@@ -10,6 +10,11 @@ here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
 
+### Added
+
+- `LICENSE` — the MIT text the plugin manifest and skill frontmatter already
+  declared.
+
 ## [1.8.0] - 2026-09-05 — Review loop and test validity
 
 ### Added
