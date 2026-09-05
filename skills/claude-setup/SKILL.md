@@ -1,0 +1,421 @@
+---
+name: claude-setup
+version: 2.6.0
+description: Set up or refresh Claude Code configuration on a machine with the user's preferred conventions — a read-only command allowlist and destructive-command denylist in ~/.claude/settings.json, plugin-enablement pruning to canonical defaults (context-heavy plugins off unless needed) with stale-command cleanup, the user's complete global standards in ~/.claude/CLAUDE.md (shell/path rules that eliminate spurious permission prompts, git conventions, and the TDD + phase-workflow development process) reconciled to current on every run via a managed block, wiring this machine to the synced Drive skills (symlink) and the localclaude plugin (local marketplace), plus a Stop-hook backup of Claude Code and Cowork chat transcripts, plans, memory, and config to Google Drive. Use when configuring Claude Code on a new computer, replicating this setup, updating the global CLAUDE.md standards, pruning plugins to save context, backing up transcripts/memory, or cutting down repetitive permission prompts.
+license: MIT
+---
+
+# claude-setup
+
+Bootstrap a machine's Claude Code config with the user's preferred conventions:
+
+- A **read-only command allowlist** + **destructive-command denylist** in `~/.claude/settings.json`.
+- The user's **complete global standards** in `~/.claude/CLAUDE.md` (shell/path rules that stop spurious permission prompts on cloud-synced "My Drive" paths, git conventions, and the TDD + phase-workflow development process), carried in a **managed block** so a re-run reconciles a stale file up to the current standard.
+- **Wiring this machine to the synced Drive**: a `~/.claude/skills` symlink (loose skills like `drawio`) and the **`localclaude`** plugin via a local marketplace — both derived from one detected `Code` root.
+- **Backing up chat transcripts + memory** (Claude Code **and** Cowork) to the synced `Code/Claude-Projects` folder via a `Stop` hook, so sessions are backed up and analyzable later.
+
+Idempotent — safe to re-run. It **merges** into existing config, never clobbers. See `REFERENCE.md` (next to this file) for the full rationale and troubleshooting.
+
+## When to use
+
+- Setting up Claude Code on a new computer.
+- Replicating or refreshing this permission setup.
+- Reducing repetitive permission prompts for read-only exploration commands.
+
+## Steps — perform in order
+
+### 1. Locate the config dir
+
+Use `~/.claude` (honor `$CLAUDE_CONFIG_DIR` if set). All paths below are under it.
+
+### 2. Merge `~/.claude/settings.json` permissions
+
+**Read the file first if it exists** — preserve `model`, `enabledPlugins`, `effortLevel`, prior `allow`/`deny`, etc. Ensure `permissions.allow` is the **union** (deduplicated) of its current entries and the list below, likewise `permissions.deny`. If the file doesn't exist, create it with just a `permissions` block.
+
+`permissions.allow` must include:
+
+```json
+[
+  "Grep", "Glob", "Read",
+  "Bash(cd:*)", "Bash(ls:*)", "Bash(find:*)", "Bash(grep:*)", "Bash(head:*)",
+  "Bash(tail:*)", "Bash(cat:*)", "Bash(diff:*)", "Bash(echo:*)", "Bash(ps:*)",
+  "Bash(wc:*)", "Bash(sort:*)", "Bash(uniq:*)", "Bash(cut:*)", "Bash(tr:*)",
+  "Bash(nl:*)", "Bash(column:*)", "Bash(jq:*)",
+  "Bash(pytest:*)", "Bash(black:*)", "Bash(ruff:*)",
+  "Bash(python -m pytest:*)", "Bash(python3 -m pytest:*)",
+  "Bash(.venv/bin/python -m pytest:*)", "Bash(.venv/bin/pytest:*)",
+  "Bash(.venv/bin/ruff:*)", "Bash(.venv/bin/black:*)",
+  "Bash(uv venv:*)", "Bash(uv python install:*)", "Bash(uv python list:*)",
+  "Bash(uv pip list:*)", "Bash(uv pip freeze:*)",
+  "Bash(npm test:*)", "Bash(npx vitest:*)",
+  "Bash(markdownlint-cli2:*)"
+]
+```
+
+`permissions.deny` must include:
+
+```json
+[
+  "Bash(rm -rf /:*)", "Bash(rm -fr /:*)", "Bash(rm -rf ~:*)", "Bash(rm -fr ~:*)",
+  "Bash(rm -rf --no-preserve-root:*)", "Bash(mkfs:*)", "Bash(dd:*)",
+  "Bash(shutdown:*)", "Bash(reboot:*)"
+]
+```
+
+Rules that matter:
+
+- **Bash rule syntax MUST use the colon form `Bash(cmd:*)`.** `Bash(cmd*)` (no colon) silently never matches — the #1 reason an allowlist "doesn't work."
+- **Do NOT add `sed`, `awk`, `tee`, `xargs`, or a blanket `Bash(*)`.** They can modify files; leaving them to prompt is intentional.
+- **`pytest`/`black`/`ruff` are a deliberate exception to the read-only rule** — they run project code / rewrite files, but they're the everyday dev loop and project-scoped, so they're allow-listed on purpose. Note `Bash(ruff:*)` also permits `ruff check --fix` (edits code); that's accepted, since `ruff format` and `ruff check` share the `ruff` prefix and can't be split cleanly.
+- **The venv forms are allow-listed too** (`.venv/bin/python -m pytest`, `.venv/bin/pytest`, `.venv/bin/ruff`, `.venv/bin/black`, plus bare `python -m pytest`). A bare `Bash(pytest:*)` never matches the venv-path invocation the Python convention actually uses, so the everyday test run still prompted — and stayed exposed to permission-classifier outages. These prefixes make routine test/format runs prompt-free.
+- **uv is allow-listed for env creation and inspection only** (`uv venv`, `uv python install`, `uv python list`, `uv pip list`, `uv pip freeze`). These build or read an env and never install code, so the documented new-project setup in the CLAUDE.md `### Python environment` section runs without a prompt. `uv pip install` is deliberately left out: installing packages stays a conscious approval.
+- **Node's everyday test loop is allow-listed the same way** (`npm test`, `npx vitest`), run from the project root through the `node_modules` symlink. `npm run` is deliberately left out: it executes whatever a project's `package.json` defines, so it stays a conscious approval. So does `npm install`, which additionally replaces the symlink with a real directory on Drive (see the CLAUDE.md `### Node environment` section).
+- **`markdownlint-cli2` is allow-listed on the same terms as `ruff`.** It reads by default but rewrites files with `--fix`, and the two share one prefix that can't be split. It's the everyday docs loop, so the write case is accepted rather than prompted. Step 3b sets it up.
+- **Deliberately no leading `*`.** Bash rules do accept `*` anywhere, so `Bash(*.venv/bin/python -m pytest*)` would also catch absolute paths — but a leading wildcard in an **allow** rule matches arbitrary text before the venv path, which is a wider grant than intended. The relative prefixes are exact, so the standard is: run tests and formatters from the project root with the relative path (recorded in the CLAUDE.md `### Python environment` section). An absolute venv path prompts, by design.
+- **Validate after writing:** `python3 -m json.tool ~/.claude/settings.json`. Malformed JSON silently disables **all** settings in the file.
+
+### 2b. Reconcile plugin enablement + remove stale artifacts
+
+Every enabled plugin's skill descriptions sit in **every** session's context (skill bodies load on invoke, but routing = the in-context description), so unused plugins are a permanent token tax. Normalize this machine to the canonical defaults; per-machine overrides are legitimate — the user can flip any back on for a work session (`/plugin` → enable → full Cmd+Q restart).
+
+**Canonical default-OFF list** — for each of these *present* in `settings.json` → `enabledPlugins`, set its value to `false` (merge: never touch plugins not installed on this machine, never remove keys, never clobber other settings; validate with `python3 -m json.tool` after):
+
+| Plugin | Re-enable when |
+| --- | --- |
+| `huggingface-skills@claude-plugins-official` | doing local-model / HF work (`localclaude:local-models` orchestrates it) — the biggest context win, ~25 skills with long descriptions |
+| `firebase@claude-plugins-official` | working on a Firebase project |
+| `mcp-server-dev@claude-plugins-official` | building an MCP server |
+| `feature-dev@claude-plugins-official` | (generally stays off — overlaps the superpowers workflow) |
+| `code-simplifier@claude-plugins-official` | (stays off — not a coverage overlap. It is an autonomous editing agent whose coding standards are hardcoded to ES modules/React/TypeScript rather than this stack, and its "refine proactively without explicit requests" posture fights the phase gate. Built-in `/simplify` is diff-scoped and invoked; its guardrail lives in `phase-workflow` §3 step 2) |
+| `pr-review-toolkit@claude-plugins-official` | wanting its specialized PR-review agents (zero uses in first month; its agent descriptions cost ~1.6k est. resident tokens) |
+| `claude-md-management@claude-plugins-official` | auditing CLAUDE.md files (zero uses; `/doctor` covers the audit) |
+| `skill-creator@claude-plugins-official` | running skill evals/benchmarks (zero uses; `superpowers:writing-skills` covers authoring) |
+| `frontend-design@claude-plugins-official` | doing UI/visual design work (zero uses so far) |
+| `github@claude-plugins-official` | wanting its GitHub commands (zero uses; the `gh` CLI is used directly instead) |
+
+**Canonical stale-artifact removal list** — delete if present (use `rm` without `-f`, per the delete conventions):
+
+- `~/.claude/commands/use-anthropic.md`, `~/.claude/commands/use-ollama.md` — superseded by `claude-toggle-backend`; their `cp settings.*.json → settings.json` would clobber the allowlist/hooks, and the source files they copy no longer exist.
+
+**Background auto-updates ON** — ensure `"autoUpdates": true` in `~/.claude.json` (top level). This file holds machine state and per-project permission grants, so edit it **key-scoped** (jq/python setting just that key — never rewrite or template the whole file). A legacy `autoUpdates: false` leaves the install silently going stale; the user's standard is auto-update on.
+
+Finish with the usual reminder: changes take effect only after a full Cmd+Q + reopen.
+
+### 3. Reconcile `~/.claude/CLAUDE.md` to the complete standards
+
+This is the user's **complete global standard** — the goal is that a re-run brings a *stale* file **up to date**, not merely appends the sections when they're absent. So **reconcile**, don't just check-for-presence. The canonical block below is wrapped in managed markers (same pattern as the `.zshrc` block in step 7) so re-runs can replace it cleanly.
+
+**Read the file first if it exists**, then install the canonical block verbatim between the markers:
+
+- **Markers already present** (`<!-- >>> localclaude standards …`) → **replace everything between them** with the current canonical block. This is how a stale copy gets refreshed — e.g. an old hardcoded `Co-Authored-By: Claude Opus 4.8` trailer, or a file missing the whole `## Development process` section.
+- **Standards present without markers** (an older machine — e.g. bare `## Shell commands` / `## Git` and nothing else) → **replace those sections in place** with the marked block, preserving any unrelated content the user keeps elsewhere in the file.
+- **Neither** (missing file, or unrelated content only) → create/append the marked block.
+
+Preserve any non-standard content the user keeps **outside** the managed block. After writing, the managed block must match the canonical text **verbatim** — diff it to confirm no section (especially `## Development process`) was dropped and the trailer wording is the dynamic-model-name form, not a hardcoded model.
+
+```markdown
+<!-- >>> localclaude standards (managed — edit here + re-run claude-setup to sync every machine) >>> -->
+# Global standards
+
+## Communication
+
+- Neutral, positive tone. No automatic evaluative reactions to my input: no validating preambles ("Great question", "You're absolutely right") and no reflexive mid-conversation praise ("Good idea", "Great catch"). Respond to suggestions and feedback with substance first. Praise or criticism needs a specific reason behind it, stated constructively. Objective analysis, including disagreement, beats agreement by default, because ungrounded agreement erodes trust in the grounded assessments. Don't manufacture criticism to fill the space either.
+- When context grows long, compact at natural task boundaries (between phases or features), never mid-task. Compacting live working state only re-summarizes it and loses fidelity.
+- Write in Simplified Technical English, following Zinsser's four principles: clarity, simplicity, brevity, humanity. Familiar precise words, active voice, short direct sentences, one idea at a time. Cut needless words and jargon, but keep the technical detail, nuance, and natural tone that make the answer accurate and useful. This covers chat replies **and** every artifact you write: README, ARCHITECTURE, ROADMAP, CLAUDE.md, code comments, commit messages, plans. My explicit requests, required artifact conventions, quotations, and real domain terms outrank this default. Even then, pick the simplest wording that carries the meaning.
+- Caveats must earn their place. Before adding a hedge, exception, or aside, ask whether the main point is wrong without it. Keep it in the main line only if it is material; otherwise demote it to a sub-bullet or a parenthetical. Cut caveats that guard against a misreading no careful reader would make.
+- Avoid the constructions that mark machine-written prose. Vary sentence shape instead of reaching for the em-dash; aim for one per paragraph at most, since a period, comma, or colon usually reads better. Drop antithesis templates ("it's not X, it's Y", "X isn't just Y, it's Z") and pseudo-technical filler (load-bearing, no-op, delve, leverage, robust, seamless, "at its core", "the key insight"). State the point plainly.
+
+## Shell commands
+
+- **Always double-quote file paths** passed to Bash, e.g. `"/Users/.../My Drive/Clients/.../file.py"`, never backslash-escaped spaces (`My\ Drive`). Escaped spaces get mis-tokenized and break Claude Code's workspace-boundary path check, which raises spurious permission prompts even for allow-listed read-only commands. Most projects live under cloud-synced "My Drive" folders whose absolute paths contain spaces, so this applies almost everywhere.
+- Prefer absolute double-quoted paths over `cd "…" && <relative-path>`. A `cd` inside a compound command can trip a permission prompt, and it defeats the in-scope check for the relative paths that follow.
+- For searching and reading code, prefer the built-in Grep / Glob / Read tools over `grep`/`find`/`ls`/`cat`/`cut` pipelines in Bash, because the native tools never trigger permission prompts. Reserve Bash for what those tools can't do, and run single commands rather than long `&&`/`;`/`echo`-banner chains.
+
+## Git
+
+- **Never commit or push on your own.** Make edits, verify (syntax, build, tests as appropriate), then stop and hand off. I test and review locally first, iterating on feedback. Commit and push to origin only when I explicitly give the go-ahead; open a PR only when I explicitly ask, **except as the landing step of an already-approved `localclaude:phase-workflow` merge cycle on a protected default branch, where the PR is the merge**; never merge to main or close out without my sign-off.
+- **Know how a branch lands before you build on it.** Where the default branch is protected, a local merge is rejected after the release is already cut and pushed, and the recovery is `git reset --hard`. Check protection when the branch is created, not at merge time — `gh api "repos/{owner}/{repo}/branches/main/protection"`, or an empty `git log --merges origin/main` on a repo with real history. On the PR path, ask the repo which merge methods it allows rather than assuming, and tag `main` after pulling: a squash or rebase merge leaves no merge SHA, and the branch tip is not what shipped.
+- Branch naming: `feature/<slug>` for new features, `bugfix/<ticket>-<slug>` (or `bugfix/<short-desc>`) for defect fixes. Never a personal `rahulragunathan/…` prefix. Keep each PR small and single-purpose.
+- Branch creation: always `--no-track` off `origin/main`, so `git switch -c <branch> --no-track origin/main` (or `git checkout --no-track -b <branch> origin/main`). Without `--no-track` the upstream auto-sets to `origin/main`, so a later `push` or `pull` reconciles the feature branch against main and hits "divergent branches". Branch off `origin/main`, not off another open feature branch.
+- Publish the branch to origin right after creating it: `git push -u origin <branch>`, so it lives on the remote and tracks `origin/<branch>`. (Pushing *commits* still waits for my sign-off; this only establishes the remote branch.)
+- Staging hygiene: stage only the files for your change. Leave unrelated working-tree noise out, such as a pre-existing `web/package-lock.json` change.
+- Trailers: end commit messages with a `Co-Authored-By` trailer naming the model that actually did the work, e.g. `Co-Authored-By: Claude Fable 5` (no email). Use the current session's model, never a hardcoded one. End PR bodies with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
+
+## Development process
+
+- TDD via the `superpowers:test-driven-development` skill for every feature and bugfix where the layer is deterministically testable: one minimal failing test → watch it fail for the right reason → minimal code to pass → watch it pass → refactor while green. No production code without a failing test first, and a bug gets a reproducing test before the fix.
+- **"The right reason" has to be stated before you can watch for it.** Name each test's failure condition when you write it — the specific thing that turns it red. *"Fails if a `<script>` survives sanitization"*, never *"tests the parser"*. Then check the red you get is that one: an import error, a collection error, or a fixture failure is not the red you wanted, and a test that never went red for its stated reason is evidence of nothing. Where a test closes a tracked issue, put the ID in its name or docstring (`test_ki_07_…`); most tests have no ID and need none, so the failure condition is the requirement, not the ID. A test written after its fix gets the reason checked retroactively — revert the fix, confirm the assertion fails, restore (`localclaude:phase-workflow` §3 step 3).
+- **`/simplify` runs at the refactor step**, while green, on the change just made — in a one-off edit or refactor as much as inside a phase. **Once per red-green-refactor cycle**, so a plan with three tasks gets three runs, each after its own task, never one pass at the end. That keeps the diff small, and the tests that just passed re-validate what it rewrites; re-run them and confirm green before starting the next task, since it edits the working tree. Simpler, not shorter: reject any rewrite that nests ternaries, trades readability for fewer lines, folds unrelated concerns into one function, or deletes an abstraction that was organising the code.
+- Layers that are inherently network- or LLM-bound get integration or eval coverage instead, faked at the network or system boundary so real client code paths run, or manual verification. Don't mock internals. If a project has no test harness, set one up before the first behavior change. Where a repo has no CI, its documented verify gate (e.g. a `verify.sh`) is the bar.
+- Automated tests are the primary verification and Claude runs them. I do manual verification (e.g. in the browser) as final sign-off before anything is committed. Run the project's configured formatter on modified files before hand-off, matching whatever the repo already uses rather than imposing a different one.
+- **Lint markdown before hand-off**, the same way code gets formatted: `markdownlint-cli2 --config ~/.markdownlint.jsonc <paths>` over the docs you touched. That config is global and the VS Code extension reads it too, so the editor and the command line agree. Pass `--config` every time; without it the CLI finds the file only when the target happens to sit under `~`. On a whole-repo sweep also exclude `.venv`, `node_modules` and `.pytest_cache`, or it lints vendored third-party docs. Fix what it reports on your own files, and leave files the change didn't touch alone unless I ask for a sweep.
+- Larger efforts run as phases, one feature branch per phase, following the `localclaude:phase-workflow` skill. Invoke it at every phase boundary: plan review, plan approval, end-of-phase retrospective, post-sign-off merge cycle. **Completing phase N never rolls into phase N+1: present phase N for my review and stop; my approval is the only trigger for the next phase.**
+- **The phase gate is uncommitted work.** At hand-off `git status` shows the phase's changes as modified or untracked, and `git log` shows no new commit on the phase branch. A commit already on the branch at the gate means the gate was passed, and that is the error itself. Commit is a post-sign-off action, so check the tree state before you present.
+- **Sign-off is my approval of the finished phase**: "looks good", "approved", "go ahead and commit". Approval to *start* a phase is not sign-off on it. When one message does both ("commit this and start the next phase"), it authorizes the merge cycle for phase N and the implementation of N+1, never the commit of N+1.
+- Docs and code comments stay true to the code. Check them **holistically**: read each doc against the code as it now stands and fix drift from earlier phases, not only the part you just changed.
+- Two boundaries. **Before every commit hand-off:** update the comments in the files you touched and any doc the change invalidated. **At every phase end:** sweep README.md, project CLAUDE.md, CHANGELOG.md, docs/ARCHITECTURE.md with its drawio diagram, and the roadmap files (docs/ROADMAP.md, KNOWN_ISSUES.md, ENHANCEMENTS.md, OPEN_QUESTIONS.md), per the `localclaude:phase-workflow` skill.
+- **One fact, one place, and docs split by tense.** CHANGELOG.md is the past (versioned; a released section is never edited); README, ARCHITECTURE and the project CLAUDE.md are the present; ROADMAP.md, KNOWN_ISSUES.md, ENHANCEMENTS.md and OPEN_QUESTIONS.md are the future. An item moves between them and never copies: it enters ROADMAP and its supporting file together, and on completion is *deleted* from both and written into CHANGELOG `[Unreleased]`. Dropped ideas move to "Decisions taken and not taken" in the project CLAUDE.md. If a sentence would be true in two of these files, it belongs in exactly one; pick by tense.
+- **ROADMAP is an index; the detail lives beside it.** ROADMAP carries one row per item (ID, title, rating, link) and never a summary. KNOWN_ISSUES.md holds one entry per open bug (`KI-nn`, severity Critical/High/Medium/Low), ENHANCEMENTS.md one per candidate (`ENH-nn`, priority High/Medium/Low plus a rough effort), OPEN_QUESTIONS.md one per unsettled question (`UNK-nn`, kind Decision/Verification/Risk). Each file is ordered by its rating, most important first, and defines that scale in a table at the top. Each entry is detailed enough to start work from cold: what happens, a concrete failure scenario, real code excerpts with `file.py#L12-L30` links, and fix notes naming the constraints. IDs are stable, used in branch names and CHANGELOG entries, and never reused. Use explicit `<a id="ki-01"></a>` anchors, not derived heading slugs.
+- **A phase ends by cutting a CHANGELOG release** whose heading names the phase (`## [3.3.0] - 2026-08-30 — Lineup safeguards and run hygiene`), versioned by what the phase did: minor for additive work, patch for fixes and docs, major for a break. The merge cycle tags it in git. The release history is the phase history, so ROADMAP keeps no table of completed phases, only a note on what is in flight or planned.
+- **Repo root holds README.md, CLAUDE.md, CHANGELOG.md, LICENSE. Everything else goes in `docs/`.** CLAUDE.md is only auto-loaded from root, and CHANGELOG stays there for the Keep a Changelog and release-tooling conventions.
+- Drift check, not a re-read: confirm every identifier, file path, command, flag, and config key a doc names still exists. A comment or doc line the code outgrew is worse than none, so delete it or fix it.
+- Comments say *why*, not *what*. Don't narrate self-evident code.
+
+### Subagents
+
+- Delegate to a subagent only for sizeable, genuinely independent parallel tracks of work. Don't delegate what the main agent can finish in a handful of tool calls, and don't use subagents to verify or double-check your own work.
+- **Subagents never commit, push, or merge.** They implement or review and report back: changed files, test results, concerns. Git state changes and overall project status tracking belong to the main agent alone, at my approved checkpoints. This overrides any skill prompt that tells a subagent to commit (e.g. superpowers subagent-driven-development), so strip that step when dispatching.
+- Model tiering to save cost: Haiku for read-only Explore and search fan-out, Sonnet for general implementation, the strong model for reasoning-heavy work (code review, architecture, debugging). Don't downgrade the tasks you spawned an agent *because* they are hard.
+
+### Python environment
+
+- **No virtualenv ever lives inside Drive.** Each project's env lives at `~/Python-Envs/<name>`, and the project holds `.venv` as a symlink to it. A real venv in a synced folder produces constant sync churn and conflicted copies. Use uv, never conda, and never a plain `python3 -m venv .venv`.
+- **New repo: run the script, don't hand-roll the env.** `standardize-python-envs.sh new [PROJECT_DIR] [ENV_ROOT]` builds the env, links `.venv`, and gitignores it. PROJECT_DIR defaults to the current directory, ENV_ROOT to `~/Python-Envs`, and the Python version to `PYVER` (3.13 by default). The script lives in the machine's code root (`…/My Drive/Code` on one machine, `…/My Drive/Clients` on the other), which is also how it names the env: the project path relative to that folder, flattened with `_`, so `Code/Skills/drawio` becomes `Skills_drawio` and `Clients/ClientX/Code/api` becomes `ClientX_Code_api`. Same-named repos never collide.
+- An existing repo with a real `.venv` directory gets migrated by the same script: `standardize-python-envs.sh check` to inventory, then `envs` to move and rebuild. The `new` command refuses that case on purpose.
+- Runtime deps go in `requirements.txt`, dev deps (pytest, ruff/black, …) in `requirements-dev.txt`. Install with `uv pip install --python .venv/bin/python -r requirements.txt`. uv itself is the standalone build at `~/.local/bin/uv`, not the Homebrew one, so `brew upgrade` can't break an env.
+- Run pytest and the formatters from the project root through the **relative** venv path: `.venv/bin/python -m pytest`, `.venv/bin/ruff`, `.venv/bin/black`. The allowlist matches those exact prefixes, so they run without a prompt. An absolute venv path does not match and will prompt.
+
+### Node environment
+
+- **No `node_modules` ever lives inside Drive.** The real tree lives at `~/Node-Envs/<name>`, and the project holds `node_modules` as a symlink to it. Same reason as Python: thousands of tiny files in a synced folder mean constant sync churn.
+- **npm cannot be pointed at the symlink the way uv can.** npm always materializes a real `node_modules` in its working directory and deletes whatever is in the way first, even on a no-op install, even when the symlink is already fully populated. So the install runs in the env dir, which holds a copy of the manifests plus the real tree, and the project only ever holds the link.
+- **New repo: run the script, don't hand-roll it.** `standardize-node-envs.sh new [PROJECT_DIR] [ENV_ROOT]` builds the env, installs from the manifests, links `node_modules`, and gitignores it. PROJECT_DIR defaults to the current directory, ENV_ROOT to `~/Node-Envs` (override with `NODEENVROOT`). Naming matches the Python script exactly, the project path relative to the code root flattened with `_`, so a repo with both ends up at `~/Python-Envs/<name>` and `~/Node-Envs/<name>`.
+- An existing repo with a real `node_modules` directory gets migrated by the same script: `standardize-node-envs.sh check` to inventory, then `envs` to relocate and rebuild. The `new` command refuses that case on purpose.
+- **Install deps with `standardize-node-envs.sh install`, never a bare `npm install`.** Everything after `--` is passed to npm, so `install . -- --save-dev vitest` works. A bare `npm install` still succeeds but replaces the symlink with a real directory on Drive; `standardize-node-envs.sh relink` repairs that.
+- `package.json` and `package-lock.json` stay authoritative in the repo. The script copies them into the env dir before installing and back afterwards, and writes back only when they actually changed.
+- **The `.gitignore` entry must be `node_modules`, with no trailing slash.** `node_modules/` is a directory-only pattern and does not match a symlink, so git reports the link as untracked forever.
+- Run tests and tools from the project root as normal: `npm test`, `npx vitest`. Resolution goes through the symlink, so nothing else changes. Those two prefixes are allow-listed and run without a prompt; `npm run <script>` is deliberately not, so package scripts stay a conscious approval.
+<!-- <<< localclaude standards <<< -->
+```
+
+**Keeping this in sync going forward:** this canonical block is the single source of truth for the global `CLAUDE.md`. When the standards change, edit *this* block (and the live `~/.claude/CLAUDE.md` markers) — the marker wrapper is what lets every other machine pick up the change on its next `claude-setup` run.
+
+### 3b. Markdown lint — install the CLI, pin one global config
+
+The standards in step 3 say to lint the markdown you touched before hand-off. That needs a linter and, more to the point, **one config the editor and the CLI both obey**. Out of the box they disagree, so a shared config is required, not a refinement.
+
+1. **Install the CLI** (Homebrew; pulls `node` as a dependency):
+
+   ```bash
+   brew install markdownlint-cli2
+   ```
+
+2. **Write `~/.markdownlint.jsonc`** if it isn't there. Four rules have to be set — each is a real conflict with the house conventions, not a preference:
+
+   ```jsonc
+   {
+     // Long prose lines are the house style. The VS Code extension turns this
+     // rule off by default and the CLI leaves it on, so pin it off for parity.
+     "MD013": false,
+
+     // Roadmap files use explicit <a id="ki-01"></a> anchors rather than
+     // derived heading slugs, per localclaude:phase-workflow.
+     "MD033": { "allowed_elements": ["a"] },
+
+     // Keep a Changelog repeats Added/Changed/Fixed/Removed under every version.
+     "MD024": { "siblings_only": true },
+
+     // Numbered steps deliberately continue across headings (phase-workflow §4
+     // splits one 1-7 sequence into Path A and Path B). Auto-renumbering breaks
+     // cross-references such as "step 5 already removed the remote branch".
+     "MD029": false
+   }
+   ```
+
+3. **Point the VS Code extension at that same file**, or the editor keeps its own defaults and the two tools disagree forever. Merge this one key into `~/Library/Application Support/Code/User/settings.json` — key-scoped, never rewrite the file:
+
+   ```json
+   "markdownlint.configFile": "${userHome}/.markdownlint.jsonc"
+   ```
+
+4. **Verify** from any repo root. Both sides should now agree, and a clean tree exits 0:
+
+   ```bash
+   markdownlint-cli2 --config ~/.markdownlint.jsonc "**/*.md" \
+     "!**/.venv/**" "!**/node_modules/**" "!**/.pytest_cache/**"
+   ```
+
+**Always exclude the vendor directories.** A bare `**/*.md` walks into `.venv` and `node_modules` and lints third-party package docs — which must never be edited, and which drown the real findings. Both are symlinks under this setup, so the glob follows them off into `~/Python-Envs` and `~/Node-Envs`. Tool caches like `.pytest_cache` ship a `README.md` too.
+
+**`--fix` is safe only with this config, and only on files you touched.** Without `MD029: false` it renumbers ordered lists that deliberately continue across headings, which silently invalidates every "see step N" reference in the file. Read the diff after any `--fix` run rather than trusting the issue count.
+
+**Indent fenced blocks inside a numbered step.** A fence at column 0 ends the list, so the next item restarts at 1. Indent it three spaces to keep the step numbering intact — the blocks in this section show the shape.
+
+**Always pass `--config` explicitly.** The CLI finds a config by walking up from each file, so `~/.markdownlint.jsonc` is picked up only when the target sits under `~` — and silently ignored when it doesn't. Naming the file removes the guess and makes the command portable.
+
+**Keep the VS Code extension installed.** It's the same rule engine as the CLI, so once both read this config they never contradict each other. The extension gives live feedback while editing and surfaces diagnostics to Claude through the IDE; the CLI is the batch gate over a whole repo. They cover different moments, not the same one.
+
+### 4. Locate the synced `Code` folder, then symlink `Skills`
+
+Everything this skill wires — `Skills/`, `Plugins/`, `Claude-Projects/` — lives side-by-side under **one synced `Code` folder**. Its parent differs per machine (e.g. `…/My Drive/AnswerRocket/Code` on one, `…/My Drive/Code` on another) and Google Drive mounts differ (CloudStorage vs classic `~/Google Drive`). So detect the `Code` folder **once** and derive all three siblings from it. Set `CODE_ROOT` by hand if the helper finds nothing (the `while … read` loop is space-safe — every "My Drive" path has a space):
+
+```bash
+# The Code folder = a dir named "Code" under a My Drive root that already contains Skills/ or Plugins/.
+CODE_ROOT=""
+while IFS= read -r d; do
+  { [ -d "$d/Skills" ] || [ -d "$d/Plugins" ]; } && { CODE_ROOT="$d"; break; }
+done < <(find "$HOME/Library/CloudStorage/"GoogleDrive-*/"My Drive" "$HOME/Google Drive/My Drive" -maxdepth 3 -type d -name Code 2>/dev/null)
+echo "CODE_ROOT=$CODE_ROOT"   # set by hand if empty, e.g. CODE_ROOT="$HOME/.../My Drive/Code"
+```
+
+Then symlink the loose-skills folder (every subfolder with a top-level `SKILL.md` auto-loads, e.g. `drawio`):
+
+```bash
+SKILLS_SRC="$CODE_ROOT/Skills"
+mkdir -p "$HOME/.claude"
+[ -e "$HOME/.claude/skills" ] && [ ! -L "$HOME/.claude/skills" ] && mv "$HOME/.claude/skills" "$HOME/.claude/skills.local.bak"
+ln -sfn "$SKILLS_SRC" "$HOME/.claude/skills"
+```
+
+Only subfolders with a `SKILL.md` load; `RCLONE_TEST`/`.DS_Store` and the plugin folder are ignored. (The `localclaude` plugin is **not** loaded this way — it loads via the marketplace in step 5, and won't double-load because it has no top-level `SKILL.md`.)
+
+### 5. Register the `localclaude` plugin (local marketplace)
+
+The bundled skills (`claude-setup`, `claude-toggle-backend`, `local-models`) ship as the `localclaude` plugin in the sibling `Code/Plugins` folder.
+
+**Gotcha:** `/plugin marketplace add` **cannot parse the Drive path** — "My Drive" has a space, the slash-command parser doesn't honor quotes, and it falls back to treating the arg as a GitHub `owner/repo`. So point it at a **space-free symlink** instead — derived from `CODE_ROOT` (step 4; set `PLUGINS_SRC` by hand if `CODE_ROOT` was empty):
+
+```bash
+PLUGINS_SRC="$CODE_ROOT/Plugins"
+ln -sfn "$PLUGINS_SRC" "$HOME/.claude/localclaude-plugins"
+```
+
+Then in Claude Code, using the **literal absolute path** (no quotes, no spaces, and not `~` — the slash command won't expand it):
+
+```text
+/plugin marketplace add /Users/<you>/.claude/localclaude-plugins
+/plugin install localclaude@localclaude-marketplace
+```
+
+`enabledPlugins` is written to this machine's `settings.json` (not synced), so each machine enables independently. **After install, skills are namespaced** `/localclaude:<skill>` (e.g. `/localclaude:claude-toggle-backend ollama`).
+
+### 6. Back up chat transcripts + memory to Drive (Claude Code **and** Cowork)
+
+Snapshot conversation transcripts, plans, per-project `memory/`, and key config to the synced `Code/Claude-Projects` folder so they're backed up and analyzable later. The backup script ships **with this plugin** (`backup-projects.sh`, next to this file), so it auto-arrives on every machine once step 5's plugin symlink exists — nothing to copy. It rsyncs these sources:
+
+- `~/.claude/projects` → `Claude-Projects/Code`      (Claude Code transcripts + `memory/`)
+- `~/.claude/plans`    → `Claude-Projects/Plans`     (approved plan-mode plan files)
+- `~/Claude/Projects`  → `Claude-Projects/Cowork`    (Cowork project files)
+- `~/Claude/Scheduled` → `Claude-Projects/Scheduled` (Cowork scheduled-task definitions)
+- `~/Library/Application Support/Claude/local-agent-mode-sessions` → `Claude-Projects/Cowork-Local/local-agent-mode-sessions` (Cowork local-agent session transcripts + audit logs; ~200 MB on first sync, incremental after)
+- `~/Library/Application Support/Claude/claude-code-sessions` → `Claude-Projects/Cowork-Local/claude-code-sessions` (Cowork-managed Claude Code session/scheduled-task state)
+- A **Config snapshot** → `Claude-Projects/Config`: `~/.claude/CLAUDE.md`, `settings.json`, `history.jsonl`, `projects-backup.dest`, `commands/`, `~/.claude.json` (holds the invisible per-project "always allow" state — otherwise unrecoverable), and the Desktop app's `claude_desktop_config.json` + `config.json`.
+
+**Why rsync-on-Stop, not a symlink into Drive:** Claude appends to the live `.jsonl` many times per turn; a symlinked dir would make Google Drive repeatedly upload a half-written file → conflicted-copy churn. rsync writes each file atomically (temp + rename), so Drive only ever sees complete files. It's append-only (no `--delete`) — transcripts pruned locally stay archived.
+
+**a) Point it at this machine's Drive folder** (dest lives beside Skills/Plugins under `CODE_ROOT`). The script reads this `.dest` file first, so detection never has to guess:
+
+```bash
+BACKUP_DEST="$CODE_ROOT/Claude-Projects"          # from step 4
+mkdir -p "$BACKUP_DEST/Code" "$BACKUP_DEST/Plans" "$BACKUP_DEST/Cowork" "$BACKUP_DEST/Scheduled" "$BACKUP_DEST/Cowork-Local" "$BACKUP_DEST/Config"
+printf '# Absolute path to this machine%s Claude-Projects backup folder.\n%s\n' "'s" "$BACKUP_DEST" > "$HOME/.claude/projects-backup.dest"
+```
+
+(The script also auto-detects common layouts and honors a `CLAUDE_PROJECTS_BACKUP_DEST` env override, but the `.dest` file is the reliable per-machine anchor — use it on machines where the path isn't `…/Code/Claude-Projects`.)
+
+**b) Seed the first backup and confirm:**
+
+```bash
+bash "$HOME/.claude/localclaude-plugins/localclaude/skills/claude-setup/backup-projects.sh"
+tail -n 2 "$HOME/.claude/projects-backup.log"     # expect: ok (rc=0) -> Code Cowork Scheduled -> <dest>
+```
+
+**c) Add the `Stop` hook** to `~/.claude/settings.json` so it runs at the end of every turn. **Read the file first** and merge the `hooks` key alongside `permissions`/`model` (don't clobber existing hooks); then validate with `python3 -m json.tool ~/.claude/settings.json`:
+
+```json
+"hooks": {
+  "Stop": [
+    { "hooks": [ { "type": "command",
+      "command": "nohup bash \"$HOME/.claude/localclaude-plugins/localclaude/skills/claude-setup/backup-projects.sh\" >/dev/null 2>&1 &" } ] }
+  ]
+}
+```
+
+`nohup … &` detaches rsync so the turn never waits; the script self-locks (mkdir lock) so rapid turns don't race, and always exits 0 so a backup failure can't break a turn.
+
+**Idempotent check — already set up iff all three hold:** `~/.claude/projects-backup.dest` exists, `settings.json`'s `Stop` hook calls `backup-projects.sh`, and the log's last line shows `rc=0`. If so, just re-seed with the 6b command.
+
+**Cowork standalone (optional) — GUI, one-time per machine.** The Stop hook only fires while you're in Claude Code, so Cowork-only sessions back up on your next Claude Code turn. For independent coverage, schedule the script with **Automator + Shortcuts** — a one-time click-through per machine that's more secure than cron (see the TCC note). Walk the user through it:
+
+> **Why not launchd or cron.** A background **LaunchAgent can't read/write the Google Drive** (`~/Library/CloudStorage/…` FileProvider) path — it fails `Operation not permitted` — and can't be granted Full Disk Access cleanly. **cron** works but only after granting FDA to `/usr/sbin/cron`, a *shared system binary* — so every scheduled job on the machine inherits full-disk access (broad). **Automator + Shortcuts** scopes the grant to one app you built (least privilege). The `Stop` hook needs none of this: it runs inside Claude Code's logged-in session, which already has Drive access.
+
+**Worker — a tiny Automator app that runs the script (grant *this* Full Disk Access):**
+
+> **Give the user these steps to do by hand — do NOT build the app for them.** Creating it programmatically (an `osacompile` applet, or a hand-rolled `.app` bundle) is a dead end: those don't reliably register with Launch Services, so the app **never shows up in the Shortcuts "Open App" picker** (step 8) — confirmed the hard way. Automator's editor, the Full Disk Access grant, and Shortcuts automations are all GUI-only surfaces a background/non-interactive process can't drive anyway. Walk the user through the clicks; don't try to shortcut it.
+
+1. **Automator** → New Document → **Application**.
+2. Add the **Run Shell Script** action; set Shell to `/bin/bash`; body (**hardcode the absolute path — Automator's env may not carry `$HOME`**, so substitute the real home dir):
+   `/bin/bash "/Users/<you>/.claude/localclaude-plugins/localclaude/skills/claude-setup/backup-projects.sh"`
+3. **File → Save** as **`Backup Claude Projects`** into top-level **`/Applications`** (not `~/Applications`) — apps there register with Launch Services most reliably, which is what makes the app appear in the Shortcuts picker in step 8. Format stays **Application**.
+4. **System Settings → Privacy & Security → Full Disk Access → `+`** → select that app → enable. (Only this app gets FDA.)
+5. Double-click the app once to confirm — check `tail -n 2 ~/.claude/projects-backup.log` for a fresh `ok (rc=0)` (not `Operation not permitted`, which means the FDA toggle didn't take).
+
+**Scheduler — a Shortcuts automation that just opens the app (needs no disk access):**
+
+1. **Shortcuts** → **Automation** tab → **New Automation** → **Time of Day**.
+2. Pick a time and **Daily** (add 2–3 automations, e.g. 12pm/6pm, for more frequent coverage — "every 30 min" isn't offered, and isn't needed for a safety net).
+3. Action: **Open App** → choose **Backup Claude Projects**. Turn **off "Ask Before Running."**
+
+**If the app still isn't in the "Open App" list** (Launch Services hasn't indexed it), force a reindex, then reopen the picker:
+
+```bash
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "/Applications/Backup Claude Projects.app"
+```
+
+Because Shortcuts only *opens* the app and the app carries its own FDA, neither the scheduler nor any shared binary gets broad disk access.
+
+### 7. (Optional, any machine) Local llama.cpp server aliases
+
+Convenience controls for the llama.cpp backend. Installed as a **managed block** between markers so re-running replaces it cleanly without clobbering other `~/.zshrc` lines (path = the space-free plugin symlink; port pinned to `8730` so the toggle and aliases agree on one port):
+
+```bash
+ZS="$HOME/.zshrc"
+# Strip any previous managed block (keeps everything else), then append the current set.
+[ -f "$ZS" ] && awk '/# >>> localclaude aliases/{s=1} /# <<< localclaude aliases/{s=0;next} !s' "$ZS" > "$ZS.tmp" && mv "$ZS.tmp" "$ZS"
+cat >> "$ZS" <<'EOF'
+
+# >>> localclaude aliases (managed) >>>
+# Pin the llama.cpp port so the toggle and aliases use the same server.
+export LLAMACPP_PORT=8730
+alias llama-cpp-up='LLAMACPP_PORT=8730 bash "$HOME/.claude/localclaude-plugins/localclaude/skills/claude-toggle-backend/llama-serve.sh" start'
+alias llama-cpp-down='bash "$HOME/.claude/localclaude-plugins/localclaude/skills/claude-toggle-backend/llama-serve.sh" stop'
+alias llama-cpp-status='bash "$HOME/.claude/localclaude-plugins/localclaude/skills/claude-toggle-backend/llama-serve.sh" status'
+# <<< localclaude aliases <<<
+EOF
+```
+
+- `export LLAMACPP_PORT=8730` — makes `claude-toggle-backend llama-cpp` use the same fixed port (8730) as the aliases, instead of auto-scanning. (8730 is an unregistered port; nothing standard uses it.)
+- `llama-cpp-up` — start the server (single-instance: sweeps any stray first; port pinned 8730).
+- `llama-cpp-down` — stop it and clean up any orphans.
+- `llama-cpp-status` — show whether it's running (pid/port/model) and warn if >1 process.
+
+(New shell or `source ~/.zshrc` to use them in an open terminal.)
+
+### 8. (Optional, OFF by default) Auto-start llama-server at login
+
+The server is **manual by default** (`llama-cpp-up`). **Only set this up if the user explicitly asks.** To auto-start it from login via a launchd LaunchAgent:
+
+```bash
+bash "$HOME/.claude/localclaude-plugins/localclaude/skills/claude-toggle-backend/llama-autostart.sh" install
+```
+
+- `RunAtLoad` + `KeepAlive=false`: starts once at login on port 8730, but `llama-cpp-down` still works and it won't respawn until the next login (so it coexists with the manual aliases).
+- **Caveats:** holds ~14 GB resident from login on — don't pair with Ollama on a 24 GB machine; macOS shows a one-time "background item added" (Login Items) notification.
+- **Alias lifecycle:** `install` also adds a `llama-cpp-autostart` alias (→ `llama-autostart.sh`) to `~/.zshrc`; `uninstall` **removes** it again — so the alias exists only while auto-start is enabled, and this skill / `llama-autostart.sh install` stays the single obvious way to re-enable it. (It's never created on a machine that hasn't enabled auto-start.)
+- Manage: `llama-autostart.sh status` / `llama-autostart.sh uninstall` (uninstall removes the plist + alias; it leaves any running server alone — stop that with `llama-cpp-down`).
+
+### 9. Tell the user to fully restart
+
+Config (and plugin enablement) is read at **process start**. In the VS Code extension each chat tab is a long-lived `claude` process; "Developer: Reload Window" only *resumes* it. The user must fully **quit (Cmd+Q) and reopen** for changes to take effect. (CLI: start a new `claude` invocation.)
+
+### 10. Confirm and point to the reference
+
+Report what was added/merged and which skills now load, then point at `REFERENCE.md`.
+
+## Quick reference
+
+- Read-only commands → allowlisted (no prompt). File-modifying commands → still prompt, by design.
+- Always double-quote paths; never `My\ Drive`. Prefer absolute paths over `cd "…" && relative`.
+- Loose skills (drawio) load via the `~/.claude/skills` symlink; bundled skills load via the `localclaude` plugin (`/localclaude:<skill>`). Both, plus the transcript-backup dest, derive from one detected `Code` root.
+- Transcripts + plans + memory + config (Claude Code & Cowork, incl. Cowork local-agent sessions) back up to `Code/Claude-Projects` at the end of every turn via a `Stop` hook (`backup-projects.sh`). Dest is recorded in `~/.claude/projects-backup.dest`; activity log at `~/.claude/projects-backup.log`.
+- Context-heavy plugins (huggingface-skills, firebase, mcp-server-dev, feature-dev, code-simplifier) default OFF per step 2b — re-enable per session when needed.

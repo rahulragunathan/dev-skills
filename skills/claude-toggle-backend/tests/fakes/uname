@@ -1,0 +1,7 @@
+#!/bin/bash
+# Fake uname: FAKE_UNAME_S / FAKE_UNAME_M control output.
+case "${1:-}" in
+  -s) echo "${FAKE_UNAME_S:-Darwin}" ;;
+  -m) echo "${FAKE_UNAME_M:-arm64}" ;;
+  *)  echo "${FAKE_UNAME_S:-Darwin}" ;;
+esac

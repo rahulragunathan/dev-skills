@@ -1,0 +1,7 @@
+#!/bin/bash
+# Fake vllm-mlx. FAKE_MLX_MODE=alive (default) -> stay alive; crash -> exit 1 now.
+if [ "${FAKE_MLX_MODE:-alive}" = "crash" ]; then
+  echo "fake vllm-mlx: simulated crash" >&2
+  exit 1
+fi
+exec sleep 300
