@@ -5,7 +5,7 @@ How `localclaude` is put together today. Planned work is in
 
 ## What this is
 
-A Claude Code plugin of six skills. Five are **instructions, not code** — a `SKILL.md` that
+A Claude Code plugin of seven skills. Six are **instructions, not code** — a `SKILL.md` that
 Claude reads and follows. The only executable code is five bash scripts and their `bats`
 tests, all under `claude-setup` and `claude-toggle-backend`.
 
@@ -34,6 +34,7 @@ what sits at the bottom changes when someone else ships a new CLI.
 | `phase-workflow` | Run a phase from plan review to merge | `/localclaude:phase-workflow` | `design-review`, `review-checkpoint`, `gh` |
 | `design-review` | Decide structure at plan time and re-check it at phase end | `/localclaude:design-review <plan\|phase>` | `drawio` skill |
 | `claude-setup` | Configure a machine and keep the standards block current | `/localclaude:claude-setup` | `~/.claude`, Drive |
+| `project-env` | Build or repair a project env outside Drive | `/localclaude:project-env` | `standardize-*-envs.sh`, uv, npm |
 | `review-checkpoint` | Get a non-Claude review of a plan, a phase diff or the repo | `/localclaude:review-checkpoint <plan\|phase\|repo>` | `codex`, `agy` |
 | `local-models` | Find, size and fetch local models | `/localclaude:local-models` | `huggingface-skills`, HF |
 | `claude-toggle-backend` | Point Claude Code at a different inference backend | `/localclaude:claude-toggle-backend <backend>` | `~/.claude/settings.json`, local servers |
@@ -58,6 +59,13 @@ what lets `review-checkpoint repo` run on a repository that has never seen a pha
 marked block that a re-run reconciles, so every machine converges on the same text. The
 canonical copy is in `claude-setup/SKILL.md`, and the installed file must match it
 byte-for-byte inside the markers.
+
+`project-env` sits beside it and holds the environment procedures the standards block used to
+carry inline. The split follows one test: **a prohibition stays resident, a procedure moves to
+a skill.** "No virtualenv ever lives inside Drive" is something you need before you know you
+need it, so it stays in the block; the argument order of `standardize-python-envs.sh` is not,
+so it moved. Nothing else depends on `project-env` — it is invoked directly, at the moment an
+environment is created or repaired.
 
 **Local backends** — `claude-toggle-backend` switches which server Claude Code talks to and
 `local-models` decides which model that server should load. Both are being rebuilt, so their

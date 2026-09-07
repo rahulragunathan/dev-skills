@@ -27,47 +27,6 @@ ENH-02, ENH-04 and ENH-05 are held in full; ENH-03 is held in part.
 
 ---
 
-<a id="enh-01"></a>
-
-## ENH-01 — Slim the global standards by moving procedures into skills
-
-**Priority:** High · **Effort:** ~1 session
-**Where:** [claude-setup/SKILL.md](../skills/claude-setup/SKILL.md) · **Regression net:** the managed-block `diff` in `claude-setup`
-
-### What it is
-
-The global standards block is about 3,400 words and sits in every session's context. Two
-sections are procedures rather than prohibitions and can move behind a skill:
-
-- `### Python environment` and `### Node environment` — roughly 620 words, about 18% of the
-  block. They matter only when creating or repairing an environment, which is a moment the
-  user always notices. Move them into a new `localclaude:project-env` skill, leaving a
-  two-line stub carrying the prohibition ("no virtualenv or `node_modules` ever lives inside
-  Drive") and the script names.
-- The roadmap taxonomy — roughly 600 words restating what `phase-workflow` and the four
-  templates already define. Cut to a pointer plus the rules that apply outside a phase.
-
-### Why it matters
-
-The block is resident on every request, so its length is a permanent cost paid whether or not
-any of it is relevant. The test to apply is: **a prohibition stays resident, a procedure moves
-to a skill.** You need "never put a venv in Drive" before you know you need it; you do not
-need the `standardize-python-envs.sh` argument order until you are running it.
-
-### Notes for the work
-
-Every edit lands in two places — the canonical block in `claude-setup/SKILL.md` and the live
-`~/.claude/CLAUDE.md` — and the two must stay byte-identical inside the markers. A skill's
-own `description` is itself resident, so moving 620 words behind a ~60-word description is a
-clear win while adding many small skills would not be. Related: ENH-07, the config-dir
-resolver, which touches the same step 1 wording.
-
-**Verify the block after every edit**, per `claude-setup` step 3: exactly one opening and one
-closing marker, no stray fence, and the installed file byte-identical to canonical inside them.
-A wrong slice here corrupts the file loaded into every session.
-
----
-
 <a id="enh-02"></a>
 
 ## ENH-02 — Cover the untested llama.cpp and toggle paths

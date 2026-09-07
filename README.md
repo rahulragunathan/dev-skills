@@ -1,6 +1,6 @@
 # localclaude
 
-A personal Claude Code plugin bundling six skills for config bootstrap, development process, and local-LLM workflows on macOS (Apple Silicon).
+A personal Claude Code plugin bundling seven skills for config bootstrap, development process, and local-LLM workflows on macOS (Apple Silicon).
 
 ## Skills
 
@@ -10,6 +10,7 @@ A personal Claude Code plugin bundling six skills for config bootstrap, developm
 - **claude-toggle-backend** — switch the Claude Code backend between **anthropic** (the `opus[1m]` alias, High effort), **ollama**, **llama-cpp**, and **mlx** (Apple Silicon). For llama.cpp it auto-starts a Metal-accelerated `llama-server` on a flat GGUF; for mlx it auto-starts a `vllm-mlx` server on an MLX model referenced **by HF repo id** from the HF cache (native Anthropic `/v1/messages`, generally faster tok/s on Apple Silicon) — each on a free port, with the Anthropic base URL pointed at it. A `~/.claude/local-backend` marker records which local backend is active. No-arg `toggle` flips anthropic ⇄ mlx. Bundles `toggle.sh` + `llama-serve.sh` + `mlx-serve.sh` + `llama-autostart.sh`.
 - **design-review** — the structural design pass. At plan time it produces the module table, the expected-change and shared-state lines, and verdicts on six named checks covering SOLID, DRY, KISS and separation of concerns, with a YAGNI cap graded by cost; at phase end it re-checks that structure against the code and diffs the regenerated diagrams. Its rules are pressure-tested against a fresh agent and the scenarios live beside it in `tests/`, with each rule's result recorded — including the ones a strong model already follows unaided.
 - **local-models** — discover (by use case: coding / RAG & analysis), download, inventory, and remove local models, RAM-sized to the machine. Orchestrates the `huggingface-skills` plugin + Ollama CLI. Storage convention: **GGUFs** are flat files at the top level of `~/Local-Models` (llama.cpp); **MLX** models live in the HF cache at `~/Local-Models/hub` (`HF_HOME=~/Local-Models`, served by repo id, `hf cache ls`).
+- **project-env** — build or repair a project's Python / Node environment outside Drive: the `~/Python-Envs` / `~/Node-Envs` layout with a symlinked `.venv` / `node_modules`, the `standardize-*-envs.sh` scripts for new repos and for migrating a real directory out, the dependency-file split, and which invocations are allow-listed (relative venv paths, `npm test`) versus deliberately not (`uv pip install`, `npm run`, bare `npm install`).
 
 ## Install
 

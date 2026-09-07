@@ -27,7 +27,7 @@ reused. Nothing here looks backward — completed phases are CHANGELOG releases.
 
 ## Status
 
-The plugin ships six skills and is in daily use on one machine. The five bash scripts under
+The plugin ships seven skills and is in daily use on one machine. The five bash scripts under
 `claude-toggle-backend` and `claude-setup` carry the whole open bug list: the process,
 review and standards skills were repaired in the phase that created this file, and their
 findings are in the CHANGELOG rather than here.
@@ -45,10 +45,10 @@ tests that cannot fail.
 
 ### Phases
 
-**Phase 1 — `design-review` skill and process remediation** — in progress. Also carries
-ENH-01, slimming the global standards, which is a standards document like the rest of the
-phase. ENH-06 landed in it: the repo now has the `CLAUDE.md` and `ARCHITECTURE.md` it
-requires of others.
+**Phase 1 — `design-review` skill and process remediation** — in progress. ENH-06 and ENH-01
+landed in it: the repo now has the `CLAUDE.md` and `ARCHITECTURE.md` it requires of others,
+and the standards block is down to 2,742 words with its environment procedures moved into the
+new `project-env` skill.
 
 **Phase 2 — the backup cluster.** A bats harness for `backup-projects.sh` (ENH-03, in its
 active half), then KI-14, KI-06, KI-08 and KI-07, each with its reproducing test written
@@ -94,7 +94,6 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 
 | ID | Enhancement | Priority | Effort |
 | ---- | ------------- | ---------- | -------- |
-| [ENH-01](ENHANCEMENTS.md#enh-01) | Slim the global standards by moving procedures into skills | High | ~1 session |
 | [ENH-02](ENHANCEMENTS.md#enh-02) | Cover the untested llama.cpp and toggle paths | High | ~1 day |
 | [ENH-03](ENHANCEMENTS.md#enh-03) | Test the two destructive scripts that have no tests at all | High | ~1 day |
 | [ENH-04](ENHANCEMENTS.md#enh-04) | Make the fakes assert a contract rather than only a shape | Medium | ~half a day |

@@ -6,7 +6,7 @@ only what is specific to this repository. Structure is in
 
 ## What makes this repo different
 
-**Five of the six skills are prose, so a regression is a contradiction.** There is nothing to
+**Six of the seven skills are prose, so a regression is a contradiction.** There is nothing to
 compile and no test that fails when two files disagree. Whenever you change a rule, grep for
 every place that states it and fix them together — the recurring failure here has been fixing
 one site and leaving the others asserting the old rule.

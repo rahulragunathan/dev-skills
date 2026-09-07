@@ -649,10 +649,19 @@ setup = box(
     fill=CONFIG,
     bold=False,
 )
-backup = box(
+projenv = box(
     80,
     945,
-    560,
+    270,
+    50,
+    "<b>project-env</b> " + sub("Envs outside Drive"),
+    fill=CONFIG,
+    bold=False,
+)
+backup = box(
+    370,
+    945,
+    270,
     50,
     "<b>backup-projects.sh</b> " + sub("Stop-hook copy"),
     fill=CONFIG,
@@ -808,10 +817,21 @@ edge(
 )
 edge(
     setup,
+    projenv,
+    color=CONFIG,
+    label="Delegates",
+    exitX=0.25,
+    exitY=1,
+    entryX=0.5,
+    entryY=0,
+    label_bg="#fbf6e6",
+)
+edge(
+    setup,
     backup,
     color=CONFIG,
     label="Installs",
-    exitX=0.5,
+    exitX=0.76,
     exitY=1,
     entryX=0.5,
     entryY=0,
