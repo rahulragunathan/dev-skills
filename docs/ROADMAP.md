@@ -79,7 +79,7 @@ Most severe first. Severity definitions and full detail in [KNOWN_ISSUES.md](KNO
 | [KI-12](KNOWN_ISSUES.md#ki-12) | The stop test passes even if nothing is stopped | High |
 | [KI-13](KNOWN_ISSUES.md#ki-13) | Test cleanup kills unrelated processes on the machine | High |
 | [KI-14](KNOWN_ISSUES.md#ki-14) | Every backup failure is logged as `ok` and exits 0 | High |
-| [KI-16](KNOWN_ISSUES.md#ki-16) | The docs say the shell block exports `HF_HOME`; it does not | Medium |
+| [KI-16](KNOWN_ISSUES.md#ki-16) | `HF_HOME` is exported by an orphaned `~/.zshrc` block no skill installs | Medium |
 | [KI-17](KNOWN_ISSUES.md#ki-17) | The machine is documented as both 64 GB and 24 GB | Medium |
 | [KI-18](KNOWN_ISSUES.md#ki-18) | `toggle.sh` needs `python3` and never checks for it | Medium |
 | [KI-19](KNOWN_ISSUES.md#ki-19) | Port selection releases the socket before the server binds | Medium |

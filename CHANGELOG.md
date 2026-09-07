@@ -69,6 +69,12 @@ here — the plugin manifest's version is the only record of them.
   only write to `~/.zshrc`. The hardened marker handling — require both markers,
   back up first, write through `mktemp` — travelled with the block, so
   `~/.zshrc` still has exactly one hardened writer.
+- **The merge cycle no longer calls a shell alias.** `phase-workflow` §4 step 6
+  ran the user's hand-written `git-clean-local-branches` function, which no skill
+  installs and which a fresh machine, a subagent or a non-interactive shell may
+  not have loaded. The eight lines are inlined instead. `git branch -d` — never
+  `-D` — is what enforces the step's existing retain rule, because it refuses a
+  branch holding unmerged work.
 - **Test-validity audit now mutates rather than reverts** (`phase-workflow` §3
   step 3). Breaking the named behaviour in place replaces stashing the fix, which
   left newly added files in the tree and falsely certified the test. Restoration
@@ -178,6 +184,16 @@ here — the plugin manifest's version is the only record of them.
   163→49, `external-review` 187→59. They are resident in every session.
 
 ### Fixed
+
+- **KI-16 rewritten: the `HF_HOME` claim had an orphan behind it.** It was filed
+  as doc drift — `local-models` says the managed `~/.zshrc` block exports
+  `HF_HOME`, and it does not. The machine tells a different story: a second block
+  branded `# >>> localclaude HF_HOME >>>` does export it, and
+  `git log -S` finds no commit that ever installed one. Hand-written, branded as
+  managed. That is why the claim survived review — verifying it on this machine
+  confirms it, while a machine built from the skills as written gets nothing. The
+  entry now carries both halves and is marked partly held: the docs wait for the
+  `local-models` rebuild, the missing installer does not.
 
 - The CHANGELOG move is instructed once, at §3 step 4, not again at §4 step 1.
 - CHANGELOG.md is exempt from the current-state rule, which had forbidden it from

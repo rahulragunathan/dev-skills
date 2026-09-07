@@ -354,7 +354,21 @@ Sign-off — as defined at the top of this file — is the only trigger. Once it
    fi
    ```
 
-   Then run the user's `git-clean-local-branches` alias. Retain any local branch with unpushed work; do not force-delete it. Cleanup failures resume at step 6 and do not repeat release edits or merge.
+   Then prune the local branches whose upstream is gone. **Run these commands rather than a shell alias** — the workflow must not depend on the user's `~/.zshrc`, which a fresh machine, a subagent or a non-interactive shell may not have loaded.
+
+   ```bash
+   git fetch --prune
+   GONE="$(git branch -vv | grep ': gone]' | grep -v '^\*' | awk '{print $1}' || true)"
+   if [ -n "$GONE" ]; then
+     # -d refuses a branch holding unmerged work, which is exactly the retain rule.
+     # Never -D here: a force-delete discards commits that were never pushed.
+     echo "$GONE" | xargs git branch -d || echo "RETAINED — a branch holds unmerged work; inspect it by hand"
+   else
+     echo "Nothing to clean up."
+   fi
+   ```
+
+   Cleanup failures resume at step 6 and do not repeat release edits or merge.
 
 Then stop. The next phase's branch is created at phase start (§2 step 1) — never here.
 

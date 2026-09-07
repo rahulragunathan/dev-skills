@@ -27,15 +27,19 @@ still valid, still filed, not worked until the rebuild, and excluded from extern
 bundles in the meantime. They are not closed because they are the rebuild's requirements — the
 new code has to clear them, and deleting them would lose the specification.
 
-Held: KI-01 through KI-05, KI-09 through KI-13, and KI-16 through KI-27. **KI-22 is held only
-in its `claude-toggle-backend` half**; the same defect in `claude-setup` is fixed.
+Held: KI-01 through KI-05, KI-09 through KI-13, and KI-16 through KI-27, with two
+exceptions. **KI-22 is held only in its `claude-toggle-backend` half**; the same defect in
+`claude-setup` is fixed. **KI-16 is held only in its `local-models` half**; the missing
+`~/.zshrc` installer behind it is machine setup and is in scope.
 
 Active: **KI-06, KI-07, KI-08 and KI-14** — the `backup-projects.sh` cluster, scheduled as its
 own phase with a bats harness (ENH-03).
 
 **An entry naming a held skill is not automatically held.** Several were filed against a
 defect that appears in both a held script and a `claude-setup` one; check the "Where" lines
-against the skill boundary rather than the title. KI-22 was such a case.
+against the skill boundary rather than the title. KI-22 and KI-16 are both such cases, and
+KI-16 shows the second shape: a held skill's *documentation* describing a real gap in
+machine setup, which is not held.
 
 ---
 
@@ -566,34 +570,57 @@ Related: KI-06.
 
 <a id="ki-16"></a>
 
-## KI-16 — the docs say the shell block exports `HF_HOME`; it does not
+## KI-16 — `HF_HOME` is exported by an orphaned `~/.zshrc` block no skill installs
 
-**Severity:** Medium · **Held**
-**Where:** [local-models/SKILL.md:15](../skills/local-models/SKILL.md#L15), [local-models/SKILL.md:28](../skills/local-models/SKILL.md#L28)
+**Severity:** Medium · **Partly held**
+**Where:** [local-models/SKILL.md:15](../skills/local-models/SKILL.md#L15), [local-models/SKILL.md:28](../skills/local-models/SKILL.md#L28), [claude-toggle-backend/SKILL.md](../skills/claude-toggle-backend/SKILL.md) (the managed block)
 
-**Wholly held, despite naming `claude-setup`.** Both false statements are in `local-models`,
-which is being rebuilt. `claude-setup` makes no `HF_HOME` claim of its own — its shell block
-is merely where an export *would* go if the first fix option were taken. Nothing to do in
-`claude-setup` now, and the rebuild should simply not repeat the claim.
+**The doc half is held; the installer half is not.** The two false sentences are in
+`local-models`, which is being rebuilt. The missing installer is machine setup and is in scope
+now — an entry naming a held skill is not automatically held.
 
 ### What happens
 
 `local-models` says twice that `HF_HOME=$LOCAL_MODELS_DIR` is "set globally in `~/.zshrc`" by
-the plugin's managed block. The only export in that block is `export LLAMACPP_PORT=8730`.
+the plugin's managed block. The plugin's managed block exports only `LLAMACPP_PORT=8730`.
+
+But `HF_HOME` *is* exported on the development machine, by a second block that carries
+`localclaude` branding and that **no skill in this repo installs**:
+
+```bash
+# >>> localclaude HF_HOME >>>
+export HF_HOME="$HOME/Local-Models"
+# <<< localclaude HF_HOME <<<
+```
+
+`git log -S"localclaude HF_HOME" --all` returns nothing, so it was never installed by code —
+it was hand-written and branded as though it had been.
 
 ### Example scenario
 
-The user follows the skill's own instruction to *"verify with `echo $HF_HOME`"* and sees an
-empty value, which reads as a broken install. The practical impact is limited because the
-skill passes `HF_HOME` explicitly on every `hf` command, so downloads still land correctly.
+This is why the defect survived a review. Anyone verifying the claim on the machine that has
+the orphan runs the skill's own check, `echo $HF_HOME`, sees `~/Local-Models`, and concludes
+the docs are right. On a machine set up from the skills as written, the same check prints
+nothing and the install reads as broken. The practical impact stays limited because the skill
+passes `HF_HOME` explicitly on every `hf` command, so downloads land correctly either way.
 
 ### Notes for a fix
 
-Either add the export to the managed block in `claude-setup`, or correct the two sentences in
-`local-models` to say the variable is passed per command rather than set globally. The second
-matches how the skill already behaves.
+Two separable pieces:
 
-**Source:** gpt-5.6-sol — repo review, 2026-09-05.
+- **Installer (in scope).** Decide whether `HF_HOME` belongs in the managed block that
+  `claude-toggle-backend` now owns. If yes, add it there with the rest of the shell block so
+  one writer owns the file. If no, delete the orphan from `~/.zshrc` so no machine disagrees
+  with the repo.
+- **Docs (held).** Correct the two `local-models` sentences to match whichever way the
+  installer goes. The rebuild should not restate the claim without an installer behind it.
+
+**A branded block with no installer is the failure mode to look for**, not just this variable.
+The marker text asserts an owner, so the next person to touch `~/.zshrc` — including the
+hardened strip — reasons about it as managed code when nothing generates it.
+
+**Source:** gpt-5.6-sol — repo review, 2026-09-05; orphan found 2026-09-07 while auditing the
+`~/.zshrc` writers after ENH-09.
 
 ---
 
