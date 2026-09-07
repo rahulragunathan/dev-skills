@@ -30,10 +30,11 @@ this file) for the full rationale and troubleshooting.
 
 `~/.claude`. All paths below are under it.
 
-**`$CLAUDE_CONFIG_DIR` is not honoured**, here or in `backup-projects.sh`, which resolves
-`$HOME/.claude` directly. Setting it relocates what Claude Code reads without relocating what
-this skill writes, so the two would disagree. Do not set it on a machine this skill manages.
-Supporting it is ENH-07.
+**`$CLAUDE_CONFIG_DIR` is not honoured** anywhere in this plugin — not here, and not in the
+scripts `drive-backup` and `claude-toggle-backend` ship, which all resolve `$HOME/.claude`
+directly. Setting it relocates what Claude Code reads without relocating what these skills
+write, so the two would disagree, and `toggle.sh` would patch a `settings.json` Claude Code is
+not reading. Do not set it on a machine this skill manages. Supporting it is ENH-07.
 
 ### 2. Merge `~/.claude/settings.json` permissions
 

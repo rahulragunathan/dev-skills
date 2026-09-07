@@ -185,6 +185,20 @@ here — the plugin manifest's version is the only record of them.
 
 ### Fixed
 
+- **ENH-07 was scoped to two files and applies to six.** It named
+  `backup-projects.sh` and `claude-setup`, missing all four
+  `claude-toggle-backend` scripts. The omission mattered: `toggle.sh` resolves
+  `settings.json` the same hardcoded way and *patches* it, so on a machine with
+  `$CLAUDE_CONFIG_DIR` set the backend would appear to switch and would not, in
+  silence — worse than the backup writing to the wrong folder. Now partly held,
+  with counts taken from the files rather than restated (ten occurrences over
+  eight distinct paths in `backup-projects.sh`, six over three in
+  `claude-setup`, four in `toggle.sh`).
+- **The `~/.zshrc` shared-state line overstated the fix.** ENH-09 left one
+  *managed* writer, which `ARCHITECTURE.md` recorded as one writer full stop.
+  The file also carries two surfaces the repo depends on and does not own. The
+  line now says which, and gives the test: ask whether code generates a block,
+  not whether it looks managed.
 - **KI-16 rewritten: the `HF_HOME` claim had an orphan behind it.** It was filed
   as doc drift — `local-models` says the managed `~/.zshrc` block exports
   `HF_HOME`, and it does not. The machine tells a different story: a second block

@@ -48,8 +48,12 @@ allowlist), `claude-toggle-backend` (model, effort and `ANTHROPIC_*` keys) and `
 (the `Stop` hook). It is the only shared mutable state in the repo, and the reason every writer
 patches keys in place rather than rewriting the file. KI-01 is what happens when one does not.
 
-`~/.zshrc` has exactly one writer, `claude-toggle-backend`. It used to have two; KI-22 is the
-truncation bug that surfaced in the copy that has since moved there.
+`~/.zshrc` is the other shared file, and it is shared differently: one writer in the repo,
+`claude-toggle-backend`, plus surfaces the repo depends on but does not own. `phase-workflow`
+called a hand-written `git-clean-local-branches` function until §4 inlined it, and an `HF_HOME`
+block branded `# >>> localclaude` exports a variable no skill installs (KI-16). Marker text
+asserts an owner, so the question to ask of a block in that file is whether code generates it,
+not whether it looks managed. KI-22 is the truncation bug in the block that did move here.
 
 ## The three groups
 

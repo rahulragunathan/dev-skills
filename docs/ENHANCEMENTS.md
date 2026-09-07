@@ -23,7 +23,7 @@ Priority is about value, not urgency. Effort is a rough estimate — a session, 
 Those two skills are being rebuilt from scratch. Entries scoped to them are **held**: still
 valid, still filed, not worked until the rebuild, and excluded from external review bundles in
 the meantime. Their defects are the rebuild's requirements, which is why they are not closed.
-ENH-02, ENH-04 and ENH-05 are held in full; ENH-03 is held in part.
+ENH-02, ENH-04 and ENH-05 are held in full; ENH-03 and ENH-07 are held in part.
 
 ---
 
@@ -171,19 +171,23 @@ is, the task-by-task plan probably is not.
 
 ## ENH-07 — Honour `$CLAUDE_CONFIG_DIR` in the bundled scripts
 
-**Priority:** Low · **Effort:** ~1 hour
+**Priority:** Low · **Effort:** ~2 hours · **Partly held**
 
-**Where:** [backup-projects.sh](../skills/drive-backup/backup-projects.sh), [claude-setup/SKILL.md](../skills/claude-setup/SKILL.md)
+**Where:** [backup-projects.sh](../skills/drive-backup/backup-projects.sh), [claude-setup/SKILL.md](../skills/claude-setup/SKILL.md) (inline bash), and the four scripts under [claude-toggle-backend](../skills/claude-toggle-backend) — `toggle.sh`, `llama-serve.sh`, `mlx-serve.sh`, `llama-autostart.sh`
+
+**Scope now:** `backup-projects.sh` and `claude-setup`'s inline bash. The
+`claude-toggle-backend` scripts are held for the rebuild, which should resolve the config dir
+once in whatever replaces them rather than inherit four more hardcoded copies.
 
 ### What it is
 
-`claude-setup` and `backup-projects.sh` resolve `$HOME/.claude` directly. Claude Code reads
-`$CLAUDE_CONFIG_DIR` when it is set, so on such a machine the two would disagree: setup writes
+Every script in the plugin resolves `$HOME/.claude` directly. Claude Code reads
+`$CLAUDE_CONFIG_DIR` when it is set, so on such a machine they would disagree: the skills write
 the standards and settings to one place while Claude Code reads another.
 
 The documentation used to claim the variable was honoured, which was the defect recorded as
-KI-15. That claim is gone — step 1 now states plainly that the variable is not supported and
-must not be set. This entry is the remaining capability, not a bug.
+KI-15. That claim is gone — `claude-setup` step 1 now states plainly that the variable is not
+supported and must not be set. This entry is the remaining capability, not a bug.
 
 ### Why it matters
 
@@ -191,12 +195,22 @@ Low, because a single-machine setup never sets the variable and the docs no long
 It becomes real the moment a second config root is wanted — a work profile beside a personal
 one on the same machine.
 
+**The held half is the sharper one, which is why the scope split is recorded rather than
+assumed.** `backup-projects.sh` writing to a stale config root copies files to the wrong
+folder, which is recoverable. `toggle.sh` resolves `settings.json` the same way and *patches*
+it: on a machine with the variable set it would edit a file Claude Code is not reading, so the
+backend would appear to switch and would not, with no error. That is the shared-state file
+three skills already write, and KI-01 is what a bad write to it costs.
+
 ### Notes for the work
 
 One resolver near the top of each script, `CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"`,
-then substitute it for the eight hardcoded paths in `backup-projects.sh`. **`~/.claude.json`
-is not under the config dir** and stays as it is; check that against the current Claude Code
-behaviour before assuming either way. Do this inside the ENH-03 harness so the substitution
-has tests, rather than as a blind rename.
+substituted for the hardcoded paths: ten occurrences over eight distinct paths in
+`backup-projects.sh`; six over three in `claude-setup`'s inline bash, which are the
+`skills` and `localclaude-plugins` symlinks and one backup of the first — Claude Code would
+look for those under the relocated root, so they count; and four in `toggle.sh` once the held
+half is unblocked. **`~/.claude.json` is not under the config dir** and stays as it
+is; check that against the current Claude Code behaviour before assuming either way. Do this
+inside the ENH-03 harness so the substitution has tests, rather than as a blind rename.
 
 Deferred from the phase that closed KI-15, to keep the fix beside its tests.
