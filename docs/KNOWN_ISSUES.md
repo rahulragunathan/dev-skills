@@ -262,7 +262,7 @@ second is a one-line change and is honest.
 ## KI-06 — a stale lock silently disables every later backup
 
 **Severity:** High
-**Where:** [backup-projects.sh:73-77](../skills/claude-setup/backup-projects.sh#L73-L77)
+**Where:** [backup-projects.sh:73-77](../skills/drive-backup/backup-projects.sh#L73-L77)
 
 ### What happens
 
@@ -300,7 +300,7 @@ failure.
 ## KI-07 — credentials are copied to Drive with no scan or warning
 
 **Severity:** High
-**Where:** [backup-projects.sh:107-120](../skills/claude-setup/backup-projects.sh#L107-L120)
+**Where:** [backup-projects.sh:107-120](../skills/drive-backup/backup-projects.sh#L107-L120)
 
 ### What happens
 
@@ -340,7 +340,7 @@ is otherwise unrecoverable, so stripping fields makes the copy less useful for r
 ## KI-08 — backup destination discovery picks the first Drive account it finds
 
 **Severity:** High
-**Where:** [backup-projects.sh:47-67](../skills/claude-setup/backup-projects.sh#L47-L67), [claude-setup/SKILL.md:250](../skills/claude-setup/SKILL.md#L250)
+**Where:** [backup-projects.sh:47-67](../skills/drive-backup/backup-projects.sh#L47-L67), [drive-backup/SKILL.md](../skills/drive-backup/SKILL.md)
 
 ### What happens
 
@@ -538,7 +538,7 @@ group rather than searching by name.
 ## KI-14 — every backup failure is logged as `ok` and exits 0
 
 **Severity:** High
-**Where:** [backup-projects.sh:133](../skills/claude-setup/backup-projects.sh#L133)
+**Where:** [backup-projects.sh:133](../skills/drive-backup/backup-projects.sh#L133)
 
 ### What happens
 

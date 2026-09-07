@@ -548,7 +548,8 @@ def desc(text, size=11):
 #   x=695  channel — external-review to codex
 #   x=700  channel — claude-setup to settings.json
 #   x=710  channel — external-review to agy
-#   x=715  channel — backup-projects.sh to Drive
+#   x=705  channel — drive-backup to settings.json
+#   x=715  channel — drive-backup to Drive
 #   x=725  channel — phase-workflow to gh
 #   x=735  channel — claude-toggle-backend to settings.json
 #   x=740  channel — design-review to the drawio skill
@@ -645,7 +646,7 @@ setup = box(
     560,
     80,
     "<b>claude-setup</b><br>"
-    + desc("Permission allowlist, plugin pruning, the standards block, the backup hook"),
+    + desc("Permission allowlist, plugin pruning, the standards block, Drive wiring"),
     fill=CONFIG,
     bold=False,
 )
@@ -663,7 +664,7 @@ backup = box(
     945,
     270,
     50,
-    "<b>backup-projects.sh</b> " + sub("Stop-hook copy"),
+    "<b>drive-backup</b> " + sub("Stop-Hook Backup"),
     fill=CONFIG,
     bold=False,
 )
@@ -830,12 +831,24 @@ edge(
     setup,
     backup,
     color=CONFIG,
-    label="Installs",
+    label="Delegates",
     exitX=0.76,
     exitY=1,
     entryX=0.5,
     entryY=0,
     label_bg="#fbf6e6",
+)
+edge(
+    backup,
+    settings,
+    color=CONFIG,
+    label="Adds Stop<div>Hook</div>",
+    waypoints=[(705, 955), (705, 600)],
+    exitX=1,
+    exitY=0.2,
+    entryX=0,
+    entryY=0.5,
+    label_y=90,
 )
 edge(
     backup,

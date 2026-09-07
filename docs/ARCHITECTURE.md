@@ -5,9 +5,9 @@ How `localclaude` is put together today. Planned work is in
 
 ## What this is
 
-A Claude Code plugin of seven skills. Six are **instructions, not code** — a `SKILL.md` that
+A Claude Code plugin of eight skills. Six are **instructions, not code** — a `SKILL.md` that
 Claude reads and follows. The only executable code is five bash scripts and their `bats`
-tests, all under `claude-setup` and `claude-toggle-backend`.
+tests, under `claude-toggle-backend` and `drive-backup`.
 
 That shapes everything else here. There is no build, no runtime and no entry point. A "module"
 is a skill directory, its interface is how the skill is invoked, and a regression is a
@@ -35,6 +35,7 @@ what sits at the bottom changes when someone else ships a new CLI.
 | `design-review` | Decide structure at plan time and re-check it at phase end | `/localclaude:design-review <plan\|phase>` | `drawio` skill |
 | `claude-setup` | Configure a machine and keep the standards block current | `/localclaude:claude-setup` | `~/.claude`, Drive |
 | `project-env` | Build or repair a project env outside Drive | `/localclaude:project-env` | `standardize-*-envs.sh`, uv, npm |
+| `drive-backup` | Copy transcripts, plans, memory and config to Drive | `/localclaude:drive-backup`, the `Stop` hook | `backup-projects.sh`, rsync, Drive |
 | `external-review` | Get a non-Claude review of a plan, a phase diff or the repo | `/localclaude:external-review <plan\|phase\|repo>` | `codex`, `agy` |
 | `local-models` | Find, size and fetch local models | `/localclaude:local-models` | `huggingface-skills`, HF |
 | `claude-toggle-backend` | Point Claude Code at a different inference backend | `/localclaude:claude-toggle-backend <backend>` | `~/.claude/settings.json`, local servers |
@@ -42,11 +43,13 @@ what sits at the bottom changes when someone else ships a new CLI.
 **Expected change:** a new external reviewer. Adding one should mean editing
 `external-review` and nothing else.
 
-**Shared state:** `~/.claude/settings.json`, written by both `claude-setup` (the permission
-allowlist) and `claude-toggle-backend` (model, effort and `ANTHROPIC_*` keys). Two writers on
-one file is the only shared mutable state in the repo, and the reason `claude-toggle-backend`
-patches keys in place rather than rewriting the file. KI-01 is what happens when that goes
-wrong.
+**Shared state:** `~/.claude/settings.json` has three writers — `claude-setup` (the permission
+allowlist), `claude-toggle-backend` (model, effort and `ANTHROPIC_*` keys) and `drive-backup`
+(the `Stop` hook). It is the only shared mutable state in the repo, and the reason every writer
+patches keys in place rather than rewriting the file. KI-01 is what happens when one does not.
+
+`~/.zshrc` has exactly one writer, `claude-toggle-backend`. It used to have two; KI-22 is the
+truncation bug that surfaced in the copy that has since moved there.
 
 ## The three groups
 
@@ -60,12 +63,22 @@ marked block that a re-run reconciles, so every machine converges on the same te
 canonical copy is in `claude-setup/SKILL.md`, and the installed file must match it
 byte-for-byte inside the markers.
 
-`project-env` sits beside it and holds the environment procedures the standards block used to
-carry inline. The split follows one test: **a prohibition stays resident, a procedure moves to
-a skill.** "No virtualenv ever lives inside Drive" is something you need before you know you
-need it, so it stays in the block; the argument order of `standardize-python-envs.sh` is not,
-so it moved. Nothing else depends on `project-env` — it is invoked directly, at the moment an
-environment is created or repaired.
+`project-env` and `drive-backup` sit beside it, each holding a procedure `claude-setup` used to
+carry inline. `project-env` took the environment steps out of the standards block on one test:
+**a prohibition stays resident, a procedure moves to a skill.** "No virtualenv ever lives inside
+Drive" is something you need before you know you need it, so it stays in the block; the argument
+order of `standardize-python-envs.sh` is not, so it moved.
+
+`drive-backup` took the transcript backup out of `claude-setup` on a different test — one
+concern, one owner. Backing conversations up to Drive is a separate product that happened to be
+installed by the same run, with its own script, its own bug cluster and its own upcoming phase.
+What is left in `claude-setup` step 6 is a pointer plus the one fact the caller needs: both
+skills write `settings.json`, so whichever runs second must merge.
+
+`claude-setup` now writes nothing outside `~/.claude` and the detected Drive root. Its
+`~/.zshrc` block went to `claude-toggle-backend`, which is the skill those aliases control.
+Neither delegate is depended on by anything else; both are invoked directly, at the moment the
+thing they configure is set up or repaired.
 
 **Local backends** — `claude-toggle-backend` switches which server Claude Code talks to and
 `local-models` decides which model that server should load. Both are being rebuilt, so their
@@ -90,7 +103,7 @@ before reading them, and disables diff conversion filters, in every mode.
 `uname` and `vllm-mlx` and a sandboxed `$HOME`. Eight of them pass with the behaviour they
 name removed — see UNK-02.
 
-`claude-setup`'s `backup-projects.sh` has no tests at all. That is ENH-03, and the next phase.
+`drive-backup`'s `backup-projects.sh` has no tests at all. That is ENH-03, and the next phase.
 
 The skills themselves are prose, so they are tested by running scenarios against a fresh
 agent: `design-review/tests/` holds seven, each with failure conditions written to judge the

@@ -45,14 +45,17 @@ tests that cannot fail.
 
 ### Phases
 
-**Phase 1 — `design-review` skill and process remediation** — in progress. ENH-06 and ENH-01
-landed in it: the repo now has the `CLAUDE.md` and `ARCHITECTURE.md` it requires of others,
-and the standards block is down to 2,742 words with its environment procedures moved into the
-new `project-env` skill.
+**Phase 1 — `design-review` skill and process remediation** — in progress. Four enhancements
+landed in it. ENH-06 and ENH-01 gave the repo the `CLAUDE.md` and `ARCHITECTURE.md` it requires
+of others and cut the standards block to 2,480 words, with its environment procedures moved
+into the new `project-env` skill. ENH-08 and ENH-09 then split `claude-setup` three ways: the
+Drive backup into a new `drive-backup` skill and the llama.cpp shell block into
+`claude-toggle-backend`, leaving `claude-setup` at 5,395 words and writing nothing outside
+`~/.claude` and the Drive root.
 
 **Phase 2 — the backup cluster.** A bats harness for `backup-projects.sh` (ENH-03, in its
-active half), then KI-14, KI-06, KI-08 and KI-07, each with its reproducing test written
-first. KI-14 leads: while every run reports success, the other three cannot be observed
+active half), now scoped to the `drive-backup` skill it moved into, then KI-14, KI-06, KI-08
+and KI-07, each with its reproducing test written first. KI-14 leads: while every run reports success, the other three cannot be observed
 failing.
 
 ## Known Issues
@@ -98,8 +101,6 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 | [ENH-03](ENHANCEMENTS.md#enh-03) | Test the two destructive scripts that have no tests at all | High | ~1 day |
 | [ENH-04](ENHANCEMENTS.md#enh-04) | Make the fakes assert a contract rather than only a shape | Medium | ~half a day |
 | [ENH-05](ENHANCEMENTS.md#enh-05) | Fold the MLX plan and spec into the permanent docs | Medium | ~half a day |
-| [ENH-08](ENHANCEMENTS.md#enh-08) | Move the Drive backup out of `claude-setup` into its own skill | Medium | ~half a day |
-| [ENH-09](ENHANCEMENTS.md#enh-09) | Move the llama.cpp aliases and auto-start into `claude-toggle-backend` | Medium | ~2 hours |
 | [ENH-07](ENHANCEMENTS.md#enh-07) | Honour `$CLAUDE_CONFIG_DIR` in the bundled scripts | Low | ~1 hour |
 
 ## Open Questions

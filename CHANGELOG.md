@@ -30,6 +30,16 @@ here — the plugin manifest's version is the only record of them.
   open question from an external repo review.
 - `LICENSE` — the MIT text the plugin manifest and skill frontmatter already
   declared.
+- **`drive-backup` skill** (`ENH-08`), holding the Drive backup `claude-setup`
+  step 6 used to carry inline: `backup-projects.sh`, the destination-resolution
+  order, the `Stop` hook JSON, the rsync flag choices, and the Full Disk Access /
+  Automator / Shortcuts path for backing up when Claude Code is not running. One
+  concern, one owner — backing conversations up to Drive is a separate product
+  that happened to be installed by the same run, with its own script, its own
+  bug cluster (KI-06, KI-07, KI-08, KI-14) and its own upcoming phase.
+  **The `Stop` hook path changed** to
+  `skills/drive-backup/backup-projects.sh`; a hook left on the old path backs
+  nothing up and stops growing the log rather than reporting an error.
 - **`project-env` skill** (`ENH-01`), holding the Python and Node environment
   procedures the global standards block used to carry inline: the
   `~/Python-Envs` / `~/Node-Envs` layout, the `standardize-*-envs.sh` scripts,
@@ -49,6 +59,16 @@ here — the plugin manifest's version is the only record of them.
 
 ### Changed
 
+- **`claude-setup` gave up two concerns and 20% of its length** — 6,785 words to
+  5,395. The Drive backup went to the new `drive-backup` skill (`ENH-08`) and the
+  llama.cpp shell aliases and login auto-start went to `claude-toggle-backend`
+  (`ENH-09`), which is the skill those aliases control. Step 6 is now a pointer,
+  and steps 7 and 8 are gone; the two that followed renumbered to 7 and 8. The
+  second move matters beyond the word count: **`claude-setup` now writes nothing
+  outside `~/.claude` and the detected Drive root**, because that block was its
+  only write to `~/.zshrc`. The hardened marker handling — require both markers,
+  back up first, write through `mktemp` — travelled with the block, so
+  `~/.zshrc` still has exactly one hardened writer.
 - **Test-validity audit now mutates rather than reverts** (`phase-workflow` §3
   step 3). Breaking the named behaviour in place replaces stashing the fix, which
   left newly added files in the tree and falsely certified the test. Restoration

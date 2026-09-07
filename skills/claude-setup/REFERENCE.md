@@ -34,20 +34,16 @@ Why each rule in `SKILL.md` exists, and how to debug "I allow-listed it but stil
 - **Denied (catastrophic):** root/home recursive force-deletes, `--no-preserve-root`, `mkfs`, `dd`, `shutdown`, `reboot`. Prefix matching is literal — `rm --recursive --force /` or flag reordering won't match, so the real protection is still the default prompt on everything non-allow-listed.
 - **Deliberately NOT allowed (so they still prompt):** `sed` (`-i` writes), `awk`, `tee`, `xargs` (`find | xargs rm` would bypass the "ask before file changes" intent), and any `> realfile` redirect. **`rm` is never allow-listed** — deletes always prompt; to delete use `rm -r` (no `-f`), `rmdir`, or Finder (`rm -rf` on home/abs paths is denied outright).
 
-## Transcript & memory backup (`backup-projects.sh`)
+## What this skill no longer owns
 
-- **What/where.** A `Stop` hook runs `backup-projects.sh` at the end of every turn, rsyncing `~/.claude/projects` → `Claude-Projects/Code`, `~/Claude/Projects` → `Claude-Projects/Cowork`, and `~/Claude/Scheduled` → `Claude-Projects/Scheduled` (Cowork scheduled-task definitions). Claude Code's per-project `memory/` lives *inside* `~/.claude/projects`, so it's captured in the same pass.
-- **Why a Stop hook, not a live symlink.** `~/.claude/projects` is written continuously during a session (the active `.jsonl` is appended many times per turn). Symlinking that dir into Google Drive would make Drive's watcher upload half-written files → "conflicted copy" duplicates, wasted CPU, and a small corruption risk on the live file. rsync instead writes each file atomically (temp + rename), so Drive only ever uploads a *complete* file. (Same reason loose skills — read-mostly — are fine to symlink, but transcripts are not.)
-- **Append-only.** No `--delete`: a transcript pruned locally stays in the backup, so the Drive copy is a growing archive for later analysis.
-- **rsync flags.** `-rt` only (not `-a`): recurse + preserve mtimes, but skip perms/owner/group — Google Drive mounts reject chmod/chown and would spam errors. Exit code 24 ("file changed as we read it," i.e. a live `.jsonl` grew mid-copy) is treated as success.
-- **Concurrency & safety.** A `mkdir` lock (macOS ships no `flock`) makes overlapping runs from rapid turns no-ops. The script **always exits 0** so a backup failure can never break a turn; the hook backgrounds it with `nohup … &` so the turn never waits on rsync.
-- **Exiting 0 is deliberate; logging `ok` regardless is not.** The two are separate, and only the first is a feature. Every failure currently reaches `projects-backup.log` as `ok`, so a backup that has silently stopped looks identical to one that is working — that is **KI-14**, and it is what hides KI-06 and KI-08 as well. The fix keeps the exit code and corrects the log line. A stale lock left by a `SIGKILL` or power loss disables every later run through the same silent path (**KI-06**).
-- **Destination resolution (first match wins).** `$CLAUDE_PROJECTS_BACKUP_DEST` → `~/.claude/projects-backup.dest` (one line, written per machine in step 6) → glob of common `…/Code/Claude-Projects` layouts → bounded `find`. The `.dest` file is what makes machines with a different Drive layout (`…/My Drive/Code` vs `…/My Drive/AnswerRocket/Code`) Just Work without touching the hook or script.
-- **Log.** `~/.claude/projects-backup.log`, auto-trimmed to the last 300 lines once it exceeds 1000. Safe to delete anytime.
-- **Cowork coverage & the TCC gotcha.** The Stop hook only fires while you're in Claude Code (it runs *inside* the app's logged-in session, which has Drive access), so Cowork-only sessions back up on your next Claude Code turn. Independent scheduling hits a TCC wall on the `~/Library/CloudStorage/…` (Google Drive FileProvider) path, and the mechanisms differ by **how contained** the required Full Disk Access grant is:
-  - **launchd — ✗ won't work.** A background LaunchAgent fails `Operation not permitted` on the Drive path and can't be granted FDA cleanly.
-  - **cron — works, but broad.** Requires FDA on `/usr/sbin/cron`, a *shared system binary*, so every scheduled job on the machine inherits full-disk access.
-  - **Automator app + Shortcuts — recommended (least privilege).** Wrap the script in an Automator **Application**, grant FDA to *just that app*, and trigger it from a Shortcuts **Time of Day** automation via an **Open App** action (so Shortcuts itself needs no disk access). Downside: Shortcuts schedules daily/weekly, not every-30-min — fine for a safety net. This is the GUI, one-time-per-machine path in step 6.
+Two concerns moved out, so troubleshooting for them lives with their skill rather than here:
+
+- **The Drive backup** — `/localclaude:drive-backup`. The Stop hook, `backup-projects.sh`, the
+  destination resolution order, the rsync flag choices, and the Full Disk Access / Automator /
+  Shortcuts path are all documented there.
+- **The llama.cpp shell aliases and login auto-start** — `/localclaude:claude-toggle-backend`,
+  which owns the managed `~/.zshrc` block. `claude-setup` now writes nothing outside
+  `~/.claude` and the detected Drive root.
 
 ## Other useful facts
 
@@ -59,5 +55,5 @@ Why each rule in `SKILL.md` exists, and how to debug "I allow-listed it but stil
 
 1. Detect `CODE_ROOT` — the synced `Code` folder holding `Skills/`, `Plugins/`, `Claude-Projects/`. Its parent can differ per machine (`…/My Drive/Code` vs `…/My Drive/AnswerRocket/Code`) (step 4).
 2. Symlink `~/.claude/skills` → `$CODE_ROOT/Skills` (step 4) and `~/.claude/localclaude-plugins` → `$CODE_ROOT/Plugins`, then `/plugin marketplace add /Users/<you>/.claude/localclaude-plugins` + `/plugin install localclaude@localclaude-marketplace` (step 5).
-3. Backup: `mkdir -p "$CODE_ROOT/Claude-Projects"/{Code,Cowork,Scheduled}`, write that path to `~/.claude/projects-backup.dest`, seed once, and merge the `Stop` hook into `settings.json` (step 6).
+3. Backup: run `/localclaude:drive-backup` — it creates the destination folders, writes `~/.claude/projects-backup.dest`, seeds once, and merges the `Stop` hook into `settings.json` (step 6).
 4. Cmd+Q + reopen.

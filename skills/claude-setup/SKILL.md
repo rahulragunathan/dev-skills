@@ -1,7 +1,7 @@
 ---
 name: claude-setup
-version: 2.6.0
-description: Set up or refresh Claude Code configuration on a machine — settings allowlist and denylist, plugin pruning, the global standards in ~/.claude/CLAUDE.md as a managed block, wiring to the synced Drive skills and this plugin, and a Stop-hook backup of transcripts and config to Drive. Use when configuring a new machine, updating the standards, or cutting down permission prompts.
+version: 2.7.0
+description: Set up or refresh Claude Code configuration on a machine — settings allowlist and denylist, plugin pruning, the global standards in ~/.claude/CLAUDE.md as a managed block, and wiring to the synced Drive skills and this plugin. Use when configuring a new machine, updating the standards, or cutting down permission prompts. It hands the Drive backup to drive-backup and the llama.cpp shell aliases to claude-toggle-backend.
 license: MIT
 ---
 
@@ -12,9 +12,11 @@ Bootstrap a machine's Claude Code config with the user's preferred conventions:
 - A **fewer-prompts allowlist** + **destructive-command denylist** in `~/.claude/settings.json`. **It is not a security boundary and must not be described as one:** `cat`/`echo` redirection writes, formatters have fix modes, and `pytest` executes arbitrary project code. It is a list of commands already judged safe, so they stop prompting. Adding argument-level criteria would re-attempt the impossible — a prefix rule cannot inspect arguments.
 - The user's **complete global standards** in `~/.claude/CLAUDE.md` (shell/path rules that stop spurious permission prompts on cloud-synced "My Drive" paths, git conventions, and the TDD + phase-workflow development process), carried in a **managed block** so a re-run reconciles a stale file up to the current standard.
 - **Wiring this machine to the synced Drive**: a `~/.claude/skills` symlink (loose skills like `drawio`) and the **`localclaude`** plugin via a local marketplace — both derived from one detected `Code` root.
-- **Backing up chat transcripts + memory** (Claude Code **and** Cowork) to the synced `Code/Claude-Projects` folder via a `Stop` hook, so sessions are backed up and analyzable later.
+- **A `Stop`-hook backup** of transcripts, plans and config to the synced `Code/Claude-Projects` folder. Step 6 hands this to `/localclaude:drive-backup`, which owns the script and the procedure.
 
-Idempotent — safe to re-run. It **merges** into existing config, never clobbers. See `REFERENCE.md` (next to this file) for the full rationale and troubleshooting.
+It writes nothing outside `~/.claude` and the detected Drive root. Idempotent — safe to re-run,
+and it **merges** into existing config rather than clobbering it. See `REFERENCE.md` (next to
+this file) for the full rationale and troubleshooting.
 
 ## When to use
 
@@ -108,7 +110,7 @@ Finish with the usual reminder: changes take effect only after a full Cmd+Q + re
 
 ### 3. Reconcile `~/.claude/CLAUDE.md` to the complete standards
 
-This is the user's **complete global standard** — the goal is that a re-run brings a *stale* file **up to date**, not merely appends the sections when they're absent. So **reconcile**, don't just check-for-presence. The canonical block below is wrapped in managed markers (same pattern as the `.zshrc` block in step 7) so re-runs can replace it cleanly.
+This is the user's **complete global standard** — the goal is that a re-run brings a *stale* file **up to date**, not merely appends the sections when they're absent. So **reconcile**, don't just check-for-presence. The canonical block below is wrapped in managed markers so re-runs can replace it cleanly. `claude-toggle-backend` uses the same pattern for its `~/.zshrc` block; if you change the marker handling here, change it there too.
 
 **Read the file first if it exists**, then install the canonical block verbatim between the markers.
 
@@ -299,151 +301,24 @@ Then in Claude Code, using the **literal absolute path** (no quotes, no spaces, 
 
 `enabledPlugins` is written to this machine's `settings.json` (not synced), so each machine enables independently. **After install, skills are namespaced** `/localclaude:<skill>` (e.g. `/localclaude:claude-toggle-backend ollama`).
 
-### 6. Back up chat transcripts + memory to Drive (Claude Code **and** Cowork)
+### 6. Back up chat transcripts + memory to Drive
 
-Snapshot conversation transcripts, plans, per-project `memory/`, and key config to the synced `Code/Claude-Projects` folder so they're backed up and analyzable later. The backup script ships **with this plugin** (`backup-projects.sh`, next to this file), so it auto-arrives on every machine once step 5's plugin symlink exists — nothing to copy. It rsyncs these sources:
+Transcripts, plans, per-project `memory/` and a config snapshot back up to
+`$CODE_ROOT/Claude-Projects` through a `Stop` hook that runs at the end of every turn.
 
-- `~/.claude/projects` → `Claude-Projects/Code`      (Claude Code transcripts + `memory/`)
-- `~/.claude/plans`    → `Claude-Projects/Plans`     (approved plan-mode plan files)
-- `~/Claude/Projects`  → `Claude-Projects/Cowork`    (Cowork project files)
-- `~/Claude/Scheduled` → `Claude-Projects/Scheduled` (Cowork scheduled-task definitions)
-- `~/Library/Application Support/Claude/local-agent-mode-sessions` → `Claude-Projects/Cowork-Local/local-agent-mode-sessions` (Cowork local-agent session transcripts + audit logs; ~200 MB on first sync, incremental after)
-- `~/Library/Application Support/Claude/claude-code-sessions` → `Claude-Projects/Cowork-Local/claude-code-sessions` (Cowork-managed Claude Code session/scheduled-task state)
-- A **Config snapshot** → `Claude-Projects/Config`: `~/.claude/CLAUDE.md`, `settings.json`, `history.jsonl`, `projects-backup.dest`, `commands/`, `~/.claude.json` (holds the invisible per-project "always allow" state — otherwise unrecoverable), and the Desktop app's `claude_desktop_config.json` + `config.json`.
+Run **`/localclaude:drive-backup`** to install it. It owns the destination file, the seed run,
+the hook JSON and the optional standalone scheduler; the script lives beside that skill. Come
+back here afterwards for step 7.
 
-**Why rsync-on-Stop, not a symlink into Drive:** Claude appends to the live `.jsonl` many times per turn; a symlinked dir would make Google Drive repeatedly upload a half-written file → conflicted-copy churn. rsync writes each file atomically (temp + rename), so Drive only ever sees complete files. It's append-only (no `--delete`) — transcripts pruned locally stay archived.
+**The hook writes to `~/.claude/settings.json`**, which step 2 also writes. Whichever runs
+second must merge rather than replace, so re-validate with
+`python3 -m json.tool ~/.claude/settings.json` after either.
 
-**a) Point it at this machine's Drive folder** (dest lives beside Skills/Plugins under `CODE_ROOT`). The script reads this `.dest` file first, so detection never has to guess:
-
-```bash
-BACKUP_DEST="$CODE_ROOT/Claude-Projects"          # from step 4
-mkdir -p "$BACKUP_DEST/Code" "$BACKUP_DEST/Plans" "$BACKUP_DEST/Cowork" "$BACKUP_DEST/Scheduled" "$BACKUP_DEST/Cowork-Local" "$BACKUP_DEST/Config"
-printf '# Absolute path to this machine%s Claude-Projects backup folder.\n%s\n' "'s" "$BACKUP_DEST" > "$HOME/.claude/projects-backup.dest"
-```
-
-(The script also auto-detects common layouts and honors a `CLAUDE_PROJECTS_BACKUP_DEST` env override, but the `.dest` file is the reliable per-machine anchor — use it on machines where the path isn't `…/Code/Claude-Projects`.)
-
-**b) Seed the first backup and confirm:**
-
-```bash
-bash "$HOME/.claude/localclaude-plugins/localclaude/skills/claude-setup/backup-projects.sh"
-tail -n 2 "$HOME/.claude/projects-backup.log"     # expect: ok (rc=0) -> Code Cowork Scheduled -> <dest>
-```
-
-**c) Add the `Stop` hook** to `~/.claude/settings.json` so it runs at the end of every turn. **Read the file first** and merge the `hooks` key alongside `permissions`/`model` (don't clobber existing hooks); then validate with `python3 -m json.tool ~/.claude/settings.json`:
-
-```json
-"hooks": {
-  "Stop": [
-    { "hooks": [ { "type": "command",
-      "command": "nohup bash \"$HOME/.claude/localclaude-plugins/localclaude/skills/claude-setup/backup-projects.sh\" >/dev/null 2>&1 &" } ] }
-  ]
-}
-```
-
-`nohup … &` detaches rsync so the turn never waits; the script self-locks (mkdir lock) so rapid turns don't race, and always exits 0 so a backup failure can't break a turn.
-
-**Idempotent check — already set up iff all three hold:** `~/.claude/projects-backup.dest` exists, `settings.json`'s `Stop` hook calls `backup-projects.sh`, and the log's last line shows `rc=0`. If so, just re-seed with the 6b command.
-
-**Cowork standalone (optional) — GUI, one-time per machine.** The Stop hook only fires while you're in Claude Code, so Cowork-only sessions back up on your next Claude Code turn. For independent coverage, schedule the script with **Automator + Shortcuts** — a one-time click-through per machine that's more secure than cron (see the TCC note). Walk the user through it:
-
-> **Why not launchd or cron.** A background **LaunchAgent can't read/write the Google Drive** (`~/Library/CloudStorage/…` FileProvider) path — it fails `Operation not permitted` — and can't be granted Full Disk Access cleanly. **cron** works but only after granting FDA to `/usr/sbin/cron`, a *shared system binary* — so every scheduled job on the machine inherits full-disk access (broad). **Automator + Shortcuts** scopes the grant to one app you built (least privilege). The `Stop` hook needs none of this: it runs inside Claude Code's logged-in session, which already has Drive access.
-
-**Worker — a tiny Automator app that runs the script (grant *this* Full Disk Access):**
-
-> **Give the user these steps to do by hand — do NOT build the app for them.** Creating it programmatically (an `osacompile` applet, or a hand-rolled `.app` bundle) is a dead end: those don't reliably register with Launch Services, so the app **never shows up in the Shortcuts "Open App" picker** (step 8) — confirmed the hard way. Automator's editor, the Full Disk Access grant, and Shortcuts automations are all GUI-only surfaces a background/non-interactive process can't drive anyway. Walk the user through the clicks; don't try to shortcut it.
-
-1. **Automator** → New Document → **Application**.
-2. Add the **Run Shell Script** action; set Shell to `/bin/bash`; body (**hardcode the absolute path — Automator's env may not carry `$HOME`**, so substitute the real home dir):
-   `/bin/bash "/Users/<you>/.claude/localclaude-plugins/localclaude/skills/claude-setup/backup-projects.sh"`
-3. **File → Save** as **`Backup Claude Projects`** into top-level **`/Applications`** (not `~/Applications`) — apps there register with Launch Services most reliably, which is what makes the app appear in the Shortcuts picker in step 8. Format stays **Application**.
-4. **System Settings → Privacy & Security → Full Disk Access → `+`** → select that app → enable. (Only this app gets FDA.)
-5. Double-click the app once to confirm — check `tail -n 2 ~/.claude/projects-backup.log` for a fresh `ok (rc=0)` (not `Operation not permitted`, which means the FDA toggle didn't take).
-
-**Scheduler — a Shortcuts automation that just opens the app (needs no disk access):**
-
-1. **Shortcuts** → **Automation** tab → **New Automation** → **Time of Day**.
-2. Pick a time and **Daily** (add 2–3 automations, e.g. 12pm/6pm, for more frequent coverage — "every 30 min" isn't offered, and isn't needed for a safety net).
-3. Action: **Open App** → choose **Backup Claude Projects**. Turn **off "Ask Before Running."**
-
-**If the app still isn't in the "Open App" list** (Launch Services hasn't indexed it), force a reindex, then reopen the picker:
-
-```bash
-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "/Applications/Backup Claude Projects.app"
-```
-
-Because Shortcuts only *opens* the app and the app carries its own FDA, neither the scheduler nor any shared binary gets broad disk access.
-
-### 7. (Optional, any machine) Local llama.cpp server aliases
-
-Convenience controls for the llama.cpp backend. Installed as a **managed block** between markers so re-running replaces it cleanly without clobbering other `~/.zshrc` lines (path = the space-free plugin symlink; port pinned to `8730` so the toggle and aliases agree on one port):
-
-**Require both markers before stripping anything.** A block with only its opening marker — the
-user tidied the file by hand and deleted the closing line — makes a naive strip delete
-everything from that marker to the end of the file. Everything below it goes: `PATH` edits,
-exports, other tools' managed blocks. Back up first, refuse on a mismatch, and never write
-through a fixed temporary path a concurrent shell could be using.
-
-```bash
-set -euo pipefail
-ZS="$HOME/.zshrc"
-OPEN='# >>> localclaude aliases'
-CLOSE='# <<< localclaude aliases'
-
-if [ -f "$ZS" ]; then
-  n_open="$(grep -c "^$OPEN" "$ZS" || true)"
-  n_close="$(grep -c "^$CLOSE" "$ZS" || true)"
-  [ "$n_open" = "$n_close" ] || {
-    echo "MARKER MISMATCH in $ZS — $n_open opening, $n_close closing."
-    echo "Repair the block by hand; refusing to edit."; exit 1; }
-  cp -p "$ZS" "$ZS.localclaude.bak"
-  if [ "$n_open" != "0" ]; then
-    TMP="$(mktemp "${TMPDIR:-/tmp}/zshrc.XXXXXX")"
-    awk -v o="$OPEN" -v c="$CLOSE" '
-      index($0, o) == 1 { s = 1; next }
-      index($0, c) == 1 { s = 0; next }
-      !s' "$ZS" > "$TMP"
-    mv "$TMP" "$ZS"
-  fi
-fi
-
-cat >> "$ZS" <<'EOF'
-
-# >>> localclaude aliases (managed) >>>
-# Pin the llama.cpp port so the toggle and aliases use the same server.
-export LLAMACPP_PORT=8730
-alias llama-cpp-up='LLAMACPP_PORT=8730 bash "$HOME/.claude/localclaude-plugins/localclaude/skills/claude-toggle-backend/llama-serve.sh" start'
-alias llama-cpp-down='bash "$HOME/.claude/localclaude-plugins/localclaude/skills/claude-toggle-backend/llama-serve.sh" stop'
-alias llama-cpp-status='bash "$HOME/.claude/localclaude-plugins/localclaude/skills/claude-toggle-backend/llama-serve.sh" status'
-# <<< localclaude aliases <<<
-EOF
-```
-
-- `export LLAMACPP_PORT=8730` — makes `claude-toggle-backend llama-cpp` use the same fixed port (8730) as the aliases, instead of auto-scanning. (8730 is an unregistered port; nothing standard uses it.)
-- `llama-cpp-up` — start the server (single-instance: sweeps any stray first; port pinned 8730).
-- `llama-cpp-down` — stop it and clean up any orphans.
-- `llama-cpp-status` — show whether it's running (pid/port/model) and warn if >1 process.
-
-(New shell or `source ~/.zshrc` to use them in an open terminal.)
-
-### 8. (Optional, OFF by default) Auto-start llama-server at login
-
-The server is **manual by default** (`llama-cpp-up`). **Only set this up if the user explicitly asks.** To auto-start it from login via a launchd LaunchAgent:
-
-```bash
-bash "$HOME/.claude/localclaude-plugins/localclaude/skills/claude-toggle-backend/llama-autostart.sh" install
-```
-
-- `RunAtLoad` + `KeepAlive=false`: starts once at login on port 8730, but `llama-cpp-down` still works and it won't respawn until the next login (so it coexists with the manual aliases).
-- **Caveats:** holds ~14 GB resident from login on — don't pair with Ollama on a 24 GB machine; macOS shows a one-time "background item added" (Login Items) notification.
-- **Alias lifecycle:** `install` also adds a `llama-cpp-autostart` alias (→ `llama-autostart.sh`) to `~/.zshrc`; `uninstall` **removes** it again — so the alias exists only while auto-start is enabled, and this skill / `llama-autostart.sh install` stays the single obvious way to re-enable it. (It's never created on a machine that hasn't enabled auto-start.)
-- Manage: `llama-autostart.sh status` / `llama-autostart.sh uninstall` (uninstall removes the plist + alias; it leaves any running server alone — stop that with `llama-cpp-down`).
-
-### 9. Tell the user to fully restart
+### 7. Tell the user to fully restart
 
 Config (and plugin enablement) is read at **process start**. In the VS Code extension each chat tab is a long-lived `claude` process; "Developer: Reload Window" only *resumes* it. The user must fully **quit (Cmd+Q) and reopen** for changes to take effect. (CLI: start a new `claude` invocation.)
 
-### 10. Confirm and point to the reference
+### 8. Confirm and point to the reference
 
 Report what was added/merged and which skills now load, then point at `REFERENCE.md`.
 
@@ -452,5 +327,5 @@ Report what was added/merged and which skills now load, then point at `REFERENCE
 - Read-only commands → allowlisted (no prompt). File-modifying commands → still prompt, by design.
 - Always double-quote paths; never `My\ Drive`. Prefer absolute paths over `cd "…" && relative`.
 - Loose skills (drawio) load via the `~/.claude/skills` symlink; bundled skills load via the `localclaude` plugin (`/localclaude:<skill>`). Both, plus the transcript-backup dest, derive from one detected `Code` root.
-- Transcripts + plans + memory + config (Claude Code & Cowork, incl. Cowork local-agent sessions) back up to `Code/Claude-Projects` at the end of every turn via a `Stop` hook (`backup-projects.sh`). Dest is recorded in `~/.claude/projects-backup.dest`; activity log at `~/.claude/projects-backup.log`.
+- Transcripts, plans, memory and config back up to `Code/Claude-Projects` at the end of every turn via a `Stop` hook. `/localclaude:drive-backup` owns it; the dest is `~/.claude/projects-backup.dest` and the log is `~/.claude/projects-backup.log`.
 - Context-heavy plugins (huggingface-skills, firebase, mcp-server-dev, feature-dev, code-simplifier) default OFF per step 2b — re-enable per session when needed.

@@ -1,7 +1,7 @@
 ---
 name: claude-toggle-backend
-version: 2.1.0
-description: Switch the local Claude Code backend between the Anthropic API, a local Ollama server, a local llama.cpp (llama-server, Metal-accelerated) server, and a local MLX (vllm-mlx, Apple Silicon) server. Non-destructively patches only model + effortLevel + ANTHROPIC_* env keys in ~/.claude/settings.json (preserving the permission allowlist and everything else) via the bundled toggle.sh, and auto-manages the llama-server / vllm-mlx process for the llama-cpp / mlx backends. Use when the user wants to run Claude Code on local models (Ollama, llama.cpp, or MLX), switch back to Anthropic, work offline, or asks which backend is active.
+version: 2.2.0
+description: Switch the local Claude Code backend between the Anthropic API, a local Ollama server, a local llama.cpp (llama-server, Metal-accelerated) server, and a local MLX (vllm-mlx, Apple Silicon) server. Non-destructively patches only model + effortLevel + ANTHROPIC_* env keys in ~/.claude/settings.json (preserving the permission allowlist and everything else) via the bundled toggle.sh, and auto-manages the llama-server / vllm-mlx process for the llama-cpp / mlx backends. Also installs the managed ~/.zshrc block of llama-cpp-up / -down / -status aliases and the optional login auto-start. Use when the user wants to run Claude Code on local models (Ollama, llama.cpp, or MLX), switch back to Anthropic, work offline, install the server aliases, or asks which backend is active.
 license: MIT
 ---
 
@@ -94,7 +94,63 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/claude-toggle-backend/mlx-serve.sh" status|stop
 
 e.g. `OLLAMA_MODEL=qwen2.5-coder:14b bash "$TB" ollama`
 
-## Optional: terminal aliases
+## Shell aliases (managed `~/.zshrc` block)
+
+Convenience controls for the llama.cpp server. Installed as a **managed block** between
+markers, so re-running replaces it cleanly without touching other `~/.zshrc` lines. The path is
+the space-free plugin symlink, and the port is pinned to `8730` so the aliases and the toggle
+agree on one server.
+
+**Require both markers before stripping anything.** A block with only its opening marker — the
+user tidied the file by hand and deleted the closing line — makes a naive strip delete
+everything from that marker to the end of the file. `PATH` edits, exports and other tools'
+managed blocks all go. Back up first, refuse on a mismatch, and never write through a fixed
+temporary path a concurrent shell could be using.
+
+```bash
+set -euo pipefail
+ZS="$HOME/.zshrc"
+OPEN='# >>> localclaude aliases'
+CLOSE='# <<< localclaude aliases'
+
+if [ -f "$ZS" ]; then
+  n_open="$(grep -c "^$OPEN" "$ZS" || true)"
+  n_close="$(grep -c "^$CLOSE" "$ZS" || true)"
+  [ "$n_open" = "$n_close" ] || {
+    echo "MARKER MISMATCH in $ZS — $n_open opening, $n_close closing."
+    echo "Repair the block by hand; refusing to edit."; exit 1; }
+  cp -p "$ZS" "$ZS.localclaude.bak"
+  if [ "$n_open" != "0" ]; then
+    TMP="$(mktemp "${TMPDIR:-/tmp}/zshrc.XXXXXX")"
+    awk -v o="$OPEN" -v c="$CLOSE" '
+      index($0, o) == 1 { s = 1; next }
+      index($0, c) == 1 { s = 0; next }
+      !s' "$ZS" > "$TMP"
+    mv "$TMP" "$ZS"
+  fi
+fi
+
+cat >> "$ZS" <<'EOF'
+
+# >>> localclaude aliases (managed) >>>
+# Pin the llama.cpp port so the toggle and aliases use the same server.
+export LLAMACPP_PORT=8730
+alias llama-cpp-up='LLAMACPP_PORT=8730 bash "$HOME/.claude/localclaude-plugins/localclaude/skills/claude-toggle-backend/llama-serve.sh" start'
+alias llama-cpp-down='bash "$HOME/.claude/localclaude-plugins/localclaude/skills/claude-toggle-backend/llama-serve.sh" stop'
+alias llama-cpp-status='bash "$HOME/.claude/localclaude-plugins/localclaude/skills/claude-toggle-backend/llama-serve.sh" status'
+# <<< localclaude aliases <<<
+EOF
+```
+
+- `export LLAMACPP_PORT=8730` — makes `llama-cpp` use the same fixed port as the aliases
+  instead of auto-scanning. 8730 is unregistered; nothing standard uses it.
+- `llama-cpp-up` — start the server. Single-instance: sweeps any stray process first.
+- `llama-cpp-down` — stop it and clean up orphans.
+- `llama-cpp-status` — show pid, port and model, and warn if more than one process is running.
+
+Open a new shell, or `source ~/.zshrc`, to use them in a terminal that is already open.
+
+**Toggle shortcuts (not managed — add by hand if you want them):**
 
 ```bash
 alias claude-anthropic='bash "<abs>/toggle.sh" anthropic'
@@ -103,6 +159,28 @@ alias claude-llama='bash "<abs>/toggle.sh" llama-cpp'
 alias claude-mlx='bash "<abs>/toggle.sh" mlx'
 alias claude-backend='bash "<abs>/toggle.sh" status'
 ```
+
+## Optional: auto-start `llama-server` at login
+
+The server is **manual by default** (`llama-cpp-up`). **Only set this up if the user explicitly
+asks.** To start it from login via a launchd LaunchAgent:
+
+```bash
+bash "$HOME/.claude/localclaude-plugins/localclaude/skills/claude-toggle-backend/llama-autostart.sh" install
+```
+
+- `RunAtLoad` with `KeepAlive=false`: starts once at login on port 8730, but `llama-cpp-down`
+  still works and it will not respawn until the next login, so it coexists with the manual
+  aliases.
+- **Costs:** holds ~14 GB resident from login onward — do not pair it with Ollama on a 24 GB
+  machine. macOS shows a one-time "background item added" notification.
+- **Alias lifecycle:** `install` also adds a `llama-cpp-autostart` alias to `~/.zshrc`, and
+  `uninstall` removes it, so the alias exists only while auto-start is enabled and
+  `llama-autostart.sh install` stays the single obvious way to re-enable it. It is never
+  created on a machine that has not enabled auto-start. **`llama-autostart.sh` still carries
+  the unhardened marker strip this section's block replaced — that is KI-22.**
+- Manage with `llama-autostart.sh status` / `uninstall`. Uninstall removes the plist and the
+  alias and leaves a running server alone; stop that with `llama-cpp-down`.
 
 ## Prerequisites
 
