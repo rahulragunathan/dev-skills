@@ -514,7 +514,7 @@ group rather than searching by name.
 
 ## KI-14 — every backup failure is logged as `ok` and exits 0
 
-**Severity:** Medium
+**Severity:** High
 **Where:** [backup-projects.sh:133](../skills/claude-setup/backup-projects.sh#L133)
 
 ### What happens

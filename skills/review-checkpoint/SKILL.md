@@ -67,11 +67,24 @@ print(" ".join(sorted(ms,key=rank)[:3]))'
 `claude-*` and `gpt-oss-*`. A Claude model is not a second opinion on Claude's work, and the
 filter keeps the run inside the Gemini subscription.
 
-**Three rungs, and the floor is a refusal.** Each ladder stops at three deliberately, and the loops
-above walk them — selecting only the first rung would document a downshift that can never run.
-Downshift only when a model fails with an **availability** error (`model ... is not supported`, unknown or
-retired model, entitlement error). Quota, auth and timeout are **not** downshift triggers — see
-*Failure handling*.
+**At most three rungs, and the floor is a refusal.** The loops above walk them — selecting only
+the first rung would document a downshift that can never run. Downshift only when a model fails
+with an **availability** error (`model ... is not supported`, unknown or retired model,
+entitlement error). Quota, auth and timeout are **not** downshift triggers — see *Failure
+handling*.
+
+**Three is a ceiling on how far you may descend, not a promise that three exist.** Where the
+discovered list is shorter, the floor arrives sooner; never pad it out by relaxing the filter to
+reach a third name.
+
+**An empty ladder is a failure, not an empty loop.** If discovery returns nothing — a missing or
+malformed `models_cache.json`, an `agy models` that did not run — `for m in $(…)` iterates zero
+times and the reviewer silently produces no output, which reads downstream as a clean review.
+Check before running, and report it as partial coverage for that reviewer:
+
+```bash
+[ -n "$(codex_ladder)" ] || echo "Codex ladder discovery returned nothing — report partial coverage, do not run"
+```
 
 **If all three rungs fail, that reviewer produces nothing. Never reach past the floor.** A review
 from the weakest tier available is worse than no review: it arrives with the same authority as a
@@ -132,6 +145,8 @@ Prompt drift between the two reviewers corrupts the agree/disagree triage. Compo
    > *Already tracked — do not re-report these. Do say so if you think one is mis-rated, filed in the wrong place, or has a cause different from the one recorded.*
 
    Without this the reviewers re-derive the whole backlog and the duplicates swamp the genuinely new findings. With it they stay on what the phase actually changed.
+
+   **Send only the entries in scope for this phase.** Where a component is being rebuilt or is otherwise off the table, its entries are noise: the reviewers spend the pass re-deriving bugs in code nobody is going to touch, and the real findings compete with them. Name the excluded area in the preamble — *"`local-models` and `claude-toggle-backend` are being rebuilt; their open issues are out of scope, do not report on those two skills"* — rather than silently dropping the IDs, so a reviewer that finds something there can still say so in one line. Scope exclusions are per-review; nothing leaves the roadmap files.
 3. **Focus list** by mode:
    - *plan*: gaps and missing steps, risks and failure modes, sequencing problems, simpler approaches missed, anything underspecified.
    - *phase / repo*: real bugs (report everything, do not self-filter for severity), silent failures, security issues, design choices that will not hold up, code duplication/consolidation opportunities, genuinely missing test coverage; plus doc-vs-code contradictions (README, ARCHITECTURE, CLAUDE.md, ROADMAP + KNOWN_ISSUES/ENHANCEMENTS/OPEN_QUESTIONS, CHANGELOG).
@@ -146,11 +161,17 @@ Prompt drift between the two reviewers corrupts the agree/disagree triage. Compo
 
 7. **Suggested remediation:** for each finding, add one or two sentences on how you would fix it. A sketch, not a patch — enough to show what change you have in mind.
 
-8. **Output contract:** "Return a numbered list of findings with file/function references and a severity for each."
+8. **Output contract — always a list, even an empty one:**
+
+   > Return a numbered list of findings, each with file/function references and a severity. Return the list **even when you found nothing**: emit the heading and the single line `No findings.` Never answer with prose instead of the list.
+
+   The empty list is what separates a reviewer that ran and found nothing from one that never ran. **Absent output means the review did not happen — nothing else does.** A reviewer that returns `No findings.` has covered the material; a reviewer that returns nothing at all has not, and the coverage line must say which.
 
 ## Modes
 
-**`plan <plan-file>`** — default: newest file in `~/.claude/plans/`. Inline the plan text for BOTH reviewers (Codex may also explore the repo for context; Gemini gets text only).
+**Every mode bundles through the same procedure below.** The exclusions, the symlink test, the binary test and the reconciled count are not phase-mode details — they are what stops source and secrets reaching a third party, and they apply whenever anything is inlined. Only the *selection* differs by mode.
+
+**`plan <plan-file>`** — **name the plan file explicitly.** Fall back to the newest file in `~/.claude/plans/` only when the user gave no path and you have confirmed the newest file is this phase's plan; say which file you selected. Newest-in-directory silently reviews an unrelated plan when a plan was drafted for other work in between. Inline the plan text for BOTH reviewers (Codex may also explore the repo for context; Gemini gets text only). A plan can quote configuration and connection strings, so run it through the same exclusion check before inlining.
 
 **`phase [base-branch]`** — detect base via `git remote show origin` if not given. Codex: repo-rooted with the rubric framed around the phase's changes. Gemini: the change bundle below, written to a scratchpad file and inlined into the prompt.
 
@@ -177,23 +198,37 @@ EXCL=(':(exclude,icase)*.env' ':(exclude,icase)*.env.*' ':(exclude,icase)*.pem'
       ':(exclude,icase)*credentials*' ':(exclude,icase)*.netrc' ':(exclude,icase)*.npmrc'
       ':(exclude,icase)*.sqlite' ':(exclude,icase)*.sqlite3')
 
-# tracked: committed + staged + unstaged
-git diff "<base>"...HEAD -- . "${EXCL[@]}" > "$BUNDLE" || { echo "DIFF FAILED — bundle incomplete"; exit 1; }
+# tracked: the phase's commits, with every conversion filter off
+git -c diff.external= diff --no-textconv --no-ext-diff "<base>"...HEAD -- . "${EXCL[@]}" \
+  >> "$BUNDLE" || { echo "DIFF FAILED — do not send this bundle"; exit 1; }
 
 # untracked: each one appended IN FULL, behind a path header
-git ls-files --others --exclude-standard -z -- . "${EXCL[@]}" |
+git ls-files --others --exclude-standard -z -- . "${EXCL[@]}" > "<scratchpad>/untracked.z" \
+  || { echo "LS-FILES FAILED — do not send this bundle"; exit 1; }
+
 while IFS= read -r -d '' f; do
   [ -L "$f" ] && { printf '%s\t(symlink)\n' "$f" >> "$WITHHELD"; continue; }
   [ -f "$f" ] || continue
   perl -e 'exit(-B $ARGV[0] ? 0 : 1)' "$f" && { printf '%s\t(binary)\n' "$f" >> "$WITHHELD"; continue; }
   printf '\n===== UNTRACKED FILE: %s =====\n' "$f" >> "$BUNDLE"
-  cat "$f" >> "$BUNDLE" || { echo "READ FAILED: $f"; exit 1; }
-done
+  cat "$f" >> "$BUNDLE" || printf '%s\t(read failed)\n' "$f" >> "$WITHHELD"
+done < "<scratchpad>/untracked.z"
+
+grep -q '(read failed)' "$WITHHELD" && { echo "A FILE FAILED TO READ — do not send this bundle"; exit 1; }
 ```
 
-**`git ls-files` prints paths, so something has to do the appending.** Show the loop, not the
-command plus a comment describing what the comment wishes happened — an agent that runs exactly
-what is written otherwise sends a bundle of filenames and reports that it sent the files.
+**Feed the loop from a file, not from a pipe.** On the right-hand side of a pipe the loop runs in
+a subshell, so an `exit` inside it ends the subshell and the script carries on to send a bundle it
+already knows is incomplete.
+
+**Write the bundle outside the repo.** The untracked sweep lists whatever is untracked, so a
+bundle written inside the working tree is listed, appended to itself, and grows until the disk
+fills. The scratchpad is outside the repo; keep it that way.
+
+**Turn conversion off for the tracked diff.** A repo that configures `textconv` or an external
+diff driver — for PDFs, notebooks, or an encrypted-file helper — otherwise runs it during capture,
+and the converted plaintext lands in the bundle for a file the exclusions were written to keep
+out.
 
 **Bundling sends your source to a third party.** Exclude credential-shaped files from **both** lists — a tracked `.env` reaches the reviewer through `git diff` just as easily as an untracked one. **Every pattern needs a leading `*` and `icase`**: without them a pathspec anchors at the repo root and is case-sensitive, so `config/credentials.json` and `Credentials.yaml` both pass.
 
@@ -225,17 +260,40 @@ A reviewer told what was withheld never reports it as missing. `-z` in the bundl
 
 Put that count in the prompt (*"this bundle contains all N changed files"*) and in the report's coverage line. Codex reads the working tree and sees untracked files on its own, but give it the same manifest so it is not inferring the scope of the phase.
 
-**`repo`** — no in-flight branch; review current state (workflow adoption, periodic health check). Codex: repo-rooted as above. Gemini: concatenate the source into one bundle (`allsrc.txt`-style) and inline it. **If the bundle exceeds the model's input limit, chunk by package/directory and run one call per chunk — never silently review a subset; say in the report exactly what each call covered.**
+**`repo`** — no in-flight branch; review current state (workflow adoption, periodic health check). Codex: repo-rooted as above. Gemini: one bundle of the source, inlined.
+
+**Build the `repo` bundle from `git ls-files`, never from a filesystem walk.** A recursive `find` or `cat -r` follows the `node_modules` and `.venv` symlinks straight out of the repo and into the environment root, and sweeps in every ignored file. Tracked files only, with the same exclusions, the same symlink and binary tests, and the same reconciled count:
+
+```bash
+git ls-files -z -- . "${EXCL[@]}" |
+while IFS= read -r -d '' f; do
+  [ -L "$f" ] && { printf '%s\t(symlink)\n' "$f" >> "$WITHHELD"; continue; }
+  [ -f "$f" ] || continue
+  perl -e 'exit(-B $ARGV[0] ? 0 : 1)' "$f" && { printf '%s\t(binary)\n' "$f" >> "$WITHHELD"; continue; }
+  printf '\n===== %s =====\n' "$f" >> "$BUNDLE"
+  cat "$f" >> "$BUNDLE" || printf '%s\t(read failed)\n' "$f" >> "$WITHHELD"
+done
+[ -s "$WITHHELD" ] && echo "withheld $(wc -l < "$WITHHELD") files — name them in the report"
+```
+
+**Chunk when the bundle is too large, and measure before sending.** Neither CLI reports its own input limit, so treat roughly 400k characters as the working ceiling for one Gemini call and split below it rather than discovering the limit from a truncated answer:
+
+```bash
+wc -c "$BUNDLE"    # split by package/directory if this is over ~400000
+```
+
+Never silently review a subset. Say in the report exactly what each call covered, and reconcile the chunks against the file count the same way a single bundle is reconciled.
 
 ## Failure handling — classify, don't guess
 
 On empty output or non-zero exit, run a tiny probe before reporting:
 
 ```bash
-codex exec -C "<repo-root>" --sandbox read-only -m <same model as the real run> "List the three most obvious code-quality issues in this repository. Be brief."   # or the agy equivalent with inline text
+codex exec -C "<repo-root>" --sandbox read-only -m <same model as the real run> \
+  "Do not open .env, .env.*, *.pem, *.key, credentials*, .netrc, .npmrc, id_rsa*, id_ed25519*, or anything else shaped like a secret. List the three most obvious code-quality issues in this repository. Be brief."   # or the agy equivalent with inline text
 ```
 
-Use the SAME model as the real run — quota and availability limits are per-model, so a probe on a different rung misdiagnoses the failure.
+Use the SAME model as the real run — quota and availability limits are per-model, so a probe on a different rung misdiagnoses the failure. **The probe carries the do-not-read instruction too.** It is a real agentic run over the repo, and a diagnostic is not an exemption.
 
 - Probe succeeds → the real prompt was the problem (too large, malformed) — fix and re-run.
 - Probe fails → read the error: quota/usage → **partial coverage, not a skip** (the CLI is installed and it ran); report "Codex/Gemini out of usage" with the error verbatim, per *A skip and partial coverage are different things* above; `model ... is not supported` → an unavailable model tier, not a quota problem (see the pins above); auth → say re-login is needed (`codex login` / `agy` interactive); tool-permission denial (Gemini) → the prompt asked it to use tools — inline the material instead.
@@ -250,7 +308,11 @@ Use the SAME model as the real run — quota and availability limits are per-mod
 
 ## The findings table (canonical format — both modes)
 
+**One table, both reviewers.** Each reviewer returns its own list; you merge them into the single table below, dedupe across them, and present that. Never hand the user two tables to reconcile.
+
 Every finding the reviewers returned gets a row, **including rejected and duplicate ones** — the user has to see what was thrown away. Never summarize the list down.
+
+**A reviewer that returned `No findings.` is covered and contributes no rows.** Say so in the coverage line (`Gemini gemini-3.1-pro-high 0`). That is a clean result, not partial coverage. A reviewer that returned *nothing* is the partial-coverage case instead — name it and give the error verbatim. When both reviewers return `No findings.`, present the empty table under its coverage line rather than omitting the table: an absent table has to keep meaning "no review ran".
 
 Open with a coverage line so the count is unambiguous:
 
@@ -307,7 +369,7 @@ The table itself is **chat-only** — do not write a per-phase review file. It p
 
 A first review changes the code, and those changes have been reviewed by no one — so a phase review is a loop, not one shot.
 
-**Five review runs per phase by default — a soft ceiling, not a target.** Go past it when the findings justify it; say why. Pass 1 full scope; passes 2 and 3 narrow. `plan` and `repo` modes stay single-pass: a plan already loops through the user's approval, and a `repo` review seeds the backlog rather than gating a hand-off.
+**There is no pass ceiling.** How many passes a phase needs depends on what the findings are and which way the count is moving, and neither is knowable at the start. Pass 1 is full scope; every later pass narrows. `plan` and `repo` modes stay single-pass: a plan already loops through the user's approval, and a `repo` review seeds the backlog rather than gating a hand-off.
 
 ### The loop
 
@@ -316,9 +378,17 @@ A first review changes the code, and those changes have been reviewed by no one 
 3. **Fix and file** what they approved.
 4. **Pass 2** — narrow (below). Then present and stop again, and repeat on the same terms.
 
-**Early exit.** A pass that returns no confirmed finding needing a code change ends the loop. Do not spend the remaining passes to use them up.
+### Ending the loop is the user's call, every pass
 
-**At the ceiling.** Anything still open when the passes stop is *filed* — `KI-nn`, `ENH-nn` or `UNK-nn` with its ROADMAP pointer row — never fixed-and-unreviewed. Say in the hand-off that the cap was reached and what is still open, so the user can call another round if they want one.
+Close every pass with a short assessment under the findings table, then stop:
+
+- **The trend** — the finding count for each pass so far, as a series.
+- **What the new findings are about** — fresh defects in untouched code, defects in the previous pass's own fixes, or documentation drift. A count that holds steady while the *kind* changes is a different situation from one that holds steady on the same kind.
+- **Your recommendation** — another pass, or land what is here and file the rest, with the reason.
+
+Recommend stopping when a pass returns no confirmed finding needing a code change, or when what remains is better filed than fixed. **The decision is the user's.** Never end the loop on your own judgement, and never open another pass without asking.
+
+Whatever is still open when the loop ends is *filed* — `KI-nn`, `ENH-nn` or `UNK-nn` with its ROADMAP pointer row — never fixed-and-unreviewed. Say in the hand-off what remains open.
 
 ### What "narrow" means
 
@@ -346,7 +416,7 @@ Finding IDs run in **one sequence for the whole phase** — pass 1 ends at `F-08
 
 ## Hard rules
 
-- **The reviewers never apply anything.** They are read-only by sandbox, not by request.
+- **The reviewers never write.** Codex is held to that by `--sandbox read-only`, not by prompt wording; Gemini gets text and no tools. Neither is restricted from *reading* — see the bundle section — so "read-only" here means it cannot change the repo, never that it cannot see a file.
 - **Who acts on a finding differs by mode, and both are review-only in the sense that matters — no fix is applied straight from review output.**
   - *plan*: the agent revises the plan itself, then presents the revision and the findings table together. This is deliberate: phase-workflow §1 says the plan the user sees is the revised one, so waiting for a disposition first would defeat the checkpoint.
   - *phase / repo*: the user dispositions every finding **before any code is touched**. A disposition you assigned yourself is a proposal until they say so.

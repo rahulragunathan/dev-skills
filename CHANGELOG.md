@@ -36,11 +36,10 @@ here — the plugin manifest's version is the only record of them.
 - **Test-validity audit now mutates rather than reverts** (`phase-workflow` §3
   step 3). Breaking the named behaviour in place replaces stashing the fix, which
   left newly added files in the tree and falsely certified the test. Restoration
-  is by **file snapshot**, never by `git checkout --`, `git restore` or `git stash`
-  — at the phase gate those read committed or indexed state, which is the phase's
-  starting point rather than its work, and none of them can restore a file the
-  phase created. Every failure path stops and names the surviving copy. A fixture
-  must carry the property under test.
+  is by `git checkout --`, which is correct here because the audit runs against a
+  committed task: the commit is the state to return to, and the snippet refuses to
+  run on a dirty tree or a symlinked target. Every failure path stops rather than
+  continuing. A fixture must carry the property under test.
 - **Skip and partial coverage are now distinct** in both `phase-workflow` and
   `review-checkpoint`. A reviewer that fails on quota, auth, timeout or sandbox
   ran and returned nothing; only an uninstalled CLI is a skip.

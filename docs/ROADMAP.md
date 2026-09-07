@@ -21,14 +21,20 @@ completion is deleted from both, with the record written into CHANGELOG `[Unrele
 item dropped rather than built moves to "Decisions taken and not taken". IDs are never
 reused. Nothing here looks backward — completed phases are CHANGELOG releases.
 
-**Last Updated**: 2026-09-06 (seeded from the external repo review of 2026-09-05)
+**Last Updated**: 2026-09-07 (seeded from the external repo review of 2026-09-05)
 
 ## Status
 
-The plugin ships six skills and is in daily use on one machine. The four bash scripts under
+The plugin ships six skills and is in daily use on one machine. The five bash scripts under
 `claude-toggle-backend` and `claude-setup` carry the whole open bug list: the process,
 review and standards skills were repaired in the phase that created this file, and their
 findings are in the CHANGELOG rather than here.
+
+**`local-models` and `claude-toggle-backend` are being rebuilt from scratch**, so their
+entries below are held rather than worked. They stay filed — the defects are real and the
+rebuild has to clear them — but they are out of scope for the current phase and are excluded
+from its external review bundles. KI-06, KI-07, KI-08, KI-14 and KI-15 belong to
+`claude-setup` and are not affected.
 
 The active queue is bug work in the scripts, and the test suite that would have caught it.
 Eight of the 29 bats tests pass with the behaviour they name removed, so ENH-02 and ENH-03
@@ -59,7 +65,7 @@ Most severe first. Severity definitions and full detail in [KNOWN_ISSUES.md](KNO
 | [KI-11](KNOWN_ISSUES.md#ki-11) | The MLX start test cannot detect a wrong server invocation | High |
 | [KI-12](KNOWN_ISSUES.md#ki-12) | The stop test passes even if nothing is stopped | High |
 | [KI-13](KNOWN_ISSUES.md#ki-13) | Test cleanup kills unrelated processes on the machine | High |
-| [KI-14](KNOWN_ISSUES.md#ki-14) | Every backup failure is logged as `ok` and exits 0 | Medium |
+| [KI-14](KNOWN_ISSUES.md#ki-14) | Every backup failure is logged as `ok` and exits 0 | High |
 | [KI-15](KNOWN_ISSUES.md#ki-15) | `$CLAUDE_CONFIG_DIR` is honoured in the docs and nowhere in the code | Medium |
 | [KI-16](KNOWN_ISSUES.md#ki-16) | The docs say the shell block exports `HF_HOME`; it does not | Medium |
 | [KI-17](KNOWN_ISSUES.md#ki-17) | The machine is documented as both 64 GB and 24 GB | Medium |

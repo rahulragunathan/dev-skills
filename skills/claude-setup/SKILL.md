@@ -105,13 +105,17 @@ Finish with the usual reminder: changes take effect only after a full Cmd+Q + re
 
 This is the user's **complete global standard** — the goal is that a re-run brings a *stale* file **up to date**, not merely appends the sections when they're absent. So **reconcile**, don't just check-for-presence. The canonical block below is wrapped in managed markers (same pattern as the `.zshrc` block in step 7) so re-runs can replace it cleanly.
 
-**Read the file first if it exists**, then install the canonical block verbatim between the markers:
+**Read the file first if it exists**, then install the canonical block verbatim between the markers.
 
-- **Markers already present** (`<!-- >>> localclaude standards …`) → **replace everything between them** with the current canonical block. This is how a stale copy gets refreshed — e.g. an old hardcoded `Co-Authored-By: Claude Opus 4.8` trailer, or a file missing the whole `## Development process` section.
-- **Standards present without markers** (an older machine — e.g. bare `## Shell commands` / `## Git` and nothing else) → **replace those sections in place** with the marked block, preserving any unrelated content the user keeps elsewhere in the file.
-- **Neither** (missing file, or unrelated content only) → create/append the marked block.
+**Take the canonical text from inside the fenced block below, not by searching this file for a marker.** This section discusses the markers, so a prefix search finds prose before it finds the real delimiters. Match **whole marker lines only**, and take the *last* opening marker in any file that has more than one.
 
-Preserve any non-standard content the user keeps **outside** the managed block. After writing, the managed block must match the canonical text **verbatim** — diff it to confirm no section (especially `## Development process`) was dropped and the trailer wording is the dynamic-model-name form, not a hardcoded model.
+- **Markers already present** → replace everything between them with the current canonical block. This is how a stale copy gets refreshed: a file missing the whole `## Development process` section, or one whose `Co-Authored-By` trailer still names a fixed model instead of the model that wrote the commit.
+- **Standards present without markers** (an older machine — e.g. bare `## Shell commands` / `## Git` and nothing else) → replace those sections in place with the marked block, preserving any unrelated content the user keeps elsewhere in the file.
+- **Neither** (missing file, or unrelated content only) → create or append the marked block.
+
+Preserve any non-standard content the user keeps **outside** the managed block.
+
+**Then verify, because a wrong slice here corrupts the file that governs every session.** The result must start with the opening marker, end with the closing marker, contain exactly one of each, and carry no stray code fence. Diff the installed block against the canonical text and confirm they match, that no section was dropped, and that the trailer wording is the dynamic-model-name form.
 
 ```markdown
 <!-- >>> localclaude standards (managed — edit here + re-run claude-setup to sync every machine) >>> -->
