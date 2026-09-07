@@ -139,7 +139,8 @@ Preserve any non-standard content the user keeps **outside** the managed block. 
 - Branch creation: always `--no-track` off `origin/main`, so `git switch -c <branch> --no-track origin/main` (or `git checkout --no-track -b <branch> origin/main`). Without `--no-track` the upstream auto-sets to `origin/main`, so a later `push` or `pull` reconciles the feature branch against main and hits "divergent branches". Branch off `origin/main`, not off another open feature branch.
 - Publish the branch to origin right after creating it: `git push -u origin <branch>`, so it lives on the remote and tracks `origin/<branch>`. (Pushing *commits* still waits for my sign-off; this only establishes the remote branch.)
 - Staging hygiene: stage only the files for your change. Leave unrelated working-tree noise out, such as a pre-existing `web/package-lock.json` change.
-- Trailers: end commit messages with a `Co-Authored-By` trailer naming the model that actually did the work, e.g. `Co-Authored-By: Claude Fable 5` (no email). Use the current session's model, never a hardcoded one. End PR bodies with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
+- Trailers: end commit messages with a `Co-Authored-By` trailer naming **the model that wrote that commit** — not the session's model, which differs once a subagent commits its own task under model tiering. `Co-Authored-By: Claude Fable 5` (no email). End PR bodies with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
+- **Take the model name from what the harness states, and nowhere else.** `~/.claude/settings.json` holds an alias (`opus`) with no version and goes stale the moment `/model` switches mid-session, and a model asked to identify itself unprompted will answer from training data — confidently, and a generation behind. If the harness does not state it, ask; a wrong trailer is worse than a missing one because nothing flags it.
 
 ## Development process
 

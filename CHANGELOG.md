@@ -66,6 +66,11 @@ here — the plugin manifest's version is the only record of them.
   architectural; anything that lands cuts a release with semver deciding the
   number; "deterministically testable" and post-gate edits are defined; the
   allowlist is described as a prompt-reducer rather than a security boundary.
+- **The commit trailer names the model that wrote the commit**, not the
+  session's — they differ once a subagent commits its own task under model
+  tiering. The name comes from what the harness states: `settings.json` holds a
+  versionless alias, and a model asked to identify itself unprompted answers
+  from training data, a generation behind and with no signal that it is wrong.
 - **Reviewer model ladders are discovered at run time**, not hard-coded. Codex is
   ranked from its own `models_cache.json` `priority` field; Gemini is ranked by
   family, then effort, then version, and filtered to `gemini-*` only — `agy`
