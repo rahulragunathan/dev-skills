@@ -85,7 +85,17 @@ Prompt drift between the two reviewers corrupts the agree/disagree triage. Compo
    - *plan*: gaps and missing steps, risks and failure modes, sequencing problems, simpler approaches missed, anything underspecified.
    - *phase / repo*: real bugs (report everything, do not self-filter for severity), silent failures, security issues, design choices that will not hold up, code duplication/consolidation opportunities, genuinely missing test coverage; plus doc-vs-code contradictions (README, ARCHITECTURE, CLAUDE.md, ROADMAP + KNOWN_ISSUES/ENHANCEMENTS/OPEN_QUESTIONS, CHANGELOG).
 4. **Test-discrimination question** (*phase / repo* only): *"For each test in the material below, say whether it would still pass with the change it covers reverted. Name any test that asserts on a mock, on a constant, or on something true before the change."* This is a backstop — phase-workflow §3 step 3 already runs the check by actually reverting and re-running, which a reviewer cannot do. Ask anyway: a reviewer reading the assertion catches a different class than a revert catches.
-5. **Output contract:** "Return a numbered list of findings with file/function references and a severity for each."
+5. **Do-not-read instruction (mandatory, both reviewers):**
+
+   > Do not open `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `credentials*`, `.netrc`, `.npmrc`, `id_rsa*`, `id_ed25519*`, or anything else shaped like a secret. If a finding depends on one, name the file and say what you would need rather than reading it.
+
+6. **Don't explain the tools:**
+
+   > This is a workflow document, not a git tutorial. Flag any passage that explains standard behaviour of `git`, `gh`, `pytest` or the shell rather than stating this project's policy. Genuine nuances that people get wrong are in scope; plain feature descriptions are not.
+
+7. **Suggested remediation:** for each finding, add one or two sentences on how you would fix it. A sketch, not a patch — enough to show what change you have in mind.
+
+8. **Output contract:** "Return a numbered list of findings with file/function references and a severity for each."
 
 ## Modes
 
@@ -132,7 +142,7 @@ what is written otherwise sends a bundle of filenames and reports that it sent t
 
 **Bundling sends your source to a third party.** Exclude credential-shaped files from **both** lists — a tracked `.env` reaches the reviewer through `git diff` just as easily as an untracked one. **Every pattern needs a leading `*` and `icase`**: without them a pathspec anchors at the repo root and is case-sensitive, so `config/credentials.json` and `Credentials.yaml` both pass.
 
-**The exclusions protect Gemini only. Codex reads the repository itself.** `--sandbox read-only` stops writes, not reads: an excluded `.env` is still readable, and reading it into a tool response has already sent it. There is no user-level way to prevent this — `permissions.filesystem.deny_read` is an enterprise-managed layer and is not enforced from `-c`. Treat pointing Codex at a repo as granting it read access to everything in that repo, and do not point it at one holding secrets you would not paste into a chat. Use `git` pathspecs rather than a `grep` filter: `grep` inside Claude Code is a shadowed ugrep with injected `--ignore-files`, `-I` and `--exclude-dir` defaults, so a filter written with it searches a different file set than you think.
+**The exclusions protect Gemini only. Codex reads the repository itself**, so `--sandbox read-only` stops writes, not reads, and `permissions.filesystem.deny_read` is an enterprise-managed layer that `-c` does not enforce. The control that remains is the prompt, so the rubric carries an explicit instruction not to open credential-shaped files (below). It is a soft instruction and a determined agent, or a broad recursive grep, can defeat it — so a repo whose secrets must never leave the machine needs the secrets moved out of it, not a better prompt. Use `git` pathspecs rather than a `grep` filter: `grep` inside Claude Code is a shadowed ugrep with injected `--ignore-files`, `-I` and `--exclude-dir` defaults, so a filter written with it searches a different file set than you think.
 
 **Skip symlinks explicitly; the pathspecs cannot.** `git ls-files` matches an untracked symlink by *its own name*, so an innocuous `notes.txt` pointing at `~/.ssh/id_rsa`, or at a `.env` outside the repo, passes every exclusion — and `cat` then reads the target. Test `-L` **before** `-f`, because `-f` follows the link and reports the target's type.
 

@@ -22,46 +22,6 @@ nothing. IDs are never reused.
 
 ---
 
-<a id="unk-01"></a>
-
-## UNK-01 — Should the phase gate be "unpushed" rather than "uncommitted"?
-
-**Kind:** Decision
-**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) §3 step 7, §4
-
-The gate is defined as uncommitted work: at hand-off `git status` shows the phase's changes
-as modified or untracked, and `git log origin/main..HEAD` shows no new commits. Sign-off then
-authorises commit, push and landing.
-
-That definition rules out `superpowers:subagent-driven-development`, which is built on
-per-task subagent commits. Three of its mechanisms are commit-range based and none of them
-degrade gracefully: `scripts/review-package PLAN_FILE BASE HEAD` diffs a commit range to
-build each task's review, the ledger records SHAs per task and is the documented crash
-recovery map, and the implementer subagent is specified to return its commits as its result.
-Instructing a subagent to skip committing removes the substrate the rest of the skill runs
-on, which is why the two kept colliding in practice.
-
-The alternative considered on 2026-09-05 was to redefine the gate as **unpushed**: at
-hand-off the branch has commits, the tree is clean, and nothing has reached origin. Sign-off
-would then authorise push and landing rather than commit and landing. The protection the gate
-actually provides — nothing leaves the machine and nothing lands without approval — survives
-that change intact, and on a squash-merge repository the intermediate commits disappear at
-merge anyway.
-
-It was rejected to keep the gate stable, and parallel implementation now runs through
-`superpowers:dispatching-parallel-agents` instead: one implementer per module from the plan's
-module table, returning changed files and test results without committing. The known cost is
-that task N's diff against `origin/main` contains tasks 1 to N-1, since nothing is committed
-in between, so review noise grows through a phase. The mitigation in use is to review per
-module by path rather than by diff range, which the module table makes possible.
-
-**What settles it:** running several phases with parallel implementation under the current
-gate and seeing whether per-module path review holds up. If review noise becomes the thing
-that slows a phase down, the unpushed gate is the change that fixes it, and this entry records
-the reasoning so the argument does not have to be rebuilt.
-
----
-
 <a id="unk-02"></a>
 
 ## UNK-02 — No test in this repo can be shown to discriminate from git history alone

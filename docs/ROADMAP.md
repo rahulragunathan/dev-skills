@@ -93,5 +93,4 @@ reasoning behind each in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
 | ID | Question | Kind |
 | ---- | ---------- | ------ |
-| [UNK-01](OPEN_QUESTIONS.md#unk-01) | Should the phase gate be "unpushed" rather than "uncommitted"? | Decision |
 | [UNK-02](OPEN_QUESTIONS.md#unk-02) | No test in this repo can be shown to discriminate from git history alone | Risk |

@@ -171,7 +171,15 @@ Preserve any non-standard content the user keeps **outside** the managed block. 
 - Three uses, and only three. **Parallel implementation** of independent tasks — where the plan's module table and Interfaces blocks define the boundaries, dispatch one implementer per module via `superpowers:dispatching-parallel-agents`; they return changed files, test results and concerns, and I integrate. **Fresh-context probes**, where the subagent is the subject or the audience: pressure-testing a skill's wording, or reading a module map cold to check it is legible without the conversation. **Read-only search fan-out.** Don't delegate what the main agent can finish in a handful of tool calls.
 - **Never to verify correctness.** A subagent is a copy of me and shares my blind spots, so it confirms rather than checks. Outside opinion comes from a different model via `localclaude:review-checkpoint`, never another instance of the same one.
 - **Pressure-test a skill on the model that will read it.** `design-review` is invoked in the main session, so its tests run on the main model, not on a cheaper one picked for cost.
-- **Subagents never commit, push, or merge.** They implement or review and report back: changed files, test results, concerns. Git state changes and overall project status tracking belong to the main agent alone, at my approved checkpoints. This overrides any skill prompt that tells a subagent to commit (e.g. superpowers subagent-driven-development), so strip that step when dispatching.
+- **Subagents may commit their own task. They never push, merge, tag, or touch the default branch.** One task, one commit, on the phase branch. Everything that reaches origin goes through the main agent at my approved checkpoints, which keeps a single point of contact with the remote and one place that tracks overall status. `superpowers:subagent-driven-development` works as built under this rule — its review packages, ledger and crash recovery are all commit-range based.
+- **Serialize subagents that share a branch.** Two agents committing to one branch at once will race. Run them one at a time, or give each its own worktree via `superpowers:dispatching-parallel-agents`.
+### Secrets
+
+- **Don't read files that are likely to hold secrets** — `.env` and `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `credentials*`, `.netrc`, `.npmrc`, `id_rsa*`, `id_ed25519*` — unless I ask for it. If a task looks like it needs one, name the file and say why instead of opening it. Reading a secret into the transcript has already sent it.
+- This is a habit, not a sandbox. A broad `grep -r` or a directory dump can surface the same content incidentally, so narrow the search rather than filtering the output afterwards.
+
+### Model tiering
+
 - Model tiering to save cost: Haiku for read-only Explore and search fan-out, Sonnet for general implementation, the strong model for reasoning-heavy work (code review, architecture, debugging). Don't downgrade the tasks you spawned an agent *because* they are hard.
 
 ### Python environment

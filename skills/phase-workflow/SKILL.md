@@ -17,7 +17,7 @@ Nothing else exempts the step: not a clean `/code-review`, not a green suite, no
 
 **Commit per task; never hold a phase's work in the working tree.** A task lands as one commit once its tests are green and `/simplify` has run. This is a safety rule: the retrospective points `git checkout`, worktree and stash operations at the tree, and `git reflog` recovers what was committed and nothing else.
 
-**The phase's full diff is always one command:** `git diff "origin/$DEFAULT_BRANCH"...HEAD` — three dots, so it reads from the merge base and stays correct as the default branch advances. `git log --oneline "origin/$DEFAULT_BRANCH"..HEAD` lists the phase's commits, and `gh pr diff <n>` shows the same thing in a browser. Per-review-pass scope is `git diff <last-reviewed-sha>..HEAD`.
+**The phase's full diff:** `git diff "origin/$DEFAULT_BRANCH"...HEAD`. **Three dots, not two** — two compares against a moving tip and misreports the phase once the default branch advances. Per-review-pass scope is `git diff <last-reviewed-sha>..HEAD`.
 
 **What "sign-off" means.** Sign-off is the user approving the *completed* phase's work: "looks good", "approved", "go ahead and commit". Approval to *start* a phase is not sign-off on it. When one message appears to do both — "commit this and start the next phase" — it authorizes the merge cycle for phase N and the *implementation* of N+1, never the commit of N+1. Nothing else is sign-off: not a passing test run, not a positive external review, not your own confidence.
 
@@ -35,7 +35,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 
 ## 2. Phase start (plan approved)
 
-1. **Detect the default branch, then create and publish the phase branch.** Never hardcode `main`. `origin/HEAD` is set by `git clone` but not by `git remote add`, hence the fallback. **Every later section re-runs this block** — a shell variable does not survive between invocations.
+1. **Detect the default branch, then create and publish the phase branch.** Never hardcode `main`; a repo wired up with `git remote add` has no `origin/HEAD`, hence the fallback. **Every later section re-runs this block.**
 
    ```bash
    DEFAULT_BRANCH="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')"
@@ -52,7 +52,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
      --title "<phase name>" --body-file <file>
    ```
 
-   A draft PR cannot be merged, which is the point: the branch is visible and reviewable from the first commit while the merge stays gated on sign-off. Body ends with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
+   Body ends with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
 
    **This does not conflict with "open a PR only when I explicitly ask."** That rule guards against surprise PRs on work the user has not approved. This one opens *after* plan approval, as a draft, and lands nothing.
 3. **Read the repo's merge settings now, not at merge time.** The PR is the landing path on every repo, so branch protection no longer decides *how* a phase lands — only whether the merge needs review approval, which sign-off covers anyway. What still varies is the merge method: `--squash` is rejected by a repo that allows only merge commits, and the remote branch survives unless someone deletes it.
@@ -112,9 +112,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 
    **Mutate, don't revert.** Break the specific behaviour the test names, in place, and confirm the test fails on the named assertion. Reverting the whole fix is coarser and has a hole: `git stash push` without `-u` leaves a newly added file in the tree, so the "reverted" code is still there and the test is falsely certified.
 
-   **The task is committed before you mutate it, so git holds the original.** That is the whole
-   safety mechanism, and it is why per-task commits exist. `git checkout --` restores from the
-   index, which under this workflow *is* the task's finished state.
+   **Commit the task before you mutate it.** That is what makes the restore safe.
 
    ```bash
    git diff --quiet && git diff --cached --quiet \
@@ -223,7 +221,7 @@ and only the merge.
    gh pr view <n> --json state,mergeCommitSha --jq '{state: .state, sha: .mergeCommitSha}'
    ```
 
-   **`state` must read `MERGED`.** `gh pr merge` can *enqueue* a PR on a repo with a merge queue and return success without merging anything, and even a completed merge can be followed by someone else's commit before you pull — so the default branch tip is not reliably this release. `mergeCommitSha` is, on all three methods: squash and rebase merges write a new commit that appears nowhere on the branch, and this field names it.
+   **`state` must read `MERGED`.** `gh pr merge` returns success when it only *enqueues* on a merge-queue repo, and a completed merge can be followed by someone else's commit before you pull — so the default branch tip is not reliably this release. `mergeCommitSha` is, on all three merge methods.
 
    ```bash
    SHA="$(gh pr view <n> --json mergeCommitSha --jq .mergeCommitSha)"

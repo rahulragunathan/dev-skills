@@ -26,8 +26,8 @@ here — the plugin manifest's version is the only record of them.
   unaided — six of this skill's own rules and three process rules from
   `phase-workflow`.
 - **Four roadmap files** under `docs/` — ROADMAP, KNOWN_ISSUES, ENHANCEMENTS and
-  OPEN_QUESTIONS, seeded from the templates with 27 issues, 6 enhancements and 2
-  open questions from an external repo review.
+  OPEN_QUESTIONS, seeded from the templates with 27 issues, 6 enhancements and 1
+  open question from an external repo review.
 - `LICENSE` — the MIT text the plugin manifest and skill frontmatter already
   declared.
 
@@ -66,6 +66,24 @@ here — the plugin manifest's version is the only record of them.
   architectural; anything that lands cuts a release with semver deciding the
   number; "deterministically testable" and post-gate edits are defined; the
   allowlist is described as a prompt-reducer rather than a security boundary.
+- **The phase gate is per-task commits on a draft PR** (`UNK-01`, resolved). The
+  gate was "present uncommitted work and stop", which held a phase's whole
+  output in the one state `git reflog` cannot recover while the retrospective
+  pointed `git checkout`, worktree and stash operations at it. Work now commits
+  per task onto a draft PR opened at phase start; the PR goes ready for review at
+  the gate and sign-off authorizes the merge.
+- **Subagents may commit their own task**, one task per commit, on the phase
+  branch. They still never push, merge, tag, or touch the default branch.
+  `superpowers:subagent-driven-development` works as built under this rule, since
+  its review packages, ledger and crash recovery are all commit-range based —
+  which the uncommitted gate had ruled out.
+- **Branch-protection detection removed.** Every phase lands by PR, so the
+  question no longer arises. The probe could not be made correct anyway:
+  `GET /branches/{b}/protection` covers classic protection only, so a repo using
+  rulesets to require PRs returns 404 and reads as unprotected.
+- **Neither Claude nor the external reviewers open credential-shaped files** by
+  default. For the reviewers this is a prompt instruction rather than
+  enforcement, because `--sandbox read-only` gates writes and not reads.
 - **The phase gate cites the reviewer output files**, per pass, with byte counts.
   The gate's other half asks git a question; this half used to ask the agent's own
   hand-off whether it contained a findings table, which an agent that skipped the
