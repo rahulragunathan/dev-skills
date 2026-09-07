@@ -19,9 +19,9 @@ Nothing else exempts the step: not a clean `/code-review`, not a green suite, no
 
 **The phase's full diff:** `git diff "origin/$DEFAULT_BRANCH"...HEAD`. **Three dots, not two** — two compares against a moving tip and misreports the phase once the default branch advances. Per-review-pass scope is `git diff <last-reviewed-sha>..HEAD`.
 
-**What "sign-off" means.** Sign-off is the user approving the *completed* phase's work: "looks good", "approved", "go ahead and commit". Approval to *start* a phase is not sign-off on it. When one message appears to do both — "commit this and start the next phase" — it authorizes the merge cycle for phase N and the *implementation* of N+1, never the commit of N+1. Nothing else is sign-off: not a passing test run, not a positive external review, not your own confidence.
+**What "sign-off" means.** Sign-off is the user approving the *completed* phase's work: "looks good", "approved", "go ahead and merge". Approval to *start* a phase is not sign-off on it. When one message appears to do both — "merge this and start the next phase" — it authorizes the merge cycle for phase N and the *implementation* of N+1, never the merge of N+1. Nothing else is sign-off: not a passing test run, not a positive external review, not your own confidence.
 
-Subagents never commit/push/merge (global CLAUDE.md policy) — all git state changes happen here, in the main agent.
+Subagents may commit their own task; they never push, merge, or tag (global CLAUDE.md policy). Everything that reaches origin goes through the main agent.
 
 ## 1. Plan review (before the user approves)
 
@@ -45,7 +45,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    ```
 
    **This is the only place a phase branch is created.**
-2. **Open the PR as a draft, now.** It exists for the whole phase, accumulates the per-task commits, and gives the user a live comprehensive diff at any moment rather than only at the gate.
+2. **Open the draft PR as soon as the first task is committed.** A PR needs at least one commit ahead of the base, so this runs immediately after task one lands, not before it. From then on it accumulates the per-task commits and gives the user a live comprehensive diff at any moment rather than only at the gate.
 
    ```bash
    gh pr create --draft --base "$DEFAULT_BRANCH" --head "feature/<slug>" \
@@ -115,6 +115,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    **Commit the task before you mutate it.** That is what makes the restore safe.
 
    ```bash
+   [ -f "<file>" ] && [ ! -L "<file>" ] || { echo "NOT A REGULAR FILE — restore would not cover the target"; exit 1; }
    git diff --quiet && git diff --cached --quiet \
      || { echo "TREE DIRTY — commit the task before auditing it"; exit 1; }
 
@@ -183,7 +184,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    - **The gate has two checkable states.** First, **the work is committed, pushed, and on a PR marked ready for review** — every one of those is a fact git or `gh` will answer, none is self-attested:
 
      ```bash
-     git diff --quiet && git diff --cached --quiet || echo "UNCOMMITTED WORK — commit it before the gate"
+     git diff --quiet && git diff --cached --quiet || { echo "UNCOMMITTED WORK — commit it before the gate"; exit 1; }
      git log --oneline "origin/$DEFAULT_BRANCH"..HEAD          # the phase's commits; must not be empty
      git status -sb | head -1                                  # must not say [ahead N] — push first
      gh pr ready <n> && gh pr view <n> --json isDraft,state --jq '{draft: .isDraft, state: .state}'
@@ -218,14 +219,15 @@ and only the merge.
 5. **Confirm the merge actually completed, then tag the SHA it produced.** Do not tag the default branch's tip.
 
    ```bash
-   gh pr view <n> --json state,mergeCommitSha --jq '{state: .state, sha: .mergeCommitSha}'
+   gh pr view <n> --json state,mergeCommit --jq '{state: .state, sha: .mergeCommit.oid}'
    ```
 
-   **`state` must read `MERGED`.** `gh pr merge` returns success when it only *enqueues* on a merge-queue repo, and a completed merge can be followed by someone else's commit before you pull — so the default branch tip is not reliably this release. `mergeCommitSha` is, on all three merge methods.
+   **`state` must read `MERGED`.** `gh pr merge` returns success when it only *enqueues* on a merge-queue repo, and a completed merge can be followed by someone else's commit before you pull — so the default branch tip is not reliably this release. `mergeCommit.oid` is, on all three merge methods.
 
    ```bash
-   SHA="$(gh pr view <n> --json mergeCommitSha --jq .mergeCommitSha)"
-   [ -n "$SHA" ] && [ "$SHA" != "null" ] || { echo "NOT MERGED — stop; do not tag"; exit 1; }
+   SHA="$(gh pr view <n> --json state,mergeCommit \
+          --jq 'if .state=="MERGED" and .mergeCommit then .mergeCommit.oid else empty end')"
+   [ -n "$SHA" ] || { echo "NOT MERGED — stop; do not tag"; exit 1; }
    git fetch origin && git tag "v<version>" "$SHA" && git push origin "v<version>"
    ```
 

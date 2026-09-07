@@ -53,8 +53,8 @@ gemini_ladder() { agy models 2>/dev/null | awk '$1 ~ /^gemini-/ {print $1}' | py
 import sys,re
 def rank(s):
     fam = 0 if "-pro" in s else 1
-    m = re.search(r"gemini-(\d+(?:\.\d+)?)", s)
-    ver = -float(m.group(1)) if m else 0
+    m = re.search(r"gemini-(\d+)(?:\.(\d+))?", s)
+    ver = (-int(m.group(1)), -int(m.group(2) or 0)) if m else (0, 0)   # tuple, not float: 3.10 outranks 3.9
     eff = {"high":0,"medium":1,"low":2}.get(s.rsplit("-",1)[-1], 3)
     return (fam, eff, ver)
 ms=[l.strip() for l in sys.stdin if l.strip()]
@@ -67,8 +67,9 @@ print(" ".join(sorted(ms,key=rank)[:3]))'
 `claude-*` and `gpt-oss-*`. A Claude model is not a second opinion on Claude's work, and the
 filter keeps the run inside the Gemini subscription.
 
-**Three rungs, and the floor is a refusal.** Each ladder stops at three deliberately. Downshift
-only when a model fails with an **availability** error (`model ... is not supported`, unknown or
+**Three rungs, and the floor is a refusal.** Each ladder stops at three deliberately, and the loops
+above walk them — selecting only the first rung would document a downshift that can never run.
+Downshift only when a model fails with an **availability** error (`model ... is not supported`, unknown or
 retired model, entitlement error). Quota, auth and timeout are **not** downshift triggers — see
 *Failure handling*.
 
@@ -86,16 +87,20 @@ the strongest model while the run reads as stronger than it was. Pass
 **Record which model actually ran**, in the coverage line and the findings table's Model column.
 Note a downshift plainly there: a lighter model changes how much weight a finding deserves.
 
-- **Top-tier availability is a PLAN issue, not an auth-method one.** The strongest Codex tiers need a paid ChatGPT subscription; the **free** tier does not include them. The CLI's error is misleading — it says *"not supported when using Codex with a ChatGPT account"* when the real cause is the account's plan. Diagnose with `codex login status` plus the `chatgpt_plan_type` claim in `~/.codex/auth.json` (read that key only — the file holds tokens). If it reads `free`, say so, and that `codex logout && codex login` switches accounts; Codex auth is global per machine.
+- **Top-tier availability is a PLAN issue, not an auth-method one.** The strongest Codex tiers need a paid ChatGPT subscription; the **free** tier does not include them. The CLI's error is misleading — it says *"not supported when using Codex with a ChatGPT account"* when the real cause is the account's plan. Diagnose with `codex login status`, which reports the plan without opening the token store. **Do not read `~/.codex/auth.json`** — it holds credentials, and the do-not-read rule in the rubric applies to us as much as to the reviewers. If it reads `free`, say so, and that `codex logout && codex login` switches accounts; Codex auth is global per machine.
 - If every rung is rejected, the cached list is likely stale. `agy models` is live and `codex` refreshes `models_cache.json` itself, so re-run discovery before concluding.
 
 **Codex is agentic** — it explores the repo itself. Point it at the repo root and pin it read-only at the tool level (never rely on prompt wording alone):
 
 ```bash
-codex exec -C "<repo-root>" --sandbox read-only \
-  -m "$(codex_ladder | cut -d' ' -f1)" -c model_reasoning_effort="high" \
-  -o "<scratchpad>/codex_<mode>_p<n>.txt" "<prompt>" \
-  > "<scratchpad>/codex_<mode>_p<n>.log" 2>&1        # downshift per the ladder if unavailable
+for m in $(codex_ladder); do
+  codex exec -C "<repo-root>" --sandbox read-only \
+    -m "$m" -c model_reasoning_effort="high" \
+    -o "<scratchpad>/codex_<mode>_p<n>.txt" "<prompt>" \
+    > "<scratchpad>/codex_<mode>_p<n>.log" 2>&1
+  grep -qiE 'not supported|unknown model|is not available|entitle' "<scratchpad>/codex_<mode>_p<n>.log" || break
+  echo "unavailable: $m — trying the next rung"
+done
 ```
 
 - `-C` replaces `cd "…" &&` (which the global shell rules prohibit); `--sandbox read-only` makes review-only enforced, not requested; `-o` writes only the final message (no event noise).
@@ -105,7 +110,12 @@ codex exec -C "<repo-root>" --sandbox read-only \
 **Gemini (`agy -p`) is one-shot print mode — it cannot prompt for tool permissions.** Any prompt asking it to "review this repository" gets its tool calls auto-denied and fails. **Always inline the material in the prompt** and state: *"REVIEW ONLY: do not attempt to use any tools; answer purely from the text below."*
 
 ```bash
-agy -p "$(cat "<scratchpad>/gemini_prompt_p<n>.txt")" --model "$(gemini_ladder | cut -d' ' -f1)" --effort high --print-timeout 15m > "<scratchpad>/gemini_<mode>_p<n>.txt" 2>&1
+for m in $(gemini_ladder); do
+  agy -p "$(cat "<scratchpad>/gemini_prompt_p<n>.txt")" --model "$m" --effort high \
+      --print-timeout 15m > "<scratchpad>/gemini_<mode>_p<n>.txt" 2>&1
+  grep -qiE 'not supported|unknown model|is not available|entitle' "<scratchpad>/gemini_<mode>_p<n>.txt" || break
+  echo "unavailable: $m — trying the next rung"
+done
 ```
 
 - Build the prompt in a file (rubric + inlined material); the default 5m print-timeout is too short for big inputs — set ~15m.
@@ -144,14 +154,18 @@ Prompt drift between the two reviewers corrupts the agree/disagree triage. Compo
 
 **`phase [base-branch]`** — detect base via `git remote show origin` if not given. Codex: repo-rooted with the rubric framed around the phase's changes. Gemini: the change bundle below, written to a scratchpad file and inlined into the prompt.
 
-### Capturing the phase's changes — `git diff <base>...HEAD` is WRONG here
+### Capturing the phase's changes
 
-Two separate defects, and each one silently hands a reviewer an incomplete picture:
+The phase's work is committed per task, so `git diff "<base>"...HEAD` is the right command and
+the bundle is built around it. **Three dots, not two** — two compares against a moving tip and
+inverts upstream commits once the base advances.
 
-- **`base...HEAD` shows only committed work.** At the phase gate the work is *uncommitted* by design (phase-workflow §3 step 7), so that command can legitimately return nothing at all.
-- **No `git diff` ever contains untracked files.** A phase that adds a new module gives the reviewer a diff full of calls into a file it cannot see. It then reports the file as missing — a real review round wasted on an artifact of the capture.
+Untracked files should be rare at a review point, since a task is committed before it is
+reviewed. The loop below still sweeps them, because a review can be requested mid-task and a diff
+never contains untracked files: the reviewer would see calls into a module it cannot read and
+report the module as missing.
 
-Build the bundle like this instead:
+Build the bundle like this:
 
 ```bash
 BUNDLE="<scratchpad>/bundle.txt";   : > "$BUNDLE"
@@ -164,7 +178,7 @@ EXCL=(':(exclude,icase)*.env' ':(exclude,icase)*.env.*' ':(exclude,icase)*.pem'
       ':(exclude,icase)*.sqlite' ':(exclude,icase)*.sqlite3')
 
 # tracked: committed + staged + unstaged
-git diff "<base>" -- . "${EXCL[@]}" > "$BUNDLE" || { echo "DIFF FAILED — bundle incomplete"; exit 1; }
+git diff "<base>"...HEAD -- . "${EXCL[@]}" > "$BUNDLE" || { echo "DIFF FAILED — bundle incomplete"; exit 1; }
 
 # untracked: each one appended IN FULL, behind a path header
 git ls-files --others --exclude-standard -z -- . "${EXCL[@]}" |
@@ -195,7 +209,7 @@ Skip binaries the same way, with no grep involved:
 perl -e 'exit(-B $ARGV[0] ? 0 : 1)' "$f" && continue   # skip binary files
 ```
 
-Do **not** use `git add -N` to sweep untracked files into the diff. It mutates the index, and phase-workflow's gate checks `git status` to prove the work is uncommitted.
+Do **not** use `git add -N` to sweep untracked files into the diff. It mutates the index, and phase-workflow's gate checks that the tree is clean.
 
 **Reconcile the bundle, and say the count out loud.** This failure is silent — a short bundle looks exactly like a small phase — so a better command is not the fix; a stated count is:
 
@@ -300,11 +314,11 @@ A first review changes the code, and those changes have been reviewed by no one 
 1. **Pass 1** — full scope, per *Modes* above.
 2. **Present the findings table and STOP.** Blocking, every time. The user decides what gets fixed, what gets filed, and what gets rejected before any code is touched. A disposition you assigned yourself is a proposal until they say so.
 3. **Fix and file** what they approved.
-4. **Pass 2** — narrow (below). Then present and stop again. Then pass 3, on the same terms.
+4. **Pass 2** — narrow (below). Then present and stop again, and repeat on the same terms.
 
 **Early exit.** A pass that returns no confirmed finding needing a code change ends the loop. Do not spend the remaining passes to use them up.
 
-**At the cap.** Anything still open after pass 3 is *filed* — `KI-nn`, `ENH-nn` or `UNK-nn` with its ROADMAP pointer row — never fixed-and-unreviewed. Say in the hand-off that the cap was reached and what is still open, so the user can call another round if they want one.
+**At the ceiling.** Anything still open when the passes stop is *filed* — `KI-nn`, `ENH-nn` or `UNK-nn` with its ROADMAP pointer row — never fixed-and-unreviewed. Say in the hand-off that the cap was reached and what is still open, so the user can call another round if they want one.
 
 ### What "narrow" means
 
@@ -340,4 +354,4 @@ Finding IDs run in **one sequence for the whole phase** — pass 1 ends at `F-08
 - **Never widen a follow-up pass back to full scope.** If pass 2 looks thin, that is the loop working, not a reason to re-review the phase.
 - **Never report a bundle without its reconciled file count.** An unstated count is how a reviewer ends up reviewing half a phase and nobody notices.
 - The Codex stop-time review gate (`/codex:setup`) stays **off** — it reviews every turn and burns quota; these checkpoints are the intended cadence.
-- Subagents dispatched for triage (if any) never commit — global policy.
+- **Triage subagents gather evidence, never verdicts.** A subagent returns the quoted file lines or command output a finding turns on; the judgement stays with the main agent. That is the narrow exception to the global ban on using subagents to verify correctness — it parallelizes the lookup without asking a copy of yourself whether you were right.

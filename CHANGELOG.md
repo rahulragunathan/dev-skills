@@ -22,8 +22,8 @@ here — the plugin manifest's version is the only record of them.
   tests rather than confirmed by them: the produce-versus-edit distinction, and
   never marking a diagram box "new" because the marker is a diff that goes stale
   the moment the phase lands. Every rule's status is recorded
-  honestly, including the nine of those fourteen a strong model already follows
-  unaided — six of this skill's own rules and three process rules from
+  honestly, including the eleven of those fourteen a strong model already
+  follows unaided — eight of this skill's own rules and three process rules from
   `phase-workflow`.
 - **Four roadmap files** under `docs/` — ROADMAP, KNOWN_ISSUES, ENHANCEMENTS and
   OPEN_QUESTIONS, seeded from the templates with 27 issues, 6 enhancements and 1

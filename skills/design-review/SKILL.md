@@ -28,7 +28,7 @@ Produce, in order:
 2. The **Expected change** line.
 3. The **Shared state** line.
 4. Whatever checks fired, and nothing about the ones that did not.
-5. At most one diagram per abstraction level the phase touches.
+5. Whatever diagrams pass the distinctness test below — there is no count.
 
 Runs **before** `review-checkpoint plan`, so the table travels to the reviewers at no extra
 cost. A bounded change gets one sentence in chat instead of all this. A spike gets nothing.
