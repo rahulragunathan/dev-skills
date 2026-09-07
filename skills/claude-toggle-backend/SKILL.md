@@ -9,7 +9,7 @@ license: MIT
 
 Switch the local Claude Code backend (VS Code extension + CLI) between four backends:
 
-- **anthropic** (default, cloud) — `model: opus[1m]` (Opus 4.8, 1M context), `effortLevel: high`, no `ANTHROPIC_BASE_URL`.
+- **anthropic** (default, cloud) — `model: opus[1m]` (current Opus, 1M context), `effortLevel: high`, no `ANTHROPIC_BASE_URL`.
 - **ollama** (local daemon) — points `ANTHROPIC_BASE_URL` at the Ollama server's Anthropic-compatible `/v1/messages` endpoint (`:11434`). Assumes `ollama serve` is up.
 - **llama-cpp** (local, Metal) — **auto-starts a `llama-server`** for a GGUF model and points `ANTHROPIC_BASE_URL` at its native Anthropic `/v1/messages` endpoint. Stops the server when you switch away.
 - **mlx** (local, Apple Silicon) — **auto-starts a `vllm-mlx` server** for an MLX model (given by **HF repo id**, resolved from the HF cache) and points `ANTHROPIC_BASE_URL` at its native Anthropic `/v1/messages` endpoint. Generally faster tok/s than llama.cpp on Apple Silicon. Stops the server when you switch away.
@@ -23,7 +23,7 @@ It edits **only** `model`, `effortLevel`, and the `env.ANTHROPIC_*` keys in `~/.
 ```bash
 TB="$CLAUDE_PLUGIN_ROOT/skills/claude-toggle-backend/toggle.sh"   # inside the plugin
 bash "$TB" status                       # show current backend + llama-server state
-bash "$TB" anthropic                    # switch to Anthropic (Opus 4.8, High effort)
+bash "$TB" anthropic                    # switch to Anthropic (opus[1m], High effort)
 bash "$TB" ollama                       # switch to local Ollama
 bash "$TB" llama-cpp                     # start llama-server on newest/last GGUF + switch to it
 bash "$TB" llama-cpp qwen2.5-coder-14b-instruct-q4_k_m.gguf   # pick a specific GGUF

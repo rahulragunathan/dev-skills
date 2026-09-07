@@ -33,26 +33,67 @@ Offer the install commands; never install a CLI or change the user's login state
 
 ## The two reviewers are NOT interchangeable — different invocation contracts
 
-**Review models — always try the strongest tier first, downshift only on rejection.** Model entitlements differ per machine and per signed-in account (a work account may have tiers a personal one doesn't), so never hard-code the fallback as the default. Ladders, strongest first:
+**Discover the ladder; never hard-code model names.** Entitlements differ per machine and per
+signed-in account, and model generations turn over faster than this file gets edited. Both CLIs
+publish what they offer, so read it at run time.
 
-| Reviewer | Try in this order |
-| --- | --- |
-| Codex (`-m`) | `gpt-6-astra` → `gpt-5.6-sol` → `gpt-5.6-terra` → unflagged default |
-| Gemini (`--model`) | `gemini-3.1-pro-high` → `gemini-3.6-flash-high` → unflagged default |
+```bash
+# Codex — its own cache ranks capability in `priority`, ascending.
+codex_ladder() { python3 - "$HOME/.codex/models_cache.json" <<'EOF'
+import json,sys
+try: models=json.load(open(sys.argv[1]))["models"]
+except Exception: sys.exit(1)
+vis=[m for m in models if m.get("visibility")=="list" and m.get("priority") is not None]
+print(" ".join(m["slug"] for m in sorted(vis,key=lambda m:m["priority"])[:3]))
+EOF
+}
 
-**Set the reasoning effort explicitly; `-m` alone does not.** Every model on both ladders supports low/medium/high/xhigh/max, and `gpt-6-astra` defaults to **low** — so naming only the slug gets the weakest setting of the strongest model, and the run reads as stronger than it was. Pass `-c model_reasoning_effort="high"` for a review, and record the effort beside the slug: a `low` run and a `high` run from one slug deserve different weight and the slug alone cannot tell them apart.
+# Gemini — `agy models` publishes no ranking, so rank by family, then effort, then version.
+gemini_ladder() { agy models 2>/dev/null | awk '$1 ~ /^gemini-/ {print $1}' | python3 -c '
+import sys,re
+def rank(s):
+    fam = 0 if "-pro" in s else 1
+    m = re.search(r"gemini-(\d+(?:\.\d+)?)", s)
+    ver = -float(m.group(1)) if m else 0
+    eff = {"high":0,"medium":1,"low":2}.get(s.rsplit("-",1)[-1], 3)
+    return (fam, eff, ver)
+ms=[l.strip() for l in sys.stdin if l.strip()]
+ms=[m for m in ms if not m.endswith("-low")]
+print(" ".join(sorted(ms,key=rank)[:3]))'
+}
+```
 
-Downshift rule: run with the top model; **only** if it fails with an availability error (`model ... is not supported`, unknown/retired model, entitlement error) drop to the next rung and retry. Quota, auth, and timeout errors are NOT downshift triggers — handle them per *Failure handling* below. **Record which model actually ran** — it goes in the findings table's coverage line and its Model column (below), which is the one place that attribution is carried. Note a downshift plainly there (`gpt-5.6-sol unavailable on this account — reviewed with gpt-5.6-terra`), since a lighter model changes how much weight the findings deserve.
+**Only Gemini models through `agy`.** The `^gemini-` filter is not cosmetic: `agy` also offers
+`claude-*` and `gpt-oss-*`. A Claude model is not a second opinion on Claude's work, and the
+filter keeps the run inside the Gemini subscription.
 
-- **Sol availability is a PLAN-TIER issue, not an auth-method one.** Sol is available to paid ChatGPT subscriptions (Plus/Pro/Business/Enterprise) through the Codex CLI as well as via API key; the **free** tier does not include it. The CLI's error is misleading — it says *"not supported when using Codex with a ChatGPT account"* when the real cause is the account's plan. Diagnose with `codex login status` plus the `chatgpt_plan_type` claim in `~/.codex/auth.json` (read that key only — the file holds tokens). If it reads `free`, tell the user Sol needs a paid account and that `codex logout && codex login` switches accounts — noting that Codex auth is global per machine, so a work account would then cover personal projects too. `gpt-5.6-luna` is the lightest sibling — never use it for reviews.
-- **Never pick `agy`'s `claude-*` models** (it offers Sonnet/Opus) — the entire point of this checkpoint is a non-Claude second opinion.
-- If every rung is rejected, the IDs likely retired: run `agy models` / check the [Codex models list](https://developers.openai.com/codex/models), use the current equivalent, and tell the user the ladder needs updating.
+**Three rungs, and the floor is a refusal.** Each ladder stops at three deliberately. Downshift
+only when a model fails with an **availability** error (`model ... is not supported`, unknown or
+retired model, entitlement error). Quota, auth and timeout are **not** downshift triggers — see
+*Failure handling*.
+
+**If all three rungs fail, that reviewer produces nothing. Never reach past the floor.** A review
+from the weakest tier available is worse than no review: it arrives with the same authority as a
+real one and the coverage line cannot carry the difference. Report it exactly as you would a
+missing CLI for that reviewer — partial coverage, named, with the reason.
+
+**Set reasoning effort explicitly; `-m` alone does not.** Every Codex model supports low through
+max and the strongest defaults to **low**, so naming only the slug gets the weakest setting of
+the strongest model while the run reads as stronger than it was. Pass
+`-c model_reasoning_effort="high"`, and record the effort beside the slug — a `low` run and a
+`high` run from one slug deserve different weight and the slug alone cannot tell them apart.
+
+**Record which model actually ran**, in the coverage line and the findings table's Model column.
+Note a downshift plainly there: a lighter model changes how much weight a finding deserves.
+
+- **Top-tier availability is a PLAN issue, not an auth-method one.** The strongest Codex tiers need a paid ChatGPT subscription; the **free** tier does not include them. The CLI's error is misleading — it says *"not supported when using Codex with a ChatGPT account"* when the real cause is the account's plan. Diagnose with `codex login status` plus the `chatgpt_plan_type` claim in `~/.codex/auth.json` (read that key only — the file holds tokens). If it reads `free`, say so, and that `codex logout && codex login` switches accounts; Codex auth is global per machine.
+- If every rung is rejected, the cached list is likely stale. `agy models` is live and `codex` refreshes `models_cache.json` itself, so re-run discovery before concluding.
 
 **Codex is agentic** — it explores the repo itself. Point it at the repo root and pin it read-only at the tool level (never rely on prompt wording alone):
 
 ```bash
 codex exec -C "<repo-root>" --sandbox read-only \
-  -m gpt-6-astra -c model_reasoning_effort="high" \
+  -m "$(codex_ladder | cut -d' ' -f1)" -c model_reasoning_effort="high" \
   -o "<scratchpad>/codex_<mode>_p<n>.txt" "<prompt>" \
   > "<scratchpad>/codex_<mode>_p<n>.log" 2>&1        # downshift per the ladder if unavailable
 ```
@@ -64,7 +105,7 @@ codex exec -C "<repo-root>" --sandbox read-only \
 **Gemini (`agy -p`) is one-shot print mode — it cannot prompt for tool permissions.** Any prompt asking it to "review this repository" gets its tool calls auto-denied and fails. **Always inline the material in the prompt** and state: *"REVIEW ONLY: do not attempt to use any tools; answer purely from the text below."*
 
 ```bash
-agy -p "$(cat "<scratchpad>/gemini_prompt_p<n>.txt")" --model gemini-3.1-pro-high --effort high --print-timeout 15m > "<scratchpad>/gemini_<mode>_p<n>.txt" 2>&1
+agy -p "$(cat "<scratchpad>/gemini_prompt_p<n>.txt")" --model "$(gemini_ladder | cut -d' ' -f1)" --effort high --print-timeout 15m > "<scratchpad>/gemini_<mode>_p<n>.txt" 2>&1
 ```
 
 - Build the prompt in a file (rubric + inlined material); the default 5m print-timeout is too short for big inputs — set ~15m.
@@ -203,7 +244,7 @@ Open with a coverage line so the count is unambiguous:
 Codex gpt-5.6-sol 7 · Gemini gemini-3.1-pro-high 4 · 3 overlapping → 8 unique findings
 ```
 
-Name the **exact model that ran**, not the CLI — the ladder in *Review models* downshifts on availability, so "Codex" alone hides whether the findings came from the top tier or a lighter rung. If a downshift happened, say so here too: `Codex gpt-5.6-terra 5 (gpt-5.6-sol unavailable) · …`.
+Name the **exact model that ran**, not the CLI — the ladder is discovered at run time and downshifts on availability, so "Codex" alone hides whether the findings came from the top tier or a lighter rung. If a downshift happened, say so here too: `Codex gpt-5.6-terra 5 (gpt-5.6-sol unavailable) · …`.
 
 If neither CLI is installed, print the skip line in its place — `External review skipped — neither codex nor agy is installed` — so a missing table is never mistaken for a clean review.
 

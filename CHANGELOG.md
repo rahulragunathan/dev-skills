@@ -66,6 +66,17 @@ here — the plugin manifest's version is the only record of them.
   architectural; anything that lands cuts a release with semver deciding the
   number; "deterministically testable" and post-gate edits are defined; the
   allowlist is described as a prompt-reducer rather than a security boundary.
+- **Reviewer model ladders are discovered at run time**, not hard-coded. Codex is
+  ranked from its own `models_cache.json` `priority` field; Gemini is ranked by
+  family, then effort, then version, and filtered to `gemini-*` only — `agy`
+  also offers `claude-*` and `gpt-oss-*`, and a Claude model is not a second
+  opinion on Claude's work. Each ladder is three rungs, and **if all three fail
+  the reviewer produces nothing rather than dropping to the weakest tier**: a
+  review from the bottom rung carries the same authority as a real one and the
+  coverage line cannot convey the difference.
+- **Pinned model versions removed** from the backend docs. `opus[1m]` is an
+  alias that already tracks the current Opus; only the comments beside it were
+  pinned to a version.
 - **The phase gate is per-task commits on a draft PR** (`UNK-01`, resolved). The
   gate was "present uncommitted work and stop", which held a phase's whole
   output in the one state `git reflog` cannot recover while the retrospective
