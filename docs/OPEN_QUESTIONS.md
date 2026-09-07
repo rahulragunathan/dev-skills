@@ -39,6 +39,11 @@ This is a limitation of the history, not a defect in any particular test. Eight 
 discrimination failures were found by reading the tests rather than the history, and those
 are filed as KI-09, KI-10, KI-11, KI-12, KI-23, KI-24, KI-25 and KI-26.
 
+All eight sit in `claude-toggle-backend`, which is being rebuilt, so they will be answered by
+new tests rather than by repairs to these. The entry still applies: the rebuild's tests will
+also be written alongside their implementation, so their red state will not be recoverable
+from history either.
+
 **What settles it:** nothing, and nothing needs to. The mutation check adopted in
 `phase-workflow` §3 step 3 replaces the need for historical evidence — it breaks the named
 behaviour in the production code now and confirms the test fails on the named assertion,

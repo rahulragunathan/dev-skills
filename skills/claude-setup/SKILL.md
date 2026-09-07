@@ -26,7 +26,12 @@ Idempotent — safe to re-run. It **merges** into existing config, never clobber
 
 ### 1. Locate the config dir
 
-Use `~/.claude` (honor `$CLAUDE_CONFIG_DIR` if set). All paths below are under it.
+`~/.claude`. All paths below are under it.
+
+**`$CLAUDE_CONFIG_DIR` is not honoured**, here or in `backup-projects.sh`, which resolves
+`$HOME/.claude` directly. Setting it relocates what Claude Code reads without relocating what
+this skill writes, so the two would disagree. Do not set it on a machine this skill manages.
+Supporting it is ENH-07.
 
 ### 2. Merge `~/.claude/settings.json` permissions
 

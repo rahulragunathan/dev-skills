@@ -20,6 +20,18 @@ remediated in the same phase and are not listed here — they are in the CHANGEL
 | **Medium** | Wrong under conditions the operator can notice or work around. |
 | **Low** | Cosmetic, or wrong in a field nothing consumes. |
 
+## Held — `local-models` and `claude-toggle-backend` rebuild
+
+Those two skills are being rebuilt from scratch, so every entry scoped to them is **held**:
+still valid, still filed, not worked until the rebuild, and excluded from external review
+bundles in the meantime. They are not closed because they are the rebuild's requirements — the
+new code has to clear them, and deleting them would lose the specification.
+
+Held: KI-01 through KI-05, KI-09 through KI-13, and KI-16 through KI-27.
+
+Active: **KI-06, KI-07, KI-08 and KI-14** — the `backup-projects.sh` cluster, scheduled as its
+own phase with a bats harness (ENH-03).
+
 ---
 
 <a id="ki-01"></a>
@@ -536,35 +548,6 @@ the log for failures finds nothing, and the Stop hook reports success.
 Write `ok` only when `rc_any` is 0 and `failed` otherwise, so the log is greppable. Keep
 `exit 0` if the hook must never block the session, but make the log the honest record.
 Related: KI-06.
-
-**Source:** gpt-5.6-sol — repo review, 2026-09-05.
-
----
-
-<a id="ki-15"></a>
-
-## KI-15 — `$CLAUDE_CONFIG_DIR` is honoured in the docs and nowhere in the code
-
-**Severity:** Medium
-**Where:** [claude-setup/SKILL.md:29](../skills/claude-setup/SKILL.md#L29)
-
-### What happens
-
-Setup says: *"Use `~/.claude` (honor `$CLAUDE_CONFIG_DIR` if set)."* Every bundled script
-hardcodes `$HOME/.claude` — `toggle.sh`, `llama-serve.sh`, `mlx-serve.sh`,
-`llama-autostart.sh` and `backup-projects.sh` all do.
-
-### Example scenario
-
-A user sets `CLAUDE_CONFIG_DIR` to a custom path. Setup writes the standards and settings
-there, while `toggle.sh` writes its marker and PID files under `~/.claude`. The backend
-detection then reads a marker that setup never wrote.
-
-### Notes for a fix
-
-Introduce one resolution helper the scripts share, or drop the `$CLAUDE_CONFIG_DIR` claim
-from the docs. The second is honest and costs one line; the first is correct and touches five
-files.
 
 **Source:** gpt-5.6-sol — repo review, 2026-09-05.
 

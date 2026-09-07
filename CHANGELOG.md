@@ -147,6 +147,18 @@ here — the plugin manifest's version is the only record of them.
   directories no longer collapse to one line.
 - `claude-setup` listed three bundled skills; there are six. README omitted
   `llama-autostart.sh` from the backend scripts.
+- **`claude-setup` step 3 corrupted the file it manages** (installed on this
+  machine). Its prose quoted a truncated opening marker, so a marker search
+  matched the prose before the real delimiter and the installed
+  `~/.claude/CLAUDE.md` was written with eight lines of the skill's own
+  instructions at the top, a stray code fence, and no closing marker. The step
+  now takes canonical text from the fenced block, matches whole marker lines
+  only, and verifies the result before finishing.
+- **`$CLAUDE_CONFIG_DIR` claim removed** (`KI-15`). Step 1 promised the variable
+  was honoured while every bundled script resolved `$HOME/.claude` directly. It
+  now states plainly that the variable is unsupported and must not be set on a
+  managed machine. Supporting it is filed as `ENH-07`, to be done inside the
+  backup test harness rather than as a blind substitution.
 
 ## [1.8.0] - 2026-09-05 — Review loop and test validity
 

@@ -33,17 +33,25 @@ findings are in the CHANGELOG rather than here.
 **`local-models` and `claude-toggle-backend` are being rebuilt from scratch**, so their
 entries below are held rather than worked. They stay filed — the defects are real and the
 rebuild has to clear them — but they are out of scope for the current phase and are excluded
-from its external review bundles. KI-06, KI-07, KI-08, KI-14 and KI-15 belong to
-`claude-setup` and are not affected.
+from its external review bundles. KI-06, KI-07, KI-08 and KI-14 belong to `claude-setup` and
+are not affected — they are phase 2.
 
-The active queue is bug work in the scripts, and the test suite that would have caught it.
-Eight of the 29 bats tests pass with the behaviour they name removed, so ENH-02 and ENH-03
-depend on fixing those first — adding coverage around tests that cannot fail only adds more
+The active queue is the `backup-projects.sh` cluster and the harness that would have caught
+it. Everything else is held for the rebuild: eight of the 29 bats tests pass with the
+behaviour they name removed, so ENH-02 and ENH-04 wait on new code rather than on patches to
 tests that cannot fail.
 
 ### Phases
 
-Phase 1 — `design-review` skill and process remediation — is in progress.
+**Phase 1 — `design-review` skill and process remediation** — in progress. Also carries
+ENH-01 (slim the global standards) and ENH-06 (this repo's own `CLAUDE.md` and
+`ARCHITECTURE.md`), both of which are standards and workflow documents like the rest of the
+phase.
+
+**Phase 2 — the backup cluster.** A bats harness for `backup-projects.sh` (ENH-03, in its
+active half), then KI-14, KI-06, KI-08 and KI-07, each with its reproducing test written
+first. KI-14 leads: while every run reports success, the other three cannot be observed
+failing.
 
 ## Known Issues
 
@@ -66,7 +74,6 @@ Most severe first. Severity definitions and full detail in [KNOWN_ISSUES.md](KNO
 | [KI-12](KNOWN_ISSUES.md#ki-12) | The stop test passes even if nothing is stopped | High |
 | [KI-13](KNOWN_ISSUES.md#ki-13) | Test cleanup kills unrelated processes on the machine | High |
 | [KI-14](KNOWN_ISSUES.md#ki-14) | Every backup failure is logged as `ok` and exits 0 | High |
-| [KI-15](KNOWN_ISSUES.md#ki-15) | `$CLAUDE_CONFIG_DIR` is honoured in the docs and nowhere in the code | Medium |
 | [KI-16](KNOWN_ISSUES.md#ki-16) | The docs say the shell block exports `HF_HOME`; it does not | Medium |
 | [KI-17](KNOWN_ISSUES.md#ki-17) | The machine is documented as both 64 GB and 24 GB | Medium |
 | [KI-18](KNOWN_ISSUES.md#ki-18) | `toggle.sh` needs `python3` and never checks for it | Medium |
@@ -91,6 +98,7 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 | [ENH-04](ENHANCEMENTS.md#enh-04) | Make the fakes assert a contract rather than only a shape | Medium | ~half a day |
 | [ENH-05](ENHANCEMENTS.md#enh-05) | Fold the MLX plan and spec into the permanent docs | Medium | ~half a day |
 | [ENH-06](ENHANCEMENTS.md#enh-06) | Give the repo the ARCHITECTURE.md and CLAUDE.md it requires of others | Low | ~half a day |
+| [ENH-07](ENHANCEMENTS.md#enh-07) | Honour `$CLAUDE_CONFIG_DIR` in the bundled scripts | Low | ~1 hour |
 
 ## Open Questions
 
