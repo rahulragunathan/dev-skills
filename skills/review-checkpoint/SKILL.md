@@ -1,6 +1,6 @@
 ---
 name: review-checkpoint
-description: Run external-model reviews (OpenAI Codex + Google Gemini via the Antigravity `agy` CLI) at the critical junctures of the user's phase workflow — `/localclaude:review-checkpoint plan` on a drafted plan before it goes to the user for approval, `/localclaude:review-checkpoint phase` after a phase's implementation is complete, `/localclaude:review-checkpoint repo` for the current state of a repo with no in-flight branch (e.g. adopting the workflow on an existing project). Review-only, never applies fixes; verifies findings against the repo, then presents every finding — confirmed and rejected alike — in a standard table with a disposition for each, so nothing is lost; classifies CLI failures (missing vs quota vs auth vs sandbox) plainly and continues with whichever reviewer is available, skipping the review outright when neither CLI is installed. In phase mode it runs as a short loop — up to three review→fix passes, each follow-up narrowed to the fixes just made, with a blocking pause on the findings table after every pass. Use when the user asks for an external review, a second-model opinion on a plan, diff, or codebase, or when the phase-workflow skill reaches a review checkpoint.
+description: External review from non-Claude models (OpenAI Codex, Google Gemini) at the phase workflow's checkpoints — `plan` on a drafted plan, `phase` on a branch before hand-off, `repo` on current state. Reviewers never apply fixes; every finding is verified and given a disposition in one table. Use when an outside opinion on a plan, diff or codebase is wanted.
 ---
 
 # review-checkpoint
@@ -16,8 +16,18 @@ command -v codex; command -v agy
 Neither CLI is a hard requirement of this plugin. Check both **before** composing any prompt, so a missing tool surfaces as one clear line instead of a confusing failure halfway through:
 
 - **Both present** → normal run.
-- **One missing** → say which reviewer is unavailable and its install hint (`codex` → the OpenAI Codex CLI, then `codex login`; `agy` → the Antigravity CLI), then review with the other. A single-reviewer report says so at the top — there is no agree/disagree axis, so the findings carry less weight.
-- **Both missing** → **skip the review entirely.** Report: *"External review skipped — neither `codex` nor `agy` is installed"*, with both install hints. Do not fall back to a Claude-run review: a second opinion from the same model is not a second opinion, and presenting one as this checkpoint's output would be misleading. This is a skip, not a failure — never block the user's workflow on it (see phase-workflow's note on the same rule).
+- **One missing** → say which reviewer is unavailable and its install hint (`codex` → the OpenAI Codex CLI, then `codex login`; `agy` → the Antigravity CLI), then review with the other.
+- **Both missing** → **skip the review entirely.** Report: *"External review skipped — neither `codex` nor `agy` is installed"*, with both install hints. Do not fall back to a Claude-run review: a second opinion from the same model is not a second opinion, and presenting one as this checkpoint's output would be misleading. This is a skip, not a failure — never block the user's workflow on it.
+
+### A skip and partial coverage are different things
+
+**The step is skipped only when it did not run.** That is the both-missing case above, and nothing else.
+
+Everything else is **partial coverage**: the step ran, and one reviewer produced nothing. A CLI that is installed and then fails on **quota**, **auth**, **timeout** or **sandbox denial** did not cause a skip — it ran and came back empty. Say so in the coverage line, name the reviewer, and give the reason verbatim:
+
+> *Coverage: Codex `gpt-5.6-sol` 9 findings. Gemini installed but returned `Individual quota reached` (resets 23h26m) — no findings this pass. Single-reviewer coverage, not a clean review.*
+
+Never record partial coverage as "both reviewers clean". A single-reviewer report has no agree/disagree axis, so its findings carry less weight, and the hand-off must say which reviewer is missing and why.
 
 Offer the install commands; never install a CLI or change the user's login state yourself.
 
@@ -27,8 +37,10 @@ Offer the install commands; never install a CLI or change the user's login state
 
 | Reviewer | Try in this order |
 | --- | --- |
-| Codex (`-m`) | `gpt-5.6-sol` → `gpt-5.6-terra` (CLI default) → unflagged default |
+| Codex (`-m`) | `gpt-6-astra` → `gpt-5.6-sol` → `gpt-5.6-terra` → unflagged default |
 | Gemini (`--model`) | `gemini-3.1-pro-high` → `gemini-3.6-flash-high` → unflagged default |
+
+**Set the reasoning effort explicitly; `-m` alone does not.** Every model on both ladders supports low/medium/high/xhigh/max, and `gpt-6-astra` defaults to **low** — so naming only the slug gets the weakest setting of the strongest model, and the run reads as stronger than it was. Pass `-c model_reasoning_effort="high"` for a review, and record the effort beside the slug: a `low` run and a `high` run from one slug deserve different weight and the slug alone cannot tell them apart.
 
 Downshift rule: run with the top model; **only** if it fails with an availability error (`model ... is not supported`, unknown/retired model, entitlement error) drop to the next rung and retry. Quota, auth, and timeout errors are NOT downshift triggers — handle them per *Failure handling* below. **Record which model actually ran** — it goes in the findings table's coverage line and its Model column (below), which is the one place that attribution is carried. Note a downshift plainly there (`gpt-5.6-sol unavailable on this account — reviewed with gpt-5.6-terra`), since a lighter model changes how much weight the findings deserve.
 
@@ -39,15 +51,20 @@ Downshift rule: run with the top model; **only** if it fails with an availabilit
 **Codex is agentic** — it explores the repo itself. Point it at the repo root and pin it read-only at the tool level (never rely on prompt wording alone):
 
 ```bash
-codex exec -C "<repo-root>" --sandbox read-only -m gpt-5.6-sol -o "<scratchpad>/codex_<mode>.txt" "<prompt>"   # downshift per the ladder if unavailable
+codex exec -C "<repo-root>" --sandbox read-only \
+  -m gpt-6-astra -c model_reasoning_effort="high" \
+  -o "<scratchpad>/codex_<mode>_p<n>.txt" "<prompt>" \
+  > "<scratchpad>/codex_<mode>_p<n>.log" 2>&1        # downshift per the ladder if unavailable
 ```
 
 - `-C` replaces `cd "…" &&` (which the global shell rules prohibit); `--sandbox read-only` makes review-only enforced, not requested; `-o` writes only the final message (no event noise).
+- **`-o` captures the final message and nothing else.** A quota, auth or availability failure never reaches it, so the file is absent or empty and says nothing about why. The `.log` beside it holds stderr, and it is what the coverage line quotes verbatim.
+- **Number the output files by pass.** `phase-workflow` §3 step 7 cites these paths and byte counts as the evidence step 5 ran. One reused filename lets pass 1's output stand in for a pass 2 that never happened.
 
 **Gemini (`agy -p`) is one-shot print mode — it cannot prompt for tool permissions.** Any prompt asking it to "review this repository" gets its tool calls auto-denied and fails. **Always inline the material in the prompt** and state: *"REVIEW ONLY: do not attempt to use any tools; answer purely from the text below."*
 
 ```bash
-agy -p "$(cat "<scratchpad>/gemini_prompt.txt")" --model gemini-3.1-pro-high --effort high --print-timeout 15m > "<scratchpad>/gemini_<mode>.txt" 2>&1
+agy -p "$(cat "<scratchpad>/gemini_prompt_p<n>.txt")" --model gemini-3.1-pro-high --effort high --print-timeout 15m > "<scratchpad>/gemini_<mode>_p<n>.txt" 2>&1
 ```
 
 - Build the prompt in a file (rubric + inlined material); the default 5m print-timeout is too short for big inputs — set ~15m.
@@ -86,8 +103,45 @@ Two separate defects, and each one silently hands a reviewer an incomplete pictu
 Build the bundle like this instead:
 
 ```bash
-git diff "<base>" -- .                     # tracked: committed + staged + unstaged, all at once
-git ls-files --others --exclude-standard   # untracked — append each file IN FULL, with a path header
+BUNDLE="<scratchpad>/bundle.txt";   : > "$BUNDLE"
+WITHHELD="<scratchpad>/withheld.txt"; : > "$WITHHELD"
+
+EXCL=(':(exclude,icase)*.env' ':(exclude,icase)*.env.*' ':(exclude,icase)*.pem'
+      ':(exclude,icase)*.key' ':(exclude,icase)*.p12' ':(exclude,icase)*.pfx'
+      ':(exclude,icase)*.crt' ':(exclude,icase)*id_rsa*' ':(exclude,icase)*id_ed25519*'
+      ':(exclude,icase)*credentials*' ':(exclude,icase)*.netrc' ':(exclude,icase)*.npmrc'
+      ':(exclude,icase)*.sqlite' ':(exclude,icase)*.sqlite3')
+
+# tracked: committed + staged + unstaged
+git diff "<base>" -- . "${EXCL[@]}" > "$BUNDLE" || { echo "DIFF FAILED — bundle incomplete"; exit 1; }
+
+# untracked: each one appended IN FULL, behind a path header
+git ls-files --others --exclude-standard -z -- . "${EXCL[@]}" |
+while IFS= read -r -d '' f; do
+  [ -L "$f" ] && { printf '%s\t(symlink)\n' "$f" >> "$WITHHELD"; continue; }
+  [ -f "$f" ] || continue
+  perl -e 'exit(-B $ARGV[0] ? 0 : 1)' "$f" && { printf '%s\t(binary)\n' "$f" >> "$WITHHELD"; continue; }
+  printf '\n===== UNTRACKED FILE: %s =====\n' "$f" >> "$BUNDLE"
+  cat "$f" >> "$BUNDLE" || { echo "READ FAILED: $f"; exit 1; }
+done
+```
+
+**`git ls-files` prints paths, so something has to do the appending.** Show the loop, not the
+command plus a comment describing what the comment wishes happened — an agent that runs exactly
+what is written otherwise sends a bundle of filenames and reports that it sent the files.
+
+**Bundling sends your source to a third party.** Exclude credential-shaped files from **both** lists — a tracked `.env` reaches the reviewer through `git diff` just as easily as an untracked one. **Every pattern needs a leading `*` and `icase`**: without them a pathspec anchors at the repo root and is case-sensitive, so `config/credentials.json` and `Credentials.yaml` both pass.
+
+**The exclusions protect Gemini only. Codex reads the repository itself.** `--sandbox read-only` stops writes, not reads: an excluded `.env` is still readable, and reading it into a tool response has already sent it. There is no user-level way to prevent this — `permissions.filesystem.deny_read` is an enterprise-managed layer and is not enforced from `-c`. Treat pointing Codex at a repo as granting it read access to everything in that repo, and do not point it at one holding secrets you would not paste into a chat. Use `git` pathspecs rather than a `grep` filter: `grep` inside Claude Code is a shadowed ugrep with injected `--ignore-files`, `-I` and `--exclude-dir` defaults, so a filter written with it searches a different file set than you think.
+
+**Skip symlinks explicitly; the pathspecs cannot.** `git ls-files` matches an untracked symlink by *its own name*, so an innocuous `notes.txt` pointing at `~/.ssh/id_rsa`, or at a `.env` outside the repo, passes every exclusion — and `cat` then reads the target. Test `-L` **before** `-f`, because `-f` follows the link and reports the target's type.
+
+**Check each step.** A failed `git diff` leaves a truncated bundle that looks exactly like a small phase, and a failed `cat` inside the loop disappears the moment a later iteration succeeds.
+
+Skip binaries the same way, with no grep involved:
+
+```bash
+perl -e 'exit(-B $ARGV[0] ? 0 : 1)' "$f" && continue   # skip binary files
 ```
 
 Do **not** use `git add -N` to sweep untracked files into the diff. It mutates the index, and phase-workflow's gate checks `git status` to prove the work is uncommitted.
@@ -95,8 +149,14 @@ Do **not** use `git add -N` to sweep untracked files into the diff. It mutates t
 **Reconcile the bundle, and say the count out loud.** This failure is silent — a short bundle looks exactly like a small phase — so a better command is not the fix; a stated count is:
 
 ```bash
-git status --porcelain | wc -l    # must equal the file count in the bundle
+git status --porcelain -uall -z | tr -cd '\0' | wc -c   # -uall expands untracked directories; -z survives newlines in paths
 ```
+
+Once exclusions are applied the bundle can no longer equal that count, so report both and name what was withheld:
+
+> *This bundle contains 23 of 25 changed files. Withheld: `.env.staging`, `fixtures/sample.db` (credential-shaped or binary).*
+
+A reviewer told what was withheld never reports it as missing. `-z` in the bundle loop protects the *loop*; it does nothing for the count, which is why the count command above is NUL-delimited too. (A rename still emits two paths for one entry — rare, and worth knowing before trusting the number blindly.)
 
 Put that count in the prompt (*"this bundle contains all N changed files"*) and in the report's coverage line. Codex reads the working tree and sees untracked files on its own, but give it the same manifest so it is not inferring the scope of the phase.
 
@@ -113,19 +173,19 @@ codex exec -C "<repo-root>" --sandbox read-only -m <same model as the real run> 
 Use the SAME model as the real run — quota and availability limits are per-model, so a probe on a different rung misdiagnoses the failure.
 
 - Probe succeeds → the real prompt was the problem (too large, malformed) — fix and re-run.
-- Probe fails → read the error: quota/usage → report "Codex/Gemini out of usage — skipped"; `model ... is not supported` → an unavailable model tier, not a quota problem (see the pins above); auth → say re-login is needed (`codex login` / `agy` interactive); tool-permission denial (Gemini) → the prompt asked it to use tools — inline the material instead.
+- Probe fails → read the error: quota/usage → **partial coverage, not a skip** (the CLI is installed and it ran); report "Codex/Gemini out of usage" with the error verbatim, per *A skip and partial coverage are different things* above; `model ... is not supported` → an unavailable model tier, not a quota problem (see the pins above); auth → say re-login is needed (`codex login` / `agy` interactive); tool-permission denial (Gemini) → the prompt asked it to use tools — inline the material instead.
 - `command not found` → the CLI is not installed; that is a preflight case, not a runtime failure. Don't probe — report the skip per *Preflight* above.
 - Never silently drop a reviewer; the report names which ran, which didn't, and why.
 
 ## Triage — verify before presenting
 
 1. **Verify each finding against the repo** (read the cited file/function) before it reaches the user. A confident false finding routed into the roadmap files is worse than no review. Verification decides the **Verdict**, never whether the row appears.
-2. **Deduplicate across reviewers.** One row per distinct finding. Two reviewers reporting the same thing is signal, not noise — merge them into one row whose Model reads **Both**.
+2. **Deduplicate across reviewers.** One row per distinct finding. Two reviewers reporting the same thing is signal, not noise — merge them into one row listing **both model ids**, per the Model column rule below. Never `Both`: a row can outlive this table by being filed as a roadmap entry, and `Both` resolves only against a coverage line that is chat-only.
 3. **Give every finding a disposition** and present them in the findings table below. *plan* mode: the table goes in the plan. *phase / repo* mode: the table goes in the hand-off at the gate.
 
 ## The findings table (canonical format — both modes)
 
-Every finding the reviewers returned gets a row, **including rejected and duplicate ones**. A table that shows only survivors cannot be audited: the user has to be able to see what was thrown away and push back on it. Never summarize the list down.
+Every finding the reviewers returned gets a row, **including rejected and duplicate ones** — the user has to see what was thrown away. Never summarize the list down.
 
 Open with a coverage line so the count is unambiguous:
 
@@ -137,13 +197,15 @@ Name the **exact model that ran**, not the CLI — the ladder in *Review models*
 
 If neither CLI is installed, print the skip line in its place — `External review skipped — neither codex nor agy is installed` — so a missing table is never mistaken for a clean review.
 
-**Format: a compact table, then keyed notes.** Explanation and commentary are prose and wrap badly inside table cells, so they live in the notes below the table, keyed by finding ID.
+**Format: a compact table, then keyed notes.** Commentary lives below the table, keyed by finding ID.
 
-| # | Finding | Model | Severity | Verdict | Disposition |
-| --- | --------- | ------- | ---------- | --------- | ------------- |
-| F-01 | No rollback if the migration half-applies | gpt-5.6-sol | High | Confirmed | Incorporated — new step 6 |
-| F-02 | Token refresh races on concurrent runs | gpt-5.6-sol, gemini-3.1-pro-high | Medium | Confirmed | Filed UNK-08 |
-| F-03 | Add a caching layer for lookups | gemini-3.1-pro-high | Medium | Rejected | Not incorporated |
+| # | Finding | Files | Model | Severity | Verdict | Disposition |
+| --- | --------- | ------- | ------- | ---------- | --------- | ------------- |
+| F-01 | No rollback if the migration half-applies | `migrate.py:88-140` | gpt-5.6-sol | High | Confirmed | Incorporated — new step 6 |
+| F-02 | Token refresh races on concurrent runs | `auth/token.py`, `worker.py:41` | gpt-5.6-sol, gemini-3.1-pro-high | Medium | Confirmed | Filed UNK-08 |
+| F-03 | Add a caching layer for lookups | `lookup.py` | gemini-3.1-pro-high | Medium | Rejected | Not incorporated |
+
+*The dispositions above are **plan** mode; phase and repo mode use the five buckets further down. The columns are the same in every mode.*
 
 **F-01** — *Explanation:* <what the reviewer claims, in a sentence or two> *Commentary:* <what you found verifying it, and why the disposition follows>
 **F-02** — *Explanation:* … *Commentary:* …
@@ -152,8 +214,9 @@ Column rules:
 
 - **#** — `F-01`, `F-02`, … Stable within this review only; they exist so the user can say "also fix F-03" without quoting titles.
 - **Finding** — one short line. Not a summary of the explanation.
+- **Files** — where the finding lives, as `path` or `path:start-end`, comma-separated when it spans more than one. **Take the reviewer's own reference and verify it against the repo during triage** — a wrong path is itself a signal the finding was not verified. Two or three paths is the cap; a finding touching more than that is really a finding about the design, so name the area (`skills/*/SKILL.md — all six`) rather than listing every file. Use `—` only where the finding genuinely has no location, such as a missing file or an absent test. This column is what makes a filed `KI-nn`/`ENH-nn` entry actionable from cold, since the roadmap entry inherits it.
 - **Model** — the **model id that produced the finding**, not the CLI that ran it: `gpt-5.6-sol`, `gemini-3.1-pro-high`. Which rung of the ladder actually answered changes how much weight a finding deserves, and that is per-run state the CLI name cannot carry. When both reviewers found the same thing, **list both ids** — `gpt-5.6-sol, gemini-3.1-pro-high` — never `Both`: a row can outlive this table by being filed as a `KI-nn`/`ENH-nn`/`UNK-nn` entry, and `Both` resolves only against a coverage line that is chat-only. Two ids in one cell is also the agreement signal, stated so it survives the move. Never write `Codex` or `Gemini` alone in this column.
-- **Severity** — **the reviewer's own rating, verbatim** (`High (Codex)`). Never renormalize it: the same pass decides disposition, so quietly downgrading an inconvenient Critical would hide the decision. If you disagree with the rating, say so in the commentary, where the user can see the disagreement.
+- **Severity** — **the reviewer's own rating, verbatim**, attributed by **model id** and never by CLI name: `High (gpt-5.6-sol)`. Never renormalize it: the same pass decides disposition, so quietly downgrading an inconvenient Critical would hide the decision. **When the two reviewers disagree, record both and order by the higher** — `High (gpt-5.6-sol) / Medium (gemini-3.1-pro-high)`. If you disagree with a rating yourself, say so in the commentary, where the user can see the disagreement.
 - **Verdict** — `Confirmed` | `Partly` | `Rejected`, from step 1. Separate from Disposition on purpose: *valid but deferred* and *invalid so dropped* are different states, and one column cannot carry both.
 - **Disposition** — what actually happened; vocabulary differs by mode (below).
 
@@ -175,9 +238,11 @@ The table itself is **chat-only** — do not write a per-phase review file. It p
 
 ## Follow-up passes — *phase* mode only
 
-A first review changes the code. Those changes have never been reviewed by anyone, and the fixes for high-severity findings are exactly where a hurried repair introduces the next bug. So a phase review is a short loop, not one shot.
+**This section is canonical for the review loop.** `phase-workflow` §3 step 5 states only what is phase-specific and delegates the rest here.
 
-**Three review runs per phase, maximum — a ceiling, not a target.** Pass 1 full scope; passes 2 and 3 narrow. `plan` and `repo` modes stay single-pass: a plan already loops through the user's approval, and a `repo` review seeds the backlog rather than gating a hand-off.
+A first review changes the code, and those changes have been reviewed by no one — so a phase review is a loop, not one shot.
+
+**Five review runs per phase by default — a soft ceiling, not a target.** Go past it when the findings justify it; say why. Pass 1 full scope; passes 2 and 3 narrow. `plan` and `repo` modes stay single-pass: a plan already loops through the user's approval, and a `repo` review seeds the backlog rather than gating a hand-off.
 
 ### The loop
 
@@ -192,7 +257,7 @@ A first review changes the code. Those changes have never been reviewed by anyon
 
 ### What "narrow" means
 
-The churn risk in a follow-up is a reviewer re-reading the whole phase and returning pass 1's list with the numbers shuffled. Scope each follow-up prompt to exactly three things:
+Scope each follow-up prompt to exactly three things:
 
 - The diff of the fixes made **since the previous pass** — captured the same way, untracked files included, count reconciled.
 - The finding IDs that pass claimed to resolve, quoted, with *"confirm each of these is actually resolved."*
@@ -216,7 +281,10 @@ Finding IDs run in **one sequence for the whole phase** — pass 1 ends at `F-08
 
 ## Hard rules
 
-- Review-only: never apply fixes, patches, or "quick corrections" from review output.
+- **The reviewers never apply anything.** They are read-only by sandbox, not by request.
+- **Who acts on a finding differs by mode, and both are review-only in the sense that matters — no fix is applied straight from review output.**
+  - *plan*: the agent revises the plan itself, then presents the revision and the findings table together. This is deliberate: phase-workflow §1 says the plan the user sees is the revised one, so waiting for a disposition first would defeat the checkpoint.
+  - *phase / repo*: the user dispositions every finding **before any code is touched**. A disposition you assigned yourself is a proposal until they say so.
 - **The pause after a findings table is blocking.** Present, stop, wait. Not "present and start fixing while they read".
 - **Never widen a follow-up pass back to full scope.** If pass 2 looks thin, that is the loop working, not a reason to re-review the phase.
 - **Never report a bundle without its reconciled file count.** An unstated count is how a reviewer ends up reviewing half a phase and nobody notices.
