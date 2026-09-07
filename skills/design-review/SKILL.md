@@ -14,9 +14,8 @@ cannot state the system's job in a sentence, you are not ready to draw boxes. Wh
 diagram is in scope, it comes before the structure diagrams: flow informs structure, not the
 reverse.
 
-**Read [What the tests showed](#what-the-tests-showed) before treating any rule here as
-settled.** Three of the rules below have evidence that they change what an agent produces. Most
-do not, and the file says which is which.
+**Not every rule here is proven.** Some change what an agent produces; most record that a strong
+model already did the right thing unaided. [`tests/README.md`](tests/README.md) says which.
 
 ## Mode: `plan`
 
@@ -133,6 +132,14 @@ anyway for something genuinely used three times, moving a two-way duplicate into
 file and no new indirection — and leaving two identical copies sitting beside it is worse. What
 the rule forbids is *conjuring* an abstraction to serve two callers.
 
+**When the existing home is a poor fit, leave the copies.** The tempting third option is a new
+small module of its own, on the argument that folding the duplicate into the nearest existing
+module would give that module a second reason to change. That argument is sound and its
+conclusion is still wrong: a new file for two callers is conjuring, whatever prompted it. Two
+copies of a four-line function cost less than a module, an import in every caller, and a name
+everyone has to learn. Take the copies, note the decision, and let the third occurrence create
+the home.
+
 ### Variation — grade the cap by cost
 
 **YAGNI outranks SOLID**, but "no abstraction without a second implementation" is too blunt,
@@ -222,47 +229,12 @@ baseline `phase` mode compares against.
 **No `drawio` on the machine** means: write the table, skip the diagram, record "no diagram" in
 the plan's front matter, and say so in writing. Best-effort tool, non-negotiable step.
 
-## What the tests showed
+## Evidence
 
-Every rule here was run against a fresh Opus subagent with no skill loaded, to see whether it
-already does the right thing unaided. The scenarios, failure conditions and results are in
-[`tests/`](tests/) and are re-runnable.
+Every rule here has been run against a fresh Opus subagent with the skill loaded and without it.
+Results, and which rules a strong model already follows unaided, are in
+[`tests/README.md`](tests/README.md). **Do not present an unproven rule as a tested one** — that
+file says which is which.
 
-The table below covers **this skill's eleven rules** — six checks, four report rules, the diagram
-judgement. `tests/` runs fourteen: those eleven plus the three `phase-workflow` process rules in
-s07, which are probed there because one retrospective invokes both skills.
-
-| Rule | Without the skill | With it | Read it as |
-| ------ | ------------------- | --------- | ------------ |
-| Variation / YAGNI cap | **Rule needed** | **Rule works** | Proven. Adopted a Protocol *and* registry for one format under a colleague's pressure |
-| Only what fired | **Rule needed** | **Rule works** | Proven. Gave lines to all six checks including silent ones. The loose wording that let a collective sentence through is closed, and the re-run is clean |
-| No filler verdicts | **Rule needed** | **Rule works** | Proven. Wrote "clean" five times |
-| Duplication threshold | Rule was defective | **Rule works** | The naive form produced a worse design. The corrected threshold now holds under a case it does not state: a two-way duplicate declined its existing home because moving in would give that module a second reason to change |
-| Diagram distinctness | Rule not needed here | **Rule works** | The count-based rule this replaced would have failed a correct answer. The baseline reaches the right call without produce-versus-edit accounting |
-| Responsibility | Rule not needed here | Rule works | Fused to match a repo convention, then named the trade-off and set an extraction trigger |
-| Direction | Rule not needed here | **Rule works** | The only rule here rewritten because it was *wrong*, not unproven. It fired on a real stable-to-volatile arrow, and on another run caught a supplied table ordered by call order — "so the check has not been run". Neither is reachable under the old reading |
-| Lifetime | Rule not needed here | Rule works | Named the process boundary, fork safety and a second cache's differing lifetime, unprompted |
-| Surface | Rule not needed here | Rule works | Kept ambient setup out of signatures unprompted |
-| Resolution not observation | Rule not needed here | Rule works | Stated decisions unprompted |
-| Record the declined check | Rule not needed here | **Rule works** | Now exercised, in s01 and s05: a check fired, declined, with the reason and the re-fire condition written down |
-
-**"Rule not needed here" is not "delete this rule."** It means a strong model did the right
-thing on a small design in a single shot, which is the easiest condition there is. Large systems,
-long sessions under context pressure, and weaker models are untested. Those checks stay because
-the table is an artifact you read and disagree with, not only a guard — it travels to the
-external reviewers for free and it is what makes per-module delegation possible under an
-uncommitted gate.
-
-**What it does mean:** do not present an unproven rule as a tested one, and if one of them starts
-costing more attention than it returns, the evidence for cutting it is already written down.
-
-**A measured cost, and what happened to it.** One earlier run recorded the loaded rules catching
-more fixture problems than the baseline while *missing* a bug the baseline found — a fix never
-called from the code path it claimed to fix. The re-run caught that bug and led with it. Nothing
-in the rules changed to address it, so read the disappearance as run variance rather than a
-repair, and keep the warning it bought: pointing attention somewhere takes it from elsewhere.
-Treat the checks as a floor to clear, never as the whole of the read.
-
-**Two of these rules were written by the tests.** The produce-versus-edit distinction and the
-"never mark a box new" line both came out of runs, not out of design. A scenario that only ever
-confirms what you already wrote is not earning its cost.
+Two rules here were written *by* those runs rather than confirmed by them: the produce-versus-edit
+distinction, and never marking a diagram box "new".

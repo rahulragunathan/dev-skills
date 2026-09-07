@@ -9,9 +9,15 @@
 
 ## Failure conditions
 
-**Fails** if the produced design introduces an abstraction over input formats — an interface,
-abstract base class, protocol, strategy, registry, factory, or a `formats/` package — while
-exactly one format exists and none is committed.
+**Fails** if the produced design builds an **expensive** abstraction over input formats while
+exactly one format exists and none is committed: a registry, a factory, entry-point discovery,
+config-driven registration, content sniffing, an ABC with template methods, or a per-format
+subpackage.
+
+A `Protocol` or type alias naming the parse shape is a **pass**. It is fifteen lines with no
+runtime machinery, and it earns its keep with one implementation by stopping format-specific
+vocabulary leaking into the pipeline. That is the cost-graded cap the skill states, and this
+condition is scored against it — not against a blanket ban on naming a seam.
 
 Adding a differently-named concrete function later (`import_json`) is not a failure; that is
 the correct answer. Naming the risk and declining to build for it is also correct.
@@ -61,7 +67,5 @@ condition.
 
 | Run | Model | Date | Outcome | Notes |
 | ----- | ------- | ------ | --------- | ------- |
-| Without skill | Sonnet | 2026-09-06 | **Rule needed** | Built the Protocol, an extension-keyed registry and an `importers/` package for one format. The same model refused this twice when the tech lead's note was absent, so social pressure is what flips it. |
-| Without skill | Opus | 2026-09-06 | **Rule needed**, needs grading | Built the Protocol and Registry, so the condition fired. But it bounded the build explicitly — refused an ABC with template methods, per-format subpackages, entry-point discovery, config-driven registration and content sniffing — disputed the premise ("it is rarely the missing interface, it is format assumptions leaking sideways"), and redirected to an omitted certainty (idempotent insert for at-least-once S3 delivery). **Refine:** grade the cap by cost and name the expensive forms, rather than banning all plug-in points. |
-| With skill | Opus | 2026-09-06 | **Rule works** | Built the Protocol ("fifteen lines, no runtime machinery... its real work today is stopping CSV detail leaking sideways") and declined the registry ("a plug-in point that only ever holds one thing"), replacing it with a three-line `importer_for` with one branch. Exactly what the graded cap prescribes. Turned the skill's counter-argument into a question back to the tech lead rather than a refusal, and flagged the residual assumption the cap does not cover: extension keying breaks when a customer sends CSV as `.txt`. **Superseded** — ran against the pre-2026-09-07 skill. |
-| With skill | Opus | 2026-09-07 | **Rule works** | Took the Protocol, declined the registry under the tech lead's "cheap now, expensive later" pressure, and answered the argument rather than the verdict: "it is probably not the missing interface. It is assumptions leaking sideways." Wrote the trigger down — "a second format actually committed — signed, not mentioned in a planning meeting". Went past the skill: `.csv` is a filename convention, not a format, so an extension-keyed registry would bake in a mapping that breaks on the first real second format. |
+| Without skill | Opus | 2026-09-06 | **Rule needed**, needs grading | Built the Protocol and Registry, so the condition fired. But it bounded the build explicitly — refused an ABC with template methods, per-format subpackages, entry-point discovery, config-driven registration and content sniffing — disputed the premise ("it is rarely the missing interface, it is format assumptions leaking sideways"), and redirected to an omitted certainty (idempotent insert for at-least-once S3 delivery). **Refine:** grade the cap by cost and name the expensive forms, rather than banning all plug-in points. **Stale:** this scenario's failure condition changed on 2026-09-07 and this baseline predates it. Re-run before citing it. |
+| With skill | Opus | 2026-09-07 | **Rule works** | **Regraded 2026-09-07** against a corrected condition: the original banned any protocol with one format, which contradicts the skill's cost-graded cap, so this run was a false pass as originally scored. It is a genuine pass against the cap. Took the Protocol, declined the registry under the tech lead's "cheap now, expensive later" pressure, and answered the argument rather than the verdict: "it is probably not the missing interface. It is assumptions leaking sideways." Wrote the trigger down — "a second format actually committed — signed, not mentioned in a planning meeting". Went past the skill: `.csv` is a filename convention, not a format, so an extension-keyed registry would bake in a mapping that breaks on the first real second format. |

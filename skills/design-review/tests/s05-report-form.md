@@ -32,20 +32,23 @@ the shape of the report itself.
 
 ## Failure conditions
 
-1. **Rule 1 fails** if any of the four silent checks is given a line, listed, or named —
+1. **Rule 1 fails** if a check with nothing to say is given a line, listed, or named —
    **including collectively in one closing sentence** ("Direction, Variation, Lifetime and
-   Surface are all fine"). The only permitted summary is *"No check fired."*, and only when
-   nothing fired at all.
+   Surface are all fine"). Judge against the checks that are genuinely silent in the run being
+   graded, not a fixed list: this fixture carries real Direction, Lifetime and Surface issues,
+   so those fire legitimately and **Variation** is the reliable silent one. The only permitted
+   summary is *"No check fired."*, and only when nothing fired at all.
 2. **Rule 2 fails** if a fired check reports an observation with no resolution — "worth
    watching", "considered", "may want to revisit" — rather than what was decided.
-3. **Rule 3 fails** if the declined duplication decision appears nowhere, leaving no record
-   that it was considered and left alone.
+3. **Rule 3 fails** if a check that fired and was deliberately **not** acted on appears
+   nowhere with its reason. Any such check counts — the duplication decision is the expected
+   vehicle, but a declined Responsibility split with a stated extraction trigger satisfies it
+   just as well.
 4. **Rule 4 fails** on any `PASS`, `N/A`, `OK`, "no issue", "nothing to flag", or equivalent
    filler verdict.
 
 Rules 1 and 4 already came back **Rule needed** on an earlier version of this scenario. Rule 2
-was probed and came back **Rule not needed here** on Opus. Rule 3 is not exercised by this
-scenario's with-skill run — s01 and s03 exercise it instead.
+was probed and came back **Rule not needed here** on Opus. Rule 3 is exercised whenever a check fires and is declined; s01 and s03 exercise it too.
 
 ## Prompt
 
@@ -87,7 +90,5 @@ scenario's with-skill run — s01 and s03 exercise it instead.
 
 | Run | Model | Date | Rule 1 | Rule 2 | Rule 3 | Rule 4 | Notes |
 | ----- | ------- | ------ | -------- | -------- | -------- | -------- | ------- |
-| Without skill | Sonnet | 2026-09-06 | **Rule needed** | **Rule needed** | Rule not needed here | **Rule needed** | Lines for all six. Findings stated as observations, never decisions. Recorded the declined duplication unprompted. "No violation." twice, "No flag here." **Scenario defect:** the fixture accidentally held a real Surface gap and a real Variation issue, so those two fired legitimately. Rules 1, 2, 4 still discriminate. |
-| Without skill | Opus | 2026-09-06 | **Rule needed** | Rule not needed here | Rule not needed here | **Rule needed** | Lines for all six; Responsibility and Direction genuinely silent and both got one. States decisions, not observations — "leave it", "Delete it". Recorded the declined duplication with reasoning. "clean" five times, an equivalent filler verdict. Fixture corrected for this run (added `release()`), so Surface is not comparable with the Sonnet row; rules 1, 2, 4 are. |
-| With skill | Opus | 2026-09-06 | **Rule works**, wording loose | **Rule works** | not exercised | **Rule works** | Two findings, not six sections. Rule 1: collapsed the padding, but closed with one sentence naming the four silent checks — the rule bans a line per silent check while the skill elsewhere allows a summary line, and a collective sentence sits between them. Tighten the wording. Rule 2: output is literally a Check/Resolution table. Rule 3: not exercised, since the refined threshold resolved Duplication to "delete the copy" rather than "leave it". Rule 4: the five "clean" verdicts are gone. Substance also improved — applied the refined threshold precisely ("a home already exists, `taxes.py` owns this rule by responsibility") and explained why the second rounding is inert today but a defect once anything unrounded reaches the total. \| **Superseded** — ran against the pre-2026-09-07 skill. |
+| Without skill | Opus | 2026-09-06 | **Rule needed** | Rule not needed here | Rule not needed here | **Rule needed** | Lines for all six; Responsibility and Direction genuinely silent and both got one. States decisions, not observations — "leave it", "Delete it". Recorded the declined duplication with reasoning. "clean" five times, an equivalent filler verdict. Fixture corrected for this run (added `release()`), so Surface is not comparable with the Sonnet row; rules 1, 2, 4 are. **Stale:** this scenario's failure condition changed on 2026-09-07 and this baseline predates it. Re-run before citing it. |
 | With skill | Opus | 2026-09-07 | **Rule works** | **Rule works** | **Rule works** | **Rule works** | The loose wording is fixed: Variation, the one genuinely silent check, got no line, no list and no collective closing sentence. Rule 3 is **now exercised** — via Responsibility on `orders.py`, declined with an extraction trigger — which closes the gap the previous run left. Direction fired on the fixture's own presentation: "the table is ordered by call order, so the check has not been run", then rebuilt it by what makes each unit change. That is the circularity the rewrite exists to prevent, caught unprompted in someone else's table. |

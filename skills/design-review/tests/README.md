@@ -105,3 +105,36 @@ Fourteen rules across seven scenarios: the **eleven** `design-review` states —
 report rules, the diagram judgement — plus the **three** `phase-workflow` process rules in s07,
 probed here because a single retrospective invokes both skills. Every rule `design-review` states
 has a row.
+
+## Results
+
+Every rule run against a fresh **Opus** subagent, with the skill loaded and without it. Fourteen
+rules: the eleven `design-review` states, plus s07's three `phase-workflow` process rules.
+
+| Rule | Without the skill | With it | Read it as |
+| ------ | ------------------- | --------- | ------------ |
+| Variation / YAGNI cap | **Rule needed** | **Rule works** | Proven. Adopted a Protocol *and* registry for one format under a colleague's pressure. Regraded against the cost-graded cap; the original condition banned any protocol and contradicted the skill |
+| Only what fired | **Rule needed** | **Rule works** | Proven. Gave lines to all six checks including silent ones |
+| No filler verdicts | **Rule needed** | **Rule works** | Proven. Wrote "clean" five times |
+| Duplication threshold | Rule was defective | **Rule ineffective** (over side) | The naive form produced a worse design; the corrected threshold then failed to stop a new module built for two callers. The rule now closes that third option explicitly and is unproven again |
+| Diagram distinctness | Rule not needed here | **Rule works** | The count-based rule this replaced would have failed a correct answer |
+| Produce versus edit | Rule not needed here | **Rule works** | Baseline got the substance without the accounting or a bounded diff |
+| Responsibility | Rule not needed here | Rule works | Fused to match a repo convention, then named the trade-off and set an extraction trigger |
+| Direction | Rule not needed here | **Rule works** | Rewritten because it was *wrong*, not unproven. Fired on a real stable-to-volatile arrow, and elsewhere caught a supplied table ordered by call order — "so the check has not been run" |
+| Lifetime | Rule not needed here | Rule works | Named the process boundary, worker count and thread safety unprompted |
+| Surface | Rule not needed here | Rule works | Kept ambient setup out of signatures unprompted |
+| Resolution not observation | Rule not needed here | Rule works | Stated decisions unprompted |
+| Record the declined check | Rule not needed here | **Rule works** | A check fired, declined, with the reason and re-fire condition written down |
+| Skip vs partial coverage | Rule not needed here | Rule works | Named the reviewer that produced nothing, and refused to call it clean |
+| Mutation check | Rule not needed here | Rule works | Per-test predicted mutation, explicit that prediction is not execution |
+| Fixture validity | Rule not needed here | Rule works | Caught a timezone-inert fixture and a second under-specified one |
+
+**"Rule not needed here" is not "delete this rule."** It means a strong model did the right thing
+on a small design in one shot, which is the easiest condition there is. Large systems, long
+sessions under context pressure, and weaker models are untested. Say so rather than presenting
+those rules as proven.
+
+**One measured cost.** An earlier run recorded the loaded rules catching more fixture problems
+while *missing* a bug the baseline found. The re-run caught it, and nothing in the rules changed
+to address it — so read that as run variance, and keep the warning it bought: pointing attention
+somewhere takes it from elsewhere.

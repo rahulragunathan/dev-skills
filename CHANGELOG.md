@@ -66,6 +66,16 @@ here — the plugin manifest's version is the only record of them.
   architectural; anything that lands cuts a release with semver deciding the
   number; "deterministically testable" and post-gate edits are defined; the
   allowlist is described as a prompt-reducer rather than a security boundary.
+- **The duplication threshold closes its third option.** A new small module for
+  two callers is conjuring an abstraction even when the nearest existing module
+  is a poor fit — two copies of a four-line function cost less than a module, an
+  import in every caller, and a name everyone learns. Found by a pressure-test
+  run that built the module and reasoned well doing it.
+- **Skills carry only live evidence.** `design-review`'s results table moved to
+  `tests/README.md` where the tests are, and each scenario keeps one baseline row
+  and one with-skill row. Superseded rows are project memory, not repo content.
+  Three baselines are flagged stale: their failure conditions changed and the
+  rows predate the change.
 - **The commit trailer names the model that wrote the commit**, not the
   session's — they differ once a subagent commits its own task under model
   tiering. The name comes from what the harness states: `settings.json` holds a
