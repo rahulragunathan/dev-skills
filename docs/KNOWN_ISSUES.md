@@ -27,10 +27,15 @@ still valid, still filed, not worked until the rebuild, and excluded from extern
 bundles in the meantime. They are not closed because they are the rebuild's requirements — the
 new code has to clear them, and deleting them would lose the specification.
 
-Held: KI-01 through KI-05, KI-09 through KI-13, and KI-16 through KI-27.
+Held: KI-01 through KI-05, KI-09 through KI-13, and KI-16 through KI-27. **KI-22 is held only
+in its `claude-toggle-backend` half**; the same defect in `claude-setup` is fixed.
 
 Active: **KI-06, KI-07, KI-08 and KI-14** — the `backup-projects.sh` cluster, scheduled as its
 own phase with a bats harness (ENH-03).
+
+**An entry naming a held skill is not automatically held.** Several were filed against a
+defect that appears in both a held script and a `claude-setup` one; check the "Where" lines
+against the skill boundary rather than the title. KI-22 was such a case.
 
 ---
 
@@ -75,8 +80,13 @@ keys. Related: KI-02, which is the same switch failing for a different reason.
 
 ## KI-22 — the marker strip can truncate `.zshrc`
 
-**Severity:** Critical
-**Where:** [llama-autostart.sh:75](../skills/claude-toggle-backend/llama-autostart.sh#L75), [claude-setup/SKILL.md:374](../skills/claude-setup/SKILL.md#L374)
+**Severity:** Critical · **Partly fixed**
+**Where:** [llama-autostart.sh:75](../skills/claude-toggle-backend/llama-autostart.sh#L75)
+
+**Fixed in `claude-setup`, held in `claude-toggle-backend`.** The shell-block installer at
+`claude-setup` step 7 had the same defect and now requires both markers, backs the file up,
+and writes through `mktemp`. `llama-autostart.sh` still carries the original pattern and is
+held for the rebuild — which must not reintroduce it.
 
 ### What happens
 
@@ -98,8 +108,9 @@ Running uninstall silently deletes everything below that point, including unrela
 ### Notes for a fix
 
 Require both markers before editing, and refuse with a message when only one is present.
-Write to `mktemp` output rather than a fixed name. Back the file up before rewriting. The same
-pattern appears in the `claude-setup` shell-block installer and needs the same treatment.
+Write to `mktemp` output rather than a fixed name. Back the file up before rewriting. Copy the
+`claude-setup` step 7 block, which now does all three and is verified against a hand-deleted
+closing marker.
 
 **Source:** gpt-5.6-sol — repo review, 2026-09-05.
 
@@ -557,8 +568,13 @@ Related: KI-06.
 
 ## KI-16 — the docs say the shell block exports `HF_HOME`; it does not
 
-**Severity:** Medium
-**Where:** [local-models/SKILL.md:15](../skills/local-models/SKILL.md#L15), [local-models/SKILL.md:28](../skills/local-models/SKILL.md#L28), [claude-setup/SKILL.md:379](../skills/claude-setup/SKILL.md#L379)
+**Severity:** Medium · **Held**
+**Where:** [local-models/SKILL.md:15](../skills/local-models/SKILL.md#L15), [local-models/SKILL.md:28](../skills/local-models/SKILL.md#L28)
+
+**Wholly held, despite naming `claude-setup`.** Both false statements are in `local-models`,
+which is being rebuilt. `claude-setup` makes no `HF_HOME` claim of its own — its shell block
+is merely where an export *would* go if the first fix option were taken. Nothing to do in
+`claude-setup` now, and the rebuild should simply not repeat the claim.
 
 ### What happens
 

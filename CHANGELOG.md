@@ -163,6 +163,15 @@ here — the plugin manifest's version is the only record of them.
   instructions at the top, a stray code fence, and no closing marker. The step
   now takes canonical text from the fenced block, matches whole marker lines
   only, and verifies the result before finishing.
+- **The `.zshrc` shell-block installer no longer truncates the file**
+  (`KI-22`, `claude-setup` half). Step 7 stripped its managed block with an
+  `awk` that keyed only on the markers it found, so a file whose closing marker
+  had been deleted by hand lost everything from the opening marker down —
+  `PATH` edits, exports, other tools' managed blocks. Reproduced at 10 lines to
+  3. It now refuses on a marker-count mismatch, copies the file to
+  `.zshrc.localclaude.bak` first, and writes through `mktemp` instead of a
+  fixed `.tmp` path a concurrent shell could be using. `llama-autostart.sh`
+  carries the same pattern and is held for the rebuild.
 - **`$CLAUDE_CONFIG_DIR` claim removed** (`KI-15`). Step 1 promised the variable
   was honoured while every bundled script resolved `$HOME/.claude` directly. It
   now states plainly that the variable is unsupported and must not be set on a

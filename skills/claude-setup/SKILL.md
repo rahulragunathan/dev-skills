@@ -392,10 +392,35 @@ Because Shortcuts only *opens* the app and the app carries its own FDA, neither 
 
 Convenience controls for the llama.cpp backend. Installed as a **managed block** between markers so re-running replaces it cleanly without clobbering other `~/.zshrc` lines (path = the space-free plugin symlink; port pinned to `8730` so the toggle and aliases agree on one port):
 
+**Require both markers before stripping anything.** A block with only its opening marker — the
+user tidied the file by hand and deleted the closing line — makes a naive strip delete
+everything from that marker to the end of the file. Everything below it goes: `PATH` edits,
+exports, other tools' managed blocks. Back up first, refuse on a mismatch, and never write
+through a fixed temporary path a concurrent shell could be using.
+
 ```bash
+set -euo pipefail
 ZS="$HOME/.zshrc"
-# Strip any previous managed block (keeps everything else), then append the current set.
-[ -f "$ZS" ] && awk '/# >>> localclaude aliases/{s=1} /# <<< localclaude aliases/{s=0;next} !s' "$ZS" > "$ZS.tmp" && mv "$ZS.tmp" "$ZS"
+OPEN='# >>> localclaude aliases'
+CLOSE='# <<< localclaude aliases'
+
+if [ -f "$ZS" ]; then
+  n_open="$(grep -c "^$OPEN" "$ZS" || true)"
+  n_close="$(grep -c "^$CLOSE" "$ZS" || true)"
+  [ "$n_open" = "$n_close" ] || {
+    echo "MARKER MISMATCH in $ZS — $n_open opening, $n_close closing."
+    echo "Repair the block by hand; refusing to edit."; exit 1; }
+  cp -p "$ZS" "$ZS.localclaude.bak"
+  if [ "$n_open" != "0" ]; then
+    TMP="$(mktemp "${TMPDIR:-/tmp}/zshrc.XXXXXX")"
+    awk -v o="$OPEN" -v c="$CLOSE" '
+      index($0, o) == 1 { s = 1; next }
+      index($0, c) == 1 { s = 0; next }
+      !s' "$ZS" > "$TMP"
+    mv "$TMP" "$ZS"
+  fi
+fi
+
 cat >> "$ZS" <<'EOF'
 
 # >>> localclaude aliases (managed) >>>
