@@ -186,8 +186,10 @@ Every script in the plugin resolves `$HOME/.claude` directly. Claude Code reads
 the standards and settings to one place while Claude Code reads another.
 
 The documentation used to claim the variable was honoured, which was the defect recorded as
-KI-15. That claim is gone — `claude-setup` step 1 now states plainly that the variable is not
-supported and must not be set. This entry is the remaining capability, not a bug.
+KI-15. That claim is gone, and no skill asserts the opposite either: the decision lives once,
+in the repo `CLAUDE.md` under "Decisions taken and not taken", because it is a plugin-wide
+choice rather than a step in anyone's procedure. This entry is the remaining capability, not
+a bug.
 
 ### Why it matters
 

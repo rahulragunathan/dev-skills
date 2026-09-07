@@ -65,9 +65,13 @@ user decides.
 review did not run, and nothing else does. Without this, a quota failure and a clean pass look
 identical.
 
-**`$CLAUDE_CONFIG_DIR` is not supported.** The docs claimed it was while every script resolved
-`$HOME/.claude` directly. Rather than thread a resolver through code that has no tests, the
-claim was removed; the capability is ENH-07, to be done inside the backup test harness.
+**`$CLAUDE_CONFIG_DIR` is not supported, and this is the only place that says so.** The docs
+claimed it was while every script resolved `$HOME/.claude` directly. Rather than thread a
+resolver through code that has no tests, the claim was removed; the capability is ENH-07, to be
+done inside the backup test harness. The prohibition is deliberately not repeated in
+`claude-setup`: that skill neither reads the variable nor writes it, and a plugin-wide decision
+restated inside one skill's steps is how the same fact ends up in four files disagreeing.
+`drive-backup` notes it only as a fact about the script it ships.
 
 **No `development-standards` skill.** Proposed for the `## Development process` and
 `### Subagents` sections, which are the largest in the standards block. Rejected: what remains
