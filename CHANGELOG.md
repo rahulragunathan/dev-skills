@@ -175,13 +175,25 @@ here — the plugin manifest's version is the only record of them.
   instructions at the top, a stray code fence, and no closing marker. The step
   now takes canonical text from the fenced block, matches whole marker lines
   only, and verifies the result before finishing.
-- **The global standards block is 2,742 words, down from 3,386** (`ENH-01`) —
-  19% off a file resident in every request. 644 words left: the environment
-  procedures moved to `project-env`, and the roadmap taxonomy was cut from 374
-  words to 232, keeping the tense split and the ID rules while handing the
-  rating scales, entry format and anchors to `phase-workflow` and the bundled
-  templates, which already defined them. Verified byte-identical against the
-  installed `~/.claude/CLAUDE.md`.
+- **The global standards block is 2,525 words, down from 3,386** — 25% off a
+  file resident in every request. `ENH-01` took the first 644: the environment
+  procedures to `project-env`, and the roadmap taxonomy from 374 words to 232,
+  keeping the tense split and the ID rules while handing the rating scales,
+  entry format and anchors to `phase-workflow` and the bundled templates, which
+  already defined them. After `ENH-01`, four more bullets that
+  restated a procedure with an existing owner were compressed to the rule plus
+  a pointer: the mutation check and the branch-creation mechanics to
+  `phase-workflow` §3 step 3 and §2, the `/simplify` reject-list to §3 step 2,
+  and the markdown-lint invocation detail to `claude-setup` step 3b. Each
+  pointer was checked to resolve and each dropped passage confirmed present at
+  its destination. No new skill: what is left is prohibitions, which only work
+  while resident.
+- **`claude-setup/REFERENCE.md` drift.** Its allowlist rationale listed only the
+  read-only commands, omitting the deliberate write-capable exceptions
+  (`pytest`, `ruff`, `black`, `markdownlint-cli2`, the venv forms, `uv`, `npm
+  test`). It also presented `backup-projects.sh` always exiting 0 as purely a
+  safety feature; exiting 0 is deliberate, but logging `ok` regardless is KI-14,
+  and the file now separates them.
 - **The `.zshrc` shell-block installer no longer truncates the file**
   (`KI-22`, `claude-setup` half). Step 7 stripped its managed block with an
   `awk` that keyed only on the markers it found, so a file whose closing marker

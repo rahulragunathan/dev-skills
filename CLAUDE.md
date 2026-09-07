@@ -69,6 +69,19 @@ identical.
 `$HOME/.claude` directly. Rather than thread a resolver through code that has no tests, the
 claim was removed; the capability is ENH-07, to be done inside the backup test harness.
 
+**No `development-standards` skill.** Proposed for the `## Development process` and
+`### Subagents` sections, which are the largest in the standards block. Rejected: what remains
+after the procedures move out is almost entirely prohibitions, and a prohibition only works
+while it is resident — a skill you have to invoke cannot stop you doing something you did not
+know was forbidden. The procedures that could move already have owners (`phase-workflow`,
+`design-review`, `external-review`), so a new skill would be a third home for material that
+has two. `project-env` earned its place because it had a clear invocation moment; "development
+standards" has none.
+
+**Markdown-lint setup stays in `claude-setup`.** It is tooling installation, which is what that
+skill does, and folding it into `project-env` would give that skill a second reason to change
+for the sake of one 500-word step. Two occurrences do not justify a new home.
+
 **Triage subagents may gather evidence.** The global standards forbid using a subagent to
 verify correctness, because a copy of the same model confirms rather than checks. The narrow
 exception is a subagent that returns quoted file lines or command output while the judgement
