@@ -192,8 +192,8 @@ Preserve any non-standard content the user keeps **outside** the managed block.
 
 ### Project environments
 
-- **No virtualenv and no `node_modules` ever lives inside Drive.** The real tree lives at `~/Python-Envs/<name>` or `~/Node-Envs/<name>` and the project holds `.venv` / `node_modules` as a symlink to it. Thousands of small files in a synced folder mean constant sync churn and conflicted copies. Use uv, never conda.
-- **Build and repair envs with `standardize-python-envs.sh` / `standardize-node-envs.sh`, never by hand and never with a bare `npm install`** — which replaces the symlink with a real directory on Drive. Run project tools through the relative path (`.venv/bin/python -m pytest`, `npm test`); an absolute venv path is not allow-listed and will prompt. The `localclaude:project-env` skill carries the procedure, the naming scheme and the gotchas.
+- **No virtualenv and no `node_modules` ever lives inside Drive**, and **never run a bare `npm install`** in a project — it silently replaces the symlinked tree with a real directory there. Either way you get constant sync churn and conflicted copies.
+- Use `localclaude:project-env` to create or repair one. It carries the layout, the naming, the scripts, the dependency files, and which invocations run without a prompt.
 
 <!-- <<< localclaude standards <<< -->
 ```

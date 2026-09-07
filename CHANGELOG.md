@@ -175,7 +175,7 @@ here — the plugin manifest's version is the only record of them.
   instructions at the top, a stray code fence, and no closing marker. The step
   now takes canonical text from the fenced block, matches whole marker lines
   only, and verifies the result before finishing.
-- **The global standards block is 2,525 words, down from 3,386** — 25% off a
+- **The global standards block is 2,480 words, down from 3,386** — 27% off a
   file resident in every request. `ENH-01` took the first 644: the environment
   procedures to `project-env`, and the roadmap taxonomy from 374 words to 232,
   keeping the tense split and the ID rules while handing the rating scales,
