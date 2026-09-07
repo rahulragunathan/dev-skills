@@ -31,16 +31,16 @@ what sits at the bottom changes when someone else ships a new CLI.
 
 | Unit | Responsibility | Interface | Depends on |
 | --- | --- | --- | --- |
-| `phase-workflow` | Run a phase from plan review to merge | `/localclaude:phase-workflow` | `design-review`, `review-checkpoint`, `gh` |
+| `phase-workflow` | Run a phase from plan review to merge | `/localclaude:phase-workflow` | `design-review`, `external-review`, `gh` |
 | `design-review` | Decide structure at plan time and re-check it at phase end | `/localclaude:design-review <plan\|phase>` | `drawio` skill |
 | `claude-setup` | Configure a machine and keep the standards block current | `/localclaude:claude-setup` | `~/.claude`, Drive |
 | `project-env` | Build or repair a project env outside Drive | `/localclaude:project-env` | `standardize-*-envs.sh`, uv, npm |
-| `review-checkpoint` | Get a non-Claude review of a plan, a phase diff or the repo | `/localclaude:review-checkpoint <plan\|phase\|repo>` | `codex`, `agy` |
+| `external-review` | Get a non-Claude review of a plan, a phase diff or the repo | `/localclaude:external-review <plan\|phase\|repo>` | `codex`, `agy` |
 | `local-models` | Find, size and fetch local models | `/localclaude:local-models` | `huggingface-skills`, HF |
 | `claude-toggle-backend` | Point Claude Code at a different inference backend | `/localclaude:claude-toggle-backend <backend>` | `~/.claude/settings.json`, local servers |
 
 **Expected change:** a new external reviewer. Adding one should mean editing
-`review-checkpoint` and nothing else.
+`external-review` and nothing else.
 
 **Shared state:** `~/.claude/settings.json`, written by both `claude-setup` (the permission
 allowlist) and `claude-toggle-backend` (model, effort and `ANTHROPIC_*` keys). Two writers on
@@ -51,9 +51,9 @@ wrong.
 ## The three groups
 
 **The development process** — `phase-workflow` orchestrates; `design-review` and
-`review-checkpoint` are called by it at defined points and are useful on their own. The
+`external-review` are called by it at defined points and are useful on their own. The
 dependency runs one way: neither sub-skill knows about the workflow that calls it, which is
-what lets `review-checkpoint repo` run on a repository that has never seen a phase.
+what lets `external-review repo` run on a repository that has never seen a phase.
 
 **Machine configuration** — `claude-setup` owns `~/.claude`. Its global standards live in a
 marked block that a re-run reconciles, so every machine converges on the same text. The
@@ -75,13 +75,13 @@ open issues are held rather than worked; see the Held sections in
 ## External tools are all optional
 
 `codex`, `agy`, `gh` and the `drawio` skill are each invoked by exactly one skill, and a
-missing one degrades that step rather than blocking the workflow. `review-checkpoint` reports
+missing one degrades that step rather than blocking the workflow. `external-review` reports
 partial coverage; `design-review` records "no diagram" and carries on. `gh` is the closest to
 required — `phase-workflow` cannot open or merge a PR without it — so it is preflighted before
 the first phase-start mutation rather than discovered at merge time.
 
 The reviewers are also the one place this repository sends its own source to a third party.
-The bundle procedure in `review-checkpoint` excludes credential-shaped files, skips symlinks
+The bundle procedure in `external-review` excludes credential-shaped files, skips symlinks
 before reading them, and disables diff conversion filters, in every mode.
 
 ## Testing

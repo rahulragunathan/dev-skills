@@ -30,7 +30,7 @@ Produce, in order:
 4. Whatever checks fired, and nothing about the ones that did not.
 5. Whatever diagrams pass the distinctness test below — there is no count.
 
-Runs **before** `review-checkpoint plan`, so the table travels to the reviewers at no extra
+Runs **before** `external-review plan`, so the table travels to the reviewers at no extra
 cost. A bounded change gets one sentence in chat instead of all this. A spike gets nothing.
 
 ## Mode: `phase`

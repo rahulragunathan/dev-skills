@@ -545,9 +545,9 @@ def desc(text, size=11):
 #   y=700  lane    — claude-toggle-backend out to settings.json
 #   x=680..760 is the one inter-zone gap; every cross-zone edge uses it:
 #   x=690  channel — claude-setup to CLAUDE.md
-#   x=695  channel — review-checkpoint to codex
+#   x=695  channel — external-review to codex
 #   x=700  channel — claude-setup to settings.json
-#   x=710  channel — review-checkpoint to agy
+#   x=710  channel — external-review to agy
 #   x=715  channel — backup-projects.sh to Drive
 #   x=725  channel — phase-workflow to gh
 #   x=735  channel — claude-toggle-backend to settings.json
@@ -599,7 +599,7 @@ review = box(
     300,
     260,
     120,
-    "<b>review-checkpoint</b><br>"
+    "<b>external-review</b><br>"
     + desc("Non-Claude review of a plan, a phase diff, or the whole repo"),
     fill=PROCESS,
     bold=False,
@@ -705,7 +705,7 @@ edge(
     label_bg="#f3f0fb",
 )
 
-# review-checkpoint out to the reviewer CLIs — x=700 and x=690 channels.
+# external-review out to the reviewer CLIs — x=700 and x=690 channels.
 edge(
     review,
     codex,

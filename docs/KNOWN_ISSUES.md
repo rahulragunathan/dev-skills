@@ -8,7 +8,7 @@ CHANGELOG entry that closes it. When fixed, delete it from here and from the ROA
 the record lives in [CHANGELOG.md](../CHANGELOG.md). IDs are never reused.
 
 Every entry below came from the external repo review of 2026-09-05 and carries its source
-line. Findings about `phase-workflow`, `review-checkpoint` and the global standards were
+line. Findings about `phase-workflow`, `external-review` and the global standards were
 remediated in the same phase and are not listed here — they are in the CHANGELOG.
 
 ## Severity

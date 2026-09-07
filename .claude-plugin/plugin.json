@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "localclaude",
-  "description": "Personal Claude Code toolkit: bootstrap config conventions (claude-setup), switch the backend between Anthropic / Ollama / local llama.cpp / local MLX (claude-toggle-backend), discover and manage local models (local-models), run the phase-based development process (phase-workflow), build project environments outside Drive (project-env), decide structure at plan time (design-review), and get external Codex + Gemini reviews at its checkpoints (review-checkpoint).",
+  "description": "Personal Claude Code toolkit: bootstrap config conventions (claude-setup), switch the backend between Anthropic / Ollama / local llama.cpp / local MLX (claude-toggle-backend), discover and manage local models (local-models), run the phase-based development process (phase-workflow), build project environments outside Drive (project-env), decide structure at plan time (design-review), and get external Codex + Gemini reviews at its checkpoints (external-review).",
   "version": "1.10.0",
   "author": {
     "name": "Rahul Ragunathan",

@@ -57,14 +57,19 @@ here — the plugin manifest's version is the only record of them.
   run on a dirty tree or a symlinked target. Every failure path stops rather than
   continuing. A fixture must carry the property under test.
 - **Skip and partial coverage are now distinct** in both `phase-workflow` and
-  `review-checkpoint`. A reviewer that fails on quota, auth, timeout or sandbox
+  `external-review`. A reviewer that fails on quota, auth, timeout or sandbox
   ran and returned nothing; only an uninstalled CLI is a skip.
 - **Findings tables carry a `Files` column** — where each finding lives, verified against the
   repo during triage, so a filed `KI-nn` stays actionable from cold.
 - **The documentation pass covers docs outside the repo** — a container folder's own README and
   CLAUDE.md drift the same way and never appear in `git status`, so they are named explicitly in
   the hand-off.
-- **`review-checkpoint` is canonical for the review loop**; `phase-workflow`
+- **`review-checkpoint` renamed to `external-review`**, matching `design-review`
+  and saying what the skill does rather than where it is called from. The two
+  mentions in the `[1.8.0]` section keep the old name: that section is released
+  and records what the skill was called then. Invoke as
+  `/localclaude:external-review`.
+- **`external-review` is canonical for the review loop**; `phase-workflow`
   delegates instead of restating it. The two copies had already drifted into
   contradiction.
 - **Bundles exclude credential-shaped, binary and symlinked files** before
@@ -150,14 +155,14 @@ here — the plugin manifest's version is the only record of them.
   `settings.json` and `.zshrc` — which is the top line of the severity scale those
   entries are graded against.
 - Skill descriptions shortened — `claude-setup` 136→60 words, `phase-workflow`
-  163→49, `review-checkpoint` 187→59. They are resident in every session.
+  163→49, `external-review` 187→59. They are resident in every session.
 
 ### Fixed
 
 - The CHANGELOG move is instructed once, at §3 step 4, not again at §4 step 1.
 - CHANGELOG.md is exempt from the current-state rule, which had forbidden it from
   describing removed features.
-- `review-checkpoint`'s Model column no longer says `Both` in one place and
+- `external-review`'s Model column no longer says `Both` in one place and
   forbids it in another; severity disagreements between reviewers are recorded.
 - The bundle file count uses `git status --porcelain -uall`, so untracked
   directories no longer collapse to one line.

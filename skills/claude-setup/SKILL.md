@@ -178,7 +178,7 @@ Preserve any non-standard content the user keeps **outside** the managed block.
 ### Subagents
 
 - Three uses, and only three. **Parallel implementation** of independent tasks — where the plan's module table and Interfaces blocks define the boundaries, dispatch one implementer per module via `superpowers:dispatching-parallel-agents`; they return changed files, test results and concerns, and I integrate. **Fresh-context probes**, where the subagent is the subject or the audience: pressure-testing a skill's wording, or reading a module map cold to check it is legible without the conversation. **Read-only search fan-out.** Don't delegate what the main agent can finish in a handful of tool calls.
-- **Never to verify correctness.** A subagent is a copy of me and shares my blind spots, so it confirms rather than checks. Outside opinion comes from a different model via `localclaude:review-checkpoint`, never another instance of the same one.
+- **Never to verify correctness.** A subagent is a copy of me and shares my blind spots, so it confirms rather than checks. Outside opinion comes from a different model via `localclaude:external-review`, never another instance of the same one.
 - **Pressure-test a skill on the model that will read it.** `design-review` is invoked in the main session, so its tests run on the main model, not on a cheaper one picked for cost.
 - **Subagents may commit their own task. They never push, merge, tag, or touch the default branch.** One task, one commit, on the phase branch. Everything that reaches origin goes through the main agent at my approved checkpoints, which keeps a single point of contact with the remote and one place that tracks overall status. `superpowers:subagent-driven-development` works as built under this rule — its review packages, ledger and crash recovery are all commit-range based.
 - **Serialize subagents that share a branch.** Two agents committing to one branch at once will race. Run them one at a time, or give each its own worktree via `superpowers:dispatching-parallel-agents`.
@@ -282,7 +282,7 @@ Only subfolders with a `SKILL.md` load; `RCLONE_TEST`/`.DS_Store` and the plugin
 
 ### 5. Register the `localclaude` plugin (local marketplace)
 
-The bundled skills (`claude-setup`, `claude-toggle-backend`, `local-models`, `phase-workflow`, `review-checkpoint`, `design-review`) ship as the `localclaude` plugin in the sibling `Code/Plugins` folder.
+The bundled skills (`claude-setup`, `claude-toggle-backend`, `local-models`, `phase-workflow`, `external-review`, `design-review`) ship as the `localclaude` plugin in the sibling `Code/Plugins` folder.
 
 **Gotcha:** `/plugin marketplace add` **cannot parse the Drive path** — "My Drive" has a space, the slash-command parser doesn't honor quotes, and it falls back to treating the arg as a GitHub `owner/repo`. So point it at a **space-free symlink** instead — derived from `CODE_ROOT` (step 4; set `PLUGINS_SRC` by hand if `CODE_ROOT` was empty):
 
