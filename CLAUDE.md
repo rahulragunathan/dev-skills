@@ -23,31 +23,29 @@ rationale only where its absence would leave the instruction ambiguous.
 anyone can read in a man page is out of scope. Project methodology and the specific nuances
 people get wrong are in scope.
 
-## The managed standards block
+## This repo owns the standards other repos receive
 
-`claude-setup/SKILL.md` holds the canonical global standards inside
-`<!-- >>> localclaude standards ... >>> -->` markers, and `~/.claude/CLAUDE.md` holds the
-installed copy. **The two must be byte-identical inside the markers.** Edit the canonical
-block, then reconcile the installed file, then verify:
+`claude-setup/SKILL.md` holds the **canonical** global standards block; `~/.claude/CLAUDE.md`
+on any machine holds an installed copy. Editing the block here changes every machine on its
+next `claude-setup` run, so treat it as shipping, not as editing a note to yourself.
 
-- exactly one opening and one closing marker,
-- no stray code fence,
-- a clean diff of the block against canonical.
-
-That section discusses its own markers, so never locate the block by searching for a marker
-prefix — match whole marker lines and take the last opening marker. Getting this wrong
-corrupts the file loaded into every session, which has happened once.
+`claude-setup` step 3 owns the reconcile-and-verify procedure. Follow it there rather than
+from memory: a wrong slice corrupts the file loaded into every session, which has happened
+once.
 
 ## Roadmap hygiene
 
-`docs/ROADMAP.md` is an index of pointer rows; the detail lives in `KNOWN_ISSUES.md`,
-`ENHANCEMENTS.md` and `OPEN_QUESTIONS.md`. Every entry has a matching pointer row and an
-explicit `<a id="ki-01"></a>` anchor. Check both after any edit — the index drifting from the
-detail is the most common defect in these files.
+The taxonomy is in the global standards and `phase-workflow`. Two things specific to this
+repo:
+
+**Check the index against the detail after every edit.** ROADMAP rows drifting from the
+`KNOWN_ISSUES` / `ENHANCEMENTS` / `OPEN_QUESTIONS` entries they point at is the most common
+defect in these files, and it is mechanical to catch.
 
 **Held is not closed.** `local-models` and `claude-toggle-backend` are being rebuilt, so their
-entries stay filed and unworked: they are the rebuild's requirements. Do not close them, and
-do not send them to external reviewers while the rebuild is pending.
+entries stay filed and unworked: they are the rebuild's requirements. Never close one, and
+keep them out of external review bundles until the rebuild lands. The Held sections in
+`KNOWN_ISSUES.md` and `ENHANCEMENTS.md` say which entries are held and how to tell.
 
 ## Decisions taken and not taken
 

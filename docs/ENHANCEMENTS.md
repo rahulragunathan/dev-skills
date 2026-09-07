@@ -23,7 +23,7 @@ Priority is about value, not urgency. Effort is a rough estimate — a session, 
 Those two skills are being rebuilt from scratch. Entries scoped to them are **held**: still
 valid, still filed, not worked until the rebuild, and excluded from external review bundles in
 the meantime. Their defects are the rebuild's requirements, which is why they are not closed.
-ENH-02, ENH-04 and ENH-05 are held in full; ENH-03 is held in part.
+ENH-02, ENH-04, ENH-05 and ENH-09 are held in full; ENH-03 is held in part.
 
 ---
 
@@ -164,6 +164,67 @@ that is already done and cannot tell that from the file.
 asked to keep both files in place until they have gone back through them, so this is not
 ready to start. Read them first and decide what is durable — the design rationale probably
 is, the task-by-task plan probably is not.
+
+---
+
+<a id="enh-08"></a>
+
+## ENH-08 — Move the Drive backup out of `claude-setup` into its own skill
+
+**Priority:** Medium · **Effort:** ~half a day
+**Where:** [claude-setup/SKILL.md](../skills/claude-setup/SKILL.md) step 6, [backup-projects.sh](../skills/claude-setup/backup-projects.sh)
+
+### What it is
+
+Step 6 is 955 words — the largest step in the skill by a wide margin — covering the Stop hook,
+the Full Disk Access wrapper app, the Shortcuts scheduler, and what gets copied. It is a
+self-contained concern with its own script, its own bug cluster (KI-06, KI-07, KI-08, KI-14)
+and its own upcoming phase.
+
+### Why it matters
+
+`claude-setup`'s job is "configure Claude Code on this machine". Backing transcripts up to
+Drive is a separate product that happens to be installed by the same run. Splitting it gives
+the backup a place to hold its FDA and scheduler troubleshooting without inflating a skill
+that is already 7,000 words, and gives phase 2's harness an obvious home.
+
+### Notes for the work
+
+**Pair it with ENH-03**, which builds the `bats` harness for `backup-projects.sh` in phase 2 —
+moving the script and writing its first tests in one pass is cheaper than doing either alone,
+and the four KI fixes land against the new layout rather than being migrated afterwards.
+`claude-setup` keeps a short step that installs the hook and points at the new skill, the way
+step 1 now points at `project-env`.
+
+---
+
+<a id="enh-09"></a>
+
+## ENH-09 — Move the llama.cpp shell aliases and auto-start into `claude-toggle-backend`
+
+**Priority:** Medium · **Effort:** ~2 hours · **Held**
+**Where:** [claude-setup/SKILL.md](../skills/claude-setup/SKILL.md) steps 7 and 8
+
+### What it is
+
+Steps 7 and 8 install `llama-cpp-up` / `-down` / `-status` aliases and wire
+`llama-autostart.sh` at login. Both are backend concerns sitting in the configuration skill:
+they wrap `llama-serve.sh`, pin `LLAMACPP_PORT`, and exist only on a machine running a local
+backend.
+
+### Why it matters
+
+Beyond the 530 words, this is **`claude-setup`'s only write to `~/.zshrc`** — the surface that
+carried the `claude-setup` half of KI-22. Moving it leaves `claude-setup` touching nothing
+outside `~/.claude` and Drive, which is a smaller blast radius for a skill that runs on every
+new machine.
+
+### Notes for the work
+
+Held with the `claude-toggle-backend` rebuild, which should absorb these rather than inherit
+them. The rebuilt shell-block writer must carry the hardened marker handling from
+`claude-setup` step 7 — require both markers, back up first, write through `mktemp` — or KI-22
+returns in the new code.
 
 ---
 
