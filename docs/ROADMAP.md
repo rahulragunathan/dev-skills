@@ -11,7 +11,9 @@ not describe what shipped or how the code works today.
 | Detail on a candidate enhancement | [ENHANCEMENTS.md](ENHANCEMENTS.md) |
 | Detail on an open question | [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) |
 | What already shipped | [CHANGELOG.md](../CHANGELOG.md) |
-| How the code works now | [README.md](../README.md) |
+| What each skill does | [README.md](../README.md) |
+| How the pieces fit together | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Conventions for working in this repo | [CLAUDE.md](../CLAUDE.md) |
 
 The tables below are **pointers, not summaries** — ID, title, rating, link. Nothing is
 described twice.
@@ -44,9 +46,9 @@ tests that cannot fail.
 ### Phases
 
 **Phase 1 — `design-review` skill and process remediation** — in progress. Also carries
-ENH-01 (slim the global standards) and ENH-06 (this repo's own `CLAUDE.md` and
-`ARCHITECTURE.md`), both of which are standards and workflow documents like the rest of the
-phase.
+ENH-01, slimming the global standards, which is a standards document like the rest of the
+phase. ENH-06 landed in it: the repo now has the `CLAUDE.md` and `ARCHITECTURE.md` it
+requires of others.
 
 **Phase 2 — the backup cluster.** A bats harness for `backup-projects.sh` (ENH-03, in its
 active half), then KI-14, KI-06, KI-08 and KI-07, each with its reproducing test written
@@ -97,7 +99,6 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 | [ENH-03](ENHANCEMENTS.md#enh-03) | Test the two destructive scripts that have no tests at all | High | ~1 day |
 | [ENH-04](ENHANCEMENTS.md#enh-04) | Make the fakes assert a contract rather than only a shape | Medium | ~half a day |
 | [ENH-05](ENHANCEMENTS.md#enh-05) | Fold the MLX plan and spec into the permanent docs | Medium | ~half a day |
-| [ENH-06](ENHANCEMENTS.md#enh-06) | Give the repo the ARCHITECTURE.md and CLAUDE.md it requires of others | Low | ~half a day |
 | [ENH-07](ENHANCEMENTS.md#enh-07) | Honour `$CLAUDE_CONFIG_DIR` in the bundled scripts | Low | ~1 hour |
 
 ## Open Questions

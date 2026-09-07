@@ -1,0 +1,89 @@
+# Architecture
+
+How `localclaude` is put together today. Planned work is in
+[ROADMAP.md](ROADMAP.md); what already shipped is in [CHANGELOG.md](../CHANGELOG.md).
+
+## What this is
+
+A Claude Code plugin of six skills. Five are **instructions, not code** — a `SKILL.md` that
+Claude reads and follows. The only executable code is five bash scripts and their `bats`
+tests, all under `claude-setup` and `claude-toggle-backend`.
+
+That shapes everything else here. There is no build, no runtime and no entry point. A "module"
+is a skill directory, its interface is how the skill is invoked, and a regression is a
+sentence that contradicts another sentence somewhere else. The checks that matter are
+therefore consistency checks, not compilation.
+
+![Module map](architecture.png)
+
+Regenerate the diagram from its source rather than editing the XML:
+
+```bash
+python3 docs/build_architecture.py
+python3 ~/.claude/skills/drawio/scripts/validate.py docs/architecture.drawio
+python3 ~/.claude/skills/drawio/scripts/render_png.py docs/architecture.drawio
+```
+
+## Module table
+
+Ordered most-stable-first: what sits at the top changes only when the user changes their mind,
+what sits at the bottom changes when someone else ships a new CLI.
+
+| Unit | Responsibility | Interface | Depends on |
+| --- | --- | --- | --- |
+| `phase-workflow` | Run a phase from plan review to merge | `/localclaude:phase-workflow` | `design-review`, `review-checkpoint`, `gh` |
+| `design-review` | Decide structure at plan time and re-check it at phase end | `/localclaude:design-review <plan\|phase>` | `drawio` skill |
+| `claude-setup` | Configure a machine and keep the standards block current | `/localclaude:claude-setup` | `~/.claude`, Drive |
+| `review-checkpoint` | Get a non-Claude review of a plan, a phase diff or the repo | `/localclaude:review-checkpoint <plan\|phase\|repo>` | `codex`, `agy` |
+| `local-models` | Find, size and fetch local models | `/localclaude:local-models` | `huggingface-skills`, HF |
+| `claude-toggle-backend` | Point Claude Code at a different inference backend | `/localclaude:claude-toggle-backend <backend>` | `~/.claude/settings.json`, local servers |
+
+**Expected change:** a new external reviewer. Adding one should mean editing
+`review-checkpoint` and nothing else.
+
+**Shared state:** `~/.claude/settings.json`, written by both `claude-setup` (the permission
+allowlist) and `claude-toggle-backend` (model, effort and `ANTHROPIC_*` keys). Two writers on
+one file is the only shared mutable state in the repo, and the reason `claude-toggle-backend`
+patches keys in place rather than rewriting the file. KI-01 is what happens when that goes
+wrong.
+
+## The three groups
+
+**The development process** — `phase-workflow` orchestrates; `design-review` and
+`review-checkpoint` are called by it at defined points and are useful on their own. The
+dependency runs one way: neither sub-skill knows about the workflow that calls it, which is
+what lets `review-checkpoint repo` run on a repository that has never seen a phase.
+
+**Machine configuration** — `claude-setup` owns `~/.claude`. Its global standards live in a
+marked block that a re-run reconciles, so every machine converges on the same text. The
+canonical copy is in `claude-setup/SKILL.md`, and the installed file must match it
+byte-for-byte inside the markers.
+
+**Local backends** — `claude-toggle-backend` switches which server Claude Code talks to and
+`local-models` decides which model that server should load. Both are being rebuilt, so their
+open issues are held rather than worked; see the Held sections in
+[KNOWN_ISSUES.md](KNOWN_ISSUES.md) and [ENHANCEMENTS.md](ENHANCEMENTS.md).
+
+## External tools are all optional
+
+`codex`, `agy`, `gh` and the `drawio` skill are each invoked by exactly one skill, and a
+missing one degrades that step rather than blocking the workflow. `review-checkpoint` reports
+partial coverage; `design-review` records "no diagram" and carries on. `gh` is the closest to
+required — `phase-workflow` cannot open or merge a PR without it — so it is preflighted before
+the first phase-start mutation rather than discovered at merge time.
+
+The reviewers are also the one place this repository sends its own source to a third party.
+The bundle procedure in `review-checkpoint` excludes credential-shaped files, skips symlinks
+before reading them, and disables diff conversion filters, in every mode.
+
+## Testing
+
+`claude-toggle-backend/tests/` holds the `bats` suite: 29 tests with fakes for `curl`,
+`uname` and `vllm-mlx` and a sandboxed `$HOME`. Eight of them pass with the behaviour they
+name removed — see UNK-02.
+
+`claude-setup`'s `backup-projects.sh` has no tests at all. That is ENH-03, and the next phase.
+
+The skills themselves are prose, so they are tested by running scenarios against a fresh
+agent: `design-review/tests/` holds seven, each with failure conditions written to judge the
+design an agent *produces* rather than what it says about it.

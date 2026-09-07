@@ -38,8 +38,22 @@ The plugin itself needs nothing installed. Each skill checks the tools its curre
 | `hf` + `huggingface-skills` plugin | local-models | `brew install huggingface-cli`; plugin via `/plugin` |
 | `codex` | review-checkpoint (Codex reviewer) | OpenAI Codex CLI, then `codex login` |
 | `agy` | review-checkpoint (Gemini reviewer) | Antigravity CLI |
+| `gh` | phase-workflow (draft PR, checks, merge, tag) | `brew install gh`, then `gh auth login` |
+| `drawio` skill | design-review (module and flow diagrams) | drop the skill into `~/.claude/skills/drawio/` |
 | `bats` | running the test suite | `brew install bats-core`, then `bats skills/claude-toggle-backend/tests/` |
 
 review-checkpoint runs two independent reviewers, so one missing CLI is not fatal: it names the reviewer it skipped and reviews with the other. If both are missing it skips the external review altogether and says so — phase-workflow treats that as a note in the hand-off, not a blocker.
+
+`gh` is the one closest to required: phase-workflow cannot open or merge a phase PR without it, so it is checked before the first phase-start mutation rather than at merge time. `drawio` is best-effort — design-review records "no diagram" and carries on.
+
+## Documentation
+
+| Looking for | Read |
+| --- | --- |
+| What each skill does | this file |
+| How the pieces fit together | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Conventions for working in this repo | [CLAUDE.md](CLAUDE.md) |
+| What already shipped | [CHANGELOG.md](CHANGELOG.md) |
+| What is planned, open or held | [docs/ROADMAP.md](docs/ROADMAP.md) |
 
 macOS Apple Silicon is assumed for Metal (`-ngl 999`); the mlx backend is Apple-Silicon-only and errors clearly elsewhere.

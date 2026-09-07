@@ -30,6 +30,15 @@ here — the plugin manifest's version is the only record of them.
   open question from an external repo review.
 - `LICENSE` — the MIT text the plugin manifest and skill frontmatter already
   declared.
+- **`CLAUDE.md` and `docs/ARCHITECTURE.md`** (`ENH-06`). This repo requires both
+  of every project and had neither. ARCHITECTURE carries the module table, the
+  expected-change and shared-state lines, and a generated module map
+  (`docs/build_architecture.py` → `docs/architecture.{drawio,png}`, validating
+  clean). The project `CLAUDE.md` carries the conventions specific to a repo
+  whose modules are prose, plus "Decisions taken and not taken" — the rejected
+  unpushed gate, the dropped review-pass ceiling, the always-emitted findings
+  table, the unsupported `$CLAUDE_CONFIG_DIR`, the triage-subagent exception,
+  and the accepted limit on what the bundle exclusions can do about Codex.
 
 ### Changed
 
