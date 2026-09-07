@@ -1,140 +1,139 @@
 # Pressure tests for `design-review`
 
-A skill is prose that steers an agent, so its tests are scenarios run against a fresh agent
-rather than assertions run against code. Each file here holds one scenario, the rules it
-probes, the failure condition for each, and the recorded result.
-
-Re-run them after any edit to `SKILL.md`. Two limits on what a re-run proves: **s05** has no run
-that exercises report rule 3 (s01 and s03 both do, in their with-skill runs), and rows marked
-**Superseded** ran against earlier prompt text, so nothing current can be compared against them.
+Each scenario defines a normal-work artifact and failure conditions judged from that artifact.
+Run each prompt in a fresh agent with and without the indicated skill. Re-run affected pairs
+when their prompt, conditions or loaded skill changes. The current definitions have no valid
+run evidence yet; the retained rows are expired observations, not current outcomes.
 
 ## Which model to run on
 
-**The model that will actually follow the skill.** `design-review` is invoked in the main
-session, so that is Opus under the standard tiering, and Opus is the model whose behaviour
-these rules have to change.
-
-The first round ran on Sonnet, chosen on cost. That tested the wrong subject: a rule that
-changes Sonnet's output tells you nothing about a skill Opus will read. Those results are kept
-and labelled, because subagents doing design work under `dispatching-parallel-agents` do run
-on Sonnet, so both rows are worth having. Where the two disagree, the Opus row decides whether
-the rule earns its place in the skill.
+Use the exact model that will follow the skill in the main session. Record its full provider
+model identifier from the execution record, not a family label such as "Opus" or a date.
+Both members of a pair use the same model identifier and settings. Do not infer an identifier
+for retained evidence whose runner recorded only the family.
 
 ## When a recorded row expires
 
-A row records what one model did given one prompt. What invalidates it is the **prompt**
-changing, or the **failure condition** changing so much that the recorded notes cannot be
-re-judged against it.
+A row is valid only for the recorded prompt, failure conditions and loaded skill text.
+Changing a prompt or condition expires both runs unless the original output can be judged
+fully against the new condition. A changed loaded skill expires its with-skill run; an unchanged
+baseline prompt and condition do not expire merely because the skill changed.
 
-Editing `SKILL.md` invalidates every **with-skill** row, because the skill is what those runs
-loaded. It does **not**, on its own, invalidate a **without-skill** row: no skill was loaded, so
-skill churn cannot reach it. Keep those baselines, and re-run one only when its own prompt or
-condition moved. Say which, in the row.
+Mark invalid evidence **Expired — `<one-line reason>`** in its Evidence status cell. Keep its
+recorded grade. Unknown revision or model metadata also makes a row expired. Do not backfill
+missing provenance with today's HEAD or a guessed model. Unknown means unknown.
+
+For each new run, record:
+
+- Exact model identifier, date, run ID and relevant model settings.
+- Prompt revision and condition revision: the scenario's git commit SHA and section content
+  hashes, with the verbatim dispatched prompt retained as an artifact.
+- Skill git commit SHA and file path for each loaded skill, plus a content hash of the loaded
+  text. Record `not loaded` for a baseline. S01–S06 load `skills/design-review/SKILL.md`;
+  S07 loads `skills/phase-workflow/SKILL.md`.
+- Output artifact path and content hash, each condition's result, and the paired rule grade.
+
+Use committed snapshots for revision identifiers. If the runner tests uncommitted edits, record
+both the base git SHA and an archived patch with its hash, plus the exact prompt, condition and
+loaded-skill hashes. A git SHA alone must never claim to identify a dirty working-tree revision.
+The artifact archive belongs to the runner's evidence store; do not put a guessed outcome here.
 
 ## How to run one
 
-Dispatch the scenario's **Prompt** verbatim to a fresh subagent, with no other context.
+Dispatch only the scenario's **Prompt** verbatim to a fresh agent. Supply no expected output,
+failure conditions, result notes or prior conversation. Keep fixture, prompt and settings
+identical within the pair.
 
-- **Without-skill run** — no skill loaded. Confirms the rule is not already the agent's default.
-- **With-skill run** — the same prompt with `SKILL.md` loaded. Confirms the rule changed the
-  outcome.
+- **Without-skill run** — load no skill.
+- **With-skill run** — additionally load the skill specified above, from the recorded snapshot.
 
-Judge the output against the **Failure conditions** only. Never widen or soften a condition
-to make a run pass; if a condition turns out to be worded wrong, fix the wording and re-run
-both sides.
+The evaluator reads **Failure conditions** and the resulting artifacts. Do not prompt the
+agent to spot its mistake afterwards. Missing required artifacts fail the relevant conditions.
+Run definitions are text-only; S06 supplies source diagrams without rendering, and S07 produces
+an unexecuted audit plan. S07 does not prove that an agent executed cleanup or mutation scripts.
 
 ## Produce, don't spot
 
-The six checks are probed with **build** tasks — "design the modules for X" — and judged on
-the design the agent produces. They are not probed by handing an agent a broken design and
-asking it to find the flaw.
-
-The first round of these tests made that mistake and four of five scenarios came back green.
-An agent given one small artifact and an explicit six-item checklist is in the best position
-it will ever be in to be careful, and it performed accordingly. The failures these rules
-guard against happen with the check in the background: the shared sanitizer that leaked one
-request's body into another was **written** by an agent that believed it was correct, and
-found four review rounds later.
-
-The reporting rules are different and are probed the old way, because the thing under test
-*is* the shape of the report.
+S01–S04 require the module design the agent would build. S05 requires the actual report. S06
+requires diagram sources and a source diff. S07 requires coverage, per-test mutation predictions
+and replacement test code. An acknowledgement, trade-off paragraph, future fix or refusal to
+certify cannot substitute for these artifacts. A design that retains the forbidden structure
+fails even when its author names the flaw.
 
 ## A rule the model already follows is not proven
 
-Record the result honestly. A without-skill run that comes back "Rule not needed here" means one
-of three things, and the file should say which is suspected:
-
-1. The scenario telegraphs its answer, so it tests agreement rather than judgement.
-2. The failure condition is worded wrong and does not describe the real failure.
-3. The model does this correctly on its own, and the rule is insurance rather than a fix.
-
-The first two are defects in the test. Fix them and re-run. The third is a real finding and
-is recorded as such — the rule stays, marked unproven, because one small scenario going well is
-weak evidence about the conditions it does not reproduce.
+A correct baseline supplies no evidence that the skill changed behavior. Check whether the
+scenario telegraphed the answer, the condition tested the wrong thing, or the model already
+handled the case. Record the suspected explanation from the artifact. Repair defective cases
+and re-run both sides. Do not label a rule proven from a successful with-skill run alone.
 
 ## Result vocabulary
 
-Each scenario runs twice. The two runs answer different questions, so they use different words.
-
 | Run | Outcome | Means |
-| ----- | --------- | ------- |
-| **Without skill** | **Rule needed** | The subagent produced the flaw unprompted. The rule has work to do. |
-| | **Rule not needed here** | It avoided the flaw on its own. No evidence this rule changes anything, under these conditions. |
-| | **Rule defective** | It did something the rule forbids, and was right to. The rule is wrong, not the subagent. |
-| | **Scenario defective** | The brief was ambiguous or telegraphed its answer. Fix the scenario and re-run. |
-| **With skill** | **Rule works** | The subagent raised the issue, or avoided the flaw. |
-| | **Rule ineffective** | It still produced the flaw despite the rule. Close the rationalization the output shows, then re-run. |
+| --- | --- | --- |
+| Without skill | Rule needed | The artifact contains the flaw. |
+| Without skill | Rule not needed here | The artifact avoids the flaw without the skill. |
+| Without skill | Rule defective | The forbidden artifact is correct for the stated requirements. |
+| Without skill | Scenario defective | Fixture ambiguity or answer cues prevent a useful comparison. |
+| With skill | Rule works | The required artifact meets every applicable failure condition. |
+| With skill | Rule ineffective | The artifact fails at least one applicable condition. |
 
-"Rule not needed here" is a real result, not a null one. It means the model does this correctly
-on its own under the conditions tested, and the rule is insurance rather than a fix. Record it,
-say so in the skill, and do not let it read as proven.
+Evidence status is separate from grade. **Expired** is not a new grade. Legacy wording such as
+`passed` remains a historical grade and must not be interpreted as a current paired result.
 
 ## Coverage
 
-| Scenario | Rules probed | Kind |
-| ---------- | -------------- | ------ |
-| [s01](s01-responsibility-direction.md) | Responsibility, Direction | build |
-| [s02](s02-lifetime-surface.md) | Lifetime, Surface | build |
-| [s03](s03-duplication.md) | Duplication | build |
-| [s04](s04-variation.md) | Variation and the YAGNI cap | build |
-| [s05](s05-report-form.md) | Anti-gaming 1, 2, 3, 4 | report |
-| [s06](s06-diagram-cap.md) | Diagram distinctness, produce vs edit | procedure |
-| [s07](s07-process-rules.md) | Skip vs partial coverage, mutation check, fixture validity | procedure |
+These are the fifteen coverage units. Conditions within a unit are subcases, not extra rules.
+The twelve `design-review` units cover six checks, four report rules and two diagram rules;
+three `phase-workflow` units cover the process scenario.
 
-Fourteen rules across seven scenarios: the **eleven** `design-review` states — six checks, four
-report rules, the diagram judgement — plus the **three** `phase-workflow` process rules in s07,
-probed here because a single retrospective invokes both skills. Every rule `design-review` states
-has a row.
+| Unit | Scenario | Rule | Required artifact |
+| --- | --- | --- | --- |
+| D1 | [s01](s01-responsibility-direction.md) | Responsibility | module ownership |
+| D2 | s01 | Direction | stability-ordered dependency table |
+| D3 | [s02](s02-lifetime-surface.md) | Lifetime | state ownership and lifetime contracts |
+| D4 | s02 | Surface | public signatures and consumer call sequence |
+| D5 | [s03](s03-duplication.md) | Duplication | placement of third-use, fitting-home and poor-fit helpers |
+| D6 | [s04](s04-variation.md) | Variation / YAGNI cap | format and digest choices plus scheduled transport seam |
+| R1 | [s05](s05-report-form.md) | Only what fired | report omitting silent checks |
+| R2 | s05 | Resolution not observation | acted-on resolutions |
+| R3 | s05 | Record the declined check | retained duplication decision and reason |
+| R4 | s05 | No filler verdicts | report text |
+| G1 | [s06](s06-diagram-cap.md) | Diagram distinctness | complete, nonduplicative diagram sources |
+| G2 | s06 | Produce versus edit | bounded system source patch and artifact list |
+| P1 | [s07](s07-process-rules.md) | Skip vs partial coverage | reviewer coverage line |
+| P2 | s07 | Mutation reasoning | complete per-test prediction table |
+| P3 | s07 | Fixture validity | replacement test code with property assertions |
+
+Produce versus edit is explicitly tested by G2. The "never mark a box new" rule was suggested
+by a retained S06 run but has no dedicated condition here; it is not an additional tested unit.
+Other incidental observations do not add coverage. These scenarios do not claim every sentence
+of either skill has been tested.
 
 ## Results
 
-Every rule run against a fresh **Opus** subagent, with the skill loaded and without it. Fourteen
-rules: the eleven `design-review` states, plus s07's three `phase-workflow` process rules.
+No scenario was re-run while rewriting these definitions. All grades below are retained and
+expired; scenario files hold the individual run rows and their missing provenance fields.
+The historical summary has fifteen rows: three **Rule needed** baselines, eleven **Rule not
+needed here** baselines and one defective-rule baseline. There are zero current paired results.
 
-| Rule | Without the skill | With it | Read it as |
-| ------ | ------------------- | --------- | ------------ |
-| Variation / YAGNI cap | **Rule needed** | **Rule works** | Proven. Adopted a Protocol *and* registry for one format under a colleague's pressure. Regraded against the cost-graded cap; the original condition banned any protocol and contradicted the skill |
-| Only what fired | **Rule needed** | **Rule works** | Proven. Gave lines to all six checks including silent ones |
-| No filler verdicts | **Rule needed** | **Rule works** | Proven. Wrote "clean" five times |
-| Duplication threshold | Rule was defective | **Rule ineffective** (over side) | The naive form produced a worse design; the corrected threshold then failed to stop a new module built for two callers. The rule now closes that third option explicitly and is unproven again |
-| Diagram distinctness | Rule not needed here | **Rule works** | The count-based rule this replaced would have failed a correct answer |
-| Produce versus edit | Rule not needed here | **Rule works** | Baseline got the substance without the accounting or a bounded diff |
-| Responsibility | Rule not needed here | Rule works | Fused to match a repo convention, then named the trade-off and set an extraction trigger |
-| Direction | Rule not needed here | **Rule works** | Rewritten because it was *wrong*, not unproven. Fired on a real stable-to-volatile arrow, and elsewhere caught a supplied table ordered by call order — "so the check has not been run" |
-| Lifetime | Rule not needed here | Rule works | Named the process boundary, worker count and thread safety unprompted |
-| Surface | Rule not needed here | Rule works | Kept ambient setup out of signatures unprompted |
-| Resolution not observation | Rule not needed here | Rule works | Stated decisions unprompted |
-| Record the declined check | Rule not needed here | **Rule works** | A check fired, declined, with the reason and re-fire condition written down |
-| Skip vs partial coverage | Rule not needed here | Rule works | Named the reviewer that produced nothing, and refused to call it clean |
-| Mutation check | Rule not needed here | Rule works | Per-test predicted mutation, explicit that prediction is not execution |
-| Fixture validity | Rule not needed here | Rule works | Caught a timezone-inert fixture and a second under-specified one |
+| Rule | Without the skill | With it | Evidence status |
+| --- | --- | --- | --- |
+| Variation / YAGNI cap | **Rule needed** | **Rule works** | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
+| Only what fired | **Rule needed** | **Rule works** | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
+| No filler verdicts | **Rule needed** | **Rule works** | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
+| Duplication threshold | Rule was defective | **Rule ineffective** (over side) | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
+| Diagram distinctness | Rule not needed here | **Rule works** | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
+| Produce versus edit | Rule not needed here | **Rule works** | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
+| Responsibility | Rule not needed here | Rule works | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
+| Direction | Rule not needed here | **Rule works** | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
+| Lifetime | Rule not needed here | Rule works | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
+| Surface | Rule not needed here | Rule works | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
+| Resolution not observation | Rule not needed here | Rule works | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
+| Record the declined check | Rule not needed here | **Rule works** | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
+| Skip vs partial coverage | Rule not needed here | Rule works | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
+| Mutation check | Rule not needed here | Rule works | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
+| Fixture validity | Rule not needed here | Rule works | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
 
-**"Rule not needed here" is not "delete this rule."** It means a strong model did the right thing
-on a small design in one shot, which is the easiest condition there is. Large systems, long
-sessions under context pressure, and weaker models are untested. Say so rather than presenting
-those rules as proven.
-
-**One measured cost.** An earlier run recorded the loaded rules catching more fixture problems
-while *missing* a bug the baseline found. The re-run caught it, and nothing in the rules changed
-to address it — so read that as run variance, and keep the warning it bought: pointing attention
-somewhere takes it from elsewhere.
+A current "Rule not needed here" would mean only that this model avoided the flaw in this
+scenario. It would not establish behavior in long sessions, larger systems or other models.

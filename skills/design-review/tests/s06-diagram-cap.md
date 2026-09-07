@@ -4,83 +4,74 @@
 
 ## Rules under test
 
-- Each diagram earns its place by showing something no other diagram shows. There is no number
-  to hit.
-- The distinctness test: *name something in this diagram that is not in any of the others. A
-  system diagram that is the module map with a boundary box round it is not a second diagram.*
-- Produce versus edit: a single new edge on an already-documented diagram is a bounded **edit**,
-  not a diagram the plan produces.
+- Each produced diagram must carry information absent from the others.
+- A single new system edge is a bounded edit to the existing diagram.
 
 ## What the subagent should do
 
-Treat the new outbound call as a **bounded edit** to the existing system diagram, not as a
-diagram this plan produces — and justify every diagram it does produce against the distinctness
-test, naming what each shows that the others do not.
-
-The judgement is deliberately arguable. The phase adds one outbound call to a service that
-already exists in the estate but which this deployable has never talked to before. That is a new
-edge at the system level, which is exactly the kind of thing that invites redrawing the picture.
-Redrawing four unchanged boxes to add one line earns nothing; annotating the existing diagram
-does.
-
-**How many diagrams is not the question.** An earlier version of this scenario scored the count,
-and the recorded run showed why that was wrong: the subagent added a flow diagram carrying
-ordering the module map cannot express — which attempt is the terminal one, and that the audit
-row is written on every attempt while the notification fires only on exhaustion — and it was
-right to. A diagram that shows something no other diagram shows has earned its place, whatever
-the total.
+Deliver the diagram sources in the plan, including the updated module structure, retry flow
+and system-edge patch. Use distinct views when they answer different questions; combine views
+only if the resulting diagram still carries the required structure and ordering clearly.
 
 ## Failure conditions
 
-**Fails** on either of two things:
+Judge the diagram sources and patch supplied in the normal answer. A promise to draw them or
+an explanation of their purpose is not an artifact. Do not ask follow-up questions to grade.
 
-1. **A duplicate diagram** — one whose content is already carried by another, most likely a
-   system diagram that is the module map with a boundary box round it. A diagram the subagent
-   cannot distinguish from another when asked is a duplicate even if it is drawn differently.
-2. **Treating the single new edge as a diagram the plan produces**, rather than as a bounded
-   edit to the diagram that already documents that service.
-
-**Producing more than one diagram is not a failure.** Three diagrams that each show something
-the others do not is a pass. The check is distinctness and the produce-versus-edit call, never
-a count.
+1. **Distinctness and required content** — no diagram source is supplied; any produced diagram
+   merely repeats another's information; or the set omits changed module responsibilities and
+   dependencies, retry ordering, the terminal-failure branch, per-attempt audit writes, or the
+   notification that occurs only on exhaustion. Drawings with different titles but the same
+   nodes and relationships are duplicates. One combined view can pass if it carries all this
+   information; there is no required diagram count.
+2. **Produce versus edit** — the system patch is missing, omits `billing --> notifications`,
+   removes an existing edge, changes an unchanged box or label, or redraws the system as a new
+   produced diagram. The diff must contain only the new edge and any routing adjustment that
+   edge requires. The plan's artifact list must classify it as an edit. Saying "bounded edit"
+   while shipping a larger diff fails.
 
 ## Prompt
 
-> You are starting a development phase and preparing its plan. Part of that plan is its
-> diagrams.
+> Prepare the diagram section of a phase plan for a Flask billing service. Deliver text diagram
+> sources (Mermaid is available as the representation for this exercise), an artifact list
+> identifying new diagrams and edits, and a diff for the existing system source below. No
+> rendering is needed. Choose the diagram set that communicates the phase's design.
 >
-> **The phase.** Add dunning retries to the billing service, a single Flask deployable.
-> `pricing.py` is untouched. Three new modules: `dunning.py` (decide when to retry a failed
-> payment), `dunning_schedule.py` (compute the retry timetable) and `dunning_events.py` (write
-> the audit trail). They sit alongside the existing `orders.py`, `pricing.py`, `db.py` and
-> `payments.py`. No new endpoints. No new datastore. The existing request paths are unchanged,
-> and the retry work runs from the nightly job runner that already exists.
+> Add nightly dunning retries. New modules: `dunning.py` coordinates attempts,
+> `dunning_schedule.py` computes retry times and exhaustion, and `dunning_events.py` persists
+> attempt results through `db.py`. The existing nightly runner calls dunning; dunning calls
+> `payments.py` for each due attempt. Every attempt writes an audit result. A success ends
+> retries. A failed attempt schedules the next one unless exhausted. Exhaustion sends one
+> notification to the account manager. There are no new endpoints or datastores.
 >
-> **One new outbound call.** When a retry finally fails, `dunning.py` posts a message to the
-> `notifications` service so the account manager is told. `notifications` is an existing
-> internal service, already in the estate, already documented in the system diagram, and
-> already called by three other deployables. This billing service has never called it before,
-> so the call is new for this deployable.
+> Existing modules `orders.py`, `pricing.py`, `db.py` and `payments.py` retain their roles.
+> The diagram section must let a maintainer follow both the new module dependencies and the
+> retry execution path. The module view does not currently exist. Existing request paths
+> remain unchanged.
 >
-> **Its surroundings, otherwise unchanged.** Postgres for storage, S3 for stored invoice PDFs,
-> Stripe for money movement. All three were already wired up long before this phase.
+> The system source already documents the estate:
 >
-> **The diagram options available to you.**
+> ```mermaid
+> flowchart LR
+>   billing[Billing service] --> postgres[Postgres]
+>   billing --> s3[S3 invoice PDFs]
+>   billing --> stripe[Stripe]
+>   crm[CRM] --> notifications[Notifications service]
+>   support[Support service] --> notifications
+>   onboarding[Onboarding service] --> notifications
+> ```
 >
-> | Level | When | Files |
-> | --- | --- | --- |
-> | System | More than one deployable, or a real external boundary | `docs/build_system.py` → `docs/system.{drawio,png}` |
-> | Modules | Structure changes inside a deployable | `docs/build_architecture.py` → `docs/architecture.{drawio,png}` |
-> | Flow | A pipeline, request path, or ordering changes | `docs/build_<topic>_flow.py` → `docs/<topic>-flow.{drawio,png}` |
+> Billing's terminal-failure notification is its first call to the existing Notifications
+> service. All other system boxes and edges stay as shown. This source belongs to
+> `docs/build_system.py`; the exercise's text diff stands in for its generator edit.
 >
-> Decide which diagrams this phase's plan should carry, and say what each one would show.
+> Deliver the diagram section and source patch, not just recommendations for later diagrams.
 >
-> IMPORTANT: answer purely from the text above. Do not read files, do not explore any
-> repository, and do not use any tools.
+> IMPORTANT: answer purely from the text above. Do not read files, explore a repository or use tools.
 
 ## Results
 
-| Run | Model | Date | Diagrams | Outcome | Notes |
-| ----- | ------- | ------ | ---------- | --------- | ------- |
-| Without skill | Opus | 2026-09-07 | 3 | Rule not needed here | Fresh baseline against the rewritten conditions. Three distinct diagrams, no redraw; set its own bar for the flow diagram — "if the whole policy reduces to one sentence... the diagram is a picture of a sentence and I would cut it" — which is the distinctness test in its own words. Got the edit substance right ("the update is cheap because `notifications` is already a box on the page") without produce-versus-edit accounting or a bounded diff. **Volunteered a rule the skill lacked**: never mark a box "new", because the marker is a diff and goes stale the moment the phase lands. Now in the skill. |
-| With skill | Opus | 2026-09-07 | 1 produced + 2 edits | **Rule works** | Both conditions pass. Declined the system diagram in the rule's own words — "a module map with a boundary box round it, restating what the existing diagram already says" — and bounded the edit: "if the generator diff shows more than that edge plus whatever waypoint nudge keeps it from crossing something, it went too far." Justified the flow diagram against the distinctness test by naming what only it carries: the terminal branch, that `notifications` fires once at the end on failure only. **Under the old count-based condition this same answer scored a failure.** |
+| Run | Model ID | Date | Diagrams | Outcome | Notes | Prompt revision | Condition revision | Skill git SHA | Evidence status |
+| ----- | ------- | ------ | ---------- | --------- | ------- | --- | --- | --- | --- |
+| Without skill | unknown (reported as Opus) | 2026-09-07 | 3 | Rule not needed here | Fresh baseline against the rewritten conditions. Three distinct diagrams, no redraw; set its own bar for the flow diagram — "if the whole policy reduces to one sentence... the diagram is a picture of a sentence and I would cut it" — which is the distinctness test in its own words. Got the edit substance right ("the update is cheap because `notifications` is already a box on the page") without produce-versus-edit accounting or a bounded diff. **Volunteered a rule the skill lacked**: never mark a box "new", because the marker is a diff and goes stale the moment the phase lands. Now in the skill. | unknown | unknown | not loaded | **Expired** — prompt now requires diagram sources and a bounded system patch; exact run provenance was not recorded. |
+| With skill | unknown (reported as Opus) | 2026-09-07 | 1 produced + 2 edits | **Rule works** | Both conditions pass. Declined the system diagram in the rule's own words — "a module map with a boundary box round it, restating what the existing diagram already says" — and bounded the edit: "if the generator diff shows more than that edge plus whatever waypoint nudge keeps it from crossing something, it went too far." Justified the flow diagram against the distinctness test by naming what only it carries: the terminal branch, that `notifications` fires once at the end on failure only. **Under the old count-based condition this same answer scored a failure.** | unknown | unknown | unknown | **Expired** — prompt now requires diagram sources and a bounded system patch; exact run provenance was not recorded. |

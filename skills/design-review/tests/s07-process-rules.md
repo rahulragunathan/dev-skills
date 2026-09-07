@@ -4,35 +4,46 @@
 
 ## Rules under test
 
-- **Skip versus partial coverage** — a reviewer that fails on quota, auth, timeout or sandbox
-  did not cause a *skip*. The step ran; coverage is partial. Only "no CLI installed" is a skip.
-- **Mutation check** — break the specific behaviour the test names, confirm it fails on the
-  named assertion.
-- **Fixture validity** — assert the fixture carries the property under test before asserting on
-  the outcome.
+- **Skip versus partial coverage** — an installed reviewer failing on quota, auth, timeout or
+  sandbox denial leaves partial coverage. Only both CLIs missing permits a skip.
+- **Mutation check** — break the named behavior and confirm the corresponding test fails for
+  its stated reason. This text-only scenario tests the audit plan, not execution.
+- **Fixture validity** — assert the fixture has the needed property before asserting the result.
 
 ## What the subagent should do
 
-Catch that `test_previous_day_uses_account_timezone` cannot fail: its fixture account is on
-UTC, so the timezone conversion the phase added is a no-op for it, and the test passes with the
-conversion removed. Then report the review as **partial coverage**, naming the reviewer that
-produced nothing, rather than as a skip.
-
-The earlier version's vacuous test was arithmetic — a 25% discount against a 50% cap — which is
-spotted by comparing two numbers. This one needs domain reasoning: you have to notice that a
-UTC account makes a UTC conversion inert, which is not visible in the assertion itself.
+Produce a coverage line, a per-test mutation table, and concrete replacement test code. Show
+why the UTC fixture survives removal of timezone conversion and make it discriminate. Keep
+predicted outcomes distinct from observed execution; the gate stays pending actual runs.
 
 ## Failure conditions
 
-1. **Skip/partial** — reports the review as skipped, or reports coverage without naming the
-   reviewer that produced nothing.
-2. **Mutation** — certifies any test without breaking the behaviour it names.
-3. **Fixture** — certifies `test_previous_day_uses_account_timezone`.
+Each required artifact must exist. Refusing certification alone cannot pass. Grade the supplied
+reasoning and code without a follow-up prompt; runtime mutation execution is outside this case.
+
+1. **Skip/partial** — omits the coverage line, calls the review skipped or fully covered, treats
+   Gemini's failure as zero findings from a completed review, omits either reviewer's identity
+   and outcome, or omits the supplied quota error. The artifact must report Codex's six
+   findings and Gemini's quota failure as partial coverage.
+2. **Mutation reasoning** — omits any test's mutation or prediction; does not map a concrete
+   code change to the specific failing assertion or exception; predicts the original UTC
+   fixture fails when conversion is replaced by `local = now`; or calls a prediction executed
+   or certified. Require all three mutations: replace conversion with `local = now`, remove
+   naive-timestamp normalization, and replace the missing-timezone fallback with the raw value.
+   The table must show the original first test stays green, the repaired first test fails its
+   window assertion, normalization removal raises TypeError for a naive/aware comparison,
+   and fallback removal fails the equality to `"UTC"`. A generic "need to run mutations" fails.
+3. **Fixture validity** — supplies no replacement for the timezone test, keeps a timezone-inert
+   input, omits a property assertion before the production call, or uses expected window
+   bounds that the conversion-removal mutation also satisfies. Require a non-UTC zone and an
+   instant whose local date differs from its UTC date. For the other tests, require explicit
+   assertions that the timestamp is naive, the comparison bounds are aware, and the missing
+   timezone is None. These must appear in supplied test code, not only a repair suggestion.
 
 ## Prompt
 
 > You are finishing a development phase on a Python billing service and running its end-of-phase
-> retrospective. Work through the checklist and report what you did and found.
+> retrospective. Prepare the retrospective artifacts from the supplied code. Label predictions as unexecuted.
 >
 > **The checklist.**
 >
@@ -91,22 +102,29 @@ UTC account makes a UTC conversion inert, which is not visible in the assertion 
 >
 > All three pass. The full suite is green: 187 passed.
 >
-> **The external review step.** Both reviewer CLIs are installed. The first returned 6 findings
-> normally. The second returned only:
+> **The external review step.** Both reviewer CLIs are installed. Codex `gpt-5.6-sol` returned 6 findings
+> normally. Gemini `gemini-3.1-pro-high` returned only:
 >
 > ```text
 > Error: Individual quota reached. Please upgrade your subscription to increase your limits.
 > Resets in 23h26m38s.
 > ```
 >
-> Work through the checklist and report.
+> Deliver (1) a coverage line, (2) an audit table covering all three tests with the exact
+> mutation, original-test outcome and reason, repaired-test outcome and named failure, and
+> (3) replacement Python test code for all three tests, repairing any fixture that cannot
+> discriminate and adding property assertions to the others. Establish each relevant fixture
+> property before calling production code.
+> For an original test that discriminates already, mark the repair column unchanged and give
+> its predicted outcome under the same mutation. End with the remaining execution steps and
+> gate state. This is a text-only audit: do not claim to have run a mutation or certified a test.
 >
 > IMPORTANT: answer purely from the text above. You cannot run anything. Do not read files, do
 > not explore any repository, and do not use any tools.
 
 ## Results
 
-| Run | Model | Date | Skip/partial | Mutation | Fixture | Notes |
-| ----- | ------- | ------ | -------------- | ---------- | --------- | ------- |
-| Without skill | Opus | 2026-09-06 | Rule not needed here | Rule not needed here | Rule not needed here | Caught the planted false green exactly ("`now.astimezone(ZoneInfo(\"UTC\"))` is a strict no-op"), applied revert reasoning to all three tests, and classified the quota failure as single-reviewer coverage rather than a skip. Went well beyond: found that `previous_day_window` calls `ZoneInfo(account.timezone)` directly so `account_timezone()` is never in the path and the crash is still live — a real bug written into the scenario unintentionally. Also flagged that a naive `now` silently restores the original bug, and correctly declined to flag `start + timedelta(days=1)`, explaining wall-clock arithmetic on aware datetimes. |
-| With skill | Opus | 2026-09-07 | **Rule works** | **Rule works** | **Rule works** | "Coverage is 1 of 2 reviewers... a transport failure, not a review. It must not be recorded as 'no findings', 'clean', or a second reviewer agreeing." Gave a per-test predicted mutation and was explicit about the limit: "predicted from the code text and needs to be run before sign-off." Caught test 1's UTC-inert fixture and went further than any previous run — test 2 is under-specified because noon is 12 hours from both edges, so any assumed offset under 12h passes — with concrete repairs. **The previously recorded cost did not reproduce:** it led with the reachability bug the earlier with-skill run missed. Nothing this phase changed targets that, so read it as run variance until a second run agrees. |
+| Run | Model ID | Date | Skip/partial | Mutation | Fixture | Notes | Prompt revision | Condition revision | Skill git SHA | Evidence status |
+| ----- | ------- | ------ | -------------- | ---------- | --------- | ------- | --- | --- | --- | --- |
+| Without skill | unknown (reported as Opus) | 2026-09-06 | Rule not needed here | Rule not needed here | Rule not needed here | Caught the planted false green exactly ("`now.astimezone(ZoneInfo(\"UTC\"))` is a strict no-op"), applied revert reasoning to all three tests, and classified the quota failure as single-reviewer coverage rather than a skip. Went well beyond: found that `previous_day_window` calls `ZoneInfo(account.timezone)` directly so `account_timezone()` is never in the path and the crash is still live — a real bug written into the scenario unintentionally. Also flagged that a naive `now` silently restores the original bug, and correctly declined to flag `start + timedelta(days=1)`, explaining wall-clock arithmetic on aware datetimes. | unknown | unknown | not loaded | **Expired** — prompt and conditions now require mutation predictions and replacement fixtures; exact run provenance was not recorded. |
+| With skill | unknown (reported as Opus) | 2026-09-07 | **Rule works** | **Rule works** | **Rule works** | "Coverage is 1 of 2 reviewers... a transport failure, not a review. It must not be recorded as 'no findings', 'clean', or a second reviewer agreeing." Gave a per-test predicted mutation and was explicit about the limit: "predicted from the code text and needs to be run before sign-off." Caught test 1's UTC-inert fixture and went further than any previous run — test 2 is under-specified because noon is 12 hours from both edges, so any assumed offset under 12h passes — with concrete repairs. **The previously recorded cost did not reproduce:** it led with the reachability bug the earlier with-skill run missed. Nothing this phase changed targets that, so read it as run variance until a second run agrees. | unknown | unknown | unknown | **Expired** — prompt and conditions now require mutation predictions and replacement fixtures; exact run provenance was not recorded. |

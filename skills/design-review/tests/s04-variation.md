@@ -1,71 +1,63 @@
 # S04 — Variation and the YAGNI cap
 
-**Kind:** build · **Model:** Sonnet
+**Kind:** build
 
 ## Rules under test
 
-- **Variation** — what's likely to change, and is there a place to change it?
-- The YAGNI cap: no plug-in point without a second implementation that exists or is scheduled.
+- **Variation** — a likely change has a usable seam; a runtime plug-in point must not exist
+  solely for a permanently single implementation.
+- **YAGNI cap** — a Protocol or type alias may name a shape with one implementation. Runtime
+  machinery requires a second implementation that exists or is scheduled.
 
 ## Failure conditions
 
-**Fails** if the produced design builds an **expensive** abstraction over input formats while
-exactly one format exists and none is committed: a registry, a factory, entry-point discovery,
-config-driven registration, content sniffing, an ABC with template methods, or a per-format
-subpackage.
+Judge the table and dependency contracts. Missing the ingestion path or the scheduled change's
+placement fails the relevant condition. A response to the tech lead does not repair the design.
 
-A `Protocol` or type alias naming the parse shape is a **pass**. It is fifteen lines with no
-runtime machinery, and it earns its keep with one implementation by stopping format-specific
-vocabulary leaking into the pipeline. That is the cost-graded cap the skill states, and this
-condition is scored against it — not against a blanket ban on naming a seam.
-
-Adding a differently-named concrete function later (`import_json`) is not a failure; that is
-the correct answer. Naming the risk and declining to build for it is also correct.
+1. **Cost cap** — builds a format registry, factory, discovery mechanism, config registration,
+   content sniffer, template-method ABC or per-format subpackage with only CSV committed.
+   A small Protocol or type alias alone is permitted; it does not excuse attached machinery.
+2. **Single-implementation plug-in point** — routes the fixed SHA-256 content digest through
+   a runtime selector, registry, factory or pluggable algorithm setting. It has one required
+   implementation and no alternative is scheduled. Naming its input/output shape with a type
+   alias or Protocol alone is permitted, as the skill's cost exception requires.
+3. **Likely change without a seam** — the scheduled HTTPS input requires edits to CSV parsing
+   or persistence because either consumes S3 keys, boto responses or transport-specific state.
+   The design must isolate acquisition so both transports can supply the same bytes/stream
+   contract. Ordinary functions or a cheap Protocol suffice; no loader framework is required.
 
 ## Note on this scenario
 
-Two earlier versions came back green: the agent declined the abstraction firmly both times,
-including once with the "nothing is scheduled" framing removed. This version adds the pressure
-that actually produces over-engineering in practice — a senior colleague who has already
-proposed the abstraction, so declining it means disagreeing with someone rather than merely
-choosing a design.
-
-If this run is also green, the honest conclusion is cause 3 in the README: the model does this
-correctly on its own and the rule is insurance. Record it that way rather than softening the
-condition.
+The tech lead's proposal pressures the agent to add machinery. The scheduled transport change
+also prevents passing by refusing every seam. Score the artifact on all three conditions;
+agreement or disagreement with the tech lead is not evidence.
 
 ## Prompt
 
-> You are designing a feature for an existing Python data platform. Produce the module design:
-> which files exist, what each is responsible for, its public functions with signatures, and
-> what it depends on.
+> Design an invoice-file importer for a Python data platform. Produce a module table with
+> responsibilities, public signatures and dependencies, plus Expected change and Shared state
+> lines. Show the acquisition-to-storage data path and where the scheduled input will fit.
 >
-> **The feature.** Customers drop invoice files into an S3 bucket. Build the importer that
-> parses them into `Record` objects and persists them.
+> Customers drop CSV invoices in S3. Parse them into `Record` objects and persist them.
+> JSON and XML came up in prospect meetings, but neither is committed. CSV is the only format
+> this sprint. Next sprint has a committed HTTPS upload endpoint delivering the same CSV bytes;
+> both S3 and HTTPS will then remain in service.
 >
-> **Format situation.** Every customer sends CSV today. In last week's planning meeting two
-> prospects were mentioned as having asked about JSON feeds, and one existing customer sends
-> XML to a competitor. Nothing has been committed and this sprint is the CSV path only.
+> Use the source bytes' SHA-256 digest as the idempotency key. The existing database contract
+> fixes that algorithm. There are no algorithm alternatives or algorithm migrations planned.
 >
-> **Your tech lead's note on the ticket**, verbatim:
+> The tech lead wrote: "Please put an Importer protocol in from the start with CsvImporter
+> first, plus a small registry keyed by file extension. I've seen two painful format migrations.
+> Cheap now, expensive later. We could use the same registry idea for digest algorithms."
 >
-> > Please put an `Importer` protocol in from the start with `CsvImporter` as the first
-> > implementation, plus a small registry keyed by file extension. I've been through two
-> > migrations where we bolted formats on afterwards and it was a mess both times. Cheap now,
-> > expensive later.
+> `records.py` defines `Record`; `db.py` wraps Postgres. Nothing else relevant exists.
+> Give the design you would build and your response to the tech lead.
 >
-> **What exists today.** `records.py` defines the `Record` dataclass. `db.py` wraps Postgres.
-> Nothing else relevant.
->
-> Give the module design you would actually build, and say how you would respond to the tech
-> lead's note.
->
-> IMPORTANT: answer purely from the text above. Do not read files, do not explore any
-> repository, and do not use any tools.
+> IMPORTANT: answer purely from the text above. Do not read files, explore a repository or use tools.
 
 ## Results
 
-| Run | Model | Date | Outcome | Notes |
-| ----- | ------- | ------ | --------- | ------- |
-| Without skill | Opus | 2026-09-06 | **Rule needed**, needs grading | Built the Protocol and Registry, so the condition fired. But it bounded the build explicitly — refused an ABC with template methods, per-format subpackages, entry-point discovery, config-driven registration and content sniffing — disputed the premise ("it is rarely the missing interface, it is format assumptions leaking sideways"), and redirected to an omitted certainty (idempotent insert for at-least-once S3 delivery). **Refine:** grade the cap by cost and name the expensive forms, rather than banning all plug-in points. **Stale:** this scenario's failure condition changed on 2026-09-07 and this baseline predates it. Re-run before citing it. |
-| With skill | Opus | 2026-09-07 | **Rule works** | **Regraded 2026-09-07** against a corrected condition: the original banned any protocol with one format, which contradicts the skill's cost-graded cap, so this run was a false pass as originally scored. It is a genuine pass against the cap. Took the Protocol, declined the registry under the tech lead's "cheap now, expensive later" pressure, and answered the argument rather than the verdict: "it is probably not the missing interface. It is assumptions leaking sideways." Wrote the trigger down — "a second format actually committed — signed, not mentioned in a planning meeting". Went past the skill: `.csv` is a filename convention, not a format, so an extension-keyed registry would bake in a mapping that breaks on the first real second format. |
+| Run | Model ID | Date | Outcome | Notes | Prompt revision | Condition revision | Skill git SHA | Evidence status |
+| ----- | ------- | ------ | --------- | ------- | --- | --- | --- | --- |
+| Without skill | unknown (reported as Opus) | 2026-09-06 | **Rule needed**, needs grading | Built the Protocol and Registry, so the condition fired. But it bounded the build explicitly — refused an ABC with template methods, per-format subpackages, entry-point discovery, config-driven registration and content sniffing — disputed the premise ("it is rarely the missing interface, it is format assumptions leaking sideways"), and redirected to an omitted certainty (idempotent insert for at-least-once S3 delivery). **Refine:** grade the cap by cost and name the expensive forms, rather than banning all plug-in points. | unknown | unknown | not loaded | **Expired** — prompt and conditions now exercise all Variation cases; exact run provenance was not recorded. |
+| With skill | unknown (reported as Opus) | 2026-09-07 | **Rule works** | **Regraded 2026-09-07** against a corrected condition: the original banned any protocol with one format, which contradicts the skill's cost-graded cap, so this run was a false pass as originally scored. It is a genuine pass against the cap. Took the Protocol, declined the registry under the tech lead's "cheap now, expensive later" pressure, and answered the argument rather than the verdict: "it is probably not the missing interface. It is assumptions leaking sideways." Wrote the trigger down — "a second format actually committed — signed, not mentioned in a planning meeting". Went past the skill: `.csv` is a filename convention, not a format, so an extension-keyed registry would bake in a mapping that breaks on the first real second format. | unknown | unknown | unknown | **Expired** — prompt and conditions now exercise all Variation cases; exact run provenance was not recorded. |

@@ -15,7 +15,7 @@ Nothing else exempts the step: not a clean `/code-review`, not a green suite, no
 
 **The phase gate (non-negotiable):** completing phase N never rolls into phase N+1. Present phase N for the user's review and stop. The work at that moment is **committed, pushed, and sitting on a PR marked ready for review** — see §3 step 7 for the checkable state. Nothing merges without sign-off.
 
-**Commit per task; never hold a phase's work in the working tree.** A task lands as one commit once its tests are green and `/simplify` has run. This is a safety rule: the retrospective points `git checkout`, worktree and stash operations at the tree, and `git reflog` recovers what was committed and nothing else.
+**Commit per task; never hold a phase's work in the working tree.** A task lands as one commit once its tests are green and `/simplify` has run. Save the task before the retrospective mutates code or creates audit worktrees.
 
 **The phase's full diff:** `git diff "origin/$DEFAULT_BRANCH"...HEAD`. **Three dots, not two** — two compares against a moving tip and misreports the phase once the default branch advances. Per-review-pass scope is `git diff <last-reviewed-sha>..HEAD`.
 
@@ -35,13 +35,33 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 
 ## 2. Phase start (plan approved)
 
-1. **Detect the default branch, then create and publish the phase branch.** Never hardcode `main`; a repo wired up with `git remote add` has no `origin/HEAD`, hence the fallback. **Every later section re-runs this block.**
+1. **Preflight before any phase-start mutation.** Use Bash for these blocks. Replace angle-bracket placeholders before running them. Run from the repo root. Stop on any failed command.
+
+   **Reusable discovery and refresh.** Later sections run only this block, never the branch-creation block. `gh` must be installed and able to read the repository and its merge settings. Resolve the repository from `origin`, not an upstream setting.
 
    ```bash
-   DEFAULT_BRANCH="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')"
-   [ -n "$DEFAULT_BRANCH" ] || DEFAULT_BRANCH="$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name 2>/dev/null)"
-   [ -n "$DEFAULT_BRANCH" ] || { echo "cannot determine the default branch — ask before continuing" >&2; exit 1; }
-   git switch -c "feature/<slug>" --no-track "origin/$DEFAULT_BRANCH" && git push -u origin "feature/<slug>"
+   set -euo pipefail
+   command -v gh >/dev/null || { echo "GH MISSING — stop"; exit 1; }
+   ORIGIN_URL="$(git remote get-url origin)"
+   REPO="$(gh repo view "$ORIGIN_URL" --json nameWithOwner --jq .nameWithOwner)"
+   DEFAULT_BRANCH="$(gh repo view "$REPO" --json defaultBranchRef --jq '.defaultBranchRef.name // empty')"
+   [ -n "$REPO" ] && [ -n "$DEFAULT_BRANCH" ] || { echo "REPO OR DEFAULT BRANCH UNKNOWN — stop"; exit 1; }
+   git check-ref-format "refs/heads/$DEFAULT_BRANCH"
+   MERGE_METHOD="$(gh api "repos/$REPO" --jq 'if .allow_squash_merge then "squash" elif .allow_rebase_merge then "rebase" elif .allow_merge_commit then "merge" else empty end')"
+   case "$MERGE_METHOD" in squash|rebase|merge) ;; *) echo "NO ALLOWED MERGE METHOD — stop"; exit 1 ;; esac
+   git fetch origin "+refs/heads/$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
+   git rev-parse --verify "refs/remotes/origin/$DEFAULT_BRANCH^{commit}"
+   ```
+
+   **One-time branch creation.** Record the selected method as step 3 requires before running this block. Never re-create the branch on resume. If publication fails, inspect the existing local branch and retry only its push.
+
+   ```bash
+   set -euo pipefail
+   PHASE_BRANCH="feature/<slug>"
+   TREE_STATE="$(git status --porcelain=v1 --untracked-files=all)"
+   [ -z "$TREE_STATE" ] || { echo "TREE DIRTY — save the work before starting"; exit 1; }
+   git switch -c "$PHASE_BRANCH" --no-track "refs/remotes/origin/$DEFAULT_BRANCH"
+   git push -u origin "$PHASE_BRANCH"
    ```
 
    **This is the only place a phase branch is created.**
@@ -55,13 +75,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    Body ends with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
 
    **This does not conflict with "open a PR only when I explicitly ask."** That rule guards against surprise PRs on work the user has not approved. This one opens *after* plan approval, as a draft, and lands nothing.
-3. **Read the repo's merge settings now, not at merge time.** The PR is the landing path on every repo, so branch protection no longer decides *how* a phase lands — only whether the merge needs review approval, which sign-off covers anyway. What still varies is the merge method: `--squash` is rejected by a repo that allows only merge commits, and the remote branch survives unless someone deletes it.
-
-   ```bash
-   gh api repos/{owner}/{repo} --jq '{squash: .allow_squash_merge, rebase: .allow_rebase_merge, merge: .allow_merge_commit, autodelete: .delete_branch_on_merge}'
-   ```
-
-   Record these with the phase. §4 reads them; it never rediscovers them. No `gh`, or the call fails? Record `unknown` and ask at §4 rather than guessing a method.
+3. **Record exactly one allowed merge method at phase start.** The preflight selects `squash`, then `rebase`, then `merge`, taking the first allowed method. Record `REPO`, `DEFAULT_BRANCH`, `PHASE_BRANCH` and that selection with the phase. If the user specifies another method, verify it is allowed before selecting it. Later discovery refreshes do not replace this record. At the gate and merge, load the recorded method into `MERGE_METHOD`. A disabled method ends the merge attempt; do not silently substitute one. Repo rules and required reviews still apply.
 
 4. **Land the plan's diagram generators.** `design-review` builds them into the scratchpad at §1, because §1 runs before this branch exists, and the plan's front matter records their filenames. Copy **every** generator the plan recorded into `docs/` as this phase's first task **and commit it**. That commit is the baseline `design-review phase` compares against at §3 step 2. Skip this step entirely when the plan recorded none, which is the no-`drawio` path.
 5. Seed/refresh `ROADMAP.md`, `KNOWN_ISSUES.md`, `ENHANCEMENTS.md`, and `OPEN_QUESTIONS.md` under `docs/` from the templates next to this file, if the project doesn't have them.
@@ -78,7 +92,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 | 2. `design-review phase` → `/simplify` → `/code-review high` | the module table plus whatever fired, or the line saying nothing did; and a re-run green suite |
 | 3. Test-validity audit | a verdict per test added or changed this phase |
 | 4. Documentation pass | the doc diffs and the drift-check report |
-| 5. External review loop | a coverage line per pass, plus a findings table wherever the count is non-zero |
+| 5. External review loop | a coverage line and a combined findings table per pass, empty when there are no findings |
 | 6. Post-fix drift re-check | confirmation that every filing has its ROADMAP row |
 | 7. Gate | the hand-off: PR ready for review, phase diff, findings |
 
@@ -114,46 +128,78 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 
    **Commit the task before you mutate it.** That is what makes the restore safe.
 
+   Run this as one Bash script. Replace the edit comment with the mutation command before starting. Do not make concurrent edits during the audit. The saved task commit must contain the target file.
+
    ```bash
+   set -euo pipefail
    [ -f "<file>" ] && [ ! -L "<file>" ] || { echo "NOT A REGULAR FILE — restore would not cover the target"; exit 1; }
-   git diff --quiet && git diff --cached --quiet \
-     || { echo "TREE DIRTY — commit the task before auditing it"; exit 1; }
+   TREE_STATE="$(git status --porcelain=v1 --untracked-files=all)"
+   [ -z "$TREE_STATE" ] || { echo "TREE DIRTY — commit the task before auditing it"; exit 1; }
+   TASK_SHA="$(git rev-parse --verify HEAD)"
+   git cat-file -e "$TASK_SHA:<file>"
+   restore_task_file() {
+     git restore --source="$TASK_SHA" --staged --worktree -- "<file>" || return 1
+     git diff --quiet "$TASK_SHA" -- && git diff --cached --quiet "$TASK_SHA" --
+   }
+   cleanup_mutation() {
+     rc=$?
+     trap - EXIT INT TERM
+     if ! restore_task_file; then
+       echo "RESTORE FAILED — inspect index and working tree before continuing"
+       exit 1
+     fi
+     exit "$rc"
+   }
+   trap cleanup_mutation EXIT
+   trap 'exit 130' INT
+   trap 'exit 143' TERM
 
    # --- edit <file> now: break exactly the behaviour the failure condition names ---
 
-   set +e; .venv/bin/python -m pytest <the test> -x; rc=$?; set -e
-
-   git checkout -- "<file>"
-   git diff --quiet || { echo "RESTORE FAILED — inspect before continuing"; exit 1; }
-
-   [ $rc -ne 0 ] || { echo "NOT A RED — it passed with the behaviour broken; the test does not discriminate"; exit 1; }
-   .venv/bin/python -m pytest <the test>              # must pass again
+   rc=0
+   .venv/bin/python -m pytest <the test> -x || rc=$?
+   restore_task_file || { echo "RESTORE FAILED — stop"; exit 1; }
+   trap - EXIT INT TERM
+   [ "$rc" -eq 1 ] || { echo "NOT AN ASSERTION RED — pytest exit $rc; inspect the output"; exit 1; }
+   .venv/bin/python -m pytest <the test>
+   git diff --quiet "$TASK_SHA" -- && git diff --cached --quiet "$TASK_SHA" -- \
+     || { echo "AUDIT CHANGED TRACKED FILES — stop"; exit 1; }
    ```
 
-   **The clean-tree guard is the precondition, not decoration** — `git checkout --` is safe only
-   because the file's committed content is what it restores. `set +e` around pytest is required:
-   under `errexit` a bare `cmd; rc=$?` exits before the assignment and leaves the mutation in
-   place.
+   The cleanup restores only the mutation target. A change elsewhere fails verification and stays available for inspection. INT, TERM and normal shell exit run cleanup; after an untrappable kill or power loss, inspect the tree and restore the target from the recorded task SHA before resuming.
 
    **A red that is an import error, a collection error, or a fixture failure does not count.** It has to be the assertion named in the failure condition. A false red is worth exactly as much as no check, and it is the easier of the two to mistake for success.
 
    **When the behaviour cannot be broken in place** — it lives in a dependency, or the fix was a deletion — use a worktree off the base, where the fix is absent by construction:
 
    ```bash
-   PY="$PWD/.venv/bin/python"                      # the base env; a fresh worktree has no .venv
+   set -euo pipefail
+   PY="$PWD/.venv/bin/python"
    WT="$(mktemp -d)"
-   git worktree add "$WT/audit" "<base>"               || { echo "WORKTREE ADD FAILED"; exit 1; }
-   mkdir -p "$WT/audit/$(dirname "<path to the test>")" || { echo "MKDIR FAILED"; exit 1; }
-   cp -p "<test file>" "$WT/audit/<path to the test>"   || { echo "COPY FAILED"; exit 1; }
-   ( cd "$WT/audit" && "$PY" -m pytest "<the test>" )   # must fail ON THE NAMED ASSERTION
-   git worktree remove --force "$WT/audit"; rmdir "$WT"
+   cleanup_worktree() {
+     rc=$?
+     trap - EXIT INT TERM
+     if [ -d "$WT/audit" ]; then
+       git worktree remove --force "$WT/audit" || { echo "WORKTREE CLEANUP FAILED: $WT"; exit 1; }
+     fi
+     rmdir "$WT" || { echo "AUDIT DIRECTORY RETAINED: $WT"; exit 1; }
+     exit "$rc"
+   }
+   trap cleanup_worktree EXIT
+   trap 'exit 130' INT
+   trap 'exit 143' TERM
+   git worktree add --detach "$WT/audit" "<base>"
+   mkdir -p "$WT/audit/$(dirname "<path to the test>")"
+   cp -p "<test file>" "$WT/audit/<path to the test>"
+   rc=0
+   ( cd "$WT/audit" && "$PY" -m pytest "<the test>" -x ) || rc=$?
+   [ "$rc" -eq 1 ] || { echo "NOT AN ASSERTION RED — pytest exit $rc; inspect the output"; exit 1; }
+   echo "EXIT 1 — verify the named assertion in the output before certifying"
    ```
 
-   **Check every setup command; none of them is safe to assume.** A `git worktree add` that fails — the base is already checked out in another worktree, most often — is followed by a `mkdir -p` that creates the directory anyway. Pytest then runs in a bare directory, or against the phase's own code, and the red it produces proves nothing.
+   **Exit 1 is necessary, not sufficient.** Inspect the output for the named assertion; fixture failures also return 1. A new module absent from the base yields an import failure, not a valid red. Audit that module at the saved task commit with a targeted mutation, or use a recorded TDD assertion red with an importable stub. If neither is available, the audit remains incomplete.
 
-   **`$PY` is absolute on purpose**, and this is the one place the relative-venv convention does not apply: the interpreter belongs to the base checkout, and a fresh worktree has no `.venv` because it is a gitignored symlink. Two limits on reusing it — an editable install can resolve imports back to the original checkout rather than the worktree, and it holds the phase's own dependency versions, so it cannot reproduce a behaviour that lives in an older dependency. Where either applies, build a throwaway env inside the worktree instead.
-
-   **`--force` on removal is required.** The copied test file makes the tree dirty, and a plain `git worktree remove` refuses and strands the worktree.
+   **`$PY` is absolute.** Verify imports resolve to the worktree. If an editable install redirects them to the phase checkout, or the audit needs older dependency versions, build a throwaway environment inside the worktree and use its interpreter.
 
    Copy the **test** across, never the fix. For a test that *documents* an open issue rather than closing one, verify it is genuinely `xfail`/`skip` with the issue ID attached and not quietly passing.
 
@@ -161,10 +207,10 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 4. **Documentation pass — holistic, not delta.** Check every doc against the code *as it now stands*, fixing drift from earlier phases too:
    - **README.md** — setup and usage; rewrite clean-slate when stale.
    - **docs/ARCHITECTURE.md** — **records and explains every diagram the project has**, one short section each saying what it depicts and when to regenerate it, not a bare embed. Regenerate each one with the `drawio` skill and compare against the generator committed at §2 (commit the `.drawio` source, generator script, and rendered PNG). **Drift-check the generator, not the PNG** — its box and edge labels are string literals naming modules and files, so they drop into the identifier check below, while a PNG is opaque to it. Catch a stale render mechanically: regenerate, then `git status`; if the PNG changes it was already out of date with its own source.
-   - **CHANGELOG.md** — this phase's user-visible changes, appended to `[Unreleased]` under Added/Changed/Fixed/Removed. Never edit a released section. Every entry here is *moved* out of ROADMAP and its supporting file, not copied. Decide the version now (minor for additive work, patch for fixes and docs, major for a break) and put it in the hand-off; the release is cut and tagged after sign-off, in the merge cycle.
+   - **CHANGELOG.md** — this phase's user-visible changes, appended to `[Unreleased]` under Added/Changed/Fixed/Removed. Never edit a released section. Every entry here is *moved* out of ROADMAP and its supporting file, not copied. Decide the version now (minor for additive work, patch for fixes and docs, major for a break). Prepare the release before external review: rename the populated `[Unreleased]` heading to `## [<version>] - <date> — <phase name>`, add a fresh empty `[Unreleased]` above it, and add the compare link under `## Reference`. Commit and push these edits before step 5. Record the version in the hand-off. Tag only after the approved PR merges.
    - **KNOWN_ISSUES.md / ENHANCEMENTS.md / OPEN_QUESTIONS.md** — every finding triaged out of steps 1–3 gets a full entry in the right one and a pointer row in ROADMAP, not a one-liner in ROADMAP alone. Getting these current *before* step 5 is what lets the external reviewers be told what is already tracked, so they stop re-deriving the backlog. Rate it when you write it; an unrated item is an untriaged item. Re-check the ordering, and re-check the filing: a question that has become a defined bug moves to KNOWN_ISSUES.
    - **Location** — root keeps README.md, CLAUDE.md, CHANGELOG.md, LICENSE; every other doc lives in `docs/`. If a doc is at root that shouldn't be, `git mv` it so the rename is tracked, then fix every inbound link.
-   - **Current-state rule:** every doc except CLAUDE.md, **CHANGELOG.md** and the roadmap files (`ROADMAP.md`, `KNOWN_ISSUES.md`, `ENHANCEMENTS.md`, `OPEN_QUESTIONS.md`) documents only what the code *is*. CHANGELOG is exempt because describing removed features is most of a changelog's job; the rule as it stood forbade exactly that — no "what we didn't build", no rejected alternatives, no removed features. Decisions-not-taken that future developers/agents must know go in the **project CLAUDE.md** only.
+   - **Current-state rule:** every doc except CLAUDE.md, **CHANGELOG.md** and the roadmap files (`ROADMAP.md`, `KNOWN_ISSUES.md`, `ENHANCEMENTS.md`, `OPEN_QUESTIONS.md`) documents only what the code *is*. CHANGELOG is exempt because describing removed features is most of a changelog's job; no "what we didn't build", no rejected alternatives, no removed features. Decisions-not-taken that future developers/agents must know go in the **project CLAUDE.md** only.
    - **Project CLAUDE.md** — updated to match the code as it actually is, plus those awareness notes.
    - **Docs about this project that live outside its repo.** A repo nested inside a container folder is usually described by that folder's own `README.md` and `CLAUDE.md` — a plugin inside a marketplace folder, a skill inside a synced skills folder. Those drift exactly like the in-repo docs and are missed exactly because they are one level up. Sweep them in the same pass: the skill list, the command table, the bundled-script list, anything naming a count.
 
@@ -172,67 +218,143 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    - **Code comments** — read the comments in every file this phase touched. Delete comments describing removed behavior, fix ones the code outgrew, add a why-comment where the logic is non-obvious. Comments say *why*, not *what*.
    - **Drift check** — for each doc and comment, verify the identifiers, file paths, commands, flags, and config keys it names still exist. Report what you found, not only what you fixed.
    - **Style** — every doc follows the global writing standard (Simplified Technical English, Zinsser: clarity, simplicity, brevity, humanity). Rewrite bloated prose you pass through, including text from earlier phases.
-   - **docs/ROADMAP.md + the three supporting files** — follow the templates' vocabulary and sections exactly (say **"Done"**, never "Implemented"). ROADMAP rows stay pointers; detail belongs in the supporting file. Verify every ID appears in both, that the ratings agree, and that both files are ordered by rating descending. ROADMAP's phase note moves to "no phase in flight" *only after* sign-off (§4) — at hand-off it still says this phase is in progress.
-5. **External review loop:** `/localclaude:review-checkpoint phase` (Codex + Gemini). **`review-checkpoint` is canonical for the loop** — passes, the blocking pause, the cap, the disposition vocabulary and the filing rules are defined there; do not restate them. What is phase-specific:
-   - **It runs after the docs pass.** The rubric asks for doc-vs-code contradictions, so stale docs spend findings on drift step 4 would have repaired anyway.
-   - **A findings table for every pass that ran appears at the gate** (step 7), or the written line naming what was unavailable. That artifact is how a skipped review is caught.
-   - Any test written to close a finding here goes through step 3's audit before the loop moves on. A fix landing without a discriminating test is how the next phase inherits this one's bug.
+   - **docs/ROADMAP.md + the three supporting files** — follow the templates' vocabulary and sections exactly (say **"Done"**, never "Implemented"). ROADMAP rows stay pointers; detail belongs in the supporting file. Verify every ID appears in both, that the ratings agree, and that both files are ordered by rating descending. At hand-off, ROADMAP names the phase as awaiting merge. Clear that note in the next phase's normal documentation task; do not add an unreviewed post-sign-off commit.
+5. **External review loop:** `/localclaude:review-checkpoint phase` (Codex + Gemini). Use its disposition vocabulary and filing rules. Pause after every external review pass. Report the findings trend and your recommendation; the user decides whether to run another pass or land the phase.
+   - **It runs after the docs pass**, including release preparation. Fold later phase fixes into that unpublished release and commit them before the next pass or gate.
+   - **Every reviewer emits a findings table**, empty when it has no findings. Combine the reviewers' tables into one table per pass and present it with the coverage line. An empty table is output; no output at all means the reviewer produced nothing. An installed CLI failure is partial coverage even when its output has no table. Report the error and include an empty combined table when no findings are available; never attribute a caller-created table to a failed reviewer.
+   - Any test written to close a finding here goes through step 3's audit before the loop moves on.
 6. **Post-fix drift re-check — narrow, not another holistic pass.** If step 5's fixes moved a module, the diagrams are back in scope: regenerate and compare. Step 5 changed code after step 4 declared the docs true. Re-check only what those fixes touched: the docs and code comments the changed files invalidate, and the CHANGELOG entries whose claims moved. Then confirm every filing from every pass has both its full entry and its ROADMAP pointer row, with ratings that agree. Report what you found, not only what you fixed.
 7. **Present to the user and stop** — the phase gate.
    - **Include a findings table per review pass** from step 5, in `review-checkpoint`'s canonical format, with the phase-mode disposition vocabulary. Chat-only — never written to a per-phase review file. It exists so the user can see every finding and pull any deferred one back into this phase before signing off.
    - **Do not merge.** The merge is the post-sign-off action; it happens in §4 and nowhere else. Committing and pushing are not — those happened per task, throughout the phase.
    - **The gate has two checkable states.** First, **the work is committed, pushed, and on a PR marked ready for review** — every one of those is a fact git or `gh` will answer, none is self-attested:
 
+     Run §2's reusable discovery block, then load the phase's recorded `REPO`, `DEFAULT_BRANCH`, `PHASE_BRANCH` and `MERGE_METHOD`; stop if repository or base discovery disagrees with the record. Set `PR` to this phase's PR number. This workflow uses a same-repository PR.
+
      ```bash
-     git diff --quiet && git diff --cached --quiet || { echo "UNCOMMITTED WORK — commit it before the gate"; exit 1; }
-     git log --oneline "origin/$DEFAULT_BRANCH"..HEAD          # the phase's commits; must not be empty
-     git status -sb | head -1                                  # must not say [ahead N] — push first
-     gh pr ready <n> && gh pr view <n> --json isDraft,state --jq '{draft: .isDraft, state: .state}'
+     set -euo pipefail
+     TREE_STATE="$(git status --porcelain=v1 --untracked-files=all)"
+     [ -z "$TREE_STATE" ] || { echo "UNCOMMITTED WORK — commit it before the gate"; exit 1; }
+     BRANCH="$(git symbolic-ref --quiet --short HEAD)"
+     [ "$BRANCH" = "$PHASE_BRANCH" ] || { echo "WRONG BRANCH — stop"; exit 1; }
+     LOCAL_SHA="$(git rev-parse --verify HEAD)"
+     REMOTE_SHA="$(git ls-remote --exit-code --heads origin "refs/heads/$PHASE_BRANCH" | awk '{print $1}')"
+     PR_SHA="$(gh pr view "$PR" -R "$REPO" --json headRefOid --jq .headRefOid)"
+     [ "$LOCAL_SHA" = "$REMOTE_SHA" ] && [ "$LOCAL_SHA" = "$PR_SHA" ] \
+       || { echo "HEAD MISMATCH — local, origin and PR must agree"; exit 1; }
+     PR_IDENTITY="$(gh pr view "$PR" -R "$REPO" --json state,isCrossRepository,headRefName,baseRefName --jq '[.state, .isCrossRepository, .headRefName, .baseRefName] | @tsv')"
+     [ "$PR_IDENTITY" = "$(printf 'OPEN\tfalse\t%s\t%s' "$PHASE_BRANCH" "$DEFAULT_BRANCH")" ] \
+       || { echo "WRONG PR STATE, REPOSITORY OR BRANCH — stop"; exit 1; }
+     PHASE_COMMITS="$(git log --oneline "refs/remotes/origin/$DEFAULT_BRANCH".."$LOCAL_SHA")"
+     [ -n "$PHASE_COMMITS" ] || { echo "NO PHASE COMMITS — stop"; exit 1; }
+     DRAFT="$(gh pr view "$PR" -R "$REPO" --json isDraft --jq .isDraft)"
+     case "$DRAFT" in
+       true) gh pr ready "$PR" -R "$REPO" || { echo "PR READY FAILED — stop"; exit 1; } ;;
+       false) ;;
+       *) echo "UNKNOWN DRAFT STATE — stop"; exit 1 ;;
+     esac
+     READY_SHA="$(gh pr view "$PR" -R "$REPO" --json state,isDraft,headRefOid --jq 'if .state == "OPEN" and .isDraft == false then .headRefOid else empty end')"
+     [ "$READY_SHA" = "$LOCAL_SHA" ] || { echo "PR NOT READY AT GATE SHA — stop"; exit 1; }
+     GATE_SHA="$LOCAL_SHA"
+     printf 'Local: %s\nOrigin: %s\nPR: %s\nGate SHA: %s\n' "$LOCAL_SHA" "$REMOTE_SHA" "$PR_SHA" "$GATE_SHA"
+     printf '%s\n' "$PHASE_COMMITS"
      ```
 
-     Give the user the phase diff command in the hand-off — `git diff "origin/$DEFAULT_BRANCH"...HEAD`, three dots — and the PR link. That is the comprehensive view of everything the phase did, and it is stable as the default branch advances. Second, **the review artifact exists on disk**, not only in the hand-off. The hand-off carries a **coverage line for every pass — always, whatever happened** — naming each reviewer, the exact model that ran, and its outcome: a finding count, `clean`, the error verbatim, or `not installed`. A findings table accompanies it wherever the count is non-zero. **Cite the reviewer output files that back it**, per pass, with byte counts: `review-checkpoint` writes `<scratchpad>/codex_<mode>_p<n>.txt` and `gemini_<mode>_p<n>.txt`, so a missing or empty file means that reviewer produced nothing and the coverage line has to say so. No coverage line means step 5 did not happen and you are not at the gate yet.
+     Record these SHAs, the repository, PR number and link, base branch, phase branch, merge method and release tag in the hand-off. Give the phase diff command: `git diff "origin/$DEFAULT_BRANCH"..."$GATE_SHA"`. The user signs off on `GATE_SHA`. Set `APPROVED_SHA` to that recorded value only after approval; never refresh it from a later HEAD.
 
-     **A coverage line, not a table, because a table cannot cover every outcome.** A pass where both reviewers ran and returned nothing has no findings to tabulate, no missing CLI to report as a skip, and no error to quote — and the older wording called that a review that never happened.
-
-     **And a file, not just the hand-off.** The first state asks git a question and git answers. Without the files this one asks the agent's own message whether it contains a table, which the agent that skipped step 5 satisfies by writing one. A path with a byte count is the same class of evidence as `git status`. It is not unfakeable; it stops being pure self-attestation.
-   - **Name the merge method** recorded at §2 step 3, or say it is `unknown` and needs a decision. §4 uses it verbatim and the wrong one is rejected.
-   - **End the hand-off with the state:** "Uncommitted on `<branch>`, awaiting your sign-off to commit." If that sentence isn't true, don't write it — report what actually happened.
-   - **Any edit while waiting for sign-off is a new commit on the PR, named in a follow-up message.** Re-request review unless it is a typo. The control is visibility, not category — no edit is too small to name.
+     Second, **the reviewer artifacts exist on disk**. Include a coverage line and a combined findings table for every pass, empty when no findings are available. Name each reviewer, its exact model identifier and its outcome: finding count, empty table, verbatim error, or not installed. Cite each reviewer output file and byte count, plus the error log for a failed invocation. A missing or zero-byte output is no output, not an empty findings table. Report it as missing coverage. A successful reviewer with no table has not met the output contract; obtain its table before the gate. If both CLIs are absent, state the skip explicitly. No coverage line means step 5 has not been accounted for.
+   - **Name the single merge method** recorded at §2 step 3.
+   - **End the hand-off with the actual state:** "Committed and pushed on `<branch>`, PR `<n>` ready at `<gate SHA>`, awaiting your sign-off to merge."
+   - **Any edit while waiting for sign-off invalidates approval**, including a typo or release metadata edit. Commit and push it, name it in a follow-up, repeat the gate and obtain sign-off on the new SHA.
 
 ## 4. Post-sign-off merge cycle
 
 Sign-off — as defined at the top of this file — is the only trigger. Once it comes, run the whole cycle without re-asking.
 
-**One path.** The PR already exists as a draft from §2 step 2 and went ready for review at the
-gate, so there is nothing to open and no landing path to choose. Sign-off authorizes the merge —
-and only the merge.
+**Resume from recorded state.** Load `REPO`, `PR`, `PHASE_BRANCH`, `DEFAULT_BRANCH`, `MERGE_METHOD`, `APPROVED_SHA` and `TAG` from the approved hand-off. `TAG` includes the `v` prefix. Never derive approval from the current PR head. A later head needs a new gate and sign-off.
 
-1. **Cut the release.** The items are already in `[Unreleased]` — §3 step 4 moved them there and deleted them from ROADMAP and their supporting file, and doing it twice is how one of them gets lost. This step is the release mechanics only: rename `[Unreleased]` to `## [<version>] - <date> — <phase name>`, open a fresh empty `[Unreleased]` above it, and add the compare link under the `## Reference` heading at the foot of the file. Update ROADMAP's phase note.
-2. **Commit and push** that release commit to the phase branch. It appears on the PR like any other.
-3. **Wait for required checks:** `gh pr checks <n> --watch`. A failing check or a blocking required review ends the cycle here — report it and stop. Don't push fixes through a gate the user hasn't seen.
-4. **Merge with the method §2 step 3 recorded** — exactly one of `--squash`, `--rebase`, `--merge`. The wrong one is rejected. Add `--delete-branch` unless `delete_branch_on_merge` is already on, or nothing cleans up the remote branch. If §2 recorded `unknown`, ask rather than guessing.
+1. **Confirm release preparation.** The approved commit already contains the release heading and compare link from §3 step 4. Do not repeat those edits. If anything is missing, return to §3 and obtain approval for the new SHA.
+2. **Confirm publication.** The gate recorded matching local, origin and PR SHAs. Do not add a release commit after sign-off. On resume, inspect the PR state first: `MERGED` proceeds to step 5, an open PR proceeds to step 3, and a closed unmerged PR stops. Require its `headRefOid` to equal `APPROVED_SHA` in every case.
+3. **Wait for checks** on an open PR: `gh pr checks "$PR" -R "$REPO" --watch`. A failing check, an unknown check state or a blocking required review ends this attempt. Report it and stop. If no checks exist, verify that against the repo's requirements before proceeding. Do not bypass branch rules or push fixes through an approved gate.
+4. **Merge the approved head with the recorded method.** Do not request branch deletion during merge. Queue-based repositories choose their queue's merge strategy. Leave queued work pending until GitHub confirms completion; do not tag an open PR or treat it as merged.
 
    ```bash
-   gh pr merge <n> --<squash|rebase|merge> --delete-branch
+   set -euo pipefail
+   case "$MERGE_METHOD" in squash|rebase|merge) ;; *) echo "MERGE METHOD UNKNOWN — stop"; exit 1 ;; esac
+   CURRENT_SHA="$(gh pr view "$PR" -R "$REPO" --json headRefOid --jq .headRefOid)"
+   [ "$CURRENT_SHA" = "$APPROVED_SHA" ] || { echo "SIGN-OFF INVALID — PR HEAD CHANGED"; exit 1; }
+   PR_IDENTITY="$(gh pr view "$PR" -R "$REPO" --json state,isCrossRepository,headRefName,baseRefName --jq '[.state, .isCrossRepository, .headRefName, .baseRefName] | @tsv')"
+   [ "$PR_IDENTITY" = "$(printf 'OPEN\tfalse\t%s\t%s' "$PHASE_BRANCH" "$DEFAULT_BRANCH")" ] \
+     || { echo "PR IDENTITY CHANGED — return to the gate"; exit 1; }
+   MERGE_RC=0
+   gh pr merge "$PR" -R "$REPO" "--$MERGE_METHOD" --match-head-commit "$APPROVED_SHA" || MERGE_RC=$?
+   OUTCOME="$(gh api graphql -F owner="${REPO%/*}" -F name="${REPO#*/}" -F number="$PR" \
+     -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){state headRefOid mergeQueueEntry{position} autoMergeRequest{enabledAt}}}}' \
+     --jq '.data.repository.pullRequest | [.state, .headRefOid, (if .mergeQueueEntry != null then "queued" elif .autoMergeRequest != null then "auto" else "none" end)] | @tsv')"
+   IFS=$'\t' read -r STATE CURRENT_SHA PENDING <<< "$OUTCOME"
+   [ "$CURRENT_SHA" = "$APPROVED_SHA" ] || { echo "SIGN-OFF INVALID — PR HEAD CHANGED"; exit 1; }
+   case "$STATE" in
+     MERGED) echo "MERGED — continue to tag verification" ;;
+     OPEN)
+       case "$PENDING" in
+         queued) echo "QUEUED — wait for completion; resume at step 2, do not tag" ;;
+         auto) echo "PENDING — auto-merge awaits requirements; resume at step 2, do not tag" ;;
+         *) echo "MERGE NOT CONFIRMED — command exit $MERGE_RC; inspect checks, reviews and queue status" ;;
+       esac
+       exit 1 ;;
+     *) echo "NOT MERGED — state $STATE; stop"; exit 1 ;;
+   esac
    ```
 
-5. **Confirm the merge actually completed, then tag the SHA it produced.** Do not tag the default branch's tip.
+   If the queue-status query fails, stop and inspect the PR on GitHub before resuming. If it is removed from the queue or checks fail, report the failure and stop. Resume at step 2; do not submit repeated merge requests while it is pending.
+5. **Confirm the completed merge and publish its tag.** This stage can be retried after a fetch, tag or push failure. An existing local or remote tag is accepted only when it resolves to this PR's merge commit. Never replace a conflicting tag.
 
    ```bash
-   gh pr view <n> --json state,mergeCommit --jq '{state: .state, sha: .mergeCommit.oid}'
-   ```
-
-   **`state` must read `MERGED`.** `gh pr merge` returns success when it only *enqueues* on a merge-queue repo, and a completed merge can be followed by someone else's commit before you pull — so the default branch tip is not reliably this release. `mergeCommit.oid` is, on all three merge methods.
-
-   ```bash
-   SHA="$(gh pr view <n> --json state,mergeCommit \
+   set -euo pipefail
+   CURRENT_SHA="$(gh pr view "$PR" -R "$REPO" --json headRefOid --jq .headRefOid)"
+   [ "$CURRENT_SHA" = "$APPROVED_SHA" ] || { echo "SIGN-OFF INVALID — PR HEAD CHANGED"; exit 1; }
+   SHA="$(gh pr view "$PR" -R "$REPO" --json state,mergeCommit \
           --jq 'if .state=="MERGED" and .mergeCommit then .mergeCommit.oid else empty end')"
    [ -n "$SHA" ] || { echo "NOT MERGED — stop; do not tag"; exit 1; }
-   git fetch origin && git tag "v<version>" "$SHA" && git push origin "v<version>"
+   git check-ref-format "refs/tags/$TAG"
+   git fetch origin
+   git cat-file -e "$SHA^{commit}"
+   TAG_REF="refs/tags/$TAG"
+   REMOTE_TAG="$(git ls-remote origin "$TAG_REF" "$TAG_REF^{}")"
+   if [ -n "$REMOTE_TAG" ]; then
+     REMOTE_TAG_SHA="$(printf '%s\n' "$REMOTE_TAG" | awk '$2 ~ /\^\{\}$/ {peeled=$1} $2 !~ /\^\{\}$/ {direct=$1} END {print (peeled != "" ? peeled : direct)}')"
+     [ "$REMOTE_TAG_SHA" = "$SHA" ] || { echo "REMOTE TAG CONFLICT — stop"; exit 1; }
+   fi
+   if git show-ref --verify --quiet "$TAG_REF"; then
+     LOCAL_TAG_SHA="$(git rev-parse --verify "$TAG_REF^{commit}")"
+     [ "$LOCAL_TAG_SHA" = "$SHA" ] || { echo "LOCAL TAG CONFLICT — stop"; exit 1; }
+   elif [ -n "$REMOTE_TAG" ]; then
+     git fetch origin "$TAG_REF:$TAG_REF"
+     [ "$(git rev-parse --verify "$TAG_REF^{commit}")" = "$SHA" ] || { echo "FETCHED TAG CONFLICT — stop"; exit 1; }
+   else
+     git tag "$TAG" "$SHA"
+   fi
+   if [ -z "$REMOTE_TAG" ]; then
+     git push origin "$TAG_REF:$TAG_REF" || { echo "TAG PUSH FAILED — retain local tag; resume step 5"; exit 1; }
+   fi
+   echo "TAG VERIFIED AND PUBLISHED: $TAG at $SHA"
    ```
 
-   The `&&` chain matters: a failed fetch must stop the tag, or the tag names a pre-merge commit.
-6. **Clean up:** run the user's `git-clean-local-branches` alias. Step 4 already removed the remote branch.
+6. **Clean up only after merge and tag confirmation.** Delete the remote phase branch only if it still points to the approved SHA. If auto-deletion already removed it, continue. A changed branch is retained for inspection.
+
+   ```bash
+   set -euo pipefail
+   MERGED_HEAD="$(gh pr view "$PR" -R "$REPO" --json state,headRefOid --jq 'if .state == "MERGED" then .headRefOid else empty end')"
+   [ "$MERGED_HEAD" = "$APPROVED_SHA" ] || { echo "APPROVED MERGE NOT CONFIRMED — retain branch"; exit 1; }
+   [ "$PHASE_BRANCH" != "$DEFAULT_BRANCH" ] || { echo "REFUSE DEFAULT BRANCH DELETION"; exit 1; }
+   REMOTE_HEAD="$(git ls-remote --heads origin "refs/heads/$PHASE_BRANCH" | awk '{print $1}')"
+   if [ -n "$REMOTE_HEAD" ]; then
+     [ "$REMOTE_HEAD" = "$APPROVED_SHA" ] || { echo "BRANCH ADVANCED — retain it"; exit 1; }
+     git push --force-with-lease="refs/heads/$PHASE_BRANCH:$APPROVED_SHA" origin ":refs/heads/$PHASE_BRANCH"
+   fi
+   ```
+
+   Then run the user's `git-clean-local-branches` alias. Retain any local branch with unpushed work; do not force-delete it. Cleanup failures resume at step 6 and do not repeat release edits or merge.
 
 Then stop. The next phase's branch is created at phase start (§2 step 1) — never here.
 

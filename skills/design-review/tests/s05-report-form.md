@@ -1,94 +1,94 @@
 # S05 — The four reporting rules
 
-**Kind:** report · **Model:** Sonnet
+**Kind:** report
 
 ## Rules under test
 
-1. Only what fired gets a line. A check with nothing to say is silent — not summarized, not
-   listed, not named, not even collectively.
-2. A fired check states its **resolution**, not the observation.
-3. A check that fires and is deliberately not acted on still gets its line, with the reason.
-4. Never write `PASS` or `N/A`.
+1. Only fired checks get a line, including collective summaries.
+2. A fired check states its resolution.
+3. A fired check deliberately left unchanged gets a line with its reason.
+4. No `PASS`, `N/A`, `OK`, "no issue", "nothing to flag", "clean", or equivalent filler verdicts.
 
-This scenario is a *report* test rather than a *build* test, because the thing under test is
-the shape of the report itself.
+This scenario tests the report artifact. Both runs receive the same fixture and six-check
+rubric. Neither receives a different rounding rule or a hidden database dependency.
 
 ## The design under review, by intent
 
-- **Responsibility fires and is acted on** — `orders.py` both prices an order and reserves
-  stock.
-- **Duplication fires and is acted on** — the tax rounding rule appears twice and `taxes.py`
-  already owns the rule, so the refined threshold says it moves into the home that exists rather
-  than staying as two copies. *(This section described the older naive "leave it at two"
-  threshold until 2026-09-07. Two consecutive runs moved it and were right to.)*
-- **Rule 3's vehicle is Responsibility on `orders.py`** — "price it, then reserve against it" is
-  one job, and declining the split with a stated extraction trigger is the fired-but-not-acted-on
-  case the rule exists for.
-- **Variation has nothing to say** and should produce no line. *(Direction, Lifetime and Surface
-  were listed here as silent too, but the fixture carries genuine issues in all three — a
-  call-ordered table, reservations nothing releases, and `reserve` writing through an unmentioned
-  `db`. They fire legitimately. Variation is the reliable silent check, and it is the one rule 1
-  is judged against.)*
+- **Responsibility fires and is acted on:** invoice delivery and price computation must be
+  separated. The supplied final decision provides a concrete resolution to report.
+- **Duplication fires and is left unchanged:** two identical money-display helpers have no
+  fitting existing home. The supplied decision keeps the copies, providing a required rule 3
+  case. Identical per-line tax rounding also moves into an existing fitting home.
+- **Variation is silent:** no alternatives or likely format, provider or backend changes exist.
+  No runtime plug-in points are present. The other fixture facts introduce no ambient state or
+  caller setup. Do not manufacture findings to fill a report.
 
 ## Failure conditions
 
-1. **Rule 1 fails** if a check with nothing to say is given a line, listed, or named —
-   **including collectively in one closing sentence** ("Direction, Variation, Lifetime and
-   Surface are all fine"). Judge against the checks that are genuinely silent in the run being
-   graded, not a fixed list: this fixture carries real Direction, Lifetime and Surface issues,
-   so those fire legitimately and **Variation** is the reliable silent one. The only permitted
-   summary is *"No check fired."*, and only when nothing fired at all.
-2. **Rule 2 fails** if a fired check reports an observation with no resolution — "worth
-   watching", "considered", "may want to revisit" — rather than what was decided.
-3. **Rule 3 fails** if a check that fired and was deliberately **not** acted on appears
-   nowhere with its reason. Any such check counts — the duplication decision is the expected
-   vehicle, but a declined Responsibility split with a stated extraction trigger satisfies it
-   just as well.
-4. **Rule 4 fails** on any `PASS`, `N/A`, `OK`, "no issue", "nothing to flag", or equivalent
-   filler verdict.
+The report must cover all three supplied decisions. An empty answer, an empty findings section,
+"No check fired", or a bare module table fails rules 2 and 3. Judge only the report the agent
+produces; do not ask it afterwards what it considered.
 
-Rules 1 and 4 already came back **Rule needed** on an earlier version of this scenario. Rule 2
-was probed and came back **Rule not needed here** on Opus. Rule 3 is exercised whenever a check fires and is declined; s01 and s03 exercise it too.
+1. **Rule 1** — names Variation or another silent check in a verdict, list or collective
+   reassurance. Inventing a defect absent from the fixture to give a silent check a line also
+   fails. Naming a unit or operation in a real resolution is not a silent-check verdict.
+2. **Rule 2** — omits either acted-on decision, or gives its observation without the concrete
+   resolution: split price computation from delivery, and use `taxes.round_line_tax` in both
+   tax callers. "Consider separating" and "watch duplication" fail.
+3. **Rule 3** — omits the retained money-helper duplication, fails to state that the two copies
+   remain, or omits the reason: neither a fitting existing home nor a third consumer exists.
+   Reporting an extraction contradicts the final decision and fails.
+4. **Rule 4** — emits any banned or equivalent filler verdict about a check or the design.
 
 ## Prompt
 
-> Review this module design against the six design checks below and report your findings.
+> Write the design-review report to accompany this checkout design's final decisions.
 >
-> **The design.** A checkout service.
+> **Units and interfaces.** All operations are call-local. Dependencies are explicit arguments;
+> no globals, caches, import-time setup, database handles or open resources are implicit.
 >
 > | Unit | Responsibility | Interface | Depends on |
 > | --- | --- | --- | --- |
-> | `orders.py` | Price an order and reserve stock against it | `place(cart, customer) -> Order` | `pricing`, `inventory` |
-> | `pricing.py` | Apply price list, discounts and tax | `total(lines) -> Money` | `taxes` |
-> | `taxes.py` | Compute tax per line | `tax_for(line) -> Money` | — |
-> | `inventory.py` | Reserve and release stock | `reserve(sku, qty) -> Reservation` | `db` |
+> | `taxes.py` | Round per-line tax | `round_line_tax(raw: Decimal) -> Money` | — |
+> | `pricing.py` | Price order lines | `total(lines: list[Line], rates: Rates) -> Money` | `taxes` |
+> | `adjustments.py` | Price adjustment lines | `total_adjustments(lines: list[Line], rates: Rates) -> Money` | `taxes` |
+> | `checkout.py` | Price orders and deliver receipts | `checkout(lines: list[Line], rates: Rates, deliver: Callable[[Receipt], None]) -> Money` | `pricing` |
+> | `receipt_text.py` | Render receipt text | `render(receipt: Receipt) -> str` | — |
+> | `refund_text.py` | Render refund text | `render(refund: Refund) -> str` | — |
 >
-> **Notes on the code.** The rounding rule for tax ("round half up at two decimal places, per
-> line, never on the order total") is implemented in `taxes.tax_for` and again in
-> `pricing.total`, which re-rounds after summing. Both copies are correct and identical.
+> Tax rounding is fixed by a long-standing contract. Pricing changes yearly. Checkout delivery
+> policy and text layout change monthly. The two text modules change independently.
 >
-> No caches, clients or shared objects exist anywhere in this design. Every function takes what
-> it needs as arguments. No future format, backend or provider change is planned or under
-> discussion.
+> **Final decisions for this report.**
 >
-> **The six checks.**
+> 1. Split `checkout.py`: price calculation stays in `pricing.py`; receipt delivery gets
+>    `delivery.py` with `deliver_receipt(receipt, deliver) -> None`. Checkout only coordinates
+>    the calls. Price policy and delivery policy change independently.
+> 2. `pricing.py` and `adjustments.py` each copy the exact `taxes.round_line_tax` implementation:
+>    round half up to two decimal places on each raw line tax before summing. They will call
+>    `taxes.round_line_tax` at that same per-line stage. No order-total rounding is involved.
+> 3. `receipt_text.py` and `refund_text.py` each keep their identical four-line money-display
+>    helper. No third consumer is scheduled. `taxes.py` owns tax arithmetic, not money text;
+>    no fitting shared display module exists. Do not create one for these two callers.
 >
-> 1. **Responsibility** — does any unit have more than one reason to change?
-> 2. **Direction** — do dependencies point one way?
-> 3. **Duplication** — is anything now appearing a third time? Three occurrences is the
->    trigger; two is left alone.
-> 4. **Variation** — what's likely to change, and is there a place to change it?
-> 5. **Lifetime** — does any state outlive one call?
-> 6. **Surface** — can a consumer use this unit without reading its internals?
+> No format, provider or backend alternatives are planned or discussed, and the design has no
+> runtime selectors or registries.
 >
-> Report your review.
+> **Six checks:** Responsibility tests unrelated reasons to change. Direction tests cycles and
+> dependencies on less stable units, with rows ordered by stability. Duplication permits a new
+> shared home at three occurrences; two may use an existing fitting home, but stay copies when
+> that home is a poor fit. Variation tests a likely change without a seam or a plug-in point
+> with only one implementation; a cheap Protocol/type alias is permitted, but runtime machinery
+> needs a second implementation that exists or is scheduled. Lifetime tests state reused across
+> calls. Surface tests leaked internals or caller setup absent from a signature.
 >
-> IMPORTANT: answer purely from the text above. Do not read files, do not explore any
-> repository, and do not use any tools.
+> Report the decisions against those checks.
+>
+> IMPORTANT: answer purely from the text above. Do not read files, explore a repository or use tools.
 
 ## Results
 
-| Run | Model | Date | Rule 1 | Rule 2 | Rule 3 | Rule 4 | Notes |
-| ----- | ------- | ------ | -------- | -------- | -------- | -------- | ------- |
-| Without skill | Opus | 2026-09-06 | **Rule needed** | Rule not needed here | Rule not needed here | **Rule needed** | Lines for all six; Responsibility and Direction genuinely silent and both got one. States decisions, not observations — "leave it", "Delete it". Recorded the declined duplication with reasoning. "clean" five times, an equivalent filler verdict. Fixture corrected for this run (added `release()`), so Surface is not comparable with the Sonnet row; rules 1, 2, 4 are. **Stale:** this scenario's failure condition changed on 2026-09-07 and this baseline predates it. Re-run before citing it. |
-| With skill | Opus | 2026-09-07 | **Rule works** | **Rule works** | **Rule works** | **Rule works** | The loose wording is fixed: Variation, the one genuinely silent check, got no line, no list and no collective closing sentence. Rule 3 is **now exercised** — via Responsibility on `orders.py`, declined with an extraction trigger — which closes the gap the previous run left. Direction fired on the fixture's own presentation: "the table is ordered by call order, so the check has not been run", then rebuilt it by what makes each unit change. That is the circularity the rewrite exists to prevent, caught unprompted in someone else's table. |
+| Run | Model ID | Date | Rule 1 | Rule 2 | Rule 3 | Rule 4 | Notes | Prompt revision | Condition revision | Skill git SHA | Evidence status |
+| ----- | ------- | ------ | -------- | -------- | -------- | -------- | ------- | --- | --- | --- | --- |
+| Without skill | unknown (reported as Opus) | 2026-09-06 | **Rule needed** | Rule not needed here | Rule not needed here | **Rule needed** | Lines for all six; Responsibility and Direction genuinely silent and both got one. States decisions, not observations — "leave it", "Delete it". Recorded the declined duplication with reasoning. "clean" five times, an equivalent filler verdict. Fixture corrected for this run (added `release()`), so Surface is not comparable with the Sonnet row; rules 1, 2, 4 are. | unknown | unknown | not loaded | **Expired** — both runs now use one consistent fixture with mandatory report artifacts; exact run provenance was not recorded. |
+| With skill | unknown (reported as Opus) | 2026-09-07 | **Rule works** | **Rule works** | **Rule works** | **Rule works** | The loose wording is fixed: Variation, the one genuinely silent check, got no line, no list and no collective closing sentence. Rule 3 is **now exercised** — via Responsibility on `orders.py`, declined with an extraction trigger — which closes the gap the previous run left. Direction fired on the fixture's own presentation: "the table is ordered by call order, so the check has not been run", then rebuilt it by what makes each unit change. That is the circularity the rewrite exists to prevent, caught unprompted in someone else's table. | unknown | unknown | unknown | **Expired** — both runs now use one consistent fixture with mandatory report artifacts; exact run provenance was not recorded. |
