@@ -415,15 +415,22 @@ If neither CLI is installed, print the skip line in its place — `External revi
 
 **Format: a compact table, then keyed notes.** Commentary lives below the table, keyed by finding ID.
 
-| # | Finding | Files | Model | Severity | Verdict | Disposition |
-| --- | --------- | ------- | ------- | ---------- | --------- | ------------- |
-| F-01 | No rollback if the migration half-applies | `migrate.py:88-140` | gpt-5.6-sol | High | Confirmed | Incorporated — new step 6 |
-| F-02 | Token refresh races on concurrent runs | `auth/token.py`, `worker.py:41` | gpt-5.6-sol, gemini-3.1-pro-high | Medium | Confirmed | Filed KI-08 |
-| F-03 | Add a caching layer for lookups | `lookup.py` | gemini-3.1-pro-high | Medium | Rejected | Not incorporated |
+| # | Finding | Files | Model | Likelihood | Severity | Verdict | Disposition |
+| --- | --------- | ------- | ------- | ---------- | ---------- | --------- | ------------- |
+| F-01 | No rollback if the migration half-applies | `migrate.py:88-140` | gpt-5.6-sol | Rare | Critical | Confirmed | Incorporated — new step 6 |
+| F-02 | Token refresh races on concurrent runs | `auth/token.py`, `worker.py:41` | gpt-5.6-sol, gemini-3.1-pro-high | Likely | Medium | Confirmed | Filed KI-08 |
+| F-03 | Add a caching layer for lookups | `lookup.py` | gemini-3.1-pro-high | Almost always | Medium | Rejected | Not incorporated |
 
 *The dispositions above are **plan** mode; phase and repo mode use the five buckets further down. The columns are the same in every mode.*
 
-**F-01** — *Explanation:* <what the reviewer claims, in a sentence or two> *Commentary:* <what you found verifying it, and why the disposition follows>
+**F-01** — *When it fires:* `the condition that has to hold` *What happens:* `the observable
+consequence, concretely` *Commentary:* `what you found verifying it, and why the disposition
+follows`
+
+**Every keyed note carries those first two lines.** They are the same pair that makes a
+`KNOWN_ISSUES` entry assessable — *What happens* and *Example scenario* — and a findings row
+without them asks the reader to take the severity on trust. They also travel: a row filed as
+`KI-nn` inherits both, so the entry starts with the two things a reader needs first.
 **F-02** — *Explanation:* … *Commentary:* …
 
 Column rules:
@@ -432,7 +439,21 @@ Column rules:
 - **Finding** — one short line. Not a summary of the explanation.
 - **Files** — where the finding lives, as `path` or `path:start-end`, comma-separated when it spans more than one. **Take the reviewer's own reference and verify it against the repo during triage** — a wrong path is itself a signal the finding was not verified. Two or three paths is the cap; a finding touching more than that is really a finding about the design, so name the area (`skills/*/SKILL.md — every skill`) rather than listing every file. Use `—` only where the finding genuinely has no location, such as a missing file or an absent test. This column is what makes a filed `KI-nn`/`ENH-nn` entry actionable from cold, since the roadmap entry inherits it.
 - **Model** — the **model id that produced the finding**, not the CLI that ran it: `gpt-5.6-sol`, `gemini-3.1-pro-high`. Which rung of the ladder actually answered changes how much weight a finding deserves, and that is per-run state the CLI name cannot carry. When both reviewers found the same thing, **list both ids** — `gpt-5.6-sol, gemini-3.1-pro-high` — never `Both`: a row can outlive this table by being filed as a `KI-nn`/`ENH-nn`/`UNK-nn` entry, and `Both` resolves only against a coverage line that is chat-only. Two ids in one cell is also the agreement signal, stated so it survives the move. Never write `Codex` or `Gemini` alone in this column.
-- **Severity** — **the reviewer's own rating, verbatim**, attributed by **model id** and never by CLI name: `High (gpt-5.6-sol)`. Never renormalize it: the same pass decides disposition, so quietly downgrading an inconvenient Critical would hide the decision. **When the two reviewers disagree, record both and order by the higher** — `High (gpt-5.6-sol) / Medium (gemini-3.1-pro-high)`. If you disagree with a rating yourself, say so in the commentary, where the user can see the disagreement.
+- **Likelihood** — `Rare` | `Likely` | `Almost always`. **How often a user following the
+  documented workflow actually hits the harm**, not how often the code path runs. The two come
+  apart: a bad count computed on every run is `Rare` if it only misleads when something else has
+  already failed. **A defect that is always present but harmful only in combination is `Rare`.**
+  Judge it against the workflow as written — if a step tells the user to do the thing that
+  triggers it, that is `Almost always` for everyone who follows the step, however unusual it
+  looks. This is the reviewer's estimate where they gave one; where they did not, it is yours,
+  and the commentary says so.
+- **Severity** — **the consequence if it does fire, and nothing about how often.** Take the
+  reviewer's own rating verbatim, attributed by **model id** and never by CLI name:
+  `High (gpt-5.6-sol)`. **Two columns, because one number cannot carry both.** A rare defect
+  that exfiltrates source is `Rare · Critical`; friction on every run is
+  `Almost always · Low`. Both get fixed, for different reasons, and a single rating hides
+  which reason. Where a reviewer's rating obviously folded in likelihood, keep their word in
+  the cell and say so in the commentary rather than silently re-rating it. Never renormalize it: the same pass decides disposition, so quietly downgrading an inconvenient Critical would hide the decision. **When the two reviewers disagree, record both and order by the higher** — `High (gpt-5.6-sol) / Medium (gemini-3.1-pro-high)`. If you disagree with a rating yourself, say so in the commentary, where the user can see the disagreement.
 - **Verdict** — `Confirmed` | `Partly` | `Rejected`, from step 1. Separate from Disposition on purpose: *valid but deferred* and *invalid so dropped* are different states, and one column cannot carry both.
 - **Disposition** — what actually happened; vocabulary differs by mode (below).
 

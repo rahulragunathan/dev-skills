@@ -80,6 +80,18 @@ here — the plugin manifest's version is the only record of them.
 
 ### Changed
 
+- **The findings table separates likelihood from consequence.** A new
+  **Likelihood** column — `Rare` / `Likely` / `Almost always` — records how often
+  a user following the documented workflow hits the harm, and **Severity** now
+  means only what happens if it does. One rating could not carry both, so it
+  defaulted to whichever the reviewer weighted: a rare defect that exfiltrates
+  source and friction on every run both read as "High". Judged by harm rather
+  than by code path, a bad count computed every run is `Rare` when it only
+  misleads after something else failed, and a setup step the docs instruct is
+  `Almost always` for everyone who follows it. Keyed notes now open with *When it
+  fires* and *What happens*, the same pair that makes a `KNOWN_ISSUES` entry
+  assessable, and both travel with a row that gets filed.
+
 - **Two rules added to the global standards**, both from failures in this phase's
   own doc work. A bulk edit to a structured file is now verified against that
   structure rather than against the match count: a regex written for one table
