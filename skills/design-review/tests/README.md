@@ -2,8 +2,12 @@
 
 Each scenario defines a normal-work artifact and failure conditions judged from that artifact.
 Run each prompt in a fresh agent with and without the indicated skill. Re-run affected pairs
-when their prompt, conditions or loaded skill changes. The current definitions have no valid
-run evidence yet; the retained rows are expired observations, not current outcomes.
+when their prompt, conditions or loaded skill changes.
+
+All fourteen runs below were made on 2026-09-07 against these definitions, on `claude-opus-5`,
+with the repository clean at `7d9f2d0`. Transcripts, dispatched prompts and the loaded skill
+snapshots are archived outside the repo at
+`Claude-Projects/design-review-evidence/2026-09-07/`.
 
 ## Which model to run on
 
@@ -112,28 +116,64 @@ of either skill has been tested.
 
 ## Results
 
-No scenario was re-run while rewriting these definitions. All grades below are retained and
-expired; scenario files hold the individual run rows and their missing provenance fields.
-The historical summary has fifteen rows: three **Rule needed** baselines, eleven **Rule not
-needed here** baselines and one defective-rule baseline. There are zero current paired results.
+Fourteen runs, seven pairs, one model. **Three units needed the rule, one is ungraded, and
+eleven were already handled unaided.**
 
-| Rule | Without the skill | With it | Evidence status |
-| --- | --- | --- | --- |
-| Variation / YAGNI cap | **Rule needed** | **Rule works** | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
-| Only what fired | **Rule needed** | **Rule works** | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
-| No filler verdicts | **Rule needed** | **Rule works** | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
-| Duplication threshold | Rule was defective | **Rule ineffective** (over side) | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
-| Diagram distinctness | Rule not needed here | **Rule works** | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
-| Produce versus edit | Rule not needed here | **Rule works** | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
-| Responsibility | Rule not needed here | Rule works | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
-| Direction | Rule not needed here | **Rule works** | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
-| Lifetime | Rule not needed here | Rule works | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
-| Surface | Rule not needed here | Rule works | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
-| Resolution not observation | Rule not needed here | Rule works | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
-| Record the declined check | Rule not needed here | **Rule works** | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
-| Skip vs partial coverage | Rule not needed here | Rule works | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
-| Mutation check | Rule not needed here | Rule works | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
-| Fixture validity | Rule not needed here | Rule works | **Expired** — prompt and artifact conditions changed; exact model and revisions are unknown. |
+| Unit | Rule | Without the skill | With it | Evidence status |
+| --- | --- | --- | --- | --- |
+| R1 | Only what fired | **Rule needed** | **Rule works** | Current |
+| R4 | No filler verdicts | **Rule needed** | **Rule works** | Current |
+| G2 | Produce versus edit | **Rule needed** | **Rule works** | Current |
+| D2 | Direction | **Ungraded** — condition ambiguous | **Rule works** | Current |
+| D1 | Responsibility | Rule not needed here | Rule works | Current |
+| D3 | Lifetime | Rule not needed here | Rule works | Current |
+| D4 | Surface | Rule not needed here | Rule works | Current |
+| D5 | Duplication | Rule not needed here | Rule works | Current |
+| D6 | Variation / YAGNI cap | Rule not needed here | Rule works | Current |
+| R2 | Resolution not observation | Rule not needed here | Rule works | Current |
+| R3 | Record the declined check | Rule not needed here | Rule works | Current |
+| G1 | Diagram distinctness | Rule not needed here | Rule works | Current |
+| P1 | Skip vs partial coverage | Rule not needed here | Rule works | Current |
+| P2 | Mutation reasoning | Rule not needed here | Rule works | Current |
+| P3 | Fixture validity | Rule not needed here | Rule works | Current |
+
+### What changed against the expired summary
+
+The previous summary also had three **Rule needed** units, but not the same three. Variation /
+YAGNI cap no longer needs its rule: the baseline declined the tech lead's registry unprompted
+and argued it the way the skill does, that what makes migrations expensive is assumptions
+leaking sideways rather than a missing interface. Produce versus edit moved the other way,
+from *not needed* to **needed**. The Duplication row is no longer defective — after the
+condition rewrite both runs place all three helpers correctly.
+
+### Two conditions that need a sentence each
+
+Neither is a result; both are defects in the definitions that this round exposed.
+
+**D2 (s01, Direction).** Condition 2 says stable grouping policy must not depend on Postgres,
+PDF layout or the mail provider. The baseline has no grouping *unit* — grouping is a private
+function inside the job file, which imports all three — so the clause is either vacuous or a
+statement about reachability, and the readings give opposite verdicts. The condition must say
+which. The with-skill run is graded because it extracted `grouping.py` with a Protocol seam,
+which passes on either reading.
+
+**P2 (s07, Mutation reasoning).** The condition requires the mutation `local = now`. The
+with-skill run used `now.astimezone()`, which reinstates the original server-local bug more
+faithfully and yields the same prediction. Graded a pass on substance. The condition should
+say whether a semantically equivalent mutation is acceptable, or a better answer will keep
+failing the letter of it.
+
+### Runs voided before grading
+
+Two, both replaced by clean re-runs:
+
+- **s02 without skill** — the agent invoked the installed `design-review` plugin skill and
+  said so in its answer. A baseline dispatched in an environment where the skill is installed
+  can load it; the re-run states the no-skill condition in the dispatch. The five other
+  baselines used zero tools, which loading a skill requires, so none of them could have.
+- **s01 with skill** — the skill was pasted inline for this one run and the paste dropped the
+  frontmatter and the Evidence section, so its loaded text did not match the snapshot hash the
+  other five used. Re-run from the same hash-verified file as the rest.
 
 A current "Rule not needed here" would mean only that this model avoided the flaw in this
 scenario. It would not establish behavior in long sessions, larger systems or other models.

@@ -215,7 +215,8 @@ baseline `phase` mode compares against.
 
 - **Never mark a box "new".** A new-in-this-phase marker is a diff, and it goes stale the moment
   the phase lands — leaving a diagram that quietly describes the wrong phase. The plan text
-  already says what is new. *(Found by the s06 baseline run, which volunteered it unprompted.)*
+  already says what is new. *(An s06 baseline volunteered this rule unprompted; a later one
+  styled its three new modules with `classDef added`, so the mistake is live either way.)*
 - **The reviewers never see the diagram.** `agy -p` is text-only and told not to use tools, and
   a scratchpad PNG is not in the repo for Codex either. The table travels; the diagram does not.
 - **Drift-check the generator, not the PNG.** Box and edge labels are string literals naming
@@ -236,5 +237,8 @@ Results, and which rules a strong model already follows unaided, are in
 [`tests/README.md`](tests/README.md). **Do not present an unproven rule as a tested one** — that
 file says which is which.
 
-Two rules here were written *by* those runs rather than confirmed by them: the produce-versus-edit
-distinction, and never marking a diagram box "new".
+As of the 2026-09-07 round, three of fifteen units change what the model produces: the two
+report rules **Only what fired** and **No filler verdicts**, and **produce versus edit**. Eleven
+record a strong model already doing the right thing unaided, and **Direction** is ungraded
+pending a condition fix. Produce versus edit was written *by* an earlier run and is now
+confirmed by a current one; never marking a diagram box "new" is still an untested rule.

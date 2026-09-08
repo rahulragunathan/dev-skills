@@ -30,6 +30,21 @@ here — the plugin manifest's version is the only record of them.
   open question from an external repo review.
 - `LICENSE` — the MIT text the plugin manifest and skill frontmatter already
   declared.
+- **Current run evidence for the pressure tests.** Fourteen runs, seven pairs,
+  `claude-opus-5`, against the rewritten failure conditions, replacing rows that
+  were all marked expired. Three of fifteen units need their rule — **Only what
+  fired**, **No filler verdicts** and **produce versus edit** — eleven record a
+  strong model already doing the right thing unaided, and **Direction** is
+  ungraded pending a condition fix. Transcripts, dispatched prompts and
+  hash-verified skill snapshots are archived outside the repo at
+  `Claude-Projects/design-review-evidence/2026-09-07/`.
+  Two runs were voided before grading and re-run: an s02 baseline that invoked
+  the installed `design-review` plugin skill, and an s01 with-skill run whose
+  inline paste of the skill did not match the snapshot hash the others loaded.
+  The round also found two defective conditions, recorded rather than graded
+  around: s01's Direction clause does not say whether it tests declared rows or
+  reachability, and s07's mutation condition names one literal mutation and so
+  fails a semantically equivalent better one.
 - **`drive-backup` skill** (`ENH-08`), holding the Drive backup `claude-setup`
   step 6 used to carry inline: `backup-projects.sh`, the destination-resolution
   order, the `Stop` hook JSON, the rsync flag choices, and the Full Disk Access /
