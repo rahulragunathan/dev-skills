@@ -22,7 +22,9 @@ flattened with `_`: `Code/Skills/drawio` → `Skills_drawio`, `Clients/ClientX/C
 
 **Flattening is not injective — check before reusing an env.** `Code/a/b` and `Code/a_b` both
 flatten to `a_b`, so two different projects can name the same env. Before adopting an existing
-env, confirm its `.venv`/`node_modules` symlink points back at *this* project; if it points
+env, resolve **this project's** `.venv` / `node_modules` symlink and confirm it lands on the env
+you are about to adopt — the link runs project → environment, so there is no backlink in the env
+to read. If a different project's link already resolves there, the two are sharing it; if it points
 somewhere else, pick an explicit name rather than sharing. ENH-10 tracks making the mapping
 unambiguous.
 
@@ -76,8 +78,8 @@ cannot break an env.
 
 ```bash
 .venv/bin/python -m pytest
-.venv/bin/ruff
-.venv/bin/black
+.venv/bin/ruff check .          # `.venv/bin/ruff` alone prints usage and checks nothing
+.venv/bin/black .
 ```
 
 The permission allowlist matches those exact prefixes. **An absolute venv path does not match

@@ -561,9 +561,12 @@ the log for failures finds nothing, and the Stop hook reports success.
 
 ### Notes for a fix
 
-Write `ok` only when `rc_any` is 0 and `failed` otherwise, so the log is greppable. Keep
-`exit 0` if the hook must never block the session, but make the log the honest record.
-Related: KI-06.
+Keep the exit code and correct the log line. **That alone is not sufficient**: rsync exit 24 is
+*partial transfer due to vanished source files*, not "the transcript grew while we read it" as
+the operating notes claim, and the script excludes 24 from `rc_any`. A run that lost files to a
+vanishing source would still be logged `ok` after the log word is fixed. Retain the partial
+status, report which inputs vanished, and correct the description in
+[drive-backup/SKILL.md](../skills/drive-backup/SKILL.md) at the same time.
 
 **Source:** gpt-5.6-sol — repo review, 2026-09-05.
 
@@ -1072,3 +1075,33 @@ explicitly whether repo-local approval state belongs in a Drive backup at all �
 state that arguably belongs in the repo.
 
 **Source:** gpt-6-astra — phase review pass 5, 2026-09-08.
+
+---
+
+<a id="ki-33"></a>
+
+## KI-33 — symlinked backup inputs are skipped without a failure status
+
+**Severity:** High
+**Where:** [backup-projects.sh:101-102](../skills/drive-backup/backup-projects.sh#L101-L102), [backup-projects.sh:123-129](../skills/drive-backup/backup-projects.sh#L123-L129)
+
+### What happens
+
+The transfers use `rsync -rt`, with neither `-l` (recreate symlinks) nor `-L` (follow them). A
+symlink inside a source tree, or an individually listed config file that is a symlink, is
+skipped with a "skipping non-regular file" warning on stdout — which the `Stop` hook discards to
+`/dev/null`. Nothing reaches the log and `rc_any` is unaffected.
+
+### Example scenario
+
+A config file under `~/.claude` is a symlink to a file kept elsewhere. It is silently absent
+from every backup, and the log says `ok` each time. The omission is discovered only when the
+backup is used to restore a machine.
+
+### Notes for a fix
+
+Decide the policy explicitly rather than inheriting rsync's default — `-l` to preserve the links
+or `-L` to copy their targets — and report anything omitted. Separate from KI-14: that entry is
+about the log word, this one is about inputs never attempted.
+
+**Source:** gpt-6-astra — phase review pass 6, 2026-09-08.

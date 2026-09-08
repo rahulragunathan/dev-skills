@@ -30,21 +30,22 @@ here — the plugin manifest's version is the only record of them.
   open question from an external repo review.
 - `LICENSE` — the MIT text the plugin manifest and skill frontmatter already
   declared.
-- **Current run evidence for the pressure tests.** Fourteen runs, seven pairs,
-  `claude-opus-5`, against the rewritten failure conditions, replacing rows that
-  were all marked expired. Three of fifteen units need their rule — **Only what
-  fired**, **No filler verdicts** and **produce versus edit** — eleven record a
-  strong model already doing the right thing unaided, and **Direction** is
-  ungraded pending a condition fix. Transcripts, dispatched prompts and
-  hash-verified skill snapshots are archived outside the repo at
-  `Claude-Projects/Project Artifacts/Plugins/localclaude/design-review-evidence-2026-09-07/`.
-  Two runs were voided before grading and re-run: an s02 baseline that invoked
-  the installed `design-review` plugin skill, and an s01 with-skill run whose
-  inline paste of the skill did not match the snapshot hash the others loaded.
-  The round also found two defective conditions, recorded rather than graded
-  around: s01's Direction clause does not say whether it tests declared rows or
-  reachability, and s07's mutation condition names one literal mutation and so
-  fails a semantically equivalent better one.
+- **Run evidence for the pressure tests, over two rounds.** Seven baselines on
+  2026-09-07 and seven with-skill arms re-run on 2026-09-08 after external review
+  changed both loaded skills. **Six of fifteen units need their rule and the skill
+  fixes all six** — Only what fired, No filler verdicts, produce versus edit,
+  Direction, Mutation reasoning and Fixture validity. The other nine record a
+  strong model already doing the right thing unaided. Transcripts, dispatched
+  prompts and hash-verified skill snapshots for both rounds are archived outside
+  the repo under
+  `Claude-Projects/Project Artifacts/Plugins/localclaude/design-review-evidence-<date>/`.
+  Two round-1 runs were voided before grading and re-run: an s02 baseline that
+  invoked the installed `design-review` plugin skill, and an s01 with-skill run
+  whose inline paste of the skill did not match the snapshot hash the others
+  loaded. Three conditions were reworded (D1, D2, P3) because a careful reader
+  could reach the opposite verdict on each; every existing output was judgeable
+  against the new wording, so no baseline expired. The grading corrections
+  themselves are recorded under *Fixed*.
 - **`drive-backup` skill** (`ENH-08`), holding the Drive backup `claude-setup`
   step 6 used to carry inline: `backup-projects.sh`, the destination-resolution
   order, the `Stop` hook JSON, the rsync flag choices, and the Full Disk Access /
@@ -199,6 +200,43 @@ here — the plugin manifest's version is the only record of them.
   163→49, `external-review` 187→59. They are resident in every session.
 
 ### Fixed
+
+- **External review pass 6 — 29 findings from a single reviewer, and three of the
+  worst were introduced by pass 5's own fixes.** `external-review`'s capture
+  blocks ended on `grep -q … && exit 1`, which returns grep's status, so a clean
+  bundle exited **1** on its success path; the file-level `-L` test missed a
+  **symlinked parent directory**, through which `cat` reads straight out of the
+  repository (reproduced against a scratch repo, and the guard now blocks it); and
+  a tracked file absent from the tree was dropped silently despite the fail-closed
+  promise. Coverage classification counted installed CLIs rather than reviewers
+  that produced output, so one CLI missing plus one out of quota reported as
+  "partial" with nothing reviewed. Bundle counts mixed a newline-delimited total
+  with a NUL-delimited selection. Both capture paths are now one checked
+  procedure.
+- **`design-review`'s Direction rule did not contain the exemption its own test
+  grades against.** The composition-root exemption and the reachability scope were
+  added to the s01 condition and not to the skill, so D2's "Rule works" certified
+  compliance with the test rather than with the rule. Both are now in the skill.
+- **The VS Code parity consequence was backwards.** `MD013` is disabled in the
+  pinned CLI config too, so line length is not the difference; declining the key
+  costs editor squiggles from `MD033`, `MD024` and `MD029` on roadmap anchors,
+  CHANGELOG headings and continuing ordered lists.
+- **Recorded condition hashes identified superseded text.** S01 and S07 were
+  reworded after their runs but kept their pre-reword hashes. Each row now records
+  the hash the grade was judged against alongside the one it was dispatched under.
+- **The gate demanded of reviewers what only the agent can produce** — a formatted
+  table rather than a findings list — and deferred plan findings were restricted
+  to `ENH-nn`/`UNK-nn`, which files a real bug as an open question. The merge
+  cycle also republished through whatever `origin` names now rather than the
+  remote validated at the gate.
+- Smaller corrections: the audit now accepts a **predicted production exception**
+  as the named red rather than forcing a second mutation to manufacture an
+  `AssertionError`; `claude-setup` lists eight bundled skills and no longer calls
+  its allowlist read-only; `project-env` gives runnable `ruff check .` /
+  `black .` invocations and states honestly that its env-collision workaround has
+  no backlink to read; the code root is defined as the directory holding the
+  siblings rather than the literal name `Code`; and two obscured diagram labels
+  were moved and the render re-inspected.
 
 - **`external-review` had three wrong or missing facts about reviewer failure,
   found by running it.** Quota is account-wide, not per-model as the skill

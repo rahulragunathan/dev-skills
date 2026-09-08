@@ -51,7 +51,9 @@ gets no line, under the same report rules as everything else:
 3. Is anything depending on something more concrete than it needs?
 
 Then regenerate each diagram and compare against the generator committed at §2. Findings you do
-not fix become `ENH-nn` entries.
+not fix are filed by what they are, using the classification in `phase-workflow`: defined wrong
+behaviour is a `KI-nn`, wanted work is an `ENH-nn`, an unsettled question is a `UNK-nn`. Do not
+route them all to `ENH-nn`.
 
 ## The module table
 
@@ -108,6 +110,16 @@ workers, written by an agent that believed it was correct and found four review 
 cycle detection: any acyclic graph can be ordered so every arrow points the same way, including
 one where policy reaches into a database driver. So the ordering has to come from what each
 unit *is*.
+
+**Judge a policy by what it can reach, not by whether it has its own row.** A policy left as a
+private function inside a module that imports Postgres, a renderer or a vendor client depends on
+all three: it cannot be tested or reused without them. Extracting it is what fixes the arrow, not
+renaming the module.
+
+**A composition root is exempt**, and only a composition root. It may depend on every unit it
+wires, provided each domain policy it would otherwise hold has been extracted. Wiring is not
+policy. A unit that still carries domain policy does not get this exemption by calling itself a
+root, and a paragraph defending the arrow is not a substitute for moving the policy.
 
 Order by **what makes it change, and how often**. Take a nightly invoice job:
 
@@ -238,7 +250,8 @@ the plan's front matter, and say so in writing. Best-effort tool, non-negotiable
 
 ## Evidence
 
-Every rule here has been run against a fresh Opus subagent with the skill loaded and without it.
+The fifteen recorded coverage units have each been run against a fresh Opus subagent with the
+skill loaded and without it. That is not every sentence in this file.
 Results, and which rules a strong model already follows unaided, are in
 [`tests/README.md`](tests/README.md). **Do not present an unproven rule as a tested one** — that
 file says which is which.

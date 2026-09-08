@@ -23,12 +23,21 @@ Neither CLI is a hard requirement of this plugin. Check both **before** composin
 
 **The step is skipped only when it did not run.** That is the both-missing case above, and nothing else.
 
-**Three outcomes, not two.** *Skipped* is both CLIs missing. *Partial coverage* is one reviewer
-returning findings and the other returning nothing. **No coverage** is both installed, both run,
-and neither producing output — every reviewer out of quota at once, which happens because quota
-is account-wide and the two accounts can be exhausted independently. Report it as *no coverage*
-with both errors verbatim; it is emphatically not a skip, and it must never be recorded as a
-clean pass. A phase cannot reach its gate on a no-coverage review.
+**Classify by how many reviewers produced output, not by how many are installed.** Count the
+reviewers that returned a findings list — `No findings.` counts, an empty or absent file does
+not — and read the outcome off that count:
+
+| Reviewers that produced output | Outcome |
+| --- | --- |
+| Both | **Full coverage** |
+| Exactly one | **Partial coverage** — name the other and give its error verbatim |
+| Neither | **No coverage** |
+
+*Skipped* is the one case that is not about output at all: **both CLIs missing**, so the step
+never ran. Everything else with zero output is **no coverage** — including one CLI missing and
+the other out of quota, which the earlier both-installed wording let slip through as "partial"
+while nothing had been reviewed. No coverage is emphatically not a skip, must never be recorded
+as a clean pass, and a phase cannot reach its gate on one.
 
 Everything else is **partial coverage**: the step ran, and one reviewer produced nothing. A CLI that is installed and then fails on **quota**, **auth**, **timeout** or **sandbox denial** did not cause a skip — it ran and came back empty. Say so in the coverage line, name the reviewer, and give the reason verbatim:
 
@@ -134,6 +143,12 @@ done
   no `-o` file written at all. **Exit status alone cannot tell a finished review from an
   exhausted account**, which is why the loop above requires a non-empty output file before it
   accepts a rung. A caller that trusts `$?` records an empty quota failure as a clean review.
+- **Name every invocation uniquely: mode, pass, chunk, attempt and model.**
+  `codex_<mode>_p<n>_c<chunk>_a<attempt>_<model>.txt`. Pass and model alone are not enough once
+  a bundle is chunked or a rung is retried: chunk 2 overwrites chunk 1's findings, and a retry
+  that produces nothing leaves the previous attempt's non-empty file standing, which then
+  satisfies the success check and is reported as this attempt's answer. Reconcile the coverage
+  line against the individual invocation files, not against one name per reviewer.
 - **Number the output files by pass.** `phase-workflow` §3 step 7 cites these paths and byte counts as the evidence step 5 ran. One reused filename lets pass 1's output stand in for a pass 2 that never happened.
 
 **Gemini (`agy -p`) is one-shot print mode — it cannot prompt for tool permissions.** Any prompt asking it to "review this repository" gets its tool calls auto-denied and fails. **Always inline the material in the prompt** and state: *"REVIEW ONLY: do not attempt to use any tools; answer purely from the text below."*
@@ -155,12 +170,10 @@ done
 
 - Build the prompt in a file (rubric + inlined material); the default 5m print-timeout is too short for big inputs — set ~15m.
 
-**Classify availability only after a failed invocation, and keep stderr separate.** The old form
-redirected stdout and stderr into one file and grepped it for `not supported`. A *successful*
-review whose findings contain that phrase then reads as an unavailable model: the good answer is
-discarded, the next rung runs, and its output overwrites the first. Check the exit status and a
-non-empty answer first; only then read the error stream. Name each attempt's artifacts after the
-model so a downshift never overwrites the rung above it.
+**Classify availability only after a failed invocation, and keep stderr in its own file.**
+Grepping a combined stream for `not supported` misreads a *successful* review whose findings
+contain that phrase as an unavailable model — the good answer is discarded and the next rung
+overwrites it. Check exit status and a non-empty answer first; only then read the error stream.
 
 **Both:** run as background tasks; **capture to scratchpad files and Read them — never pipe through `tail`/`head`**, which truncates the top of the findings list (the highest-severity items).
 
@@ -235,16 +248,48 @@ git -c diff.external= diff --no-textconv --no-ext-diff "<base>"...HEAD -- . "${E
 git ls-files --others --exclude-standard -z -- . "${EXCL[@]}" > "<scratchpad>/untracked.z" \
   || { echo "LS-FILES FAILED — do not send this bundle"; exit 1; }
 
-while IFS= read -r -d '' f; do
-  [ -L "$f" ] && { printf '%s\t(symlink)\n' "$f" >> "$WITHHELD"; continue; }
-  [ -f "$f" ] || continue
-  perl -e 'exit(-B $ARGV[0] ? 0 : 1)' "$f" && { printf '%s\t(binary)\n' "$f" >> "$WITHHELD"; continue; }
-  printf '\n===== UNTRACKED FILE: %s =====\n' "$f" >> "$BUNDLE"
-  cat "$f" >> "$BUNDLE" || printf '%s\t(read failed)\n' "$f" >> "$WITHHELD"
-done < "<scratchpad>/untracked.z"
+REPO_PHYS="$(cd "<repo-root>" && pwd -P)"
 
-grep -q '(read failed)' "$WITHHELD" && { echo "A FILE FAILED TO READ — do not send this bundle"; exit 1; }
+# ONE capture procedure. Every mode uses it; none rolls its own.
+capture() {
+  f="$1"; label="$2"
+  # A symlinked PARENT passes a -L test on the final component, and `cat` then reads
+  # straight through it to a target outside the repo. Resolve the directory instead.
+  d="$(cd -- "$(dirname -- "./$f")" 2>/dev/null && pwd -P)" || {
+    printf '%s\t(unreadable parent)\n' "$f" >> "$WITHHELD"; return; }
+  case "$d/" in "$REPO_PHYS"/*|"$REPO_PHYS"/) : ;;
+    *) printf '%s\t(parent escapes the repo)\n' "$f" >> "$WITHHELD"; return ;; esac
+  [ -L "./$f" ] && { printf '%s\t(symlink)\n' "$f" >> "$WITHHELD"; return; }
+  [ -e "./$f" ] || { printf '%s\t(tracked, absent from the tree)\n' "$f" >> "$WITHHELD"; return; }
+  [ -f "./$f" ] || { printf '%s\t(not a regular file)\n' "$f" >> "$WITHHELD"; return; }
+  perl -e 'exit(-B $ARGV[0] ? 0 : 1)' "./$f" && { printf '%s\t(binary)\n' "$f" >> "$WITHHELD"; return; }
+  printf '\n===== %s%s =====\n' "$label" "$f" >> "$BUNDLE"
+  cat -- "./$f" >> "$BUNDLE" || printf '%s\t(read failed)\n' "$f" >> "$WITHHELD"
+}
+
+while IFS= read -r -d '' f; do capture "$f" "UNTRACKED FILE: "; done < "<scratchpad>/untracked.z"
+
+if grep -q '(read failed)' "$WITHHELD"; then
+  echo "A FILE FAILED TO READ — do not send this bundle"; exit 1
+fi
+echo "capture complete"
 ```
+
+**Never end a capture block on a guard.** `grep -q … && { …; exit 1; }` returns grep's own
+status, so when nothing failed the block exits **1** on its success path — a caller checking
+`$?` reads a clean bundle as a failed one. Use `if`, and finish with an explicit success line.
+
+**A symlinked parent defeats a `-L` test on the file.** `git ls-files` names a tracked path; if
+a directory along it has been replaced by a symlink, the final component is an ordinary file and
+`cat` reads the target outside the repo. Resolve the parent with `pwd -P` and require it to stay
+under the repository root.
+
+**A tracked file missing from the tree is withheld, not skipped.** `[ -f "$f" ] || continue`
+silently drops it, which contradicts fail-closed capture: the reviewer sees a bundle that looks
+complete. Record it with a reason instead.
+
+**Terminate option parsing.** A repository file named `-n` is passed to `cat` as a flag. Prefix
+enumerated paths with `./` and pass `--`.
 
 **Feed the loop from a file, not from a pipe.** On the right-hand side of a pipe the loop runs in
 a subshell, so an `exit` inside it ends the subshell and the script carries on to send a bundle it
@@ -278,12 +323,27 @@ Do **not** use `git add -N` to sweep untracked files into the diff. It mutates t
 **Reconcile the bundle, and say the count out loud.** This failure is silent — a short bundle looks exactly like a small phase — so a better command is not the fix; a stated count is:
 
 ```bash
-# phase mode — what the diff and the untracked sweep between them should cover
-{ git diff --name-only "<base>"...HEAD; git ls-files --others --exclude-standard; } | sort -u | wc -l
+# Build ONE NUL-delimited manifest per mode, then count off it. Never mix a
+# newline count with a NUL count, and never compare a pre-exclusion total with a
+# post-exclusion selection.
+#   phase mode:
+{ git diff -z --name-only "<base>"...HEAD; git ls-files --others --exclude-standard -z; } \
+  > "<scratchpad>/all.z"
+#   repo mode:
+git ls-files -z > "<scratchpad>/all.z"
 
-# repo mode — the bundle is every tracked file, so count those, not the working tree
-git ls-files -z -- . "${EXCL[@]}" | tr -cd '\0' | wc -c
+nul() { tr -cd '\0' < "$1" | wc -c | tr -d ' '; }
+TOTAL="$(nul "<scratchpad>/all.z")"                 # everything in scope, before exclusions
+INCLUDED="$(nul "<scratchpad>/manifest.z")"         # what the exclusions left, i.e. the bundle
+WITHHELD_N="$(wc -l < "$WITHHELD" | tr -d ' ')"     # symlinks, binaries, escapes, absences
+echo "bundle contains $INCLUDED of $TOTAL files; $WITHHELD_N withheld"
 ```
+
+**All three counts come from the same NUL-delimited manifest.** A filename containing a newline
+inflates a `wc -l` count, and counting the total before exclusions against a selection made
+after them produces a difference that looks like data loss. `INCLUDED + WITHHELD_N` need not
+equal `TOTAL` — the excluded credential-shaped paths are the remainder, and the report names
+them.
 
 **Use the count that matches the mode.** `git status --porcelain` counts *changed* files, so on
 the clean committed tree a phase review is supposed to run against it returns zero while the
@@ -304,22 +364,19 @@ Put that count in the prompt (*"this bundle contains all N changed files"*) and 
 
 **`repo`** — no in-flight branch; review current state (workflow adoption, periodic health check). Codex: repo-rooted as above. Gemini: one bundle of the source, inlined.
 
-**Build the `repo` bundle from `git ls-files`, never from a filesystem walk.** A recursive `find` or `cat -r` follows the `node_modules` and `.venv` symlinks straight out of the repo and into the environment root, and sweeps in every ignored file. Tracked files only, with the same exclusions, the same symlink and binary tests, and the same reconciled count:
+**Build the `repo` bundle from `git ls-files`, never from a filesystem walk.** A filesystem walk that follows symlinks — `find -L`, or a copy/read helper with a follow flag — goes straight out through `node_modules` and `.venv` into the environment root, and sweeps in every ignored file. Tracked files only, with the same exclusions, the same symlink and binary tests, and the same reconciled count:
 
 ```bash
 git ls-files -z -- . "${EXCL[@]}" > "<scratchpad>/tracked.z" \
   || { echo "LS-FILES FAILED — do not send this bundle"; exit 1; }
 
-while IFS= read -r -d '' f; do
-  [ -L "$f" ] && { printf '%s\t(symlink)\n' "$f" >> "$WITHHELD"; continue; }
-  [ -f "$f" ] || continue
-  perl -e 'exit(-B $ARGV[0] ? 0 : 1)' "$f" && { printf '%s\t(binary)\n' "$f" >> "$WITHHELD"; continue; }
-  printf '\n===== %s =====\n' "$f" >> "$BUNDLE"
-  cat "$f" >> "$BUNDLE" || printf '%s\t(read failed)\n' "$f" >> "$WITHHELD"
-done < "<scratchpad>/tracked.z"
+while IFS= read -r -d '' f; do capture "$f" ""; done < "<scratchpad>/tracked.z"
 
-grep -q '(read failed)' "$WITHHELD" && { echo "A FILE FAILED TO READ — do not send this bundle"; exit 1; }
+if grep -q '(read failed)' "$WITHHELD"; then
+  echo "A FILE FAILED TO READ — do not send this bundle"; exit 1
+fi
 [ -s "$WITHHELD" ] && echo "withheld $(wc -l < "$WITHHELD") files — name them in the report"
+echo "capture complete"
 ```
 
 **Both modes fail closed, and for the same reason.** `repo` mode used to enumerate through a

@@ -30,7 +30,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 1. Draft the plan, **running `/localclaude:design-review plan` as part of it.** Its output — the module table, the expected-change and shared-state lines, and whatever checks fired — fills the **File Structure** section `superpowers:writing-plans` already reserves. This is not an extra step: doing it here means the table reaches the reviewers in step 2 at no extra cost, and the Interface column is the same content `writing-plans` wants in each task's `Interfaces: Consumes / Produces` block, written once at the top instead of scattered.
 2. Run `/localclaude:external-review plan` on the draft (Codex + Gemini).
 3. **Revise the plan** to incorporate every finding you verified as having merit.
-4. Add the **findings table** to the plan — the canonical format is in `external-review`. It goes **after the plan itself and before the testing strategy**, so the user reads the approach, then what outside review said about it, then how it will be verified. Every finding gets a row and a disposition; valid findings that are out of scope are filed as `ENH-nn`/`UNK-nn` rather than dropped.
+4. Add the **findings table** to the plan — the canonical format is in `external-review`. It goes **after the plan itself and before the testing strategy**, so the user reads the approach, then what outside review said about it, then how it will be verified. Every finding gets a row and a disposition; valid findings that are out of scope are filed rather than dropped, classified by what they are — defined wrong behaviour is a `KI-nn`, wanted work an `ENH-nn`, an unsettled question a `UNK-nn`. A reviewer reading a plan routinely finds a real bug in existing code, and filing that as an open question misuses the file.
 5. Present the whole thing in one pass, whatever the severities. A confirmed Critical does not hold the plan back — the user is in plan mode and can send it back.
 
 ## 2. Phase start (plan approved)
@@ -168,7 +168,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 
    The cleanup restores only the mutation target. A change elsewhere fails verification and stays available for inspection. INT, TERM and normal shell exit run cleanup; after an untrappable kill or power loss, inspect the tree and restore the target from the recorded task SHA before resuming.
 
-   **A red that is an import error, a collection error, or a fixture failure does not count.** It has to be the assertion named in the failure condition. A false red is worth exactly as much as no check, and it is the easier of the two to mistake for success.
+   **A red that is an import error, a collection error, or a fixture failure does not count.** It has to be the failure named in the condition. **That named failure may be a production exception** — if removing the behaviour makes the code under test raise, and the condition says so, that raise *is* the discrimination and the test passes the audit. What does not count is an error from the harness rather than the code: a missing import, a collection error, or a fixture that fell over before the production call. Do not invent a second mutation to manufacture an `AssertionError` when the named failure is already an exception the condition predicted. A false red is worth exactly as much as no check, and it is the easier of the two to mistake for success.
 
    **When the behaviour cannot be broken in place** — it lives in a dependency, or the fix was a deletion — use a worktree off the base, where the fix is absent by construction:
 
@@ -238,6 +238,8 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
      BRANCH="$(git symbolic-ref --quiet --short HEAD)"
      [ "$BRANCH" = "$PHASE_BRANCH" ] || { echo "WRONG BRANCH — stop"; exit 1; }
      LOCAL_SHA="$(git rev-parse --verify HEAD)"
+     [ "$(git remote get-url origin)" = "$ORIGIN_URL" ] \
+       || { echo "ORIGIN CHANGED SINCE THE GATE — refusing to publish or delete"; exit 1; }
      REMOTE_SHA="$(git ls-remote --exit-code --heads origin "refs/heads/$PHASE_BRANCH" | awk '{print $1}')"
      PR_SHA="$(gh pr view "$PR" -R "$REPO" --json headRefOid --jq .headRefOid)"
      [ "$LOCAL_SHA" = "$REMOTE_SHA" ] && [ "$LOCAL_SHA" = "$PR_SHA" ] \
@@ -262,7 +264,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 
      Record these SHAs, the repository, PR number and link, base branch, phase branch, merge method and release tag in the hand-off. Give the phase diff command: `git diff "origin/$DEFAULT_BRANCH"..."$GATE_SHA"`. The user signs off on `GATE_SHA`. Set `APPROVED_SHA` to that recorded value only after approval; never refresh it from a later HEAD.
 
-     Second, **the reviewer artifacts exist on disk**. Include a coverage line and a combined findings table for every pass, empty when no findings are available. Name each reviewer, its exact model identifier and its outcome: finding count, empty table, verbatim error, or not installed. Cite each reviewer output file and byte count, plus the error log for a failed invocation. A missing or zero-byte output is no output, not an empty findings table. Report it as missing coverage. A successful reviewer with no table has not met the output contract; obtain its table before the gate. If both CLIs are absent, state the skip explicitly. No coverage line means step 5 has not been accounted for.
+     Second, **the reviewer artifacts exist on disk**. Include a coverage line and a combined findings table for every pass, empty when no findings are available. Name each reviewer, its exact model identifier and its outcome: finding count, empty table, verbatim error, or not installed. Cite each reviewer output file and byte count, plus the error log for a failed invocation. A missing or zero-byte output is no output, not an empty findings table. Report it as missing coverage. A reviewer returns a findings **list**, or the single line `No findings.`; building the combined table is the agent's job, not the reviewer's, so a list without a table is a met contract. What fails the contract is a reviewer that returned nothing at all. If both CLIs are absent, state the skip explicitly. No coverage line means step 5 has not been accounted for.
    - **Name the single merge method** recorded at §2 step 3.
    - **End the hand-off with the actual state:** "Committed and pushed on `<branch>`, PR `<n>` ready at `<gate SHA>`, awaiting your sign-off to merge."
    - **Any edit while waiting for sign-off invalidates approval**, including a typo or release metadata edit. Commit and push it, name it in a follow-up, repeat the gate and obtain sign-off on the new SHA.
@@ -371,6 +373,12 @@ Sign-off — as defined at the top of this file — is the only trigger. Once it
    Cleanup failures resume at step 6 and do not repeat release edits or merge.
 
 Then stop. The next phase's branch is created at phase start (§2 step 1) — never here.
+
+**Revalidate `origin` before anything is published or deleted.** The approved PR is looked up
+through the `REPO` recorded at the gate, but fetches, tag pushes and branch deletions go to
+whatever remote is named `origin` *now*. If the remote was repointed between sign-off and the
+merge cycle — a fork switch, a mistyped `set-url` — those operations land in a different
+repository. Compare against the `ORIGIN_URL` captured at §2 and refuse on a mismatch.
 
 **`git reset --hard` appears nowhere in this workflow; do not add it.** Where a reset is genuinely required, branch first (`git branch backup/<phase>-$(date +%s)`) or use `git reset --keep`, which refuses rather than discarding.
 

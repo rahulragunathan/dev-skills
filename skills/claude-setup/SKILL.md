@@ -249,13 +249,15 @@ The standards in step 3 say to lint the markdown you touched before hand-off. Th
    "markdownlint.configFile": "${userHome}/.markdownlint.jsonc"
    ```
 
-   **State the consequence of declining, because it is not obvious.** Without this key the
-   extension keeps its own defaults and the two tools disagree permanently in one direction:
-   the editor turns `MD013` (line length) off by default while the CLI leaves it on, so the
-   house style of long prose lines shows as squiggles in the editor that the CLI gate never
-   reports. Nothing breaks and no gate changes — `markdownlint-cli2 --config` remains the only
-   thing that decides pass or fail — but editor noise on every markdown file is the cost. The
-   user may reasonably prefer that to editing their VS Code settings.
+   **State the consequence of declining, because it is not obvious.** `MD013` is off in both
+   places, so line length is not the difference. The difference is the other three rules, which
+   the config turns off and the extension's defaults leave on: the editor flags every
+   `<a id="ki-01"></a>` roadmap anchor (`MD033`), every repeated `Added`/`Changed`/`Fixed`
+   heading in `CHANGELOG.md` (`MD024`), and the ordered lists that deliberately continue across
+   headings (`MD029`). So declining costs editor squiggles on exactly the files this project
+   writes most, none of which the CLI gate reports. Nothing breaks and no gate changes —
+   `markdownlint-cli2 --config` alone decides pass or fail — and the user may reasonably prefer
+   that noise to editing their VS Code settings.
 
 4. **Verify** from any repo root. Both sides should now agree, and a clean tree exits 0:
 
@@ -280,7 +282,7 @@ is fully set up without this step.
 
 ### 4. Locate the synced `Code` folder, then symlink `Skills`
 
-Everything this skill wires — `Skills/`, `Plugins/`, `Claude-Projects/` — lives side-by-side under **one synced `Code` folder**. Its parent differs per machine (e.g. `…/My Drive/AnswerRocket/Code` on one, `…/My Drive/Code` on another) and Google Drive mounts differ (CloudStorage vs classic `~/Google Drive`). So detect the `Code` folder **once** and derive all three siblings from it. Set `CODE_ROOT` by hand if the helper finds nothing (the `while … read` loop is space-safe — every "My Drive" path has a space):
+Everything this skill wires — `Skills/`, `Plugins/`, `Claude-Projects/` — lives side-by-side under **one synced code root**. It is usually named `Code`, and the probe below looks for that name; on a machine where it is named something else (`project-env` documents a `Clients` root), the probe finds nothing and `CODE_ROOT` must be set by hand. **The root is whatever directory holds those siblings, not the string `Code`** — that is the contract every skill referring here depends on. Its parent differs per machine (e.g. `…/My Drive/AnswerRocket/Code` on one, `…/My Drive/Code` on another) and Google Drive mounts differ (CloudStorage vs classic `~/Google Drive`). So detect the `Code` folder **once** and derive all three siblings from it. Set `CODE_ROOT` by hand if the helper finds nothing (the `while … read` loop is space-safe — every "My Drive" path has a space):
 
 ```bash
 # The Code folder = a dir named "Code" under a My Drive root that already contains Skills/ or Plugins/.
@@ -304,7 +306,7 @@ Only subfolders with a `SKILL.md` load; `RCLONE_TEST`/`.DS_Store` and the plugin
 
 ### 5. Register the `localclaude` plugin (local marketplace)
 
-The bundled skills (`claude-setup`, `claude-toggle-backend`, `local-models`, `phase-workflow`, `external-review`, `design-review`) ship as the `localclaude` plugin in the sibling `Code/Plugins` folder.
+The bundled skills (`claude-setup`, `claude-toggle-backend`, `local-models`, `phase-workflow`, `external-review`, `design-review`, `project-env`, `drive-backup`) ship as the `localclaude` plugin in the sibling `Code/Plugins` folder.
 
 **Gotcha:** `/plugin marketplace add` **cannot parse the Drive path** — "My Drive" has a space, the slash-command parser doesn't honor quotes, and it falls back to treating the arg as a GitHub `owner/repo`. So point it at a **space-free symlink** instead — derived from `CODE_ROOT` (step 4; set `PLUGINS_SRC` by hand if `CODE_ROOT` was empty):
 
@@ -345,7 +347,7 @@ Report what was added/merged and which skills now load, then point at `REFERENCE
 
 ## Quick reference
 
-- Read-only commands → allowlisted (no prompt). File-modifying commands → still prompt, by design.
+- Commands already judged safe → allowlisted (no prompt). Most are read-only; the formatters and test runners are the deliberate exceptions. Everything else still prompts, by design.
 - Always double-quote paths; never `My\ Drive`. Prefer absolute paths over `cd "…" && relative`.
 - Loose skills (drawio) load via the `~/.claude/skills` symlink; bundled skills load via the `localclaude` plugin (`/localclaude:<skill>`). Both, plus the transcript-backup dest, derive from one detected `Code` root.
 - Transcripts, plans, memory and config back up to `Code/Claude-Projects` at the end of every turn via a `Stop` hook. `/localclaude:drive-backup` owns it; the dest is `~/.claude/projects-backup.dest` and the log is `~/.claude/projects-backup.log`.

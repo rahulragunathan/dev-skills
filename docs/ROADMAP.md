@@ -28,9 +28,11 @@ reused. Nothing here looks backward — completed phases are CHANGELOG releases.
 ## Status
 
 The plugin ships eight skills and is in daily use on one machine. The five bash scripts under
-`claude-toggle-backend` and `claude-setup` carry the whole open bug list: the process,
-review and standards skills were repaired in the phase that created this file, and their
-findings are in the CHANGELOG rather than here.
+`claude-toggle-backend`, `drive-backup` and `claude-setup` carry most of the open bug list.
+The process, review and standards skills were repaired across this phase's review passes and
+their fixes are in the CHANGELOG rather than here, but `drive-backup` opened a fresh active
+cluster (KI-28 through KI-32) when it was split out of `claude-setup`, and ENH-10 through ENH-12
+are active enhancements rather than held ones.
 
 **`local-models` and `claude-toggle-backend` are being rebuilt from scratch**, so their
 entries below are held rather than worked. They stay filed — the defects are real and the
@@ -84,6 +86,7 @@ Most severe first. Severity definitions and full detail in [KNOWN_ISSUES.md](KNO
 | [KI-30](KNOWN_ISSUES.md#ki-30) | Two machines overwrite each other's config snapshot | High |
 | [KI-31](KNOWN_ISSUES.md#ki-31) | The lock drops the last backup of a session | Medium |
 | [KI-32](KNOWN_ISSUES.md#ki-32) | Repository approval state is not in the file the backup collects | Medium |
+| [KI-33](KNOWN_ISSUES.md#ki-33) | Symlinked backup inputs are skipped without a failure status | High |
 | [KI-16](KNOWN_ISSUES.md#ki-16) | `HF_HOME` is exported by an orphaned `~/.zshrc` block no skill installs | Medium |
 | [KI-17](KNOWN_ISSUES.md#ki-17) | The machine is documented as both 64 GB and 24 GB | Medium |
 | [KI-18](KNOWN_ISSUES.md#ki-18) | `toggle.sh` needs `python3` and never checks for it | Medium |
@@ -109,6 +112,7 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 | [ENH-10](ENHANCEMENTS.md#enh-10) | Make the project-env name mapping unambiguous | Low | ~2 hours |
 | [ENH-11](ENHANCEMENTS.md#enh-11) | Reconcile an existing global markdownlint config | Low | ~1 hour |
 | [ENH-12](ENHANCEMENTS.md#enh-12) | Feed the Gemini prompt through stdin rather than argv | Low | ~1 hour |
+| [ENH-13](ENHANCEMENTS.md#enh-13) | Give the inline shell workflows execution coverage | Medium | ~1 day |
 | [ENH-07](ENHANCEMENTS.md#enh-07) | Honour `$CLAUDE_CONFIG_DIR` in the bundled scripts | Low | ~2 hours |
 
 ## Open Questions
@@ -118,5 +122,5 @@ reasoning behind each in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
 | ID | Question | Kind |
 | ---- | ---------- | ------ |
-| [UNK-03](OPEN_QUESTIONS.md#unk-03) | Does `Bash(cmd*)` really never match? | Verification gap |
+| [UNK-03](OPEN_QUESTIONS.md#unk-03) | Does `Bash(cmd*)` really never match? | Verification |
 | [UNK-02](OPEN_QUESTIONS.md#unk-02) | No test in this repo can be shown to discriminate from git history alone | Risk |

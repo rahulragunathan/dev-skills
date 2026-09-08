@@ -816,7 +816,7 @@ edge(
     exitY=0.72,
     entryX=0,
     entryY=0.5,
-    label_y=-70,
+    label_y=25,
 )
 edge(
     setup,
@@ -850,7 +850,7 @@ edge(
     exitY=0.2,
     entryX=0,
     entryY=0.5,
-    label_y=90,
+    label_y=-105,
 )
 edge(
     backup,

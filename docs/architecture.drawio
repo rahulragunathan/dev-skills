@@ -147,7 +147,7 @@
               <mxPoint x="690" y="865"/>
               <mxPoint x="690" y="690"/>
             </Array>
-            <mxPoint x="0" y="-70" as="offset"/>
+            <mxPoint x="0" y="25" as="offset"/>
           </mxGeometry>
         </mxCell>
         <mxCell id="33" value="Delegates" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=0;jettySize=auto;html=1;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#bf8f00;strokeWidth=2;endArrow=classic;endFill=1;startSize=2;endSize=2;fontSize=12;fontColor=#bf8f00;labelBackgroundColor=#fbf6e6;" edge="1" parent="1" source="17" target="18">
@@ -162,7 +162,7 @@
               <mxPoint x="705" y="955"/>
               <mxPoint x="705" y="600"/>
             </Array>
-            <mxPoint x="0" y="90" as="offset"/>
+            <mxPoint x="0" y="-105" as="offset"/>
           </mxGeometry>
         </mxCell>
         <mxCell id="36" value="Copy Transcripts&lt;div&gt;And Config&lt;/div&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=0;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#bf8f00;strokeWidth=2;endArrow=classic;endFill=1;startSize=2;endSize=2;fontSize=12;fontColor=#bf8f00;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="19" target="22">

@@ -58,7 +58,7 @@ historical evidence is not mistaken later for evidence of absence.
 
 ## UNK-03 — does `Bash(cmd*)` really never match?
 
-**Kind:** Verification gap
+**Kind:** Verification
 
 ### The question
 
