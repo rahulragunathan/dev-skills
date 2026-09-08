@@ -109,7 +109,7 @@ This is the user's **complete global standard** — the goal is that a re-run br
 
 **Read the file first if it exists**, then install the canonical block verbatim between the markers.
 
-**Take the canonical text from inside the fenced block below, not by searching this file for a marker.** This section discusses the markers, so a prefix search finds prose before it finds the real delimiters. Match **whole marker lines only**, and take the *last* opening marker in any file that has more than one.
+**Take the canonical text from inside the fenced block below, not by searching this file for a marker.** This section discusses the markers, so a prefix search finds prose before it finds the real delimiters. Match **whole marker lines only**. **Refuse a file that has more than one managed block**, and a file whose opening and closing markers do not balance: both mean an earlier run went wrong, which one is current is not knowable from the file, and every automatic reading of it discards content. Say which state was found and stop.
 
 - **Markers already present** → replace everything between them with the current canonical block. This is how a stale copy gets refreshed: a file missing the whole `## Development process` section, or one whose `Co-Authored-By` trailer still names a fixed model instead of the model that wrote the commit.
 - **Standards present without markers** (an older machine — e.g. bare `## Shell commands` / `## Git` and nothing else) → replace those sections in place with the marked block, preserving any unrelated content the user keeps elsewhere in the file.

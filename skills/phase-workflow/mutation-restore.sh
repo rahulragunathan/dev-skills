@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# mutation-restore.sh — break one behaviour, run its test, put the tree back.
+#
+# Implements phase-workflow §3 step 3. A bug here loses uncommitted work during
+# a test-validity audit, which is the worst moment for it, and the procedure
+# lived only in a fenced block that nothing ran.
+#
+# Usage:
+#   mutation-restore.sh <task-sha> <file> <sed-expression> <test-command...>
+#
+# Applies the mutation to <file>, runs the test command, and restores <file>
+# from <task-sha> across both index and worktree whatever happens.
+#
+# Exit 0  the test failed under mutation, which is what the audit wants
+# Exit 1  refused, or the test did not fail, or restoration failed
+
+set -uo pipefail
+
+SHA="${1:?usage: mutation-restore.sh <task-sha> <file> <sed-expr> <test-cmd...>}"
+FILE="${2:?missing file}"
+EXPR="${3:?missing sed expression}"
+shift 3
+[ "$#" -gt 0 ] || { echo "missing test command"; exit 1; }
+
+git rev-parse --git-dir >/dev/null 2>&1 || { echo "NOT A GIT REPOSITORY"; exit 1; }
+
+# A dirty tree means the restore would discard work that was never committed.
+if [ -n "$(git status --porcelain -uall)" ]; then
+  echo "TREE IS DIRTY — commit or stash before a mutation audit; refusing"
+  exit 1
+fi
+
+[ -L "$FILE" ] && { echo "TARGET IS A SYMLINK — refusing to mutate through it"; exit 1; }
+[ -f "$FILE" ] || { echo "TARGET IS NOT A REGULAR FILE: $FILE"; exit 1; }
+
+git rev-parse --verify "$SHA^{commit}" >/dev/null 2>&1 \
+  || { echo "NOT A COMMIT: $SHA"; exit 1; }
+git ls-tree -r --name-only "$SHA" -- "$FILE" | grep -qx -- "$FILE" \
+  || { echo "FILE IS NOT PRESENT AT $SHA — cannot restore it afterwards"; exit 1; }
+
+restore() {
+  git restore --source="$SHA" --staged --worktree -- "$FILE" 2>/dev/null \
+    || git checkout "$SHA" -- "$FILE" 2>/dev/null \
+    || { echo "RESTORE FAILED — repair $FILE by hand from $SHA"; return 1; }
+}
+# Restore on every exit path, including INT and TERM. Without this a killed run
+# leaves the mutation in place and the next command reads broken code.
+trap 'restore; exit 130' INT TERM
+trap 'restore' EXIT
+
+sed -i.mutbak "$EXPR" "$FILE" || { echo "MUTATION FAILED TO APPLY"; exit 1; }
+rm -f "$FILE.mutbak"
+
+if git diff --quiet -- "$FILE"; then
+  echo "MUTATION CHANGED NOTHING — the expression did not match; not a valid audit"
+  exit 1
+fi
+
+"$@"
+rc=$?
+
+if [ "$rc" -eq 0 ]; then
+  echo "TEST PASSED UNDER MUTATION — it does not discriminate (rc=0)"
+  exit 1
+fi
+if [ "$rc" -ne 1 ]; then
+  echo "NOT AN ASSERTION RED — test command exited $rc; inspect the output"
+  exit 1
+fi
+echo "EXIT 1 — verify the named failure in the output before certifying"
+exit 0

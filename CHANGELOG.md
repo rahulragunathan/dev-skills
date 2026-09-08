@@ -12,6 +12,18 @@ here — the plugin manifest's version is the only record of them.
 
 ### Added
 
+- **Four test suites over the shell that used to live only in prose** (`ENH-13`,
+  now closed). Each was built by extracting the procedure into a script and then
+  testing it: `capture.sh` (the bundle that leaves the machine),
+  `install-standards.sh` (the block inside `~/.claude/CLAUDE.md`),
+  `mutation-restore.sh` and `publish-release.sh` (the destructive git
+  operations), and `write_results.py` (the results-table writer). Forty-five
+  tests; two are red on purpose and reproduce open findings.
+  Each suite carries a canary — a planted secret outside the repo, user content
+  outside the managed block, uncommitted work, the columns not named — so a
+  regression fails loudly instead of quietly, which is how all four of these
+  procedures failed before.
+
 - **`design-review` skill** — the structural design pass, at plan time and phase
   end. Produces the module table, the expected-change and shared-state lines, and
   verdicts on six named checks. Wired into `phase-workflow` at §1 (drafting), §2

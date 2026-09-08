@@ -6,9 +6,10 @@ How `localclaude` is put together today. Planned work is in
 ## What this is
 
 A Claude Code plugin of eight skills. Six are **instructions, not code** — a `SKILL.md` that
-Claude reads and follows. The executable code is six bash scripts and their `bats` tests, under
-`claude-toggle-backend`, `drive-backup` and `external-review`, plus `docs/build_architecture.py`,
-the diagram generator.
+Claude reads and follows. The executable code is nine bash scripts and their `bats` tests, under
+`claude-toggle-backend`, `drive-backup`, `external-review`, `claude-setup` and `phase-workflow`,
+plus two Python tools: `docs/build_architecture.py` and
+`skills/design-review/tests/write_results.py`.
 
 That shapes everything else here. There is no build, no runtime and no entry point. A "module"
 is a skill directory, its interface is how the skill is invoked, and a regression is a
@@ -115,11 +116,19 @@ before reading them, and disables diff conversion filters, in every mode.
 `uname` and `vllm-mlx` and a sandboxed `$HOME`. Eight of them pass with the behaviour they
 name removed — see UNK-02.
 
-`external-review/tests/capture.bats` is the newest suite: fourteen tests over scratch git
-repositories covering the bundle capture, which is the one procedure in this repo that sends
-source to a third party. Two of the fourteen are red on purpose — they reproduce open findings
-(a tracked binary forced to text by a `diff` attribute, and an absolute plan path mangled by the
-relative-path prefix) and will go green when those are fixed.
+**Four suites now cover the shell that used to live only in prose**, all built the same way:
+extract the procedure into a script, then write tests over scratch fixtures.
+
+| Suite | Covers | Canary |
+| --- | --- | --- |
+| `external-review/tests/capture.bats` | the bundle that leaves the machine | planted secret outside the repo |
+| `claude-setup/tests/install-standards.bats` | the standards block in `~/.claude/CLAUDE.md` | user content outside the block |
+| `phase-workflow/tests/phase-git.bats` | mutation restore, tag publication, branch deletion | uncommitted work |
+| `design-review/tests/write_results.bats` | the results-table writer | the columns not named |
+
+Each canary is the thing that disappeared when the procedure went wrong before, so a regression
+fails loudly rather than quietly. Two of `capture.bats`'s fourteen are red on purpose: they
+reproduce open findings and go green when those are fixed.
 
 `drive-backup`'s `backup-projects.sh` has no tests at all. That is ENH-03, and the next phase.
 
