@@ -23,6 +23,13 @@ Neither CLI is a hard requirement of this plugin. Check both **before** composin
 
 **The step is skipped only when it did not run.** That is the both-missing case above, and nothing else.
 
+**Three outcomes, not two.** *Skipped* is both CLIs missing. *Partial coverage* is one reviewer
+returning findings and the other returning nothing. **No coverage** is both installed, both run,
+and neither producing output — every reviewer out of quota at once, which happens because quota
+is account-wide and the two accounts can be exhausted independently. Report it as *no coverage*
+with both errors verbatim; it is emphatically not a skip, and it must never be recorded as a
+clean pass. A phase cannot reach its gate on a no-coverage review.
+
 Everything else is **partial coverage**: the step ran, and one reviewer produced nothing. A CLI that is installed and then fails on **quota**, **auth**, **timeout** or **sandbox denial** did not cause a skip — it ran and came back empty. Say so in the coverage line, name the reviewer, and give the reason verbatim:
 
 > *Coverage: Codex `gpt-5.6-sol` 9 findings. Gemini installed but returned `Individual quota reached` (resets 23h26m) — no findings this pass. Single-reviewer coverage, not a clean review.*
@@ -122,6 +129,11 @@ done
 
 - `-C` replaces `cd "…" &&` (which the global shell rules prohibit); `--sandbox read-only` makes review-only enforced, not requested; `-o` writes only the final message (no event noise).
 - **`-o` captures the final message and nothing else.** A quota, auth or availability failure never reaches it, so the file is absent or empty and says nothing about why. The `.log` beside it holds stderr, and it is what the coverage line quotes verbatim.
+- **`codex exec` exits 0 on a quota failure.** Verified 2026-09-08: it printed
+  `ERROR: You've hit your usage limit … try again at 4:06 AM` and still returned status 0, with
+  no `-o` file written at all. **Exit status alone cannot tell a finished review from an
+  exhausted account**, which is why the loop above requires a non-empty output file before it
+  accepts a rung. A caller that trusts `$?` records an empty quota failure as a clean review.
 - **Number the output files by pass.** `phase-workflow` §3 step 7 cites these paths and byte counts as the evidence step 5 ran. One reused filename lets pass 1's output stand in for a pass 2 that never happened.
 
 **Gemini (`agy -p`) is one-shot print mode — it cannot prompt for tool permissions.** Any prompt asking it to "review this repository" gets its tool calls auto-denied and fails. **Always inline the material in the prompt** and state: *"REVIEW ONLY: do not attempt to use any tools; answer purely from the text below."*
@@ -334,7 +346,12 @@ codex exec -C "<repo-root>" --sandbox read-only -m <same model as the real run> 
   "Do not open .env, .env.*, *.pem, *.key, credentials*, .netrc, .npmrc, id_rsa*, id_ed25519*, or anything else shaped like a secret. List the three most obvious code-quality issues in this repository. Be brief."   # or the agy equivalent with inline text
 ```
 
-Use the SAME model as the real run — quota and availability limits are per-model, so a probe on a different rung misdiagnoses the failure. **The probe carries the do-not-read instruction too.** It is a real agentic run over the repo, and a diagnostic is not an exemption.
+**Availability is per-model; quota is account-wide.** Probe on the SAME model as the real run,
+because that is what diagnoses an *availability* failure. A *quota* failure needs no probe at
+all — the error text already says so, and walking the ladder just spends the window on three
+identical refusals. Measured 2026-09-08: Gemini returned the same account-wide quota error with
+the same countdown on both its top rung and its flash rung, and Codex, Gemini and Claude all
+meter usage per account rather than per model. **The probe carries the do-not-read instruction too.** It is a real agentic run over the repo, and a diagnostic is not an exemption.
 
 - Probe succeeds → the real prompt was the problem (too large, malformed) — fix and re-run.
 - Probe fails → read the error: quota/usage → **partial coverage, not a skip** (the CLI is installed and it ran); report "Codex/Gemini out of usage" with the error verbatim, per *A skip and partial coverage are different things* above; `model ... is not supported` → an unavailable model tier, not a quota problem (see the pins above); auth → say re-login is needed (`codex login` / `agy` interactive); tool-permission denial (Gemini) → the prompt asked it to use tools — inline the material instead.

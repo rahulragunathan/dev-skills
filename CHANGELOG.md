@@ -200,6 +200,18 @@ here — the plugin manifest's version is the only record of them.
 
 ### Fixed
 
+- **`external-review` had three wrong or missing facts about reviewer failure,
+  found by running it.** Quota is account-wide, not per-model as the skill
+  claimed: Gemini returned the same error with the same countdown on both its
+  top and flash rungs, so a downshift can never rescue a quota failure and only
+  spends the window on identical refusals. `codex exec` **exits 0** on a quota
+  failure and writes no `-o` file, so exit status alone cannot distinguish a
+  finished review from an exhausted account — the loop's non-empty-output check
+  is what catches it, and now says so. And the coverage vocabulary had only two
+  outcomes where there are three: *skipped* (both CLIs missing), *partial* (one
+  reviewer empty), and **no coverage** (both installed, both run, neither
+  produced output), which cannot reach a phase gate.
+
 - **External review pass 5 — 46 findings, and two of them were mine.** Both
   reviewers independently reproduced a grading error in the pressure-test
   evidence: the S07 baseline's replacement fixture puts Auckland and UTC on the
