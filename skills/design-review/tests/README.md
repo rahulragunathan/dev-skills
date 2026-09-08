@@ -4,10 +4,11 @@ Each scenario defines a normal-work artifact and failure conditions judged from 
 Run each prompt in a fresh agent with and without the indicated skill. Re-run affected pairs
 when their prompt, conditions or loaded skill changes.
 
-The evidence below spans two rounds on `claude-opus-5`. The seven **baselines** are from
-2026-09-07 and stand unchanged. The seven **with-skill** arms were re-run on 2026-09-08 at
-`a850251`, because external review pass 5 changed both loaded skills and a changed skill expires
-its with-skill run. Three grades were corrected in the same pass — see *Corrections* below.
+The evidence below spans three rounds on `claude-opus-5`. The seven **baselines** are from
+2026-09-07 and stand unchanged. The **with-skill** arms have been re-gathered twice, because a
+changed loaded skill expires its with-skill run and two review passes changed those skills: round
+2 at `a850251` after pass 5, and round 3 at `07e1769` after pass 7. Only round 3 is current.
+Three grades were corrected along the way — see *Corrections* below.
 
 Transcripts, dispatched prompts and hash-verified skill snapshots for both rounds are archived
 outside the repo, under this project's artifact folder — the standard home for run evidence, one
@@ -124,11 +125,11 @@ of either skill has been tested.
 **Six of fifteen units need their rule. The skill fixes all six.** The other nine record a strong
 model already doing the right thing unaided.
 
-> **The with-skill arms below are expired.** Pass 6's fixes changed both loaded skills at
-> `a8803f6`, and a changed loaded skill expires its with-skill run. The grades are retained as
-> the historical result; they are not current evidence until those arms are re-gathered against
-> the current snapshots. The baselines are unaffected — neither their prompts nor their
-> conditions changed.
+All fifteen units are current. The seven with-skill arms were re-gathered as **round 3** at
+`07e1769`, after external review pass 7's fixes changed both loaded skills; the round-2 arms
+they replace were marked expired in the same commit as those fixes, which is the sequencing
+`phase-workflow` now requires. The baselines are round 1 and unaffected — neither their prompts
+nor their conditions changed.
 
 | Unit | Rule | Without the skill | With it | Evidence status |
 | --- | --- | --- | --- | --- |
@@ -171,6 +172,19 @@ host zone. Codex established this arithmetically; Gemini had agreed with the wro
 declared table rows or reachability. Reworded to say reachability, and to grant a composition
 root an explicit exemption when every domain policy it would otherwise hold has been extracted.
 Both existing outputs were judged fully against the new wording, so neither run expired.
+
+### What round 3 changed in the artifacts
+
+Re-gathering is not bookkeeping — the clarified conditions changed what the agent produced:
+
+- **S01** left the email subject inline in `run()` in round 2 and flagged it as an open question.
+  Round 3 extracts it into the report module and cites that as why the composition-root
+  exemption applies. The delivery-content clause is what moved it.
+- **S02 and S03** applied the same clause unprompted, to rejection message copy and to the
+  exporter dispatch root respectively.
+- **S07** answered the P2 host-independence requirement by pinning `TZ=UTC` in a fixture, making
+  its substitute mutation equivalent to the literal one, and applied the new audit rule that a
+  predicted production exception is itself the discrimination.
 
 ### Conditions reworded this round
 

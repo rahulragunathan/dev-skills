@@ -30,9 +30,14 @@ here — the plugin manifest's version is the only record of them.
   open question from an external repo review.
 - `LICENSE` — the MIT text the plugin manifest and skill frontmatter already
   declared.
-- **Run evidence for the pressure tests, over two rounds.** Seven baselines on
-  2026-09-07 and seven with-skill arms re-run on 2026-09-08 after external review
-  changed both loaded skills. **Six of fifteen units need their rule and the skill
+- **Run evidence for the pressure tests, over three rounds.** Seven baselines on
+  2026-09-07, and the seven with-skill arms re-gathered twice as review passes
+  changed the loaded skills — round 2 at `a850251`, round 3 at `07e1769`. Only
+  round 3 is current, and the re-gather earned its cost: the clarified
+  delivery-content clause moved the email subject out of the composition root in
+  S01, two other scenarios applied the same clause unprompted, and S07 answered
+  the mutation condition's host-independence requirement by pinning `TZ` in a
+  fixture rather than arguing around it. **Six of fifteen units need their rule and the skill
   fixes all six** — Only what fired, No filler verdicts, produce versus edit,
   Direction, Mutation reasoning and Fixture validity. The other nine record a
   strong model already doing the right thing unaided. Transcripts, dispatched
