@@ -207,8 +207,13 @@ here — the plugin manifest's version is the only record of them.
   never run. P3 becomes **Rule needed / Rule works**. Codex went further and
   showed the P2 correction I had proposed was wrong too — `now.astimezone()` is
   not equivalent to `local = now`, because it keeps the original test green only
-  on a UTC host — so P2 becomes **Rule needed / Rule ineffective**, the one unit
-  the skill does not fix.
+  on a UTC host. The seven with-skill arms were then re-run at `a850251` against
+  the corrected skills, and the round-2 S07 run uses the literal mutation with a
+  fixture whose asserted properties hold, so P2 and P3 both land at **Rule
+  needed / Rule works**. Six of fifteen units now discriminate, up from three,
+  and the skill fixes all six. Three conditions were reworded because a careful
+  reader could reach the opposite verdict; every existing output was judgeable
+  against the new wording, so no baseline expired.
 - **`claude-setup` no longer writes editor configuration**, and its advertised
   write footprint is stated accurately rather than as "nothing outside
   `~/.claude`". Step 3b now detects the markdownlint extension by its
