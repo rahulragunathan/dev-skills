@@ -190,10 +190,17 @@ evaluates an *unexecuted* plan, so it cannot catch any of this.
 
 ### Notes for the work
 
-A `bats` suite over scratch git fixtures: a repo with a symlinked directory, a file named `-n`, a
-filename containing a newline, a tracked-but-deleted file, and a clean tree. Assert the bundle
-contents, the withheld list and the exit status. Separate from ENH-03, which covers
-`backup-projects.sh`; this covers shell that currently lives only inside a `SKILL.md`.
+**The `external-review` half is done.** The capture procedure was extracted to
+`skills/external-review/capture.sh` and covered by `tests/capture.bats` — fourteen tests over
+scratch git fixtures: a symlinked parent directory with a planted secret beyond it, a symlinked
+file, credential-shaped paths, a tracked-but-deleted file, a file named `-n`, a filename
+containing a newline, a binary, an unreadable file, and a clean tree. Two are red on purpose and
+reproduce open findings.
+
+**What remains** is `phase-workflow`'s inline shell: the mutation-audit restore, the release and
+tag block, and the branch-deletion guards. Those need scratch git fixtures of their own — a repo
+with a merged PR stand-in, a moved tag, a diverged remote — and they are the same class of
+untested, high-consequence procedure. Separate from ENH-03, which covers `backup-projects.sh`.
 
 **Source:** gpt-6-astra — phase review pass 6, 2026-09-08.
 

@@ -6,8 +6,9 @@ How `localclaude` is put together today. Planned work is in
 ## What this is
 
 A Claude Code plugin of eight skills. Six are **instructions, not code** — a `SKILL.md` that
-Claude reads and follows. The only executable code is five bash scripts and their `bats`
-tests, under `claude-toggle-backend` and `drive-backup`.
+Claude reads and follows. The executable code is six bash scripts and their `bats` tests, under
+`claude-toggle-backend`, `drive-backup` and `external-review`, plus `docs/build_architecture.py`,
+the diagram generator.
 
 That shapes everything else here. There is no build, no runtime and no entry point. A "module"
 is a skill directory, its interface is how the skill is invoked, and a regression is a
@@ -113,6 +114,12 @@ before reading them, and disables diff conversion filters, in every mode.
 `claude-toggle-backend/tests/` holds the `bats` suite: 29 tests with fakes for `curl`,
 `uname` and `vllm-mlx` and a sandboxed `$HOME`. Eight of them pass with the behaviour they
 name removed — see UNK-02.
+
+`external-review/tests/capture.bats` is the newest suite: fourteen tests over scratch git
+repositories covering the bundle capture, which is the one procedure in this repo that sends
+source to a third party. Two of the fourteen are red on purpose — they reproduce open findings
+(a tracked binary forced to text by a `diff` attribute, and an absolute plan path mangled by the
+relative-path prefix) and will go green when those are fixed.
 
 `drive-backup`'s `backup-projects.sh` has no tests at all. That is ENH-03, and the next phase.
 

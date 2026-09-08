@@ -47,6 +47,13 @@ entries stay filed and unworked: they are the rebuild's requirements. Never clos
 keep them out of external review bundles until the rebuild lands. The Held sections in
 `KNOWN_ISSUES.md` and `ENHANCEMENTS.md` say which entries are held and how to tell.
 
+**`drive-backup` is out of scope for external review while the process phase runs.** It is not
+held — KI-06, KI-07, KI-08, KI-14 and KI-28 through KI-34 are active — but it has its own phase
+with its own `bats` harness (ENH-03), and reviewing it now spends findings on code nobody is
+about to touch while the real ones compete for attention. Name the exclusion in the review
+prompt rather than dropping it silently, so a reviewer that finds something exceptional there
+can still say so in one line. Everything found meanwhile is filed, never fixed in this phase.
+
 ## Decisions taken and not taken
 
 **The phase gate is a PR ready for review — not uncommitted work.** The rejected alternative

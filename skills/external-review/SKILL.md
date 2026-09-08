@@ -231,71 +231,28 @@ reviewed. The loop below still sweeps them, because a review can be requested mi
 never contains untracked files: the reviewer would see calls into a module it cannot read and
 report the module as missing.
 
-Build the bundle like this:
+Build the bundle with the bundled script rather than by pasting shell:
 
 ```bash
-BUNDLE="<scratchpad>/bundle.txt";   : > "$BUNDLE"
-WITHHELD="<scratchpad>/withheld.txt"; : > "$WITHHELD"
-
-EXCL=(':(exclude,icase)*.env' ':(exclude,icase)*.env.*' ':(exclude,icase)*.pem'
-      ':(exclude,icase)*.key' ':(exclude,icase)*.p12' ':(exclude,icase)*.pfx'
-      ':(exclude,icase)*.crt' ':(exclude,icase)*id_rsa*' ':(exclude,icase)*id_ed25519*'
-      ':(exclude,icase)*credentials*' ':(exclude,icase)*.netrc' ':(exclude,icase)*.npmrc'
-      ':(exclude,icase)*.sqlite' ':(exclude,icase)*.sqlite3')
-
-# tracked: the phase's commits, with every conversion filter off
-git -c diff.external= diff --no-textconv --no-ext-diff "<base>"...HEAD -- . "${EXCL[@]}" \
-  >> "$BUNDLE" || { echo "DIFF FAILED — do not send this bundle"; exit 1; }
-
-# untracked: each one appended IN FULL, behind a path header
-git ls-files --others --exclude-standard -z -- . "${EXCL[@]}" > "<scratchpad>/untracked.z" \
-  || { echo "LS-FILES FAILED — do not send this bundle"; exit 1; }
-
-REPO_PHYS="$(cd "<repo-root>" && pwd -P)"
-# Roots a captured file may live under. The repo, plus any directory explicitly named for
-# this run — `plan` mode reads `~/.claude/plans/`, which is deliberately outside the repo.
-ALLOWED_ROOTS=("$REPO_PHYS")           # plan mode appends the resolved plan directory
-
-# ONE capture procedure. Every mode uses it; none rolls its own.
-capture() {
-  f="$1"; label="$2"
-  # A symlinked PARENT passes a -L test on the final component, and `cat` then reads
-  # straight through it to a target outside the repo. Resolve the directory instead.
-  d="$(cd -- "$(dirname -- "./$f")" 2>/dev/null && pwd -P)" || {
-    printf '%s\t(unreadable parent)\0' "$f" >> "$WITHHELD"; return; }
-  ok=0; for r in "${ALLOWED_ROOTS[@]}"; do case "$d/" in "$r"/*|"$r"/) ok=1;; esac; done
-  [ "$ok" = 1 ] || { printf '%s\t(parent outside every allowed root)\0' "$f" >> "$WITHHELD"; return; }
-  [ -L "./$f" ] && { printf '%s\t(symlink)\0' "$f" >> "$WITHHELD"; return; }
-  [ -e "./$f" ] || { printf '%s\t(tracked, absent from the tree)\0' "$f" >> "$WITHHELD"; return; }
-  [ -f "./$f" ] || { printf '%s\t(not a regular file)\0' "$f" >> "$WITHHELD"; return; }
-  perl -e 'exit(-B $ARGV[0] ? 0 : 1)' "./$f" && { printf '%s\t(binary)\0' "$f" >> "$WITHHELD"; return; }
-  printf '\n===== %s%s =====\n' "$label" "$f" >> "$BUNDLE"
-  cat -- "./$f" >> "$BUNDLE" || printf '%s\t(read failed)\0' "$f" >> "$WITHHELD"
-}
-
-while IFS= read -r -d '' f; do capture "$f" "UNTRACKED FILE: "; done < "<scratchpad>/untracked.z"
-
-if grep -q '(read failed)' "$WITHHELD"; then
-  echo "A FILE FAILED TO READ — do not send this bundle"; exit 1
-fi
-echo "capture complete"
+bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/capture.sh" phase "<scratchpad>" "<base>"
 ```
 
-**Never end a capture block on a guard.** `grep -q … && { …; exit 1; }` returns grep's own
-status, so when nothing failed the block exits **1** on its success path — a caller checking
-`$?` reads a clean bundle as a failed one. Use `if`, and finish with an explicit success line.
+It writes `bundle.txt`, a NUL-delimited `withheld.txt`, `manifest.z`, `all.z`, `captured.z` and
+`counts.txt` into the scratchpad, prints the reconciled count line, and **exits non-zero when the
+bundle is incomplete** — an enumeration failure, or any file it could not read. A non-zero exit
+means do not send.
 
-**A symlinked parent defeats a `-L` test on the file.** `git ls-files` names a tracked path; if
-a directory along it has been replaced by a symlink, the final component is an ordinary file and
-`cat` reads the target outside the repo. Resolve the parent with `pwd -P` and require it to stay
-under the repository root.
+`repo` and `plan` modes take the same first two arguments; `plan` takes the plan file as its
+third and adds that file's directory to the allowed roots, because plans live in
+`~/.claude/plans` by design.
 
-**A tracked file missing from the tree is withheld, not skipped.** `[ -f "$f" ] || continue`
-silently drops it, which contradicts fail-closed capture: the reviewer sees a bundle that looks
-complete. Record it with a reason instead.
-
-**Terminate option parsing.** A repository file named `-n` is passed to `cat` as a flag. Prefix
-enumerated paths with `./` and pass `--`.
+**Why a script and not a fenced block.** This procedure decides what source leaves the machine,
+and while it lived only in prose nothing ever ran it: external review pass 8 found four separate
+defects in it at once, including a symlinked parent directory that `cat` would read straight
+through. `tests/capture.bats` now exercises it against scratch repositories — a planted secret
+outside the repo, a file named `-n`, a filename containing a newline, a tracked file deleted from
+the worktree, an unreadable file. Change the procedure by changing the script and its tests, and
+keep the rules below, which say why the script does what it does.
 
 **Feed the loop from a file, not from a pipe.** On the right-hand side of a pipe the loop runs in
 a subshell, so an `exit` inside it ends the subshell and the script carries on to send a bundle it
@@ -390,25 +347,16 @@ Put that count in the prompt (*"this bundle contains all N changed files"*) and 
 
 **`repo`** — no in-flight branch; review current state (workflow adoption, periodic health check). Codex: repo-rooted as above. Gemini: one bundle of the source, inlined.
 
-**Build the `repo` bundle from `git ls-files`, never from a filesystem walk.** A filesystem walk that follows symlinks — `find -L`, or a copy/read helper with a follow flag — goes straight out through `node_modules` and `.venv` into the environment root, and sweeps in every ignored file. Tracked files only, with the same exclusions, the same symlink and binary tests, and the same reconciled count:
+**Build the `repo` bundle from `git ls-files`, never from a filesystem walk.** A walk that
+follows symlinks goes straight out through `node_modules` and `.venv` into the environment root
+and sweeps in every ignored file. `capture.sh repo` does this correctly:
 
 ```bash
-git ls-files -z -- . "${EXCL[@]}" > "<scratchpad>/tracked.z" \
-  || { echo "LS-FILES FAILED — do not send this bundle"; exit 1; }
-
-while IFS= read -r -d '' f; do capture "$f" ""; done < "<scratchpad>/tracked.z"
-
-if grep -q '(read failed)' "$WITHHELD"; then
-  echo "A FILE FAILED TO READ — do not send this bundle"; exit 1
-fi
-[ -s "$WITHHELD" ] && echo "withheld $(wc -l < "$WITHHELD") files — name them in the report"
-echo "capture complete"
+bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/capture.sh" repo "<scratchpad>"
 ```
 
-**Both modes fail closed, and for the same reason.** `repo` mode used to enumerate through a
-pipe and merely note read failures after the fact, so a partial bundle went out looking like a
-small repository. Guard the enumeration, feed the loop from a file, and refuse on any read
-failure — exactly as phase capture does above.
+Same outputs, same exclusions, same symlink, binary and read-failure handling as `phase`. One
+capture procedure serves every mode; none rolls its own.
 
 **Chunk when the bundle is too large, and measure before sending. The binding limit is wall-clock, not input size.** Measured on 2026-09-08: a 125,000-character prompt answered comfortably, a 198,000-character one hit `Error: timeout waiting for response` at `--print-timeout 15m` and produced nothing. Keep a chunk near **120,000 characters** and raise the timeout to 25m; a bigger single call does not fail with a truncated answer, it fails with no answer at all after burning the whole timeout.
 
