@@ -6,8 +6,9 @@ when their prompt, conditions or loaded skill changes.
 
 All fourteen runs below were made on 2026-09-07 against these definitions, on `claude-opus-5`,
 with the repository clean at `7d9f2d0`. Transcripts, dispatched prompts and the loaded skill
-snapshots are archived outside the repo at
-`Claude-Projects/design-review-evidence/2026-09-07/`.
+snapshots are archived outside the repo, under this project's artifact folder — the standard
+home for run evidence, one dated directory per round — at
+`Claude-Projects/Project Artifacts/Plugins/localclaude/design-review-evidence-2026-09-07/`.
 
 ## Which model to run on
 

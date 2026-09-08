@@ -37,7 +37,7 @@ here — the plugin manifest's version is the only record of them.
   strong model already doing the right thing unaided, and **Direction** is
   ungraded pending a condition fix. Transcripts, dispatched prompts and
   hash-verified skill snapshots are archived outside the repo at
-  `Claude-Projects/design-review-evidence/2026-09-07/`.
+  `Claude-Projects/Project Artifacts/Plugins/localclaude/design-review-evidence-2026-09-07/`.
   Two runs were voided before grading and re-run: an s02 baseline that invoked
   the installed `design-review` plugin skill, and an s01 with-skill run whose
   inline paste of the skill did not match the snapshot hash the others loaded.
