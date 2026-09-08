@@ -42,7 +42,12 @@ reasoning and code without a follow-up prompt; runtime mutation execution is out
 3. **Fixture validity** — supplies no replacement for the timezone test, keeps a timezone-inert
    input, omits a property assertion before the production call, or uses expected window
    bounds that the conversion-removal mutation also satisfies. Require a non-UTC zone and an
-   instant whose local date differs from its UTC date. For the other tests, require explicit
+   instant at which the account's UTC offset is non-zero, so account-local midnight and UTC
+   midnight are different instants; a differing calendar date is one way to get there and is not
+   itself required. **Every property the replacement test asserts about its own fixture must
+   actually hold** — an assertion that evaluates False makes the test error before it reaches
+   production code, so it can never discriminate whatever the mutation does, and that is the
+   failure this condition exists to catch. For the other tests, require explicit
    assertions that the timestamp is naive, the comparison bounds are aware, and the missing
    timezone is None. These must appear in supplied test code, not only a repair suggestion.
 
@@ -132,5 +137,5 @@ reasoning and code without a follow-up prompt; runtime mutation execution is out
 
 | Run | Model ID | Date | Skip/partial | Mutation | Fixture | Notes | Prompt revision | Condition revision | Skill git SHA · content | Evidence status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Without skill | `claude-opus-5` | 2026-09-07 | Rule not needed here | Rule not needed here | Rule not needed here | Coverage line named both reviewers, their models, the six Codex findings and the verbatim quota error, and called it partial. Used the literal `local = now` mutation the condition names, predicted the UTC fixture stays green, and supplied Auckland replacements asserting fixture properties before the production call. Also found, unprompted, that `previous_day_window` never calls `account_timezone`, so the phase's headline crash is unfixed. | `ba57ff9` · `562115beedc26965` | `27a089b6e9d1e9ce` | not loaded | Current |
-| With skill | `claude-opus-5` | 2026-09-07 | **Rule works** | **Rule works** | **Rule works** | All three pass. Used `now.astimezone()` rather than the condition's literal `local = now` — same mutation class, and arguably closer to the original server-local bug; see the condition-precision note in README. Applied the skill's rule that an error is not the red you wanted: spotted that removing normalization raises an unattributable `TypeError` and wrapped it in `pytest.fail` so the red names the condition. Filed the crash-path test as expected-to-fail rather than claiming it green. | `ba57ff9` · `562115beedc26965` | `27a089b6e9d1e9ce` | `045d07f` · `db55319cc2f8c588` | Current |
+| Without skill (round 1) | `claude-opus-5` | 2026-09-07 | Rule not needed here | **Rule needed** | **Rule needed** | Coverage line correct. **Both other conditions fail, and the cause is one defect:** its replacement fixture sets Auckland with `2026-03-15 02:00Z`, which is 15:00 the same calendar day, so its own `assert local.date() != now.date()` is False and the test errors before reaching production code. That also makes its P2 prediction wrong — it maps the repaired test's failure to the window assertion, which is never evaluated. **Regraded from "Rule not needed here"; found by both reviewers in pass 5 and reproduced arithmetically.** | `ba57ff9` · `562115beedc26965` | `a850251` · `27a089b6e9d1e9ce`→reworded | not loaded | Current |
+| With skill (round 2) | `claude-opus-5` | 2026-09-08 | **Rule works** | **Rule works** | **Rule works** | Used the literal `local = now` mutation and predicted the original stays green for the right reason. Added a second mutation (`<` → `<=`) to obtain an assertion-red where the first only yields a `TypeError`, and said so explicitly — "exit 1, so a script check passes while the named assertion never ran". Fixture is Tokyo at a non-zero offset and every property it asserts holds; the mutation breaks both window assertions. Led with the finding that `previous_day_window` never calls `account_timezone`, so the phase's third fix is unreachable. | `ba57ff9` · `562115beedc26965` | `a850251` · `27a089b6e9d1e9ce`→reworded | `a850251` · `5a48524e871000bf` | Current |

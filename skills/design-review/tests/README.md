@@ -4,11 +4,15 @@ Each scenario defines a normal-work artifact and failure conditions judged from 
 Run each prompt in a fresh agent with and without the indicated skill. Re-run affected pairs
 when their prompt, conditions or loaded skill changes.
 
-All fourteen runs below were made on 2026-09-07 against these definitions, on `claude-opus-5`,
-with the repository clean at `7d9f2d0`. Transcripts, dispatched prompts and the loaded skill
-snapshots are archived outside the repo, under this project's artifact folder — the standard
-home for run evidence, one dated directory per round — at
-`Claude-Projects/Project Artifacts/Plugins/localclaude/design-review-evidence-2026-09-07/`.
+The evidence below spans two rounds on `claude-opus-5`. The seven **baselines** are from
+2026-09-07 and stand unchanged. The seven **with-skill** arms were re-run on 2026-09-08 at
+`a850251`, because external review pass 5 changed both loaded skills and a changed skill expires
+its with-skill run. Three grades were corrected in the same pass — see *Corrections* below.
+
+Transcripts, dispatched prompts and hash-verified skill snapshots for both rounds are archived
+outside the repo, under this project's artifact folder — the standard home for run evidence, one
+dated directory per round — at
+`Claude-Projects/Project Artifacts/Plugins/localclaude/design-review-evidence-<date>/`.
 
 ## Which model to run on
 
@@ -117,15 +121,17 @@ of either skill has been tested.
 
 ## Results
 
-Fourteen runs, seven pairs, one model. **Three units needed the rule, one is ungraded, and
-eleven were already handled unaided.**
+**Six of fifteen units need their rule. The skill fixes all six.** The other nine record a strong
+model already doing the right thing unaided.
 
 | Unit | Rule | Without the skill | With it | Evidence status |
 | --- | --- | --- | --- | --- |
 | R1 | Only what fired | **Rule needed** | **Rule works** | Current |
 | R4 | No filler verdicts | **Rule needed** | **Rule works** | Current |
 | G2 | Produce versus edit | **Rule needed** | **Rule works** | Current |
-| D2 | Direction | **Ungraded** — condition ambiguous | **Rule works** | Current |
+| D2 | Direction | **Rule needed** | **Rule works** | Current |
+| P2 | Mutation reasoning | **Rule needed** | **Rule works** | Current |
+| P3 | Fixture validity | **Rule needed** | **Rule works** | Current |
 | D1 | Responsibility | Rule not needed here | Rule works | Current |
 | D3 | Lifetime | Rule not needed here | Rule works | Current |
 | D4 | Surface | Rule not needed here | Rule works | Current |
@@ -135,46 +141,50 @@ eleven were already handled unaided.**
 | R3 | Record the declined check | Rule not needed here | Rule works | Current |
 | G1 | Diagram distinctness | Rule not needed here | Rule works | Current |
 | P1 | Skip vs partial coverage | Rule not needed here | Rule works | Current |
-| P2 | Mutation reasoning | Rule not needed here | Rule works | Current |
-| P3 | Fixture validity | Rule not needed here | Rule works | Current |
 
-### What changed against the expired summary
+### Corrections — three grades were wrong, and external review found them
 
-The previous summary also had three **Rule needed** units, but not the same three. Variation /
-YAGNI cap no longer needs its rule: the baseline declined the tech lead's registry unprompted
-and argued it the way the skill does, that what makes migrations expensive is assumptions
-leaking sideways rather than a missing interface. Produce versus edit moved the other way,
-from *not needed* to **needed**. The Duplication row is no longer defective — after the
-condition rewrite both runs place all three helpers correctly.
+Recorded because the grading error is more instructive than the grades.
 
-### Two conditions that need a sentence each
+**P3 (fixture validity) was graded "Rule not needed here" and is "Rule needed".** The S07
+baseline's replacement test sets `Pacific/Auckland` with `2026-03-15 02:00Z`, which is 15:00 on
+the same calendar day, so its own `assert local.date() != now.date()` evaluates False and the
+test errors before it reaches production code. The grader checked that fixture-property
+assertions *existed* and never checked they *held* — which is the failure the scenario exists to
+catch, walked into while grading it. Both reviewers in pass 5 found it independently.
 
-Neither is a result; both are defects in the definitions that this round exposed.
+**P2 (mutation reasoning) was graded "Rule works" and the first correction was also wrong.** The
+round-1 with-skill run substituted `now.astimezone()` for the condition's `local = now`, and the
+grader called the condition too literal. It is not: `local = now` keeps the original test green
+on *any* host, while `now.astimezone()` does so only on a UTC host, so the two make different
+claims — and the run's stated justification, that the unmutated test would fail on a non-UTC
+runner, is false, because the unmutated code reads `ZoneInfo(account.timezone)` and never the
+host zone. Codex established this arithmetically; Gemini had agreed with the wrong reading.
 
-**D2 (s01, Direction).** Condition 2 says stable grouping policy must not depend on Postgres,
-PDF layout or the mail provider. The baseline has no grouping *unit* — grouping is a private
-function inside the job file, which imports all three — so the clause is either vacuous or a
-statement about reachability, and the readings give opposite verdicts. The condition must say
-which. The with-skill run is graded because it extracted `grouping.py` with a Protocol seam,
-which passes on either reading.
+**D2 (Direction) was ungraded and is "Rule needed".** Its condition did not say whether it tested
+declared table rows or reachability. Reworded to say reachability, and to grant a composition
+root an explicit exemption when every domain policy it would otherwise hold has been extracted.
+Both existing outputs were judged fully against the new wording, so neither run expired.
 
-**P2 (s07, Mutation reasoning).** The condition requires the mutation `local = now`. The
-with-skill run used `now.astimezone()`, which reinstates the original server-local bug more
-faithfully and yields the same prediction. Graded a pass on substance. The condition should
-say whether a semantically equivalent mutation is acceptable, or a better answer will keep
-failing the letter of it.
+### Conditions reworded this round
+
+Three, all because a careful reader could reach the opposite verdict:
+
+- **D1** — the policy list read as four entries or five depending on how `or` binds. Now
+  enumerated, with selection-or-grouping stated as one entry.
+- **D2** — reachability, plus the composition-root exemption above.
+- **P3** — required "an instant whose local date differs from its UTC date", which is sufficient
+  but not necessary; a non-zero UTC offset is what actually makes the mutation detectable, and
+  the round-2 fixture discriminates without a date difference. Now states the offset property,
+  and adds the rule the baseline broke: every fixture property a test asserts must actually hold.
 
 ### Runs voided before grading
 
-Two, both replaced by clean re-runs:
-
-- **s02 without skill** — the agent invoked the installed `design-review` plugin skill and
-  said so in its answer. A baseline dispatched in an environment where the skill is installed
-  can load it; the re-run states the no-skill condition in the dispatch. The five other
-  baselines used zero tools, which loading a skill requires, so none of them could have.
-- **s01 with skill** — the skill was pasted inline for this one run and the paste dropped the
-  frontmatter and the Evidence section, so its loaded text did not match the snapshot hash the
-  other five used. Re-run from the same hash-verified file as the rest.
+Two in round 1, both replaced by clean re-runs: an s02 baseline that invoked the installed
+`design-review` plugin skill and said so in its answer, and an s01 with-skill run whose inline
+paste of the skill dropped its frontmatter, so the loaded text did not match the snapshot hash
+the others used. A baseline dispatched where the plugin is installed *can* load it; zero tool
+uses is the check that one stayed clean.
 
 A current "Rule not needed here" would mean only that this model avoided the flaw in this
 scenario. It would not establish behavior in long sessions, larger systems or other models.
