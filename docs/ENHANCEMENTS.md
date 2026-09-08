@@ -216,3 +216,88 @@ is; check that against the current Claude Code behaviour before assuming either 
 inside the ENH-03 harness so the substitution has tests, rather than as a blind rename.
 
 Deferred from the phase that closed KI-15, to keep the fix beside its tests.
+
+---
+
+<a id="enh-10"></a>
+
+## ENH-10 — make the project-env name mapping unambiguous
+
+**Priority:** Low · **Effort:** ~2 hours
+**Where:** [project-env/SKILL.md:18-21](../skills/project-env/SKILL.md#L18-L21)
+
+### What it is
+
+The env name is the project path relative to the code root with separators flattened to `_`.
+That is not injective: `Code/a/b` and `Code/a_b` both become `a_b`, so two projects can name the
+same environment.
+
+### Why it matters
+
+Low, because the collision needs a project whose directory name already contains an underscore
+at the right position. When it happens, two projects silently share one `.venv`, and the symptom
+is a dependency appearing from nowhere. The skill now says to check the symlink before adopting
+an existing env; that is a workaround, not a fix.
+
+### Notes for the work
+
+Append a short digest of the normalized path, or encode the separator. Either changes existing
+env names, so it needs a migration path in `standardize-*-envs.sh` rather than a rename in the
+docs.
+
+**Source:** gpt-6-astra — phase review pass 5, 2026-09-08.
+
+---
+
+<a id="enh-11"></a>
+
+## ENH-11 — reconcile an existing global markdownlint config instead of skipping it
+
+**Priority:** Low · **Effort:** ~1 hour
+**Where:** [claude-setup/SKILL.md](../skills/claude-setup/SKILL.md) step 3b
+
+### What it is
+
+Step 3b writes `~/.markdownlint.jsonc` only when the file is absent. A machine with an existing
+config keeps it, so the four rules the step says "have to be set" are not set, and a re-run
+reports success.
+
+### Why it matters
+
+Same class as the standards block: the skill is supposed to bring a stale machine up to the
+current standard, and here it silently does not. The consequence is mild — lint findings that
+disagree with the house style — but the pattern is the one this skill exists to avoid.
+
+### Notes for the work
+
+Merge the four required keys into an existing config, preserving unrelated rules, the same way
+step 2 merges `settings.json`.
+
+**Source:** gpt-6-astra — phase review pass 5, 2026-09-08.
+
+---
+
+<a id="enh-12"></a>
+
+## ENH-12 — feed the Gemini prompt through stdin rather than argv
+
+**Priority:** Low · **Effort:** ~1 hour
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) Gemini invocation
+
+### What it is
+
+The prompt is passed as `agy -p "$(cat …)"`, so the whole bundle travels as a command-line
+argument and is bounded by `ARG_MAX` (~1 MB on macOS).
+
+### Why it matters
+
+Low today: the chunk ceiling is now ~120,000 characters for timeout reasons, well under the
+limit. It becomes real if the ceiling is ever raised, and the failure mode is `argument list too
+long` rather than anything that reads as a review problem.
+
+### Notes for the work
+
+Check whether `agy` accepts a prompt on stdin or from a file flag. If it does, use it; if not,
+record that argv is the only channel and keep the chunk ceiling as the control.
+
+**Source:** gemini-3.1-pro-high — phase review pass 5, 2026-09-08.

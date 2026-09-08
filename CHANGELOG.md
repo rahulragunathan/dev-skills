@@ -93,9 +93,9 @@ here — the plugin manifest's version is the only record of them.
 - **Test-validity audit now mutates rather than reverts** (`phase-workflow` §3
   step 3). Breaking the named behaviour in place replaces stashing the fix, which
   left newly added files in the tree and falsely certified the test. Restoration
-  is by `git checkout --`, which is correct here because the audit runs against a
-  committed task: the commit is the state to return to, and the snippet refuses to
-  run on a dirty tree or a symlinked target. Every failure path stops rather than
+  is by `git restore --source="$TASK_SHA" --staged --worktree`, which returns both
+  index and worktree to the recorded task commit; the snippet refuses to run on a
+  dirty tree or a symlinked target. Every failure path stops rather than
   continuing. A fixture must carry the property under test.
 - **Skip and partial coverage are now distinct** in both `phase-workflow` and
   `external-review`. A reviewer that fails on quota, auth, timeout or sandbox
@@ -119,9 +119,9 @@ here — the plugin manifest's version is the only record of them.
   link by its own name, so an innocuous filename pointing at a key passes every
   pathspec. The bundling loop is shown in full rather than described, and the
   withheld files are named in the coverage line.
-- **The default branch is detected, never hardcoded**, and the protection probe
-  branches on HTTP status so auth and network failures no longer read as
-  "unprotected".
+- **The default branch is detected, never hardcoded.** Every phase lands by pull
+  request regardless of branch protection, so no protection probe is needed and
+  none is run.
 - **Global standards:** subagents have three named uses and are never used to
   verify correctness; work runs as a phase when brainstorming classifies it
   architectural; anything that lands cuts a release with semver deciding the
@@ -199,6 +199,38 @@ here — the plugin manifest's version is the only record of them.
   163→49, `external-review` 187→59. They are resident in every session.
 
 ### Fixed
+
+- **External review pass 5 — 46 findings, and two of them were mine.** Both
+  reviewers independently reproduced a grading error in the pressure-test
+  evidence: the S07 baseline's replacement fixture puts Auckland and UTC on the
+  same calendar date, so its own property assertion is False and the test can
+  never run. P3 becomes **Rule needed / Rule works**. Codex went further and
+  showed the P2 correction I had proposed was wrong too — `now.astimezone()` is
+  not equivalent to `local = now`, because it keeps the original test green only
+  on a UTC host — so P2 becomes **Rule needed / Rule ineffective**, the one unit
+  the skill does not fix.
+- **`claude-setup` no longer writes editor configuration**, and its advertised
+  write footprint is stated accurately rather than as "nothing outside
+  `~/.claude`". Step 3b now detects the markdownlint extension by its
+  directory — `code --list-extensions` reports "not installed" whenever the CLI
+  is off `PATH`, which is common — and hands the user the one-key change to make
+  themselves, with the consequence of declining stated: editor squiggles on the
+  house style of long prose lines that the CLI gate never reports.
+- **`external-review` had five defects in the machinery that gates a phase.**
+  The availability check grepped combined stdout and stderr, so a review whose
+  findings contained "not supported" was discarded and overwritten by the next
+  rung; `repo` mode reconciled with `git status`, which returns zero on the clean
+  tree it is meant to run against; `repo` capture was not fail-closed while phase
+  capture was; `codex exec` hung forever without `< /dev/null`; and the ~400k
+  chunk ceiling was wrong — the binding limit is wall-clock, measured at ~120k
+  per call.
+- **Cross-file contradictions the restructuring left behind:** the typo exception
+  in the standards against phase-workflow invalidating approval on every edit,
+  a reviewer output contract no compliant reviewer could satisfy, KI-22 pointing
+  at a deleted step 7, ROADMAP still counting seven skills, README still
+  promising a three-pass ceiling, the diagram legend promising `gh` never blocks,
+  and ARCHITECTURE claiming every `settings.json` writer patches in place when
+  `toggle.sh` does not.
 
 - **ENH-07 was scoped to two files and applies to six.** It named
   `backup-projects.sh` and `claude-setup`, missing all four

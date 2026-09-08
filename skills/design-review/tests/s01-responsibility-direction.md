@@ -20,17 +20,26 @@ A missing module table, signature or dependency needed to trace the feature fail
 check. Judge the final design, including code or diagrams supplied with it. A warning or future
 extraction trigger does not repair a failing artifact.
 
-1. **Responsibility** — any changed unit owns two unrelated policies: invoice selection or
-   grouping, PDF layout, email delivery, or sent-record persistence. Fail any such pair, not
-   only summary-plus-email. Renaming the responsibility to "handle summaries", splitting
+1. **Responsibility** — any changed unit owns two policies drawn from **different** entries in
+   this list. The entries are: (a) invoice selection *or* grouping — these two count as one
+   entry, not two; (b) PDF layout; (c) email delivery; (d) sent-record persistence. Fail any
+   cross-entry pair, not only summary-plus-email. Renaming the responsibility to "handle summaries", splitting
    functions inside the same unit, or noting the trade-off does not change the result. A
    coordinator that only passes data between these units is not a second policy owner.
 2. **Direction** — the table has a cycle, orders rows by call order instead of the fixture's
-   change drivers, or gives a unit a concrete dependency on a less stable unit. Check all
-   declared dependencies, including known paths through unchanged modules. In particular,
-   stable grouping policy must not depend on Postgres, PDF layout or the mail provider, and
-   the generic pool wrapper must not import report-owned types. A reordered table or a
-   paragraph defending an unchanged downward dependency does not pass.
+   change drivers, or lets a policy-bearing unit depend on a less stable one. Check all
+   declared dependencies, including known paths through unchanged modules.
+
+   **Grouping policy is judged by reachability, not by whether it has its own row.** If grouping
+   stays a private function inside a module that imports Postgres, the PDF renderer or the mail
+   provider, this condition fails — the policy cannot be exercised without them. The generic
+   pool wrapper must not import report-owned types.
+
+   **A composition root is exempt from the downward-dependency rule**, but only if every domain
+   policy it would otherwise hold — selection, grouping, layout, persistence — has been
+   extracted into its own unit. Wiring is not policy. A reordered table, or a paragraph
+   defending a downward dependency from a unit that still carries domain policy, does not
+   pass.
 
 ## Prompt
 

@@ -87,9 +87,10 @@ keys. Related: KI-02, which is the same switch failing for a different reason.
 **Severity:** Critical · **Partly fixed**
 **Where:** [llama-autostart.sh:75](../skills/claude-toggle-backend/llama-autostart.sh#L75)
 
-**Fixed in `claude-setup`, held in `claude-toggle-backend`.** The shell-block installer at
-`claude-setup` step 7 had the same defect and now requires both markers, backs the file up,
-and writes through `mktemp`. `llama-autostart.sh` still carries the original pattern and is
+**Fixed in `claude-toggle-backend`'s alias block, held in `llama-autostart.sh`.** The
+shell-block installer that had the same defect was hardened — it requires both markers, backs
+the file up, and writes through `mktemp` — and then moved out of `claude-setup` into
+`claude-toggle-backend` with ENH-09. `claude-setup` no longer writes `~/.zshrc` at all. `llama-autostart.sh` still carries the original pattern and is
 held for the rebuild — which must not reintroduce it.
 
 ### What happens
@@ -113,8 +114,8 @@ Running uninstall silently deletes everything below that point, including unrela
 
 Require both markers before editing, and refuse with a message when only one is present.
 Write to `mktemp` output rather than a fixed name. Back the file up before rewriting. Copy the
-`claude-setup` step 7 block, which now does all three and is verified against a hand-deleted
-closing marker.
+hardened block from `claude-toggle-backend/SKILL.md` under *Shell aliases*, which does all three
+and is verified against a hand-deleted closing marker.
 
 **Source:** gpt-5.6-sol — repo review, 2026-09-05.
 
@@ -931,3 +932,143 @@ Put a fake `pgrep` on `PATH` in the test helper, as the suite already does for `
 `vllm-mlx`. Related: KI-13, which is the other place these tests reach outside their sandbox.
 
 **Source:** gpt-5.6-sol — repo review, 2026-09-05.
+
+---
+
+<a id="ki-28"></a>
+
+## KI-28 — `drive-backup` uses `$CODE_ROOT` without defining it
+
+**Severity:** High
+**Where:** [drive-backup/SKILL.md:51](../skills/drive-backup/SKILL.md#L51)
+
+### What happens
+
+Step 1 sets `BACKUP_DEST="$CODE_ROOT/Claude-Projects"`, but `CODE_ROOT` is defined in
+`claude-setup` step 4 and nowhere in `drive-backup`. The skill advertises itself as the way to
+install the backup on a machine, so it will be invoked directly.
+
+### Example scenario
+
+A user runs `/localclaude:drive-backup` on a new machine without running `claude-setup` first.
+`$CODE_ROOT` is empty, `BACKUP_DEST` becomes `/Claude-Projects`, and `mkdir -p` either fails or
+creates directories at the volume root.
+
+### Notes for a fix
+
+Copy the `CODE_ROOT` detection from `claude-setup` step 4 into `drive-backup`, or make the skill
+refuse with a clear message when the variable is unset. **Introduced by ENH-08**, which split
+this skill out of `claude-setup` and left the variable behind.
+
+**Source:** gemini-3.1-pro-high — phase review pass 5, 2026-09-08.
+
+---
+
+<a id="ki-29"></a>
+
+## KI-29 — the "already set up" shortcut accepts a hook pointing at the old path
+
+**Severity:** High
+**Where:** [drive-backup/SKILL.md:87-89](../skills/drive-backup/SKILL.md#L87-L89)
+
+### What happens
+
+The idempotence check passes when the `Stop` hook "calls `backup-projects.sh`". A hook still
+pointing at the pre-ENH-08 `skills/claude-setup/backup-projects.sh` satisfies that string test,
+so the shortcut seeds once and leaves every later turn backing up nothing.
+
+### Example scenario
+
+A machine set up before the split is re-run through the skill. The check passes, the seed run
+writes a fresh `rc=0` line, and the log then stops growing — which KI-14 makes indistinguishable
+from success.
+
+### Notes for a fix
+
+Compare the hook's command against the exact current path, not a substring, and require a log
+line newer than the seed run.
+
+**Source:** gpt-6-astra — phase review pass 5, 2026-09-08.
+
+---
+
+<a id="ki-30"></a>
+
+## KI-30 — two machines overwrite each other's config snapshot
+
+**Severity:** High
+**Where:** [backup-projects.sh:112-129](../skills/drive-backup/backup-projects.sh#L112-L129)
+
+### What happens
+
+The config snapshot writes `settings.json`, `history.jsonl`, `.claude.json` and
+`projects-backup.dest` into one shared `Config/` directory on Drive. Every machine writes the
+same filenames to the same synced destination.
+
+### Example scenario
+
+A laptop and a desktop both run the hook. Whichever ran last owns `Config/settings.json`, so the
+other machine's allowlist and its per-project approval state are gone from the backup — the one
+thing the snapshot exists to make recoverable.
+
+### Notes for a fix
+
+Namespace by a stable machine identifier (`Config/<hostname>/…`), keeping each machine
+independently restorable.
+
+**Source:** gpt-6-astra — phase review pass 5, 2026-09-08.
+
+---
+
+<a id="ki-31"></a>
+
+## KI-31 — the lock drops the last backup of a session
+
+**Severity:** Medium
+**Where:** [backup-projects.sh:75-79](../skills/drive-backup/backup-projects.sh#L75-L79)
+
+### What happens
+
+An overlapping invocation exits immediately, on the assumption that the run already in progress
+captures the newest state. It does not: a run that has already copied `Code/` and is working
+through Cowork will not pick up a turn that finishes afterwards.
+
+### Example scenario
+
+The final turn of a session ends while a backup is mid-flight. Its transcript is never copied,
+and no later turn triggers the hook because the session is over.
+
+### Notes for a fix
+
+Record a pending rerun when the lock is held and run once more on release. Distinct from KI-06,
+which is about a lock left behind by a killed process.
+
+**Source:** gpt-6-astra — phase review pass 5, 2026-09-08.
+
+---
+
+<a id="ki-32"></a>
+
+## KI-32 — repository approval state is no longer in the file the backup collects
+
+**Severity:** Medium
+**Where:** [drive-backup/SKILL.md:29-32](../skills/drive-backup/SKILL.md#L29-L32), [claude-setup/REFERENCE.md:21](../skills/claude-setup/REFERENCE.md#L21)
+
+### What happens
+
+Both files say the invisible per-project "always allow" state lives in `~/.claude.json`, and the
+snapshot collects that file on those grounds. Current Claude Code records persistent repository
+approvals in each repo's `.claude/settings.local.json`, which the snapshot does not collect.
+
+### Example scenario
+
+A machine is rebuilt from the backup. The global allowlist returns; every per-repository
+approval the user clicked does not, and the claim in the docs says otherwise.
+
+### Notes for a fix
+
+Verify where the current version stores this, version-scope the legacy sentence, and decide
+explicitly whether repo-local approval state belongs in a Drive backup at all — it is per-repo
+state that arguably belongs in the repo.
+
+**Source:** gpt-6-astra — phase review pass 5, 2026-09-08.

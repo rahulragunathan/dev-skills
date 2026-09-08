@@ -51,3 +51,32 @@ which works regardless of what the history contains. This entry exists so the ab
 historical evidence is not mistaken later for evidence of absence.
 
 **Source:** gpt-5.6-sol — repo review, 2026-09-05.
+
+---
+
+<a id="unk-03"></a>
+
+## UNK-03 — does `Bash(cmd*)` really never match?
+
+**Kind:** Verification gap
+
+### The question
+
+`claude-setup` and its `REFERENCE.md` both state that a permission rule written `Bash(cmd*)`,
+without the colon, silently never matches, and call it the most common mistake. A reviewer
+reports that current Claude Code documentation describes bare-prefix wildcards as supported,
+matching more broadly than the colon form rather than not at all.
+
+### Why it matters
+
+If the claim is wrong, the docs are teaching a superstition and — worse — a user who writes
+`Bash(rm*)` believing it inert would in fact have allow-listed a family of commands. That is the
+opposite of the safe reading.
+
+### What would settle it
+
+Write both forms into a scratch `settings.json`, restart, and observe which commands prompt.
+This is a five-minute empirical check on one machine; it has simply never been run since the
+claim was first written.
+
+**Source:** gpt-6-astra — phase review pass 5, 2026-09-08.

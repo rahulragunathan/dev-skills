@@ -42,8 +42,8 @@ Two concerns moved out, so troubleshooting for them lives with their skill rathe
   destination resolution order, the rsync flag choices, and the Full Disk Access / Automator /
   Shortcuts path are all documented there.
 - **The llama.cpp shell aliases and login auto-start** — `/localclaude:claude-toggle-backend`,
-  which owns the managed `~/.zshrc` block. `claude-setup` now writes nothing outside
-  `~/.claude` and the detected Drive root.
+  which owns the managed `~/.zshrc` block. `claude-setup` no longer writes `~/.zshrc` at all,
+  and it advises on the VS Code markdownlint key rather than writing it.
 
 ## Other useful facts
 

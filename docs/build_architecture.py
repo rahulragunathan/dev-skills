@@ -18,12 +18,13 @@ Conventions encoded here (read SKILL.md for the full rationale):
 - Multi-line edge labels use <div> tags, NOT \\n (drawio Desktop round-trip).
 
 After running this generator, run:
-    python scripts/validate.py <output.drawio>
+    python3 ~/.claude/skills/drawio/scripts/validate.py docs/architecture.drawio
 to check for CROSSING / OVERLAP / TEXT_OVERLAP / LABEL_OVERLAP /
 LABEL_BOX_OVERLAP / SHORT_LABELLED_EDGE / DIAGONAL / DANGLING violations.
 Then render the PNG and LOOK at it — a clean validate says nothing about
 whether labels have room or whether either theme is legible:
-    python scripts/render_png.py <output.drawio>   # foo.drawio -> foo.png
+    python3 ~/.claude/skills/drawio/scripts/render_png.py docs/architecture.drawio \
+        -o docs/architecture.png
 
 Reserve routing corridors before writing any edges, and record the
 allocation here (e.g. "y=225 lane — pipeline fan-in; x=850 channel — app
@@ -223,9 +224,10 @@ def edge(
     Prefer verb-first labels ('Call OCR', 'Reads index') and stacked <div>
     words in tight channels.
 
-    The label carries no explicit font colour. draw.io inverts colours for its
-    own dark theme, and an explicit <font color> opts the label OUT of that,
-    which is how it ends up as dark text on a dark canvas."""
+    The label's colour is set through the cell STYLE (fontColor=), which draw.io
+    inverts for its own dark theme. Never put an HTML <font color> in the label
+    value instead: that opts the label out of the inversion, which is how it ends
+    up as dark text on a dark canvas."""
     if (exitX is None) != (exitY is None):
         raise ValueError(
             "exitX and exitY must be given together — half a pair emits "
@@ -872,8 +874,8 @@ box(
     W - 80,
     36,
     desc(
-        "Arrow colour matches its source. Every external tool is optional — "
-        "a missing CLI degrades that step and never blocks the workflow."
+        "Arrow colour matches its source. codex, agy and drawio are optional — a "
+        "missing one degrades that step. gh is required: no PR, no phase."
     ),
     fill="#ffffff",
     stroke="#9e9e9e",

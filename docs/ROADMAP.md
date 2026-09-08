@@ -27,7 +27,7 @@ reused. Nothing here looks backward — completed phases are CHANGELOG releases.
 
 ## Status
 
-The plugin ships seven skills and is in daily use on one machine. The five bash scripts under
+The plugin ships eight skills and is in daily use on one machine. The five bash scripts under
 `claude-toggle-backend` and `claude-setup` carry the whole open bug list: the process,
 review and standards skills were repaired in the phase that created this file, and their
 findings are in the CHANGELOG rather than here.
@@ -50,8 +50,8 @@ landed in it. ENH-06 and ENH-01 gave the repo the `CLAUDE.md` and `ARCHITECTURE.
 of others and cut the standards block to 2,480 words, with its environment procedures moved
 into the new `project-env` skill. ENH-08 and ENH-09 then split `claude-setup` three ways: the
 Drive backup into a new `drive-backup` skill and the llama.cpp shell block into
-`claude-toggle-backend`, leaving `claude-setup` at 5,395 words and writing nothing outside
-`~/.claude` and the Drive root.
+`claude-toggle-backend`, leaving `claude-setup` at 5,395 words and touching neither
+`~/.zshrc` nor any editor configuration.
 
 **Phase 2 — the backup cluster.** A bats harness for `backup-projects.sh` (ENH-03, in its
 active half), now scoped to the `drive-backup` skill it moved into, then KI-14, KI-06, KI-08
@@ -79,6 +79,11 @@ Most severe first. Severity definitions and full detail in [KNOWN_ISSUES.md](KNO
 | [KI-12](KNOWN_ISSUES.md#ki-12) | The stop test passes even if nothing is stopped | High |
 | [KI-13](KNOWN_ISSUES.md#ki-13) | Test cleanup kills unrelated processes on the machine | High |
 | [KI-14](KNOWN_ISSUES.md#ki-14) | Every backup failure is logged as `ok` and exits 0 | High |
+| [KI-28](KNOWN_ISSUES.md#ki-28) | `drive-backup` uses `$CODE_ROOT` without defining it | High |
+| [KI-29](KNOWN_ISSUES.md#ki-29) | The "already set up" shortcut accepts a hook on the old path | High |
+| [KI-30](KNOWN_ISSUES.md#ki-30) | Two machines overwrite each other's config snapshot | High |
+| [KI-31](KNOWN_ISSUES.md#ki-31) | The lock drops the last backup of a session | Medium |
+| [KI-32](KNOWN_ISSUES.md#ki-32) | Repository approval state is not in the file the backup collects | Medium |
 | [KI-16](KNOWN_ISSUES.md#ki-16) | `HF_HOME` is exported by an orphaned `~/.zshrc` block no skill installs | Medium |
 | [KI-17](KNOWN_ISSUES.md#ki-17) | The machine is documented as both 64 GB and 24 GB | Medium |
 | [KI-18](KNOWN_ISSUES.md#ki-18) | `toggle.sh` needs `python3` and never checks for it | Medium |
@@ -101,6 +106,9 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 | [ENH-03](ENHANCEMENTS.md#enh-03) | Test the two destructive scripts that have no tests at all | High | ~1 day |
 | [ENH-04](ENHANCEMENTS.md#enh-04) | Make the fakes assert a contract rather than only a shape | Medium | ~half a day |
 | [ENH-05](ENHANCEMENTS.md#enh-05) | Fold the MLX plan and spec into the permanent docs | Medium | ~half a day |
+| [ENH-10](ENHANCEMENTS.md#enh-10) | Make the project-env name mapping unambiguous | Low | ~2 hours |
+| [ENH-11](ENHANCEMENTS.md#enh-11) | Reconcile an existing global markdownlint config | Low | ~1 hour |
+| [ENH-12](ENHANCEMENTS.md#enh-12) | Feed the Gemini prompt through stdin rather than argv | Low | ~1 hour |
 | [ENH-07](ENHANCEMENTS.md#enh-07) | Honour `$CLAUDE_CONFIG_DIR` in the bundled scripts | Low | ~2 hours |
 
 ## Open Questions
@@ -110,4 +118,5 @@ reasoning behind each in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
 | ID | Question | Kind |
 | ---- | ---------- | ------ |
+| [UNK-03](OPEN_QUESTIONS.md#unk-03) | Does `Bash(cmd*)` really never match? | Verification gap |
 | [UNK-02](OPEN_QUESTIONS.md#unk-02) | No test in this repo can be shown to discriminate from git history alone | Risk |

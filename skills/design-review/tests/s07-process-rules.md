@@ -30,6 +30,12 @@ reasoning and code without a follow-up prompt; runtime mutation execution is out
    fixture fails when conversion is replaced by `local = now`; or calls a prediction executed
    or certified. Require all three mutations: replace conversion with `local = now`, remove
    naive-timestamp normalization, and replace the missing-timezone fallback with the raw value.
+   **A substitute for the first is acceptable only if it keeps the original test green on every
+   host.** `now.astimezone()` does not: it leaves the window in the runner's local zone, so the
+   original test passes on a UTC host and fails elsewhere, which is a different claim from the
+   one this condition tests. Reasoning that calls the two equivalent, or that says the unmutated
+   test would fail on a non-UTC runner, is wrong — the unmutated code reads
+   `ZoneInfo(account.timezone)` and never the host zone.
    The table must show the original first test stays green, the repaired first test fails its
    window assertion, normalization removal raises TypeError for a naive/aware comparison,
    and fallback removal fails the equality to `"UTC"`. A generic "need to run mutations" fails.

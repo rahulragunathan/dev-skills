@@ -14,7 +14,7 @@ Bootstrap a machine's Claude Code config with the user's preferred conventions:
 - **Wiring this machine to the synced Drive**: a `~/.claude/skills` symlink (loose skills like `drawio`) and the **`localclaude`** plugin via a local marketplace — both derived from one detected `Code` root.
 - **A `Stop`-hook backup** of transcripts, plans and config to the synced `Code/Claude-Projects` folder. Step 6 hands this to `/localclaude:drive-backup`, which owns the script and the procedure.
 
-It writes nothing outside `~/.claude` and the detected Drive root. Idempotent — safe to re-run,
+Its write footprint is `~/.claude/`, the top-level `~/.claude.json`, `~/.markdownlint.jsonc`, the two Drive symlinks, and whatever `brew install` puts on the machine. It does **not** touch `~/.zshrc` or any editor configuration. Idempotent — safe to re-run,
 and it **merges** into existing config rather than clobbering it. See `REFERENCE.md` (next to
 this file) for the full rationale and troubleshooting.
 
@@ -160,12 +160,12 @@ Preserve any non-standard content the user keeps **outside** the managed block.
 - **Work runs as a phase when `superpowers:brainstorming` classifies it architectural.** Spike and bounded run under the normal workflow, and the one-way ratchet applies, so a bounded task that turns out architectural becomes a phase mid-flight. Call a phase on bounded work whenever you want the retrospective — a security-sensitive path, a change to a rule other work depends on, or simply because I say so.
 - Phases follow the `localclaude:phase-workflow` skill, one feature branch per phase. Invoke it at every phase boundary: plan review, plan approval, end-of-phase retrospective, post-sign-off merge cycle. **Completing phase N never rolls into phase N+1: present phase N for my review and stop; my approval is the only trigger for the next phase.**
 - **The phase gate is a PR ready for review.** At hand-off the phase's commits are pushed, the working tree is clean, and the draft PR has been marked ready. Sign-off authorizes the merge and nothing else. Committed work is recoverable from the reflog; uncommitted work is not, and the retrospective points `git checkout`, worktree and stash operations at the tree.
-- **Any edit while waiting for sign-off is a new commit on the PR, named in a follow-up message.** Re-request review unless it is a typo. The control is visibility, not category.
+- **Any edit while waiting for sign-off is a new commit on the PR, named in a follow-up message, and it invalidates the approval** — including a typo. Sign-off is on a SHA, and the merge is bound to that SHA, so an edit makes the approval refer to a commit that is no longer the head. Re-request review on the new one. The control is visibility, not category.
 - **Sign-off is my approval of the finished phase**: "looks good", "approved", "go ahead and merge". Approval to *start* a phase is not sign-off on it. When one message does both ("merge this and start the next phase"), it authorizes the merge cycle for phase N and the implementation of N+1, never the merge of N+1.
 - Docs and code comments stay true to the code. Check them **holistically**: read each doc against the code as it now stands and fix drift from earlier phases, not only the part you just changed.
 - Two boundaries. **Before every commit hand-off:** update the comments in the files you touched and any doc the change invalidated. **At every phase end:** sweep README.md, project CLAUDE.md, CHANGELOG.md, docs/ARCHITECTURE.md with its drawio diagram, and the roadmap files (docs/ROADMAP.md, KNOWN_ISSUES.md, ENHANCEMENTS.md, OPEN_QUESTIONS.md), per the `localclaude:phase-workflow` skill.
 - **One fact, one place, and docs split by tense.** CHANGELOG.md is the past (versioned; a released section is never edited); README, ARCHITECTURE and the project CLAUDE.md are the present; the roadmap files are the future. An item moves between them and never copies: it enters ROADMAP and its supporting file together, and on completion is *deleted* from both and written into CHANGELOG `[Unreleased]`. Dropped ideas move to "Decisions taken and not taken" in the project CLAUDE.md. If a sentence would be true in two of these files, it belongs in exactly one; pick by tense.
-- **Roadmap files live under `docs/`**: ROADMAP.md is the index, with Known Issues, Enhancements and Open Questions inline until a section passes five entries and splits into its own file. IDs (`KI-nn`, `ENH-nn`, `UNK-nn`) are stable, used in branch names and CHANGELOG entries, and never reused. `localclaude:phase-workflow` and the bundled templates define the rest — rating scales, entry format, anchors, and what a good entry contains.
+- **Roadmap files live under `docs/`**: ROADMAP.md is the index carrying pointer rows only, with Known Issues, Enhancements and Open Questions each in their own file. IDs (`KI-nn`, `ENH-nn`, `UNK-nn`) are stable, used in branch names and CHANGELOG entries, and never reused. `localclaude:phase-workflow` and the bundled templates define the rest — rating scales, entry format, anchors, and what a good entry contains.
 - **Anything that lands cuts a release; semver decides the number.** Version by what changed, never by how the work was classified: a bounded fix is a patch, a bounded new flag a minor, a break major. Spikes land nothing. Phase releases carry the phase name in the heading and bounded ones do not, so **the release history is the change history** — ROADMAP keeps no table of completed phases.
 - **Repo root holds README.md, CLAUDE.md, CHANGELOG.md, LICENSE. Everything else goes in `docs/`.** CLAUDE.md is only auto-loaded from root, and CHANGELOG stays there for the Keep a Changelog and release-tooling conventions.
 - Drift check, not a re-read: confirm every identifier, file path, command, flag, and config key a doc names still exists. A comment or doc line the code outgrew is worse than none, so delete it or fix it.
@@ -222,18 +222,40 @@ The standards in step 3 say to lint the markdown you touched before hand-off. Th
      // Keep a Changelog repeats Added/Changed/Fixed/Removed under every version.
      "MD024": { "siblings_only": true },
 
-     // Numbered steps deliberately continue across headings (phase-workflow §4
-     // splits one 1-7 sequence into Path A and Path B). Auto-renumbering breaks
-     // cross-references such as "step 5 already removed the remote branch".
+     // Numbered steps deliberately continue across headings, so auto-renumbering
+     // breaks cross-references such as "step 5 already removed the remote branch".
      "MD029": false
    }
    ```
 
-3. **Point the VS Code extension at that same file**, or the editor keeps its own defaults and the two tools disagree forever. Merge this one key into `~/Library/Application Support/Code/User/settings.json` — key-scoped, never rewrite the file:
+3. **Offer the VS Code parity step — do not perform it.** This skill writes nothing under
+   `~/Library/Application Support/`. Detect whether the extension is installed, and if it is,
+   give the user the instructions below and let them decide:
+
+   ```bash
+   ls -d "$HOME/.vscode/extensions/davidanson.vscode-markdownlint-"* 2>/dev/null \
+     || ls -d "$HOME/.vscode-insiders/extensions/davidanson.vscode-markdownlint-"* 2>/dev/null \
+     || echo "markdownlint extension not installed — skip this step entirely"
+   ```
+
+   **Check the directory, not `code --list-extensions`.** The `code` CLI is frequently absent
+   from `PATH` even where the editor and the extension are installed, so the CLI check reports
+   "not installed" for a machine that has it.
+
+   If it is installed, tell the user to open **Settings (JSON)** from the command palette and
+   add one key, and say what it does:
 
    ```json
    "markdownlint.configFile": "${userHome}/.markdownlint.jsonc"
    ```
+
+   **State the consequence of declining, because it is not obvious.** Without this key the
+   extension keeps its own defaults and the two tools disagree permanently in one direction:
+   the editor turns `MD013` (line length) off by default while the CLI leaves it on, so the
+   house style of long prose lines shows as squiggles in the editor that the CLI gate never
+   reports. Nothing breaks and no gate changes — `markdownlint-cli2 --config` remains the only
+   thing that decides pass or fail — but editor noise on every markdown file is the cost. The
+   user may reasonably prefer that to editing their VS Code settings.
 
 4. **Verify** from any repo root. Both sides should now agree, and a clean tree exits 0:
 
@@ -250,7 +272,11 @@ The standards in step 3 say to lint the markdown you touched before hand-off. Th
 
 **Always pass `--config` explicitly.** The CLI finds a config by walking up from each file, so `~/.markdownlint.jsonc` is picked up only when the target sits under `~` — and silently ignored when it doesn't. Naming the file removes the guess and makes the command portable.
 
-**Keep the VS Code extension installed.** It's the same rule engine as the CLI, so once both read this config they never contradict each other. The extension gives live feedback while editing and surfaces diagnostics to Claude through the IDE; the CLI is the batch gate over a whole repo. They cover different moments, not the same one.
+**The extension is optional; the CLI is not.** Where the extension is installed and pointed at
+the same config, it is the same rule engine as the CLI, so the two never contradict each other:
+live feedback while editing, and diagnostics surfaced to Claude through the IDE. The CLI is the
+batch gate over a whole repo and is what the hand-off requires. A machine with no VS Code at all
+is fully set up without this step.
 
 ### 4. Locate the synced `Code` folder, then symlink `Skills`
 

@@ -40,17 +40,20 @@ what sits at the bottom changes when someone else ships a new CLI.
 | `local-models` | Find, size and fetch local models | `/localclaude:local-models` | `huggingface-skills`, HF |
 | `claude-toggle-backend` | Point Claude Code at a different inference backend | `/localclaude:claude-toggle-backend <backend>` | `~/.claude/settings.json`, local servers |
 
-**Expected change:** a new external reviewer. Adding one should mean editing
-`external-review` and nothing else.
+**Expected change:** a new external reviewer. Adding one edits `external-review`, and today
+also `phase-workflow`, which names the reviewer pair in its skip rules — that second edit is the
+coupling to remove if this expectation is to hold.
 
 **Shared state:** `~/.claude/settings.json` has three writers — `claude-setup` (the permission
 allowlist), `claude-toggle-backend` (model, effort and `ANTHROPIC_*` keys) and `drive-backup`
-(the `Stop` hook). It is the only shared mutable state in the repo, and the reason every writer
-patches keys in place rather than rewriting the file. KI-01 is what happens when one does not.
+(the `Stop` hook). It is the only shared mutable state in the repo, and the reason a writer
+must patch keys in place rather than rewrite the file. `toggle.sh` does not — it rewrites the
+whole document, which is KI-01.
 
 `~/.zshrc` is the other shared file, and it is shared differently: one writer in the repo,
-`claude-toggle-backend`, plus surfaces the repo depends on but does not own. `phase-workflow`
-called a hand-written `git-clean-local-branches` function until §4 inlined it, and an `HF_HOME`
+`claude-toggle-backend`, plus one surface the repo depends on and does not own. `phase-workflow`
+called a hand-written `git-clean-local-branches` function until §4 inlined it, so that dependency
+is gone; what remains is an `HF_HOME`
 block branded `# >>> localclaude` exports a variable no skill installs (KI-16). Marker text
 asserts an owner, so the question to ask of a block in that file is whether code generates it,
 not whether it looks managed. KI-22 is the truncation bug in the block that did move here.
@@ -59,8 +62,10 @@ not whether it looks managed. KI-22 is the truncation bug in the block that did 
 
 **The development process** — `phase-workflow` orchestrates; `design-review` and
 `external-review` are called by it at defined points and are useful on their own. The
-dependency runs one way: neither sub-skill knows about the workflow that calls it, which is
-what lets `external-review repo` run on a repository that has never seen a phase.
+dependency is mostly one way: `external-review repo` runs on a repository that has never seen
+a phase. It is not clean, though — both sub-skills reference workflow stages by number and
+`phase-workflow` names the reviewer pair, so the three are more coupled than the call graph
+suggests.
 
 **Machine configuration** — `claude-setup` owns `~/.claude`. Its global standards live in a
 marked block that a re-run reconciles, so every machine converges on the same text. The
@@ -79,8 +84,10 @@ installed by the same run, with its own script, its own bug cluster and its own 
 What is left in `claude-setup` step 6 is a pointer plus the one fact the caller needs: both
 skills write `settings.json`, so whichever runs second must merge.
 
-`claude-setup` now writes nothing outside `~/.claude` and the detected Drive root. Its
-`~/.zshrc` block went to `claude-toggle-backend`, which is the skill those aliases control.
+`claude-setup` writes `~/.claude/`, the top-level `~/.claude.json`, `~/.markdownlint.jsonc`,
+the two Drive symlinks, and Homebrew packages. Its `~/.zshrc` block went to
+`claude-toggle-backend`, which is the skill those aliases control, and it offers the VS Code
+parity step rather than performing it — so it touches neither the shell nor the editor.
 Neither delegate is depended on by anything else; both are invoked directly, at the moment the
 thing they configure is set up or repaired.
 
@@ -91,8 +98,8 @@ open issues are held rather than worked; see the Held sections in
 
 ## External tools are all optional
 
-`codex`, `agy`, `gh` and the `drawio` skill are each invoked by exactly one skill, and a
-missing one degrades that step rather than blocking the workflow. `external-review` reports
+`codex`, `agy` and the `drawio` skill are each invoked by exactly one skill, and a missing one
+degrades that step rather than blocking the workflow. **`gh` is the exception and is required.** `external-review` reports
 partial coverage; `design-review` records "no diagram" and carries on. `gh` is the closest to
 required — `phase-workflow` cannot open or merge a PR without it — so it is preflighted before
 the first phase-start mutation rather than discovered at merge time.

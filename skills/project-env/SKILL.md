@@ -17,11 +17,23 @@ Drive and the project holds a symlink to it.
 
 **One name for both.** The env name is the project path relative to the machine's code root,
 flattened with `_`: `Code/Skills/drawio` → `Skills_drawio`, `Clients/ClientX/Code/api` →
-`ClientX_Code_api`. Same-named repos never collide, and a repo with both languages gets
-`~/Python-Envs/<name>` and `~/Node-Envs/<name>`.
+`ClientX_Code_api`. A repo with both languages gets `~/Python-Envs/<name>` and
+`~/Node-Envs/<name>`.
+
+**Flattening is not injective — check before reusing an env.** `Code/a/b` and `Code/a_b` both
+flatten to `a_b`, so two different projects can name the same env. Before adopting an existing
+env, confirm its `.venv`/`node_modules` symlink points back at *this* project; if it points
+somewhere else, pick an explicit name rather than sharing. ENH-10 tracks making the mapping
+unambiguous.
 
 The code root is `…/My Drive/Code` on one machine and `…/My Drive/Clients` on the other, which
 is also where the two scripts live.
+
+**The scripts are not on `PATH`. Resolve them from the code root and invoke by absolute path**,
+double-quoted — every code root has a space in it. The commands below are written as bare names
+for readability; run them as `"$CODE_ROOT/standardize-python-envs.sh" …`. If the file is not
+there, stop and say so rather than continuing: on a machine that has never been set up the
+script is missing, not merely unreachable, and `claude-setup` step 4 is what detects the root.
 
 ## Python
 
@@ -50,8 +62,12 @@ standardize-python-envs.sh envs     # move and rebuild
 `requirements-dev.txt`.
 
 ```bash
-uv pip install --python .venv/bin/python -r requirements.txt
+uv pip install --python .venv/bin/python -r requirements.txt -r requirements-dev.txt
 ```
+
+Install both files. The verification below runs `.venv/bin/python -m pytest` and
+`.venv/bin/ruff`, which live in `requirements-dev.txt`; installing only the runtime file leaves
+those commands missing and the check fails for a reason that has nothing to do with the env.
 
 **uv is the standalone build at `~/.local/bin/uv`, not the Homebrew one**, so `brew upgrade`
 cannot break an env.

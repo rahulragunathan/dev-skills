@@ -38,7 +38,13 @@ cost. A bounded change gets one sentence in chat instead of all this. A spike ge
 Input: the plan's approved structure section, plus the working tree. Runs at `phase-workflow`
 §3 step 2, **before** `/simplify` — structure decisions change what the later passes read.
 
-Answer three questions in writing:
+**The artifact is the updated module table plus whatever checks fired** — the same shape `plan`
+mode produces, covering the units this phase created or changed. `phase-workflow` §3 step 2
+requires that table; producing only prose does not satisfy it. When nothing fires, the artifact
+is the table plus the single line *"No check fired."*
+
+Three questions drive the pass. They are internal checks, not the output — an answer of "none"
+gets no line, under the same report rules as everything else:
 
 1. Which file picked up a second responsibility this phase?
 2. Which change required edits in more than two files that should not have needed them?
@@ -237,8 +243,11 @@ Results, and which rules a strong model already follows unaided, are in
 [`tests/README.md`](tests/README.md). **Do not present an unproven rule as a tested one** — that
 file says which is which.
 
-As of the 2026-09-07 round, three of fifteen units change what the model produces: the two
-report rules **Only what fired** and **No filler verdicts**, and **produce versus edit**. Eleven
-record a strong model already doing the right thing unaided, and **Direction** is ungraded
-pending a condition fix. Produce versus edit was written *by* an earlier run and is now
-confirmed by a current one; never marking a diagram box "new" is still an untested rule.
+**The counts live in `tests/README.md` and are deliberately not repeated here.** Restating them
+in this file would mean every new round edits the skill, which expires the very with-skill runs
+that produced the round — and a stale count here would contradict the evidence it summarises.
+Read them there.
+
+Two rules in this file came *from* those runs rather than being confirmed by them: the
+produce-versus-edit distinction, since confirmed by a later round, and never marking a diagram
+box "new", which still has no dedicated condition and is therefore untested.

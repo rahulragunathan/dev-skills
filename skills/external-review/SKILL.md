@@ -107,12 +107,16 @@ Note a downshift plainly there: a lighter model changes how much weight a findin
 
 ```bash
 for m in $(codex_ladder); do
+  OUT="<scratchpad>/codex_<mode>_p<n>_$m.txt"; LOG="<scratchpad>/codex_<mode>_p<n>_$m.log"
   codex exec -C "<repo-root>" --sandbox read-only \
     -m "$m" -c model_reasoning_effort="high" \
-    -o "<scratchpad>/codex_<mode>_p<n>.txt" "<prompt>" \
-    > "<scratchpad>/codex_<mode>_p<n>.log" 2>&1
-  grep -qiE 'not supported|unknown model|is not available|entitle' "<scratchpad>/codex_<mode>_p<n>.log" || break
-  echo "unavailable: $m — trying the next rung"
+    -o "$OUT" "<prompt>" > "$LOG" 2>&1 < /dev/null
+  rc=$?
+  [ "$rc" = 0 ] && [ -s "$OUT" ] && break                      # it answered; keep this rung
+  if grep -qiE 'not supported|unknown model|is not available|entitle' "$LOG"; then
+    echo "unavailable: $m — trying the next rung"; continue
+  fi
+  echo "$m failed for a reason that is not availability — classify per Failure handling"; break
 done
 ```
 
@@ -124,14 +128,27 @@ done
 
 ```bash
 for m in $(gemini_ladder); do
+  OUT="<scratchpad>/gemini_<mode>_p<n>_$m.txt"
   agy -p "$(cat "<scratchpad>/gemini_prompt_p<n>.txt")" --model "$m" --effort high \
-      --print-timeout 15m > "<scratchpad>/gemini_<mode>_p<n>.txt" 2>&1
-  grep -qiE 'not supported|unknown model|is not available|entitle' "<scratchpad>/gemini_<mode>_p<n>.txt" || break
-  echo "unavailable: $m — trying the next rung"
+      --print-timeout 25m > "$OUT" 2> "<scratchpad>/gemini_<mode>_p<n>_$m.err"
+  rc=$?
+  [ "$rc" = 0 ] && [ -s "$OUT" ] && break
+  if grep -qiE 'not supported|unknown model|is not available|entitle' \
+       "<scratchpad>/gemini_<mode>_p<n>_$m.err"; then
+    echo "unavailable: $m — trying the next rung"; continue
+  fi
+  echo "$m failed for a reason that is not availability — classify per Failure handling"; break
 done
 ```
 
 - Build the prompt in a file (rubric + inlined material); the default 5m print-timeout is too short for big inputs — set ~15m.
+
+**Classify availability only after a failed invocation, and keep stderr separate.** The old form
+redirected stdout and stderr into one file and grepped it for `not supported`. A *successful*
+review whose findings contain that phrase then reads as an unavailable model: the good answer is
+discarded, the next rung runs, and its output overwrites the first. Check the exit status and a
+non-empty answer first; only then read the error stream. Name each attempt's artifacts after the
+model so a downshift never overwrites the rung above it.
 
 **Both:** run as background tasks; **capture to scratchpad files and Read them — never pipe through `tail`/`head`**, which truncates the top of the findings list (the highest-severity items).
 
@@ -150,7 +167,7 @@ Prompt drift between the two reviewers corrupts the agree/disagree triage. Compo
 3. **Focus list** by mode:
    - *plan*: gaps and missing steps, risks and failure modes, sequencing problems, simpler approaches missed, anything underspecified.
    - *phase / repo*: real bugs (report everything, do not self-filter for severity), silent failures, security issues, design choices that will not hold up, code duplication/consolidation opportunities, genuinely missing test coverage; plus doc-vs-code contradictions (README, ARCHITECTURE, CLAUDE.md, ROADMAP + KNOWN_ISSUES/ENHANCEMENTS/OPEN_QUESTIONS, CHANGELOG).
-4. **Test-discrimination question** (*phase / repo* only): *"For each test in the material below, say whether it would still pass with the change it covers reverted. Name any test that asserts on a mock, on a constant, or on something true before the change."* This is a backstop — phase-workflow §3 step 3 already runs the check by actually reverting and re-running, which a reviewer cannot do. Ask anyway: a reviewer reading the assertion catches a different class than a revert catches.
+4. **Test-discrimination question** (*phase / repo* only): *"For each test in the material below, say whether it would still pass with the change it covers reverted. Name any test that asserts on a mock, on a constant, or on something true before the change."* This is a backstop — phase-workflow §3 step 3 already runs the check by **mutating** the named behaviour in place and re-running, which a reviewer cannot do. Ask anyway: a reviewer reading the assertion catches a different class than a mutation catches.
 5. **Do-not-read instruction (mandatory, both reviewers):**
 
    > Do not open `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `credentials*`, `.netrc`, `.npmrc`, `id_rsa*`, `id_ed25519*`, or anything else shaped like a secret. If a finding depends on one, name the file and say what you would need rather than reading it.
@@ -249,8 +266,21 @@ Do **not** use `git add -N` to sweep untracked files into the diff. It mutates t
 **Reconcile the bundle, and say the count out loud.** This failure is silent — a short bundle looks exactly like a small phase — so a better command is not the fix; a stated count is:
 
 ```bash
-git status --porcelain -uall -z | tr -cd '\0' | wc -c   # -uall expands untracked directories; -z survives newlines in paths
+# phase mode — what the diff and the untracked sweep between them should cover
+{ git diff --name-only "<base>"...HEAD; git ls-files --others --exclude-standard; } | sort -u | wc -l
+
+# repo mode — the bundle is every tracked file, so count those, not the working tree
+git ls-files -z -- . "${EXCL[@]}" | tr -cd '\0' | wc -c
 ```
+
+**Use the count that matches the mode.** `git status --porcelain` counts *changed* files, so on
+the clean committed tree a phase review is supposed to run against it returns zero while the
+bundle is large — the check can never fire in the mode it was written for.
+
+**Phase capture covers commits plus untracked files, not staged or unstaged edits to tracked
+files.** At a proper review point the tree is clean and that is complete. If a review is
+requested mid-task, say so and either commit first or state in the report that working-tree
+edits to tracked files were not captured — never let the diff silently stand in for them.
 
 Once exclusions are applied the bundle can no longer equal that count, so report both and name what was withheld:
 
@@ -265,22 +295,33 @@ Put that count in the prompt (*"this bundle contains all N changed files"*) and 
 **Build the `repo` bundle from `git ls-files`, never from a filesystem walk.** A recursive `find` or `cat -r` follows the `node_modules` and `.venv` symlinks straight out of the repo and into the environment root, and sweeps in every ignored file. Tracked files only, with the same exclusions, the same symlink and binary tests, and the same reconciled count:
 
 ```bash
-git ls-files -z -- . "${EXCL[@]}" |
+git ls-files -z -- . "${EXCL[@]}" > "<scratchpad>/tracked.z" \
+  || { echo "LS-FILES FAILED — do not send this bundle"; exit 1; }
+
 while IFS= read -r -d '' f; do
   [ -L "$f" ] && { printf '%s\t(symlink)\n' "$f" >> "$WITHHELD"; continue; }
   [ -f "$f" ] || continue
   perl -e 'exit(-B $ARGV[0] ? 0 : 1)' "$f" && { printf '%s\t(binary)\n' "$f" >> "$WITHHELD"; continue; }
   printf '\n===== %s =====\n' "$f" >> "$BUNDLE"
   cat "$f" >> "$BUNDLE" || printf '%s\t(read failed)\n' "$f" >> "$WITHHELD"
-done
+done < "<scratchpad>/tracked.z"
+
+grep -q '(read failed)' "$WITHHELD" && { echo "A FILE FAILED TO READ — do not send this bundle"; exit 1; }
 [ -s "$WITHHELD" ] && echo "withheld $(wc -l < "$WITHHELD") files — name them in the report"
 ```
 
-**Chunk when the bundle is too large, and measure before sending.** Neither CLI reports its own input limit, so treat roughly 400k characters as the working ceiling for one Gemini call and split below it rather than discovering the limit from a truncated answer:
+**Both modes fail closed, and for the same reason.** `repo` mode used to enumerate through a
+pipe and merely note read failures after the fact, so a partial bundle went out looking like a
+small repository. Guard the enumeration, feed the loop from a file, and refuse on any read
+failure — exactly as phase capture does above.
+
+**Chunk when the bundle is too large, and measure before sending. The binding limit is wall-clock, not input size.** Measured on 2026-09-08: a 125,000-character prompt answered comfortably, a 198,000-character one hit `Error: timeout waiting for response` at `--print-timeout 15m` and produced nothing. Keep a chunk near **120,000 characters** and raise the timeout to 25m; a bigger single call does not fail with a truncated answer, it fails with no answer at all after burning the whole timeout.
 
 ```bash
-wc -c "$BUNDLE"    # split by package/directory if this is over ~400000
+wc -c "$BUNDLE"    # split by directory or concern if this is over ~120000
 ```
+
+**Split on a seam, and repeat the shared context in every chunk.** Cross-file contradiction is the main thing a review of prose is for, and chunking is exactly what hides it — so the files every other file must agree with (the repo `CLAUDE.md`, `README.md`, `docs/ARCHITECTURE.md`) go into *each* chunk, and each prompt says which chunk it is and that the others cover the rest, so nothing is reported missing merely because it is elsewhere.
 
 Never silently review a subset. Say in the report exactly what each call covered, and reconcile the chunks against the file count the same way a single bundle is reconciled.
 
@@ -351,9 +392,9 @@ Column rules:
 
 ### Disposition vocabulary — *plan* mode
 
-`Incorporated — <where>` | `Already covered — <where>` | `Filed ENH-nn / UNK-nn` | `Not incorporated` (Verdict `Rejected`).
+`Incorporated — <where>` | `Already covered — <where>` | `Filed KI-nn / ENH-nn / UNK-nn` | `Not incorporated` (Verdict `Rejected`).
 
-A valid finding that is out of scope for this phase is **filed, not dropped** — it gets an `ENH-nn` or `UNK-nn` entry with its ROADMAP pointer row, the same as at phase end. Present the whole table in one pass regardless of severity: a confirmed Critical does not block the plan reaching the user, who is in plan mode and can send it back.
+A valid finding that is out of scope for this phase is **filed, not dropped** — it gets a `KI-nn`, `ENH-nn` or `UNK-nn` entry with its ROADMAP pointer row, the same as at phase end. **A reviewer reading a plan often finds a real defect in the existing code; that is a `KI-nn`.** Forcing it into `UNK-nn` because plan mode once listed only two buckets files defined wrong behaviour as an open question, which the `OPEN_QUESTIONS` template forbids. Present the whole table in one pass regardless of severity: a confirmed Critical does not block the plan reaching the user, who is in plan mode and can send it back.
 
 ### Disposition vocabulary — *phase / repo* mode
 

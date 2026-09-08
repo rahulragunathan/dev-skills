@@ -174,7 +174,7 @@
             <mxPoint x="-95" y="0" as="offset"/>
           </mxGeometry>
         </mxCell>
-        <mxCell id="37" value="&lt;span style='font-weight:normal;font-size:11px'&gt;Arrow colour matches its source. Every external tool is optional — a missing CLI degrades that step and never blocks the workflow.&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9e9e9e;strokeWidth=1;fontColor=#333333;fontSize=12;fontStyle=0;arcSize=10;verticalAlign=middle;align=center;spacingTop=0;spacingLeft=0;" vertex="1" parent="1">
+        <mxCell id="37" value="&lt;span style='font-weight:normal;font-size:11px'&gt;Arrow colour matches its source. codex, agy and drawio are optional — a missing one degrades that step. gh is required: no PR, no phase.&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9e9e9e;strokeWidth=1;fontColor=#333333;fontSize=12;fontStyle=0;arcSize=10;verticalAlign=middle;align=center;spacingTop=0;spacingLeft=0;" vertex="1" parent="1">
           <mxGeometry x="40" y="1030" width="1220" height="36" as="geometry"/>
         </mxCell>
       </root>
