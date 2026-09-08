@@ -80,6 +80,17 @@ here — the plugin manifest's version is the only record of them.
 
 ### Changed
 
+- **Two rules added to the global standards**, both from failures in this phase's
+  own doc work. A bulk edit to a structured file is now verified against that
+  structure rather than against the match count: a regex written for one table
+  column matched every column of the same shape and silently overwrote the
+  provenance column in seven files, and a block move that stripped whitespace
+  turned a `**Source:**` line into a setext heading. And the drift check now asks
+  whether a claim is restated elsewhere in different words, not only whether the
+  identifiers it names still exist — across three review passes, one fact
+  asserted in five files and corrected in one was the single largest source of
+  findings.
+
 - **`claude-setup` gave up two concerns and 20% of its length** — 6,785 words to
   5,395. The Drive backup went to the new `drive-backup` skill (`ENH-08`) and the
   llama.cpp shell aliases and login auto-start went to `claude-toggle-backend`
