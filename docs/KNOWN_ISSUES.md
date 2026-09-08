@@ -51,6 +51,7 @@ machine setup, which is not held.
 ## KI-01 — `settings.json` is truncated before it is rewritten
 
 **Severity:** Critical
+**Likelihood:** Rare
 **Where:** [toggle.sh:117-119](../skills/claude-toggle-backend/toggle.sh#L117-L119)
 
 ### What happens
@@ -88,6 +89,7 @@ keys. Related: KI-02, which is the same switch failing for a different reason.
 ## KI-22 — the marker strip can truncate `.zshrc`
 
 **Severity:** Critical · **Partly fixed**
+**Likelihood:** Rare
 **Where:** [llama-autostart.sh:75](../skills/claude-toggle-backend/llama-autostart.sh#L75)
 
 **Fixed in `claude-toggle-backend`'s alias block, held in `llama-autostart.sh`.** The
@@ -129,6 +131,7 @@ and is verified against a hand-deleted closing marker.
 ## KI-02 — a failed switch leaves the config pointing at a stopped server
 
 **Severity:** High
+**Likelihood:** Likely
 **Where:** [toggle.sh:63-96](../skills/claude-toggle-backend/toggle.sh#L63-L96)
 
 ### What happens
@@ -166,6 +169,7 @@ back to the previous backend on failure.
 ## KI-03 — a PID file is trusted without checking what the process is
 
 **Severity:** High
+**Likelihood:** Rare
 **Where:** [llama-serve.sh:31-35](../skills/claude-toggle-backend/llama-serve.sh#L31-L35), [mlx-serve.sh:51-55](../skills/claude-toggle-backend/mlx-serve.sh#L51-L55)
 
 ### What happens
@@ -204,6 +208,7 @@ file whose content is not a positive integer, which also removes the negative-PI
 ## KI-04 — the stray-process sweep kills servers this plugin did not start
 
 **Severity:** High
+**Likelihood:** Rare
 **Where:** [llama-serve.sh:49-57](../skills/claude-toggle-backend/llama-serve.sh#L49-L57), [mlx-serve.sh:67-75](../skills/claude-toggle-backend/mlx-serve.sh#L67-L75)
 
 ### What happens
@@ -240,6 +245,7 @@ touching the code.
 ## KI-05 — the "one model resident" guarantee does not hold for direct starts
 
 **Severity:** High
+**Likelihood:** Likely
 **Where:** [local-models/SKILL.md:175](../skills/local-models/SKILL.md#L175), [local-models/SKILL.md:81](../skills/local-models/SKILL.md#L81)
 
 ### What happens
@@ -270,6 +276,7 @@ second is a one-line change and is honest.
 ## KI-06 — a stale lock silently disables every later backup
 
 **Severity:** High
+**Likelihood:** Rare
 **Where:** [backup-projects.sh:73-77](../skills/drive-backup/backup-projects.sh#L73-L77)
 
 ### What happens
@@ -308,6 +315,7 @@ failure.
 ## KI-07 — credentials are copied to Drive with no scan or warning
 
 **Severity:** High
+**Likelihood:** Almost always
 **Where:** [backup-projects.sh:107-120](../skills/drive-backup/backup-projects.sh#L107-L120)
 
 ### What happens
@@ -348,6 +356,7 @@ is otherwise unrecoverable, so stripping fields makes the copy less useful for r
 ## KI-08 — backup destination discovery picks the first Drive account it finds
 
 **Severity:** High
+**Likelihood:** Likely
 **Where:** [backup-projects.sh:47-67](../skills/drive-backup/backup-projects.sh#L47-L67), [drive-backup/SKILL.md](../skills/drive-backup/SKILL.md)
 
 ### What happens
@@ -382,6 +391,7 @@ skills-source discovery in `claude-setup`.
 ## KI-09 — `toggle.bats` "clears env" never asserts that the env was cleared
 
 **Severity:** High
+**Likelihood:** Almost always
 **Where:** [toggle.bats:36-44](../skills/claude-toggle-backend/tests/toggle.bats#L36-L44)
 
 ### What happens
@@ -415,6 +425,7 @@ mutation check from `phase-workflow` §3 step 3 to confirm the test goes red for
 ## KI-10 — the MLX switch test does not pin the auth token
 
 **Severity:** High
+**Likelihood:** Almost always
 **Where:** [toggle.bats:45](../skills/claude-toggle-backend/tests/toggle.bats#L45)
 
 ### What happens
@@ -447,6 +458,7 @@ cannot be satisfied by the wrong line.
 ## KI-11 — the MLX start test cannot detect a wrong server invocation
 
 **Severity:** High
+**Likelihood:** Almost always
 **Where:** [mlx-serve.bats:61-69](../skills/claude-toggle-backend/tests/mlx-serve.bats#L61-L69)
 
 ### What happens
@@ -480,6 +492,7 @@ into a contract check without needing a real server.
 ## KI-12 — the stop test passes even if nothing is stopped
 
 **Severity:** High
+**Likelihood:** Almost always
 **Where:** [mlx-serve.bats:85-91](../skills/claude-toggle-backend/tests/mlx-serve.bats#L85-L91)
 
 ### What happens
@@ -514,6 +527,7 @@ appears in the output. Capture the PID before calling stop.
 ## KI-13 — test cleanup kills unrelated processes on the machine
 
 **Severity:** High
+**Likelihood:** Likely
 **Where:** [mlx-serve.bats:111](../skills/claude-toggle-backend/tests/mlx-serve.bats#L111)
 
 ### What happens
@@ -546,6 +560,7 @@ group rather than searching by name.
 ## KI-14 — every backup failure is logged as `ok` and exits 0
 
 **Severity:** High
+**Likelihood:** Almost always
 **Where:** [backup-projects.sh:133](../skills/drive-backup/backup-projects.sh#L133)
 
 ### What happens
@@ -580,6 +595,7 @@ status, report which inputs vanished, and correct the description in
 ## KI-16 — `HF_HOME` is exported by an orphaned `~/.zshrc` block no skill installs
 
 **Severity:** Medium · **Partly held**
+**Likelihood:** Almost always
 **Where:** [local-models/SKILL.md:15](../skills/local-models/SKILL.md#L15), [local-models/SKILL.md:28](../skills/local-models/SKILL.md#L28), [claude-toggle-backend/SKILL.md](../skills/claude-toggle-backend/SKILL.md) (the managed block)
 
 **The doc half is held; the installer half is not.** The two false sentences are in
@@ -636,6 +652,7 @@ hardened strip — reasons about it as managed code when nothing generates it.
 ## KI-17 — the machine is documented as both 64 GB and 24 GB
 
 **Severity:** Medium
+**Likelihood:** Almost always
 **Where:** [local-models/SKILL.md:55](../skills/local-models/SKILL.md#L55), [claude-toggle-backend/SKILL.md:17](../skills/claude-toggle-backend/SKILL.md#L17), [claude-toggle-backend/SKILL.md:88](../skills/claude-toggle-backend/SKILL.md#L88), [claude-toggle-backend/SKILL.md:115](../skills/claude-toggle-backend/SKILL.md#L115)
 
 ### What happens
@@ -672,6 +689,7 @@ negative result is meant as evidence.
 ## KI-18 — `toggle.sh` needs `python3` and never checks for it
 
 **Severity:** Medium
+**Likelihood:** Likely
 **Where:** [toggle.sh:27](../skills/claude-toggle-backend/toggle.sh#L27), [README.md:30](../README.md#L30)
 
 ### What happens
@@ -701,6 +719,7 @@ small enough for `jq`, which would then need its own preflight.
 ## KI-19 — port selection releases the socket before the server binds
 
 **Severity:** Medium
+**Likelihood:** Rare
 **Where:** [llama-serve.sh:85-92](../skills/claude-toggle-backend/llama-serve.sh#L85-L92), [mlx-serve.sh:80](../skills/claude-toggle-backend/mlx-serve.sh#L80)
 
 ### What happens
@@ -730,6 +749,7 @@ printing, or say the value is last-known rather than current.
 ## KI-20 — LaunchAgent plist values are not XML-escaped
 
 **Severity:** Medium
+**Likelihood:** Rare
 **Where:** [llama-autostart.sh:28-35](../skills/claude-toggle-backend/llama-autostart.sh#L28-L35)
 
 ### What happens
@@ -763,6 +783,7 @@ fix.
 ## KI-21 — uninstall says the server is left alone, then stops it
 
 **Severity:** Medium
+**Likelihood:** Almost always
 **Where:** [llama-autostart.sh:70-78](../skills/claude-toggle-backend/llama-autostart.sh#L70-L78)
 
 ### What happens
@@ -795,6 +816,7 @@ which happened. The message is the cheaper fix and the honest one.
 ## KI-23 — "detect llama-cpp by marker" passes without any marker handling
 
 **Severity:** Medium
+**Likelihood:** Almost always
 **Where:** [toggle.bats:25](../skills/claude-toggle-backend/tests/toggle.bats#L25), [toggle.sh:36](../skills/claude-toggle-backend/toggle.sh#L36)
 
 ### What happens
@@ -829,6 +851,7 @@ covers the default.
 ## KI-24 — "status runs clean" asserts neither server's status line
 
 **Severity:** Medium
+**Likelihood:** Almost always
 **Where:** [toggle.bats:30-34](../skills/claude-toggle-backend/tests/toggle.bats#L30-L34)
 
 ### What happens
@@ -861,6 +884,7 @@ delete it — a comment claiming coverage the test does not provide is worse tha
 ## KI-25 — "auto-picks a numeric free port" accepts any number
 
 **Severity:** Medium
+**Likelihood:** Almost always
 **Where:** [mlx-serve.bats:43-46](../skills/claude-toggle-backend/tests/mlx-serve.bats#L43-L46)
 
 ### What happens
@@ -891,6 +915,7 @@ That makes the scan the only implementation that can pass.
 ## KI-26 — the foreground test asserts only the model file
 
 **Severity:** Medium
+**Likelihood:** Almost always
 **Where:** [mlx-serve.bats:104](../skills/claude-toggle-backend/tests/mlx-serve.bats#L104)
 
 ### What happens
@@ -920,6 +945,7 @@ same argv-recording fake). Bundle these two into one pass.
 ## KI-27 — status tests depend on the host's real processes
 
 **Severity:** Low
+**Likelihood:** Likely
 **Where:** [llama-serve.bats:7](../skills/claude-toggle-backend/tests/llama-serve.bats#L7)
 
 ### What happens
@@ -946,6 +972,7 @@ Put a fake `pgrep` on `PATH` in the test helper, as the suite already does for `
 ## KI-28 — `drive-backup` uses `$CODE_ROOT` without defining it
 
 **Severity:** High
+**Likelihood:** Almost always
 **Where:** [drive-backup/SKILL.md:51](../skills/drive-backup/SKILL.md#L51)
 
 ### What happens
@@ -975,6 +1002,7 @@ this skill out of `claude-setup` and left the variable behind.
 ## KI-29 — the "already set up" shortcut accepts a hook pointing at the old path
 
 **Severity:** High
+**Likelihood:** Almost always
 **Where:** [drive-backup/SKILL.md:87-89](../skills/drive-backup/SKILL.md#L87-L89)
 
 ### What happens
@@ -1003,6 +1031,7 @@ line newer than the seed run.
 ## KI-30 — two machines overwrite each other's config snapshot
 
 **Severity:** High
+**Likelihood:** Almost always
 **Where:** [backup-projects.sh:112-129](../skills/drive-backup/backup-projects.sh#L112-L129)
 
 ### What happens
@@ -1031,6 +1060,7 @@ independently restorable.
 ## KI-33 — symlinked backup inputs are skipped without a failure status
 
 **Severity:** High
+**Likelihood:** Likely
 **Where:** [backup-projects.sh:101-102](../skills/drive-backup/backup-projects.sh#L101-L102), [backup-projects.sh:123-129](../skills/drive-backup/backup-projects.sh#L123-L129)
 
 ### What happens
@@ -1061,6 +1091,7 @@ about the log word, this one is about inputs never attempted.
 ## KI-31 — the lock drops the last backup of a session
 
 **Severity:** Medium
+**Likelihood:** Likely
 **Where:** [backup-projects.sh:75-79](../skills/drive-backup/backup-projects.sh#L75-L79)
 
 ### What happens
@@ -1088,6 +1119,7 @@ which is about a lock left behind by a killed process.
 ## KI-32 — repository approval state is no longer in the file the backup collects
 
 **Severity:** Medium
+**Likelihood:** Rare
 **Where:** [drive-backup/SKILL.md:29-32](../skills/drive-backup/SKILL.md#L29-L32), [claude-setup/REFERENCE.md:21](../skills/claude-setup/REFERENCE.md#L21)
 
 ### What happens
@@ -1116,6 +1148,7 @@ state that arguably belongs in the repo.
 ## KI-34 — a destination inside a source tree nests backups recursively
 
 **Severity:** Medium
+**Likelihood:** Rare
 **Where:** [backup-projects.sh:48-71](../skills/drive-backup/backup-projects.sh#L48-L71), [backup-projects.sh:94-102](../skills/drive-backup/backup-projects.sh#L94-L102)
 
 ### What happens

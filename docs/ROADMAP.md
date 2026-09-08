@@ -62,43 +62,43 @@ failing.
 
 ## Known Issues
 
-Most severe first. Severity definitions and full detail in [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
+Most severe first, and within a severity the most likely first. Both scales and full detail in [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
 
-| ID | Issue | Severity |
-| ---- | ------- | ---------- |
-| [KI-01](KNOWN_ISSUES.md#ki-01) | `settings.json` is truncated before it is rewritten | Critical |
-| [KI-22](KNOWN_ISSUES.md#ki-22) | The marker strip can truncate `.zshrc` | Critical |
-| [KI-02](KNOWN_ISSUES.md#ki-02) | A failed switch leaves the config pointing at a stopped server | High |
-| [KI-03](KNOWN_ISSUES.md#ki-03) | A PID file is trusted without checking what the process is | High |
-| [KI-04](KNOWN_ISSUES.md#ki-04) | The stray-process sweep kills servers this plugin did not start | High |
-| [KI-05](KNOWN_ISSUES.md#ki-05) | The "one model resident" guarantee does not hold for direct starts | High |
-| [KI-06](KNOWN_ISSUES.md#ki-06) | A stale lock silently disables every later backup | High |
-| [KI-07](KNOWN_ISSUES.md#ki-07) | Credentials are copied to Drive with no scan or warning | High |
-| [KI-08](KNOWN_ISSUES.md#ki-08) | Backup destination discovery picks the first Drive account it finds | High |
-| [KI-09](KNOWN_ISSUES.md#ki-09) | `toggle.bats` "clears env" never asserts that the env was cleared | High |
-| [KI-10](KNOWN_ISSUES.md#ki-10) | The MLX switch test does not pin the auth token | High |
-| [KI-11](KNOWN_ISSUES.md#ki-11) | The MLX start test cannot detect a wrong server invocation | High |
-| [KI-12](KNOWN_ISSUES.md#ki-12) | The stop test passes even if nothing is stopped | High |
-| [KI-13](KNOWN_ISSUES.md#ki-13) | Test cleanup kills unrelated processes on the machine | High |
-| [KI-14](KNOWN_ISSUES.md#ki-14) | Every backup failure is logged as `ok` and exits 0 | High |
-| [KI-28](KNOWN_ISSUES.md#ki-28) | `drive-backup` uses `$CODE_ROOT` without defining it | High |
-| [KI-29](KNOWN_ISSUES.md#ki-29) | The "already set up" shortcut accepts a hook on the old path | High |
-| [KI-30](KNOWN_ISSUES.md#ki-30) | Two machines overwrite each other's config snapshot | High |
-| [KI-33](KNOWN_ISSUES.md#ki-33) | Symlinked backup inputs are skipped without a failure status | High |
-| [KI-31](KNOWN_ISSUES.md#ki-31) | The lock drops the last backup of a session | Medium |
-| [KI-32](KNOWN_ISSUES.md#ki-32) | Repository approval state is not in the file the backup collects | Medium |
-| [KI-34](KNOWN_ISSUES.md#ki-34) | A destination inside a source tree nests backups recursively | Medium |
-| [KI-16](KNOWN_ISSUES.md#ki-16) | `HF_HOME` is exported by an orphaned `~/.zshrc` block no skill installs | Medium |
-| [KI-17](KNOWN_ISSUES.md#ki-17) | The machine is documented as both 64 GB and 24 GB | Medium |
-| [KI-18](KNOWN_ISSUES.md#ki-18) | `toggle.sh` needs `python3` and never checks for it | Medium |
-| [KI-19](KNOWN_ISSUES.md#ki-19) | Port selection releases the socket before the server binds | Medium |
-| [KI-20](KNOWN_ISSUES.md#ki-20) | LaunchAgent plist values are not XML-escaped | Medium |
-| [KI-21](KNOWN_ISSUES.md#ki-21) | Uninstall says the server is left alone, then stops it | Medium |
-| [KI-23](KNOWN_ISSUES.md#ki-23) | "detect llama-cpp by marker" passes without any marker handling | Medium |
-| [KI-24](KNOWN_ISSUES.md#ki-24) | "status runs clean" asserts neither server's status line | Medium |
-| [KI-25](KNOWN_ISSUES.md#ki-25) | "auto-picks a numeric free port" accepts any number | Medium |
-| [KI-26](KNOWN_ISSUES.md#ki-26) | The foreground test asserts only the model file | Medium |
-| [KI-27](KNOWN_ISSUES.md#ki-27) | Status tests depend on the host's real processes | Low |
+| ID | Issue | Likelihood | Severity |
+| ---- | ------- | ---------- | ---------- |
+| [KI-01](KNOWN_ISSUES.md#ki-01) | `settings.json` is truncated before it is rewritten | Rare | Critical |
+| [KI-22](KNOWN_ISSUES.md#ki-22) | The marker strip can truncate `.zshrc` | Rare | Critical |
+| [KI-02](KNOWN_ISSUES.md#ki-02) | A failed switch leaves the config pointing at a stopped server | Likely | High |
+| [KI-03](KNOWN_ISSUES.md#ki-03) | A PID file is trusted without checking what the process is | Rare | High |
+| [KI-04](KNOWN_ISSUES.md#ki-04) | The stray-process sweep kills servers this plugin did not start | Rare | High |
+| [KI-05](KNOWN_ISSUES.md#ki-05) | The "one model resident" guarantee does not hold for direct starts | Likely | High |
+| [KI-06](KNOWN_ISSUES.md#ki-06) | A stale lock silently disables every later backup | Rare | High |
+| [KI-07](KNOWN_ISSUES.md#ki-07) | Credentials are copied to Drive with no scan or warning | Almost always | High |
+| [KI-08](KNOWN_ISSUES.md#ki-08) | Backup destination discovery picks the first Drive account it finds | Likely | High |
+| [KI-09](KNOWN_ISSUES.md#ki-09) | `toggle.bats` "clears env" never asserts that the env was cleared | Almost always | High |
+| [KI-10](KNOWN_ISSUES.md#ki-10) | The MLX switch test does not pin the auth token | Almost always | High |
+| [KI-11](KNOWN_ISSUES.md#ki-11) | The MLX start test cannot detect a wrong server invocation | Almost always | High |
+| [KI-12](KNOWN_ISSUES.md#ki-12) | The stop test passes even if nothing is stopped | Almost always | High |
+| [KI-13](KNOWN_ISSUES.md#ki-13) | Test cleanup kills unrelated processes on the machine | Likely | High |
+| [KI-14](KNOWN_ISSUES.md#ki-14) | Every backup failure is logged as `ok` and exits 0 | Almost always | High |
+| [KI-28](KNOWN_ISSUES.md#ki-28) | `drive-backup` uses `$CODE_ROOT` without defining it | Almost always | High |
+| [KI-29](KNOWN_ISSUES.md#ki-29) | The "already set up" shortcut accepts a hook on the old path | Almost always | High |
+| [KI-30](KNOWN_ISSUES.md#ki-30) | Two machines overwrite each other's config snapshot | Almost always | High |
+| [KI-33](KNOWN_ISSUES.md#ki-33) | Symlinked backup inputs are skipped without a failure status | Likely | High |
+| [KI-31](KNOWN_ISSUES.md#ki-31) | The lock drops the last backup of a session | Likely | Medium |
+| [KI-32](KNOWN_ISSUES.md#ki-32) | Repository approval state is not in the file the backup collects | Rare | Medium |
+| [KI-34](KNOWN_ISSUES.md#ki-34) | A destination inside a source tree nests backups recursively | Rare | Medium |
+| [KI-16](KNOWN_ISSUES.md#ki-16) | `HF_HOME` is exported by an orphaned `~/.zshrc` block no skill installs | Almost always | Medium |
+| [KI-17](KNOWN_ISSUES.md#ki-17) | The machine is documented as both 64 GB and 24 GB | Almost always | Medium |
+| [KI-18](KNOWN_ISSUES.md#ki-18) | `toggle.sh` needs `python3` and never checks for it | Likely | Medium |
+| [KI-19](KNOWN_ISSUES.md#ki-19) | Port selection releases the socket before the server binds | Rare | Medium |
+| [KI-20](KNOWN_ISSUES.md#ki-20) | LaunchAgent plist values are not XML-escaped | Rare | Medium |
+| [KI-21](KNOWN_ISSUES.md#ki-21) | Uninstall says the server is left alone, then stops it | Almost always | Medium |
+| [KI-23](KNOWN_ISSUES.md#ki-23) | "detect llama-cpp by marker" passes without any marker handling | Almost always | Medium |
+| [KI-24](KNOWN_ISSUES.md#ki-24) | "status runs clean" asserts neither server's status line | Almost always | Medium |
+| [KI-25](KNOWN_ISSUES.md#ki-25) | "auto-picks a numeric free port" accepts any number | Almost always | Medium |
+| [KI-26](KNOWN_ISSUES.md#ki-26) | The foreground test asserts only the model file | Almost always | Medium |
+| [KI-27](KNOWN_ISSUES.md#ki-27) | Status tests depend on the host's real processes | Likely | Low |
 
 ## Enhancements
 
