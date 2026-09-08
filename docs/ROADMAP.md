@@ -84,9 +84,10 @@ Most severe first. Severity definitions and full detail in [KNOWN_ISSUES.md](KNO
 | [KI-28](KNOWN_ISSUES.md#ki-28) | `drive-backup` uses `$CODE_ROOT` without defining it | High |
 | [KI-29](KNOWN_ISSUES.md#ki-29) | The "already set up" shortcut accepts a hook on the old path | High |
 | [KI-30](KNOWN_ISSUES.md#ki-30) | Two machines overwrite each other's config snapshot | High |
+| [KI-33](KNOWN_ISSUES.md#ki-33) | Symlinked backup inputs are skipped without a failure status | High |
 | [KI-31](KNOWN_ISSUES.md#ki-31) | The lock drops the last backup of a session | Medium |
 | [KI-32](KNOWN_ISSUES.md#ki-32) | Repository approval state is not in the file the backup collects | Medium |
-| [KI-33](KNOWN_ISSUES.md#ki-33) | Symlinked backup inputs are skipped without a failure status | High |
+| [KI-34](KNOWN_ISSUES.md#ki-34) | A destination inside a source tree nests backups recursively | Medium |
 | [KI-16](KNOWN_ISSUES.md#ki-16) | `HF_HOME` is exported by an orphaned `~/.zshrc` block no skill installs | Medium |
 | [KI-17](KNOWN_ISSUES.md#ki-17) | The machine is documented as both 64 GB and 24 GB | Medium |
 | [KI-18](KNOWN_ISSUES.md#ki-18) | `toggle.sh` needs `python3` and never checks for it | Medium |
@@ -109,10 +110,10 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 | [ENH-03](ENHANCEMENTS.md#enh-03) | Test the two destructive scripts that have no tests at all | High | ~1 day |
 | [ENH-04](ENHANCEMENTS.md#enh-04) | Make the fakes assert a contract rather than only a shape | Medium | ~half a day |
 | [ENH-05](ENHANCEMENTS.md#enh-05) | Fold the MLX plan and spec into the permanent docs | Medium | ~half a day |
+| [ENH-13](ENHANCEMENTS.md#enh-13) | Give the inline shell workflows execution coverage | Medium | ~1 day |
 | [ENH-10](ENHANCEMENTS.md#enh-10) | Make the project-env name mapping unambiguous | Low | ~2 hours |
 | [ENH-11](ENHANCEMENTS.md#enh-11) | Reconcile an existing global markdownlint config | Low | ~1 hour |
 | [ENH-12](ENHANCEMENTS.md#enh-12) | Feed the Gemini prompt through stdin rather than argv | Low | ~1 hour |
-| [ENH-13](ENHANCEMENTS.md#enh-13) | Give the inline shell workflows execution coverage | Medium | ~1 day |
 | [ENH-07](ENHANCEMENTS.md#enh-07) | Honour `$CLAUDE_CONFIG_DIR` in the bundled scripts | Low | ~2 hours |
 
 ## Open Questions

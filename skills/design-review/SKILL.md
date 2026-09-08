@@ -118,7 +118,8 @@ renaming the module.
 
 **A composition root is exempt**, and only a composition root. It may depend on every unit it
 wires, provided each domain policy it would otherwise hold has been extracted. Wiring is not
-policy. A unit that still carries domain policy does not get this exemption by calling itself a
+policy — but **anything a stakeholder edits on their own schedule is**, including message copy,
+thresholds and formatting choices that look incidental next to the call sequence. A unit that still carries domain policy does not get this exemption by calling itself a
 root, and a paragraph defending the arrow is not a substitute for moving the policy.
 
 Order by **what makes it change, and how often**. Take a nightly invoice job:

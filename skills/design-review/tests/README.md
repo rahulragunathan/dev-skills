@@ -124,6 +124,12 @@ of either skill has been tested.
 **Six of fifteen units need their rule. The skill fixes all six.** The other nine record a strong
 model already doing the right thing unaided.
 
+> **The with-skill arms below are expired.** Pass 6's fixes changed both loaded skills at
+> `a8803f6`, and a changed loaded skill expires its with-skill run. The grades are retained as
+> the historical result; they are not current evidence until those arms are re-gathered against
+> the current snapshots. The baselines are unaffected — neither their prompts nor their
+> conditions changed.
+
 | Unit | Rule | Without the skill | With it | Evidence status |
 | --- | --- | --- | --- | --- |
 | R1 | Only what fired | **Rule needed** | **Rule works** | Current |
@@ -177,6 +183,21 @@ Three, all because a careful reader could reach the opposite verdict:
   but not necessary; a non-zero UTC offset is what actually makes the mutation detectable, and
   the round-2 fixture discriminates without a date difference. Now states the offset property,
   and adds the rule the baseline broke: every fixture property a test asserts must actually hold.
+
+### What the proposed tests inside the outputs do not establish
+
+Several runs propose test code. Grading judges the *design artifact*, not that code, and the two
+should not be conflated:
+
+- S03's frozen-digest and cross-exporter hash-equality checks stay green if the shared
+  computation is copied back into each exporter. They verify output values, not the extraction
+  D5 grades.
+- Fixture-property assertions check supplied constants and survive production mutation by
+  design. They establish a prerequisite, not regression coverage.
+- The `187 passed` in the S07 fixture is prompt text, not an observed run.
+- Two assertions in the round-1 S07 baseline fail against the *unmutated* implementation: the
+  Auckland date-difference assertion, and the supplementary DST check that subtracts two bounds
+  sharing one `ZoneInfo` object.
 
 ### Runs voided before grading
 

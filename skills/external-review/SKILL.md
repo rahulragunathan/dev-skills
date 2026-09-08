@@ -39,7 +39,7 @@ the other out of quota, which the earlier both-installed wording let slip throug
 while nothing had been reviewed. No coverage is emphatically not a skip, must never be recorded
 as a clean pass, and a phase cannot reach its gate on one.
 
-Everything else is **partial coverage**: the step ran, and one reviewer produced nothing. A CLI that is installed and then fails on **quota**, **auth**, **timeout** or **sandbox denial** did not cause a skip — it ran and came back empty. Say so in the coverage line, name the reviewer, and give the reason verbatim:
+**A reviewer that ran and produced nothing is a failed reviewer, not automatically partial coverage.** Record that outcome per reviewer; the aggregate is then read off the table below, and it is *partial* only when some other reviewer did produce output. A CLI that is installed and then fails on **quota**, **auth**, **timeout** or **sandbox denial** did not cause a skip — it ran and came back empty. Say so in the coverage line, name the reviewer, and give the reason verbatim:
 
 > *Coverage: Codex `gpt-5.6-sol` 9 findings. Gemini installed but returned `Individual quota reached` (resets 23h26m) — no findings this pass. Single-reviewer coverage, not a clean review.*
 
@@ -96,16 +96,16 @@ reach a third name.
 **An empty ladder is a failure, not an empty loop.** If discovery returns nothing — a missing or
 malformed `models_cache.json`, an `agy models` that did not run — `for m in $(…)` iterates zero
 times and the reviewer silently produces no output, which reads downstream as a clean review.
-Check before running, and report it as partial coverage for that reviewer:
+Check before running, and record that reviewer as having produced no output:
 
 ```bash
-[ -n "$(codex_ladder)" ] || echo "Codex ladder discovery returned nothing — report partial coverage, do not run"
+[ -n "$(codex_ladder)" ] || echo "Codex ladder discovery returned nothing — record no output for Codex, do not run"
 ```
 
 **If all three rungs fail, that reviewer produces nothing. Never reach past the floor.** A review
 from the weakest tier available is worse than no review: it arrives with the same authority as a
 real one and the coverage line cannot carry the difference. Report it exactly as you would a
-missing CLI for that reviewer — partial coverage, named, with the reason.
+missing CLI for that reviewer — no output from it, named, with the reason. Whether the pass is partial or no coverage depends on what the *other* reviewer did.
 
 **Set reasoning effort explicitly; `-m` alone does not.** Every Codex model supports low through
 max and the strongest defaults to **low**, so naming only the slug gets the weakest setting of
@@ -123,7 +123,9 @@ Note a downshift plainly there: a lighter model changes how much weight a findin
 
 ```bash
 for m in $(codex_ladder); do
-  OUT="<scratchpad>/codex_<mode>_p<n>_$m.txt"; LOG="<scratchpad>/codex_<mode>_p<n>_$m.log"
+  OUT="<scratchpad>/codex_<mode>_p<n>_c<chunk>_a<attempt>_$m.txt"
+  LOG="${OUT%.txt}.log"
+  rm -f "$OUT" "$LOG"          # never inherit a previous attempt's answer
   codex exec -C "<repo-root>" --sandbox read-only \
     -m "$m" -c model_reasoning_effort="high" \
     -o "$OUT" "<prompt>" > "$LOG" 2>&1 < /dev/null
@@ -155,13 +157,14 @@ done
 
 ```bash
 for m in $(gemini_ladder); do
-  OUT="<scratchpad>/gemini_<mode>_p<n>_$m.txt"
+  OUT="<scratchpad>/gemini_<mode>_p<n>_c<chunk>_a<attempt>_$m.txt"
+  rm -f "$OUT" "${OUT%.txt}.err"   # never inherit a previous attempt's answer
   agy -p "$(cat "<scratchpad>/gemini_prompt_p<n>.txt")" --model "$m" --effort high \
-      --print-timeout 25m > "$OUT" 2> "<scratchpad>/gemini_<mode>_p<n>_$m.err"
+      --print-timeout 25m > "$OUT" 2> "${OUT%.txt}.err"
   rc=$?
   [ "$rc" = 0 ] && [ -s "$OUT" ] && break
   if grep -qiE 'not supported|unknown model|is not available|entitle' \
-       "<scratchpad>/gemini_<mode>_p<n>_$m.err"; then
+       "${OUT%.txt}.err"; then
     echo "unavailable: $m — trying the next rung"; continue
   fi
   echo "$m failed for a reason that is not availability — classify per Failure handling"; break
@@ -249,6 +252,9 @@ git ls-files --others --exclude-standard -z -- . "${EXCL[@]}" > "<scratchpad>/un
   || { echo "LS-FILES FAILED — do not send this bundle"; exit 1; }
 
 REPO_PHYS="$(cd "<repo-root>" && pwd -P)"
+# Roots a captured file may live under. The repo, plus any directory explicitly named for
+# this run — `plan` mode reads `~/.claude/plans/`, which is deliberately outside the repo.
+ALLOWED_ROOTS=("$REPO_PHYS")           # plan mode appends the resolved plan directory
 
 # ONE capture procedure. Every mode uses it; none rolls its own.
 capture() {
@@ -256,15 +262,15 @@ capture() {
   # A symlinked PARENT passes a -L test on the final component, and `cat` then reads
   # straight through it to a target outside the repo. Resolve the directory instead.
   d="$(cd -- "$(dirname -- "./$f")" 2>/dev/null && pwd -P)" || {
-    printf '%s\t(unreadable parent)\n' "$f" >> "$WITHHELD"; return; }
-  case "$d/" in "$REPO_PHYS"/*|"$REPO_PHYS"/) : ;;
-    *) printf '%s\t(parent escapes the repo)\n' "$f" >> "$WITHHELD"; return ;; esac
-  [ -L "./$f" ] && { printf '%s\t(symlink)\n' "$f" >> "$WITHHELD"; return; }
-  [ -e "./$f" ] || { printf '%s\t(tracked, absent from the tree)\n' "$f" >> "$WITHHELD"; return; }
-  [ -f "./$f" ] || { printf '%s\t(not a regular file)\n' "$f" >> "$WITHHELD"; return; }
-  perl -e 'exit(-B $ARGV[0] ? 0 : 1)' "./$f" && { printf '%s\t(binary)\n' "$f" >> "$WITHHELD"; return; }
+    printf '%s\t(unreadable parent)\0' "$f" >> "$WITHHELD"; return; }
+  ok=0; for r in "${ALLOWED_ROOTS[@]}"; do case "$d/" in "$r"/*|"$r"/) ok=1;; esac; done
+  [ "$ok" = 1 ] || { printf '%s\t(parent outside every allowed root)\0' "$f" >> "$WITHHELD"; return; }
+  [ -L "./$f" ] && { printf '%s\t(symlink)\0' "$f" >> "$WITHHELD"; return; }
+  [ -e "./$f" ] || { printf '%s\t(tracked, absent from the tree)\0' "$f" >> "$WITHHELD"; return; }
+  [ -f "./$f" ] || { printf '%s\t(not a regular file)\0' "$f" >> "$WITHHELD"; return; }
+  perl -e 'exit(-B $ARGV[0] ? 0 : 1)' "./$f" && { printf '%s\t(binary)\0' "$f" >> "$WITHHELD"; return; }
   printf '\n===== %s%s =====\n' "$label" "$f" >> "$BUNDLE"
-  cat -- "./$f" >> "$BUNDLE" || printf '%s\t(read failed)\n' "$f" >> "$WITHHELD"
+  cat -- "./$f" >> "$BUNDLE" || printf '%s\t(read failed)\0' "$f" >> "$WITHHELD"
 }
 
 while IFS= read -r -d '' f; do capture "$f" "UNTRACKED FILE: "; done < "<scratchpad>/untracked.z"
@@ -299,6 +305,14 @@ already knows is incomplete.
 bundle written inside the working tree is listed, appended to itself, and grows until the disk
 fills. The scratchpad is outside the repo; keep it that way.
 
+**The tracked diff bypasses `capture()`, so filter tracked paths before building it.** Only
+untracked files go through the function; everything in `git diff` reaches the bundle as a patch.
+`--no-textconv --no-ext-diff` stops conversion *filters*, but a `diff` attribute set in
+`.gitattributes` can still force a binary blob to be emitted as text, and a tracked path that
+became a symlink is patched rather than withheld. Classify the changed paths first — same
+symlink, binary and allowed-root tests — and exclude the disallowed ones from the diff pathspec,
+naming them in the withheld list like any other.
+
 **Turn conversion off for the tracked diff.** A repo that configures `textconv` or an external
 diff driver — for PDFs, notebooks, or an encrypted-file helper — otherwise runs it during capture,
 and the converted plaintext lands in the bundle for a file the exclusions were written to keep
@@ -332,11 +346,23 @@ Do **not** use `git add -N` to sweep untracked files into the diff. It mutates t
 #   repo mode:
 git ls-files -z > "<scratchpad>/all.z"
 
-nul() { tr -cd '\0' < "$1" | wc -c | tr -d ' '; }
+# manifest.z is the same enumeration with the exclusion pathspecs applied. It is what
+# the capture loop reads, so the counts describe the bundle that was actually built.
+#   phase mode:
+{ git diff -z --name-only "<base>"...HEAD -- . "${EXCL[@]}"
+  git ls-files --others --exclude-standard -z -- . "${EXCL[@]}"; } > "<scratchpad>/manifest.z" \
+  || { echo "MANIFEST FAILED — do not send this bundle"; exit 1; }
+#   repo mode:
+git ls-files -z -- . "${EXCL[@]}" > "<scratchpad>/manifest.z" \
+  || { echo "MANIFEST FAILED — do not send this bundle"; exit 1; }
+
+nul() { tr -cd '\0' < "$1" | wc -c | tr -d ' '; }   # every list here is NUL-delimited
 TOTAL="$(nul "<scratchpad>/all.z")"                 # everything in scope, before exclusions
-INCLUDED="$(nul "<scratchpad>/manifest.z")"         # what the exclusions left, i.e. the bundle
-WITHHELD_N="$(wc -l < "$WITHHELD" | tr -d ' ')"     # symlinks, binaries, escapes, absences
-echo "bundle contains $INCLUDED of $TOTAL files; $WITHHELD_N withheld"
+SELECTED="$(nul "<scratchpad>/manifest.z")"         # what the exclusions left
+WITHHELD_N="$(nul "$WITHHELD")"                     # symlinks, binaries, escapes, absences
+CAPTURED=$(( SELECTED - WITHHELD_N ))               # what actually reached the bundle
+echo "bundle contains $CAPTURED of $TOTAL files; $WITHHELD_N withheld, $(( TOTAL - SELECTED )) excluded"
+[ "$CAPTURED" -ge 0 ] || { echo "COUNTS DO NOT RECONCILE — do not send this bundle"; exit 1; }
 ```
 
 **All three counts come from the same NUL-delimited manifest.** A filename containing a newline
@@ -411,7 +437,7 @@ the same countdown on both its top rung and its flash rung, and Codex, Gemini an
 meter usage per account rather than per model. **The probe carries the do-not-read instruction too.** It is a real agentic run over the repo, and a diagnostic is not an exemption.
 
 - Probe succeeds → the real prompt was the problem (too large, malformed) — fix and re-run.
-- Probe fails → read the error: quota/usage → **partial coverage, not a skip** (the CLI is installed and it ran); report "Codex/Gemini out of usage" with the error verbatim, per *A skip and partial coverage are different things* above; `model ... is not supported` → an unavailable model tier, not a quota problem (see the pins above); auth → say re-login is needed (`codex login` / `agy` interactive); tool-permission denial (Gemini) → the prompt asked it to use tools — inline the material instead.
+- Probe fails → read the error: quota/usage → **no output from that reviewer, and not a skip** (the CLI is installed and it ran); report "Codex/Gemini out of usage" with the error verbatim, per *A skip and partial coverage are different things* above; `model ... is not supported` → an unavailable model tier, not a quota problem (see the pins above); auth → say re-login is needed (`codex login` / `agy` interactive); tool-permission denial (Gemini) → the prompt asked it to use tools — inline the material instead.
 - `command not found` → the CLI is not installed; that is a preflight case, not a runtime failure. Don't probe — report the skip per *Preflight* above.
 - Never silently drop a reviewer; the report names which ran, which didn't, and why.
 
@@ -444,7 +470,7 @@ If neither CLI is installed, print the skip line in its place — `External revi
 | # | Finding | Files | Model | Severity | Verdict | Disposition |
 | --- | --------- | ------- | ------- | ---------- | --------- | ------------- |
 | F-01 | No rollback if the migration half-applies | `migrate.py:88-140` | gpt-5.6-sol | High | Confirmed | Incorporated — new step 6 |
-| F-02 | Token refresh races on concurrent runs | `auth/token.py`, `worker.py:41` | gpt-5.6-sol, gemini-3.1-pro-high | Medium | Confirmed | Filed UNK-08 |
+| F-02 | Token refresh races on concurrent runs | `auth/token.py`, `worker.py:41` | gpt-5.6-sol, gemini-3.1-pro-high | Medium | Confirmed | Filed KI-08 |
 | F-03 | Add a caching layer for lookups | `lookup.py` | gemini-3.1-pro-high | Medium | Rejected | Not incorporated |
 
 *The dispositions above are **plan** mode; phase and repo mode use the five buckets further down. The columns are the same in every mode.*

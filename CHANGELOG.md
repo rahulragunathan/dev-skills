@@ -17,13 +17,13 @@ here — the plugin manifest's version is the only record of them.
   verdicts on six named checks. Wired into `phase-workflow` at §1 (drafting), §2
   (landing diagram generators) and §3 step 2, where it runs before `/simplify`.
 - **Pressure tests for it**, in `skills/design-review/tests/` — seven scenarios
-  covering fourteen rules, each with its prompt, failure conditions and recorded
-  results for a run with and without the skill. Two rules were written *by* the
-  tests rather than confirmed by them: the produce-versus-edit distinction, and
-  never marking a diagram box "new" because the marker is a diff that goes stale
-  the moment the phase lands. Every rule's status is recorded
-  honestly, including the eleven of those fourteen a strong model already
-  follows unaided — eight of this skill's own rules and three process rules from
+  covering fifteen coverage units, each with its prompt, failure conditions and
+  recorded results for a run with and without the skill. Two rules were written
+  *by* the tests rather than confirmed by them: the produce-versus-edit
+  distinction, and never marking a diagram box "new" because the marker is a diff
+  that goes stale the moment the phase lands. Every unit's status is recorded
+  honestly, including the nine a strong model already
+  follows unaided — this skill's own rules and process rules from
   `phase-workflow`.
 - **Four roadmap files** under `docs/` — ROADMAP, KNOWN_ISSUES, ENHANCEMENTS and
   OPEN_QUESTIONS, seeded from the templates with 27 issues, 6 enhancements and 1
@@ -201,6 +201,33 @@ here — the plugin manifest's version is the only record of them.
 
 ### Fixed
 
+- **External review pass 7 — 19 findings, five of them in pass 6's own fixes.**
+  The bundle counts read a `manifest.z` that was never created; the invocation
+  loops still used the naming the prose had just forbidden, so a chunk could
+  overwrite another's findings and a failed retry inherit the previous answer;
+  the coverage rewrite left later text still calling a zero-output pass
+  "partial"; and the `capture()` function rejected `~/.claude/plans/`, the normal
+  location for the file `plan` mode reviews. Tracked changes also bypassed the
+  filter entirely, since only untracked files pass through `capture()` — a
+  `.gitattributes` `diff` attribute can still force a binary blob into a patch.
+- **`phase-workflow` validated the wrong remote URL.** Git keeps a separate push
+  URL, so a remote can fetch from the approved repository and push to a fork —
+  which would pass every SHA check and then receive the tag and the branch
+  deletion. Both URLs are now captured at §2 and compared before publication.
+- **New rule: re-gather derived evidence before external review, not after.**
+  Evidence produced by *running* something — subagent scenario runs, evals,
+  benchmarks — is valid only for what it was gathered against, so a fix expires
+  it. Mark it expired at the fix, make every fix that touches the measured thing
+  first, then re-gather once as the last action before the review. This repo let
+  that evidence go stale three times before the rule was written.
+- Smaller corrections: `ln -sfn` links *inside* an existing real directory rather
+  than replacing it; markdownlint discovery is bounded by the invocation
+  directory, not a walk to `$HOME`, and the CLI verification cannot establish
+  editor parity; the canonical findings-table example filed a Confirmed bug as an
+  open question; README described the reviewed plan as approved and conflated
+  release preparation with post-merge tagging; and roadmap ordering, summaries
+  and provenance were reconciled with the entries they describe.
+
 - **External review pass 6 — 29 findings from a single reviewer, and three of the
   worst were introduced by pass 5's own fixes.** `external-review`'s capture
   blocks ended on `grep -q … && exit 1`, which returns grep's status, so a clean
@@ -265,12 +292,13 @@ here — the plugin manifest's version is the only record of them.
   reader could reach the opposite verdict; every existing output was judgeable
   against the new wording, so no baseline expired.
 - **`claude-setup` no longer writes editor configuration**, and its advertised
-  write footprint is stated accurately rather than as "nothing outside
+  write footprint is stated accurately rather than as the earlier "nothing outside
   `~/.claude`". Step 3b now detects the markdownlint extension by its
   directory — `code --list-extensions` reports "not installed" whenever the CLI
   is off `PATH`, which is common — and hands the user the one-key change to make
-  themselves, with the consequence of declining stated: editor squiggles on the
-  house style of long prose lines that the CLI gate never reports.
+  themselves, with the consequence of declining stated. (Corrected in the next
+  pass: `MD013` is disabled in the pinned CLI config too, so the difference is
+  `MD033`, `MD024` and `MD029`, not line length.)
 - **`external-review` had five defects in the machinery that gates a phase.**
   The availability check grepped combined stdout and stderr, so a review whose
   findings contained "not supported" was discarded and overwritten by the next
@@ -316,8 +344,10 @@ here — the plugin manifest's version is the only record of them.
   describing removed features.
 - `external-review`'s Model column no longer says `Both` in one place and
   forbids it in another; severity disagreements between reviewers are recorded.
-- The bundle file count uses `git status --porcelain -uall`, so untracked
-  directories no longer collapse to one line.
+- The bundle file count no longer collapses untracked directories to one line.
+  (Superseded twice since: `git status` counts changed files, which is zero on the
+  clean tree a phase review runs against, and the count now derives from one
+  NUL-delimited manifest.)
 - `claude-setup` listed three bundled skills; there are six. README omitted
   `llama-autostart.sh` from the backend scripts.
 - **`claude-setup` step 3 corrupted the file it manages** (installed on this

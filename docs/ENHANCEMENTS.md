@@ -167,6 +167,38 @@ is, the task-by-task plan probably is not.
 
 ---
 
+<a id="enh-13"></a>
+
+## ENH-13 — give the inline shell workflows execution coverage
+
+**Priority:** Medium · **Effort:** ~1 day
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) §3 and §4, [external-review/SKILL.md](../skills/external-review/SKILL.md) capture and reconciliation
+
+### What it is
+
+The most consequential shell in this repo is embedded in prose: the mutation-audit restore, the
+release and tag block, the branch-deletion guards, and the bundle capture that decides what
+source leaves the machine. None of it is executed by anything.
+
+### Why it matters
+
+Pass 6 found three defects in that shell by reading it — capture blocks exiting 1 on their
+success path, a symlinked parent defeating the file-level symlink test, and a tracked file
+missing from the tree being dropped silently. All three would have been caught by running the
+snippets once against a scratch fixture. The one process scenario that exists, S07, explicitly
+evaluates an *unexecuted* plan, so it cannot catch any of this.
+
+### Notes for the work
+
+A `bats` suite over scratch git fixtures: a repo with a symlinked directory, a file named `-n`, a
+filename containing a newline, a tracked-but-deleted file, and a clean tree. Assert the bundle
+contents, the withheld list and the exit status. Separate from ENH-03, which covers
+`backup-projects.sh`; this covers shell that currently lives only inside a `SKILL.md`.
+
+**Source:** gpt-6-astra — phase review pass 6, 2026-09-08.
+
+---
+
 <a id="enh-07"></a>
 
 ## ENH-07 — Honour `$CLAUDE_CONFIG_DIR` in the bundled scripts
@@ -303,35 +335,3 @@ Check whether `agy` accepts a prompt on stdin or from a file flag. If it does, u
 record that argv is the only channel and keep the chunk ceiling as the control.
 
 **Source:** gemini-3.1-pro-high — phase review pass 5, 2026-09-08.
-
----
-
-<a id="enh-13"></a>
-
-## ENH-13 — give the inline shell workflows execution coverage
-
-**Priority:** Medium · **Effort:** ~1 day
-**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) §3 and §4, [external-review/SKILL.md](../skills/external-review/SKILL.md) capture and reconciliation
-
-### What it is
-
-The most consequential shell in this repo is embedded in prose: the mutation-audit restore, the
-release and tag block, the branch-deletion guards, and the bundle capture that decides what
-source leaves the machine. None of it is executed by anything.
-
-### Why it matters
-
-Pass 6 found three defects in that shell by reading it — capture blocks exiting 1 on their
-success path, a symlinked parent defeating the file-level symlink test, and a tracked file
-missing from the tree being dropped silently. All three would have been caught by running the
-snippets once against a scratch fixture. The one process scenario that exists, S07, explicitly
-evaluates an *unexecuted* plan, so it cannot catch any of this.
-
-### Notes for the work
-
-A `bats` suite over scratch git fixtures: a repo with a symlinked directory, a file named `-n`, a
-filename containing a newline, a tracked-but-deleted file, and a clean tree. Assert the bundle
-contents, the withheld list and the exit status. Separate from ENH-03, which covers
-`backup-projects.sh`; this covers shell that currently lives only inside a `SKILL.md`.
-
-**Source:** gpt-6-astra — phase review pass 6, 2026-09-08.

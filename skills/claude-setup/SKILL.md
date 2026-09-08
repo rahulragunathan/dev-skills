@@ -259,7 +259,8 @@ The standards in step 3 say to lint the markdown you touched before hand-off. Th
    `markdownlint-cli2 --config` alone decides pass or fail — and the user may reasonably prefer
    that noise to editing their VS Code settings.
 
-4. **Verify** from any repo root. Both sides should now agree, and a clean tree exits 0:
+4. **Verify the CLI** from any repo root — a clean tree exits 0. This checks the CLI only; it
+   passes whether or not step 3 was accepted, so it cannot establish editor parity:
 
    ```bash
    markdownlint-cli2 --config ~/.markdownlint.jsonc "**/*.md" \
@@ -272,7 +273,7 @@ The standards in step 3 say to lint the markdown you touched before hand-off. Th
 
 **Indent fenced blocks inside a numbered step.** A fence at column 0 ends the list, so the next item restarts at 1. Indent it three spaces to keep the step numbering intact — the blocks in this section show the shape.
 
-**Always pass `--config` explicitly.** The CLI finds a config by walking up from each file, so `~/.markdownlint.jsonc` is picked up only when the target sits under `~` — and silently ignored when it doesn't. Naming the file removes the guess and makes the command portable.
+**Always pass `--config` explicitly.** Configuration discovery is bounded by the directory the CLI is invoked in, not by a walk up to `$HOME`, so `~/.markdownlint.jsonc` is picked up only when the target sits under `~` — and silently ignored when it doesn't. Naming the file removes the guess and makes the command portable.
 
 **The extension is optional; the CLI is not.** Where the extension is installed and pointed at
 the same config, it is the same rule engine as the CLI, so the two never contradict each other:
@@ -307,6 +308,20 @@ Only subfolders with a `SKILL.md` load; `RCLONE_TEST`/`.DS_Store` and the plugin
 ### 5. Register the `localclaude` plugin (local marketplace)
 
 The bundled skills (`claude-setup`, `claude-toggle-backend`, `local-models`, `phase-workflow`, `external-review`, `design-review`, `project-env`, `drive-backup`) ship as the `localclaude` plugin in the sibling `Code/Plugins` folder.
+
+**`ln -sfn` does not replace an existing real directory — it creates the link *inside* it.**
+Check first and remove or move the directory, then verify the result is actually a symlink
+resolving where you meant:
+
+```bash
+[ -L "$LINK" ] || [ ! -e "$LINK" ] || { echo "$LINK is a real directory — move it, do not link over it"; exit 1; }
+ln -sfn "$SRC" "$LINK"
+[ -L "$LINK" ] && [ "$(readlink "$LINK")" = "$SRC" ] || { echo "LINK NOT ESTABLISHED"; exit 1; }
+```
+
+**Stop after a failed move.** Where a step moves an existing path aside before linking, a failed
+move must abort rather than fall through to the link command, which would then link into the
+directory it failed to clear.
 
 **Gotcha:** `/plugin marketplace add` **cannot parse the Drive path** — "My Drive" has a space, the slash-command parser doesn't honor quotes, and it falls back to treating the arg as a GitHub `owner/repo`. So point it at a **space-free symlink** instead — derived from `CODE_ROOT` (step 4; set `PLUGINS_SRC` by hand if `CODE_ROOT` was empty):
 

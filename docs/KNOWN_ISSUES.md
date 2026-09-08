@@ -7,9 +7,11 @@ Each entry has a stable ID — use it in branch names (`bugfix/ki-02-<slug>`) an
 CHANGELOG entry that closes it. When fixed, delete it from here and from the ROADMAP index;
 the record lives in [CHANGELOG.md](../CHANGELOG.md). IDs are never reused.
 
-Every entry below came from the external repo review of 2026-09-05 and carries its source
-line. Findings about `phase-workflow`, `external-review` and the global standards were
-remediated in the same phase and are not listed here — they are in the CHANGELOG.
+Every entry carries its own source line; they come from several review passes, not one.
+KI-01 through KI-27 came from the repo review of 2026-09-05, KI-28 through KI-32 from phase
+review pass 5 on 2026-09-07, and KI-33 from pass 6 on 2026-09-08. Findings about
+`phase-workflow`, `external-review` and the global standards were remediated in the passes that
+found them and are in the CHANGELOG rather than here.
 
 ## Severity
 
@@ -32,8 +34,9 @@ exceptions. **KI-22 is held only in its `claude-toggle-backend` half**; the same
 `claude-setup` is fixed. **KI-16 is held only in its `local-models` half**; the missing
 `~/.zshrc` installer behind it is machine setup and is in scope.
 
-Active: **KI-06, KI-07, KI-08 and KI-14** — the `backup-projects.sh` cluster, scheduled as its
-own phase with a bats harness (ENH-03).
+Active: **KI-06, KI-07, KI-08, KI-14 and KI-28 through KI-33** — the `drive-backup` cluster,
+scheduled as its own phase with a bats harness (ENH-03). Held is the default for the two skills
+being rebuilt, not for everything else.
 
 **An entry naming a held skill is not automatically held.** Several were filed against a
 defect that appears in both a held script and a `claude-setup` one; check the "Where" lines
@@ -1023,6 +1026,36 @@ independently restorable.
 
 ---
 
+<a id="ki-33"></a>
+
+## KI-33 — symlinked backup inputs are skipped without a failure status
+
+**Severity:** High
+**Where:** [backup-projects.sh:101-102](../skills/drive-backup/backup-projects.sh#L101-L102), [backup-projects.sh:123-129](../skills/drive-backup/backup-projects.sh#L123-L129)
+
+### What happens
+
+The transfers use `rsync -rt`, with neither `-l` (recreate symlinks) nor `-L` (follow them). A
+symlink inside a source tree, or an individually listed config file that is a symlink, is
+skipped with a "skipping non-regular file" warning on stdout — which the `Stop` hook discards to
+`/dev/null`. Nothing reaches the log and `rc_any` is unaffected.
+
+### Example scenario
+
+A config file under `~/.claude` is a symlink to a file kept elsewhere. It is silently absent
+from every backup, and the log says `ok` each time. The omission is discovered only when the
+backup is used to restore a machine.
+
+### Notes for a fix
+
+Decide the policy explicitly rather than inheriting rsync's default — `-l` to preserve the links
+or `-L` to copy their targets — and report anything omitted. Separate from KI-14: that entry is
+about the log word, this one is about inputs never attempted.
+
+**Source:** gpt-6-astra — phase review pass 6, 2026-09-08.
+
+---
+
 <a id="ki-31"></a>
 
 ## KI-31 — the lock drops the last backup of a session
@@ -1078,30 +1111,29 @@ state that arguably belongs in the repo.
 
 ---
 
-<a id="ki-33"></a>
+<a id="ki-34"></a>
 
-## KI-33 — symlinked backup inputs are skipped without a failure status
+## KI-34 — a destination inside a source tree nests backups recursively
 
-**Severity:** High
-**Where:** [backup-projects.sh:101-102](../skills/drive-backup/backup-projects.sh#L101-L102), [backup-projects.sh:123-129](../skills/drive-backup/backup-projects.sh#L123-L129)
+**Severity:** Medium
+**Where:** [backup-projects.sh:48-71](../skills/drive-backup/backup-projects.sh#L48-L71), [backup-projects.sh:94-102](../skills/drive-backup/backup-projects.sh#L94-L102)
 
 ### What happens
 
-The transfers use `rsync -rt`, with neither `-l` (recreate symlinks) nor `-L` (follow them). A
-symlink inside a source tree, or an individually listed config file that is a symlink, is
-skipped with a "skipping non-regular file" warning on stdout — which the `Stop` hook discards to
-`/dev/null`. Nothing reaches the log and `rc_any` is unaffected.
+An explicitly configured destination is accepted if the directory merely exists. Nothing checks
+that it sits outside the trees being copied, so a destination such as
+`~/.claude/projects/archive` is taken, and the run then copies `~/.claude/projects` — including
+that archive — into the archive's own `Code/` directory.
 
 ### Example scenario
 
-A config file under `~/.claude` is a symlink to a file kept elsewhere. It is silently absent
-from every backup, and the log says `ok` each time. The omission is discovered only when the
-backup is used to restore a machine.
+A user points `projects-backup.dest` at a folder inside `~/.claude/projects` to keep everything
+together. Each run copies the previous run's copy, the tree grows a level deeper every turn
+until the disk fills, and the log says `ok` throughout.
 
 ### Notes for a fix
 
-Decide the policy explicitly rather than inheriting rsync's default — `-l` to preserve the links
-or `-L` to copy their targets — and report anything omitted. Separate from KI-14: that entry is
-about the log word, this one is about inputs never attempted.
+Resolve source and destination to physical paths with `pwd -P` before copying and refuse when
+either contains the other, including overlap reached through a directory symlink.
 
-**Source:** gpt-6-astra — phase review pass 6, 2026-09-08.
+**Source:** gpt-6-astra — phase review pass 7, 2026-09-08.

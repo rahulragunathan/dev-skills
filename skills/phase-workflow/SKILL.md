@@ -43,6 +43,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    set -euo pipefail
    command -v gh >/dev/null || { echo "GH MISSING — stop"; exit 1; }
    ORIGIN_URL="$(git remote get-url origin)"
+   ORIGIN_PUSH_URL="$(git remote get-url --push origin)"   # may differ from the fetch URL
    REPO="$(gh repo view "$ORIGIN_URL" --json nameWithOwner --jq .nameWithOwner)"
    DEFAULT_BRANCH="$(gh repo view "$REPO" --json defaultBranchRef --jq '.defaultBranchRef.name // empty')"
    [ -n "$REPO" ] && [ -n "$DEFAULT_BRANCH" ] || { echo "REPO OR DEFAULT BRANCH UNKNOWN — stop"; exit 1; }
@@ -219,6 +220,27 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    - **Drift check** — for each doc and comment, verify the identifiers, file paths, commands, flags, and config keys it names still exist. Report what you found, not only what you fixed.
    - **Style** — every doc follows the global writing standard (Simplified Technical English, Zinsser: clarity, simplicity, brevity, humanity). Rewrite bloated prose you pass through, including text from earlier phases.
    - **docs/ROADMAP.md + the three supporting files** — follow the templates' vocabulary and sections exactly (say **"Done"**, never "Implemented"). ROADMAP rows stay pointers; detail belongs in the supporting file. Verify every ID appears in both, that the ratings agree, and that both files are ordered by rating descending. At hand-off, ROADMAP names the phase as awaiting merge. Clear that note in the next phase's normal documentation task; do not add an unreviewed post-sign-off commit.
+**Re-gather derived evidence before this step, not after.** Some phases produce evidence by
+*running* something rather than by reasoning: subagent scenario runs, eval scores, benchmark
+numbers, generated diagrams. That evidence is only valid for the thing it was gathered against,
+so a fix that changes that thing expires it — and an expired result read as current is worse
+than no result, because it carries the authority of a measurement.
+
+Three rules, in order:
+
+- **Mark it expired at the moment of the fix**, in the file that records it, rather than
+  remembering to do so later. The mark is what stops the next reader trusting it.
+- **Make every fix that touches the measured thing first, then re-gather once.** Re-gathering
+  mid-loop and fixing again afterwards expires the fresh evidence immediately; this has happened
+  three times in this repo. The re-gather is the *last* action before the review, not a step in
+  the middle of it.
+- **Never send stale evidence to an external reviewer.** They cannot tell it is stale, and a
+  reviewer's agreement with an expired result reads as confirmation.
+
+This matters most where re-gathering is expensive — fresh subagents, paid API calls, long runs —
+because that cost is exactly what tempts a skip. Say in the hand-off what was re-gathered and
+what remains expired.
+
 5. **External review loop:** `/localclaude:external-review phase` (Codex + Gemini). Use its disposition vocabulary and filing rules. Pause after every external review pass. Report the findings trend and your recommendation; the user decides whether to run another pass or land the phase.
    - **It runs after the docs pass**, including release preparation. Fold later phase fixes into that unpublished release and commit them before the next pass or gate.
    - **Every reviewer emits a findings list**, and the single line `No findings.` when it has none — that is `external-review`'s output contract, and a reviewer cannot satisfy a demand for a formatted table. **The combined table is yours to build**, one per pass, presented with the coverage line. A reviewer's empty result is output and counts as covered; no output at all means it produced nothing, which is partial coverage. Report the error verbatim and present an empty combined table when no findings survive; never attribute a table you wrote to a reviewer that failed.
@@ -239,6 +261,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
      [ "$BRANCH" = "$PHASE_BRANCH" ] || { echo "WRONG BRANCH — stop"; exit 1; }
      LOCAL_SHA="$(git rev-parse --verify HEAD)"
      [ "$(git remote get-url origin)" = "$ORIGIN_URL" ] \
+       && [ "$(git remote get-url --push origin)" = "$ORIGIN_PUSH_URL" ] \
        || { echo "ORIGIN CHANGED SINCE THE GATE — refusing to publish or delete"; exit 1; }
      REMOTE_SHA="$(git ls-remote --exit-code --heads origin "refs/heads/$PHASE_BRANCH" | awk '{print $1}')"
      PR_SHA="$(gh pr view "$PR" -R "$REPO" --json headRefOid --jq .headRefOid)"
@@ -264,7 +287,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 
      Record these SHAs, the repository, PR number and link, base branch, phase branch, merge method and release tag in the hand-off. Give the phase diff command: `git diff "origin/$DEFAULT_BRANCH"..."$GATE_SHA"`. The user signs off on `GATE_SHA`. Set `APPROVED_SHA` to that recorded value only after approval; never refresh it from a later HEAD.
 
-     Second, **the reviewer artifacts exist on disk**. Include a coverage line and a combined findings table for every pass, empty when no findings are available. Name each reviewer, its exact model identifier and its outcome: finding count, empty table, verbatim error, or not installed. Cite each reviewer output file and byte count, plus the error log for a failed invocation. A missing or zero-byte output is no output, not an empty findings table. Report it as missing coverage. A reviewer returns a findings **list**, or the single line `No findings.`; building the combined table is the agent's job, not the reviewer's, so a list without a table is a met contract. What fails the contract is a reviewer that returned nothing at all. If both CLIs are absent, state the skip explicitly. No coverage line means step 5 has not been accounted for.
+     Second, **the reviewer artifacts exist on disk**. Include a coverage line and a combined findings table for every pass, empty when the reviewers ran and found nothing. **An empty table with zero reviewer outputs is not a pass state**: that is no coverage, and the gate rejects it — re-run when a reviewer is available, or record in writing that the phase is landing without external review. Name each reviewer, its exact model identifier and its outcome: finding count, empty table, verbatim error, or not installed. Cite each reviewer output file and byte count, plus the error log for a failed invocation. A missing or zero-byte output is no output, not an empty findings table. Report it as missing coverage. A reviewer returns a findings **list**, or the single line `No findings.`; building the combined table is the agent's job, not the reviewer's, so a list without a table is a met contract. What fails the contract is a reviewer that returned nothing at all. If both CLIs are absent, state the skip explicitly. No coverage line means step 5 has not been accounted for.
    - **Name the single merge method** recorded at §2 step 3.
    - **End the hand-off with the actual state:** "Committed and pushed on `<branch>`, PR `<n>` ready at `<gate SHA>`, awaiting your sign-off to merge."
    - **Any edit while waiting for sign-off invalidates approval**, including a typo or release metadata edit. Commit and push it, name it in a follow-up, repeat the gate and obtain sign-off on the new SHA.
@@ -374,11 +397,15 @@ Sign-off — as defined at the top of this file — is the only trigger. Once it
 
 Then stop. The next phase's branch is created at phase start (§2 step 1) — never here.
 
-**Revalidate `origin` before anything is published or deleted.** The approved PR is looked up
-through the `REPO` recorded at the gate, but fetches, tag pushes and branch deletions go to
-whatever remote is named `origin` *now*. If the remote was repointed between sign-off and the
-merge cycle — a fork switch, a mistyped `set-url` — those operations land in a different
-repository. Compare against the `ORIGIN_URL` captured at §2 and refuse on a mismatch.
+**Revalidate `origin` before anything is published or deleted, and check both of its URLs.**
+The approved PR is looked up through the `REPO` recorded at the gate, but fetches, tag pushes and
+branch deletions go to whatever remote is named `origin` *now*. If it was repointed between
+sign-off and the merge cycle — a fork switch, a mistyped `set-url` — those operations land in a
+different repository. **`git` keeps a separate push URL**, so a remote can fetch from the
+approved repository while pushing somewhere else: a fork holding the same approved SHA would
+satisfy every SHA check and then receive the tag and the branch deletion. Capture
+`git remote get-url origin` *and* `git remote get-url --push origin` at §2 and require both to
+match before publishing or deleting.
 
 **`git reset --hard` appears nowhere in this workflow; do not add it.** Where a reset is genuinely required, branch first (`git branch backup/<phase>-$(date +%s)`) or use `git reset --keep`, which refuses rather than discarding.
 
