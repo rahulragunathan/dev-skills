@@ -209,3 +209,41 @@ teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/nul
   local skill; skill="$(dirname "$PUBLISH")/SKILL.md"
   grep -q 'ORIGIN_PUSH_URL="\$(git remote get-url --push origin)"' "$skill"
 }
+
+@test "restore: a SHA that is not HEAD is refused before anything is mutated" {
+  # THE data-loss case. The script accepted any commit containing the file,
+  # mutated the current checkout, then restored from that older commit —
+  # silently discarding every committed change made since it.
+  printf 'def add(a, b):\n    return a + b\n\ndef sub(a, b):\n    return a - b\n' > calc.py
+  git add -A && git commit -qm "later work"
+  run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a * b/' bash -c 'exit 1'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"NOT HEAD"* ]]
+  grep -q 'def sub' calc.py
+}
+
+@test "restore: a restore that silently does nothing is reported, not swallowed" {
+  # Red while cleanup runs in a bare EXIT trap. A failing trap command cannot
+  # replace the preceding exit status, so a botched restore reports success and
+  # leaves mutated code in the tree. git is faked here so `restore` and
+  # `checkout` return 0 without restoring, which is the shape that hides.
+  mkdir -p "$TEST_TMP/bin"
+  cat > "$TEST_TMP/bin/git" <<'EOF'
+#!/usr/bin/env bash
+for a in "$@"; do
+  case "$a" in restore|checkout) exit 0 ;; esac
+done
+exec /usr/bin/git "$@"
+EOF
+  chmod +x "$TEST_TMP/bin/git"
+  PATH="$TEST_TMP/bin:$PATH" run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a - b/' bash -c 'exit 1'
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"RESTORE"* ]]
+}
+
+@test "restore: the happy path still leaves the file byte-identical" {
+  run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a - b/' bash -c 'exit 1'
+  [ "$status" -eq 0 ]
+  [ -z "$(git status --porcelain)" ]
+  grep -q 'a + b' calc.py
+}

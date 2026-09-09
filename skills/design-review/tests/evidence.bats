@@ -239,3 +239,59 @@ PY
   [[ "$output" == *"incomplete"* ]]
   [ ! -e "$EV/answers/S01-with-skill.md" ]
 }
+
+@test "check: a batch whose answer files are gone is not current" {
+  # THE hole. check validated manifest keys and never opened the files they
+  # name, so a batch with every answer deleted reported all seven current and
+  # exited 0. Verified against the real round-4 batch before this test existed.
+  python3 "$EVPY" init "$EV" --round 4 --model claude-opus-5 --tests skills/design-review/tests
+  P="$(cat "$EV/S01-prompt.txt")"
+  python3 - "$TEST_TMP/t.jsonl" "$P" <<'MKJSON'
+import json, sys
+rows = [{"type":"user","message":{"role":"user","content":sys.argv[2]}},
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ANSWER BODY"}]}}]
+open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in rows) + "\n")
+MKJSON
+  python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --transcript "$TEST_TMP/t.jsonl"
+  rm -f "$EV/answers/S01-baseline.md"
+  run python3 "$EVPY" check "$EV"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"S01"*"EXPIRED"* ]]
+  [[ "$output" == *"answer"* ]]
+}
+
+@test "check: an answer edited after recording is reported" {
+  # Red while only existence is checked: the recorded hash is what ties the
+  # answer to the run that produced it.
+  python3 "$EVPY" init "$EV" --round 4 --model claude-opus-5 --tests skills/design-review/tests
+  P="$(cat "$EV/S01-prompt.txt")"
+  python3 - "$TEST_TMP/t.jsonl" "$P" <<'MKJSON'
+import json, sys
+rows = [{"type":"user","message":{"role":"user","content":sys.argv[2]}},
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ANSWER BODY"}]}}]
+open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in rows) + "\n")
+MKJSON
+  python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --transcript "$TEST_TMP/t.jsonl"
+  printf 'EDITED BY HAND\n' > "$EV/answers/S01-baseline.md"
+  run python3 "$EVPY" check "$EV"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"S01"*"EXPIRED"* ]]
+}
+
+@test "record: a final message that still holds a tool call is incomplete" {
+  # Red while completion means "has any text": a message can carry a preamble
+  # and a tool call together, which is a run still in flight.
+  python3 "$EVPY" init "$EV" --round 4 --model claude-opus-5 --tests skills/design-review/tests
+  P="$(cat "$EV/S01-prompt.txt")"
+  python3 - "$TEST_TMP/t.jsonl" "$P" <<'MKJSON'
+import json, sys
+rows = [{"type":"user","message":{"role":"user","content":sys.argv[2]}},
+        {"type":"assistant","message":{"role":"assistant","content":[
+            {"type":"text","text":"Let me read the skill first."},
+            {"type":"tool_use","name":"Read","input":{}}]}}]
+open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in rows) + "\n")
+MKJSON
+  run python3 "$EVPY" record "$EV" --scenario S01 --arm with-skill --transcript "$TEST_TMP/t.jsonl"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"incomplete"* ]]
+}

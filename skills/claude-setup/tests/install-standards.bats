@@ -159,3 +159,39 @@ markers_balanced() {
   [[ "$output" == *"TWO MANAGED BLOCKS"* ]]
   [ "$(cat "$TARGET")" = "$before" ]
 }
+
+@test "a line starting with the marker text is not treated as a marker" {
+  # THE prefix bug. Every check is `grep "^$OPEN"`, never `^…$`, so a line that
+  # merely BEGINS with the marker counts as one. Paired with a real closing
+  # marker it makes the installer replace content that is not its own. The
+  # existing quoted-marker test puts "See the" first, so it never reaches
+  # column zero and never tests this.
+  cat > "$TARGET" <<'EOF'
+# My notes
+
+<!-- >>> localclaude standards v1 >>> --> this line is prose, not a marker
+USER-CONTENT must survive
+<!-- <<< localclaude standards <<< -->
+
+More USER-CONTENT below.
+EOF
+  run bash "$SCRIPT" "$CANON" "$TARGET"
+  [ "$status" -eq 1 ]
+  grep -q 'USER-CONTENT must survive' "$TARGET"
+  grep -q 'More USER-CONTENT below' "$TARGET"
+}
+
+@test "a dangling symlink target is refused, not written through" {
+  # Red while the symlink check sits inside the existing-target branch: a
+  # dangling link satisfies `! -e`, so the create path follows it and writes
+  # to whatever it points at, outside ~/.claude entirely.
+  local outside="$TEST_TMP/outside.md"
+  printf 'USER-CONTENT outside the config dir\n' > "$outside"
+  rm -f "$TARGET"
+  ln -s "$TEST_TMP/absent.md" "$TARGET"
+  run bash "$SCRIPT" "$CANON" "$TARGET"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"SYMLINK"* ]]
+  [ ! -e "$TEST_TMP/absent.md" ]
+  grep -q 'USER-CONTENT outside the config dir' "$outside"
+}

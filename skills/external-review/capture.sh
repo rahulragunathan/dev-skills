@@ -82,6 +82,31 @@ ALL=':(top)'
 
 withhold() { printf '%s\t(%s)\0' "$1" "$2" >> "$WITHHELD"; }
 
+# The same policy the pathspecs express, as a name test. git pathspecs filter
+# the repo and phase manifests, but plan mode names one file directly and never
+# builds a manifest, so that path had no credential filter at all — the one
+# mode whose input a human types was the one with nothing checking it.
+credential_shaped() {
+  local base; base="$(basename -- "$1" | tr '[:upper:]' '[:lower:]')"
+  case "$base" in
+    *.env|*.env.*|.env|*.pem|*.key|*.p12|*.pfx|*.crt|*id_rsa*|*id_ed25519*) return 0 ;;
+    *credentials*|*.netrc|*.npmrc|*.sqlite|*.sqlite3) return 0 ;;
+  esac
+  return 1
+}
+
+# 0 binary, 1 text. Any other status from the detector is a failure, not text:
+# `if perl ...; then` treated a missing perl (127) as text, and the bytes it was
+# meant to keep out went into the bundle.
+is_binary() {
+  perl -e 'exit(-B $ARGV[0] ? 0 : 1)' "$1"
+  case "$?" in
+    0) return 0 ;;
+    1) return 1 ;;
+    *) echo "BINARY DETECTOR FAILED on $1 — do not send this bundle"; exit 1 ;;
+  esac
+}
+
 # Containment. Sets CAPTURE_PATH and answers one question: may this path be
 # read at all? It applies to every path capture handles, however its content
 # reaches the bundle, so a new escape check belongs here rather than at a call
@@ -111,9 +136,8 @@ classify() {
   [ "$rc" = 0 ] || return 1
   [ -e "$CAPTURE_PATH" ] || { withhold "$f" "tracked, absent from the tree"; return 1; }
   [ -f "$CAPTURE_PATH" ] || { withhold "$f" "not a regular file"; return 1; }
-  if perl -e 'exit(-B $ARGV[0] ? 0 : 1)' "$CAPTURE_PATH"; then
-    withhold "$f" "binary"; return 1
-  fi
+  credential_shaped "$f" && { withhold "$f" "credential-shaped name"; return 1; }
+  is_binary "$CAPTURE_PATH" && { withhold "$f" "binary"; return 1; }
   return 0
 }
 
@@ -174,7 +198,7 @@ case "$MODE" in
           fi
           git cat-file blob "$blob" > "$OUT/diff-blob" \
             || { echo "BLOB READ FAILED — do not send this bundle"; exit 1; }
-          if perl -e 'exit(-B $ARGV[0] ? 0 : 1)' "$OUT/diff-blob"; then
+          if is_binary "$OUT/diff-blob"; then
             withhold "$f" "binary in diff"; allowed=0; break
           fi
         done

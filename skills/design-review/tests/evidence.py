@@ -158,7 +158,7 @@ def read_transcript(path: pathlib.Path) -> tuple[str, int, bool]:
     with. That reads as a valid short answer, so completeness is checked here
     rather than left to whoever looks at the byte count.
     """
-    last_msg_had_text = False
+    last_msg_complete = False
     texts, tools = [], 0
     for line in path.read_text(errors="replace").splitlines():
         if not line.strip():
@@ -173,16 +173,21 @@ def read_transcript(path: pathlib.Path) -> tuple[str, int, bool]:
         content = m.get("content")
         if isinstance(content, str):
             texts.append(content)
-            last_msg_had_text = True
+            last_msg_complete = True
             continue
-        last_msg_had_text = False
+        msg_text, msg_tool = False, False
         for c in content or []:
             if c.get("type") == "text":
                 texts.append(c["text"])
-                last_msg_had_text = True
+                msg_text = True
             elif c.get("type") == "tool_use":
                 tools += 1
-    return (texts[-1] if texts else ""), tools, last_msg_had_text
+                msg_tool = True
+        # A message carrying both a preamble and a tool call is a run still in
+        # flight, not an answer. Treating any text as completion recorded four
+        # of round 4's answers as their opening sentence.
+        last_msg_complete = msg_text and not msg_tool
+    return (texts[-1] if texts else ""), tools, last_msg_complete
 
 
 def cmd_record(args) -> int:
@@ -216,10 +221,13 @@ def cmd_record(args) -> int:
     if args.arm == "baseline" and tools > 0:
         fail(f"refusing: baseline is contaminated — {tools} tool use(s) in {args.transcript}")
     tgt = ev / "answers" / f"{args.scenario}-{args.arm}.md"
-    tgt.write_text(body.rstrip("\n") + "\n")
+    # Hash what is written, not what was parsed. Hashing the pre-normalized body
+    # made `check` report every untouched answer as edited.
+    normalized = body.rstrip("\n") + "\n"
+    tgt.write_text(normalized)
     manifest["scenarios"][args.scenario]["arms"][args.arm] = {
         "answer": f"answers/{tgt.name}",
-        "answer_hash": h16(body),
+        "answer_hash": h16(normalized),
         "tool_uses": tools,
         "transcript": pathlib.Path(args.transcript).name,
     }
@@ -251,6 +259,17 @@ def cmd_check(args) -> int:
                 reasons.append("grading conditions changed")
             if h16(unquote(section(text, "Prompt"))) != s["prompt_hash"]:
                 reasons.append("prompt changed")
+        # Verify the answers, not only the keys that name them. Checking the
+        # manifest alone reported a batch current with every answer file
+        # deleted, which is the one thing a completeness check exists to catch.
+        for arm, rec in sorted(s.get("arms", {}).items()):
+            ap = ev / rec.get("answer", "")
+            if not ap.is_file():
+                reasons.append(f"{arm} answer file is missing")
+            elif not ap.read_text().strip():
+                reasons.append(f"{arm} answer file is empty")
+            elif "answer_hash" in rec and h16(ap.read_text()) != rec["answer_hash"]:
+                reasons.append(f"{arm} answer changed after it was recorded")
         if args.require_complete:
             missing = [a for a in ARMS if a not in s.get("arms", {})]
             if missing:

@@ -35,18 +35,45 @@ fi
 
 git rev-parse --verify "$SHA^{commit}" >/dev/null 2>&1 \
   || { echo "NOT A COMMIT: $SHA"; exit 1; }
+
+# The mutation is applied to the current checkout, so the restore must come from
+# the same commit. Any older commit that merely contains the file would restore
+# it over every change committed since — work that looks safe because it was
+# committed, which is exactly why this is checked rather than trusted.
+HEAD_SHA="$(git rev-parse --verify HEAD)"
+[ "$(git rev-parse --verify "$SHA^{commit}")" = "$HEAD_SHA" ] \
+  || { echo "SHA IS NOT HEAD — refusing: restoring from it would discard"
+       echo "everything committed since. HEAD is $HEAD_SHA"; exit 1; }
+
 git ls-tree -r --name-only "$SHA" -- "$FILE" | grep -qx -- "$FILE" \
   || { echo "FILE IS NOT PRESENT AT $SHA — cannot restore it afterwards"; exit 1; }
 
+RESTORE_FAILED=0
 restore() {
   git restore --source="$SHA" --staged --worktree -- "$FILE" 2>/dev/null \
-    || git checkout "$SHA" -- "$FILE" 2>/dev/null \
-    || { echo "RESTORE FAILED — repair $FILE by hand from $SHA"; return 1; }
+    || git checkout "$SHA" -- "$FILE" 2>/dev/null || true
+  # Verify rather than trust the exit status. A restore that returns 0 without
+  # restoring leaves mutated code in the tree, and the audit reports success.
+  if ! git diff --quiet "$SHA" -- "$FILE" || ! git diff --quiet -- "$FILE"; then
+    echo "RESTORE FAILED — $FILE does not match $SHA; repair it by hand"
+    RESTORE_FAILED=1
+    return 1
+  fi
+  return 0
 }
+
 # Restore on every exit path, including INT and TERM. Without this a killed run
-# leaves the mutation in place and the next command reads broken code.
+# leaves the mutation in place and the next command reads broken code. The EXIT
+# trap preserves the incoming status and overrides it only to report a failed
+# restore: a trap's own failure cannot change an exit status on its own.
+on_exit() {
+  local rc=$?
+  restore
+  [ "$RESTORE_FAILED" = 1 ] && exit 1
+  exit "$rc"
+}
 trap 'restore; exit 130' INT TERM
-trap 'restore' EXIT
+trap on_exit EXIT
 
 sed -i.mutbak "$EXPR" "$FILE" || { echo "MUTATION FAILED TO APPLY"; exit 1; }
 rm -f "$FILE.mutbak"

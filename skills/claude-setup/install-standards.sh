@@ -24,6 +24,11 @@ set -uo pipefail
 
 OPEN='<!-- >>> localclaude standards'
 CLOSE='<!-- <<< localclaude standards'
+# Whole-line patterns. `^$OPEN` matches any line that merely BEGINS with the
+# marker text, so prose at column zero counted as a marker and, paired with a
+# real closing line, made the installer replace content that was not its own.
+OPEN_RE='^<!-- >>> localclaude standards.*>>> -->$'
+CLOSE_RE='^<!-- <<< localclaude standards <<< -->$'
 
 CANON="${1:?usage: install-standards.sh <canonical-block-file> [target]}"
 TARGET="${2:-$HOME/.claude/CLAUDE.md}"
@@ -35,21 +40,26 @@ case "$block" in
   "$OPEN"*) : ;;
   *) echo "CANONICAL BLOCK DOES NOT START WITH THE OPENING MARKER"; exit 1 ;;
 esac
-printf '%s' "$block" | tail -n 1 | grep -q "^$CLOSE" \
+printf '%s' "$block" | head -n 1 | grep -qE "$OPEN_RE" \
+  || { echo "CANONICAL BLOCK'S OPENING MARKER IS NOT A COMPLETE MARKER LINE"; exit 1; }
+printf '%s' "$block" | tail -n 1 | grep -qE "$CLOSE_RE" \
   || { echo "CANONICAL BLOCK DOES NOT END WITH THE CLOSING MARKER"; exit 1; }
 
 mkdir -p "$(dirname "$TARGET")" || { echo "CANNOT CREATE TARGET DIRECTORY"; exit 1; }
+
+# Test the link before testing existence. A dangling symlink satisfies `! -e`,
+# so the create path followed it and wrote through to its target — outside the
+# config directory entirely.
+[ -L "$TARGET" ] && { echo "TARGET IS A SYMLINK — refusing to write through it"; exit 1; }
 
 if [ ! -e "$TARGET" ]; then
   printf '%s\n' "$block" > "$TARGET" || { echo "WRITE FAILED"; exit 1; }
   echo "created"
 else
   [ -f "$TARGET" ] || { echo "TARGET IS NOT A REGULAR FILE"; exit 1; }
-  [ -L "$TARGET" ] && { echo "TARGET IS A SYMLINK — refusing to write through it"; exit 1; }
 
-  # Whole-line matches only. A prefix match finds prose that quotes a marker.
-  n_open="$(grep -c "^$OPEN" "$TARGET" || true)"
-  n_close="$(grep -c "^$CLOSE" "$TARGET" || true)"
+  n_open="$(grep -cE "$OPEN_RE" "$TARGET" || true)"
+  n_close="$(grep -cE "$CLOSE_RE" "$TARGET" || true)"
 
   if [ "$n_open" != "$n_close" ]; then
     echo "MARKER MISMATCH in $TARGET — $n_open opening, $n_close closing."
@@ -77,7 +87,7 @@ else
     # Replace from the LAST opening marker to the first closing marker after it.
     # Assemble with head/tail/cat: the block is multi-line and cannot travel
     # through `awk -v`, which silently truncates at the first newline.
-    last_open="$(grep -n "^$OPEN" "$TARGET" | tail -n 1 | cut -d: -f1)"
+    last_open="$(grep -nE "$OPEN_RE" "$TARGET" | tail -n 1 | cut -d: -f1)"
     close_line="$(awk -v s="$last_open" -v c="$CLOSE" \
       'NR >= s && index($0, c) == 1 { print NR; exit }' "$TARGET")"
     [ -n "$close_line" ] \
@@ -91,8 +101,8 @@ else
   # Verify the CANDIDATE before it replaces anything. Verifying after the move
   # is how a bad slice destroys the file it was meant to update: the check fires,
   # and the damage is already done.
-  v_open="$(grep -c "^$OPEN" "$TMP" || true)"
-  v_close="$(grep -c "^$CLOSE" "$TMP" || true)"
+  v_open="$(grep -cE "$OPEN_RE" "$TMP" || true)"
+  v_close="$(grep -cE "$CLOSE_RE" "$TMP" || true)"
   [ "$v_open" = "1" ] && [ "$v_close" = "1" ] \
     || { echo "CANDIDATE REJECTED — $v_open opening, $v_close closing; $TARGET untouched"; exit 1; }
   diff -q <(awk -v o="$OPEN" -v c="$CLOSE" \
@@ -105,8 +115,8 @@ else
 fi
 
 # Final check on whatever path ran, including the create path above.
-v_open="$(grep -c "^$OPEN" "$TARGET" || true)"
-v_close="$(grep -c "^$CLOSE" "$TARGET" || true)"
+v_open="$(grep -cE "$OPEN_RE" "$TARGET" || true)"
+v_close="$(grep -cE "$CLOSE_RE" "$TARGET" || true)"
 [ "$v_open" = "1" ] && [ "$v_close" = "1" ] \
   || { echo "VERIFY FAILED — $v_open opening, $v_close closing after write"; exit 1; }
 exit 0

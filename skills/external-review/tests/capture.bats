@@ -350,3 +350,28 @@ refute_canary() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"--exclude"* ]]
 }
+
+@test "plan: a credential-shaped plan file is withheld, not sent" {
+  # THE leak. plan mode hands its argument straight to capture(), which never
+  # consults EXCL, so the one path that reviews a file named by a human is the
+  # one path with no credential filter. The skill claims otherwise.
+  printf 'AWS_SECRET=SECRET-CANARY\n' > "$OUTSIDE/deploy.env"
+  run bash "$CAPTURE" plan "$OUT" "$OUTSIDE/deploy.env"
+  [ "$status" -eq 0 ]
+  refute_canary
+  withheld_for "deploy.env" "credential"
+}
+
+@test "repo: a missing binary detector aborts instead of passing binaries through" {
+  # Red while `if perl ...; then` treats every nonzero status as "text". A
+  # missing perl exits 127, the file is called text, and its bytes reach the
+  # bundle.
+  printf '\x00\x01BINARY-CANARY\x00' > blob.bin
+  git add -A && git commit -qm binary
+  mkdir -p "$TEST_TMP/nobin"
+  printf '#!/usr/bin/env bash\nexit 127\n' > "$TEST_TMP/nobin/perl"
+  chmod +x "$TEST_TMP/nobin/perl"
+  PATH="$TEST_TMP/nobin:$PATH" run bash "$CAPTURE" repo "$OUT"
+  [ "$status" -eq 1 ]
+  ! grep -q 'BINARY-CANARY' "$OUT/bundle.txt"
+}
