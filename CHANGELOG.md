@@ -42,18 +42,17 @@ here — the plugin manifest's version is the only record of them.
   open question from an external repo review.
 - `LICENSE` — the MIT text the plugin manifest and skill frontmatter already
   declared.
-- **Run evidence for the pressure tests, over three rounds.** Seven baselines on
-  2026-09-07, and the seven with-skill arms re-gathered twice as review passes
-  changed the loaded skills — round 2 at `a850251`, round 3 at `07e1769`. Only
-  round 3 is current, and the re-gather earned its cost: the clarified
-  delivery-content clause moved the email subject out of the composition root in
-  S01 and two other scenarios applied the same clause unprompted. The S07
-  mutation grade was corrected under *Fixed*; its replacement fixture did not
-  establish the original test's behavior on every host. **Six of fifteen units
-  need their rule and the skill fixes five**: Only what fired, No filler verdicts,
-  produce versus edit, Direction and Fixture validity. Mutation reasoning remains
-  ineffective. The other nine record a
-  strong model already doing the right thing unaided. Transcripts, dispatched
+- **Run evidence for the pressure tests, over four rounds.** Rounds 1 to 3 mixed
+  arms: seven baselines from 2026-09-07 carried forward while the with-skill arms
+  were re-gathered twice as review passes changed the loaded skills. **Round 4
+  (2026-09-09) is the current and only complete batch** — both arms of all seven
+  scenarios gathered the same day against the same skill text, with per-scenario
+  provenance so a single stale scenario can be named. Rounds 1 to 3 are retained
+  as history and marked superseded. **Seven of fifteen units need their rule and
+  the skill fixes two**: Direction and Lifetime. Five remain ineffective —
+  Responsibility, Only what fired, No filler verdicts, Mutation reasoning and
+  Fixture validity. The other eight record a strong model already doing the right
+  thing unaided. Transcripts, dispatched
   prompts and hash-verified skill snapshots for both rounds are archived outside
   the repo under
   `Claude-Projects/Project Artifacts/Plugins/localclaude/design-review-evidence-<date>/`.

@@ -4,11 +4,19 @@ Each scenario defines a normal-work artifact and failure conditions judged from 
 Run each prompt in a fresh agent with and without the indicated skill. Re-run affected pairs
 when their prompt, conditions or loaded skill changes.
 
-The evidence below spans three rounds on `claude-opus-5`. The seven **baselines** are from
-2026-09-07 and stand unchanged. The **with-skill** arms have been re-gathered twice, because a
-changed loaded skill expires its with-skill run and two review passes changed those skills: round
-2 at `a850251` after pass 5, and round 3 at `07e1769` after pass 7. Only round 3 is current.
-Three grades were corrected along the way — see *Corrections* below.
+The evidence below spans four rounds on `claude-opus-5`. **Round 4 (2026-09-09) is the current
+one and the only complete one**: both arms of all seven scenarios were gathered on the same day
+against the same skill text, after the earlier batches were found to be mixing baselines from one
+round with with-skill answers from another. Rounds 1 to 3 are retained as history and marked
+superseded in each scenario's Results table.
+
+Provenance is tracked per scenario, not per repository — `evidence.py check` recomputes each
+scenario's loaded-skill hash, prompt hash and condition hash, so it can say which single scenario
+has gone stale. A repository-wide SHA could only mark everything stale or nothing, which is how
+S07's evidence outlived two changes to `phase-workflow`.
+
+Several grades have been corrected across rounds, always in the same direction — see
+*Corrections* below.
 
 Transcripts, dispatched prompts and hash-verified skill snapshots for both rounds are archived
 outside the repo, under this project's artifact folder — the standard home for run evidence, one
@@ -122,32 +130,34 @@ of either skill has been tested.
 
 ## Results
 
-**Six of fifteen units need their rule. The skill fixes five of six; P2 (Mutation reasoning)
-remains ineffective.** The other nine record a strong
-model already doing the right thing unaided.
+**Seven of fifteen units need their rule, and the skill fixes two of them.** Five are
+`Rule ineffective`: the skill's text does not change the answer in the direction it intends. The
+other eight units record a strong model already doing the right thing unaided.
 
-All fifteen units are current. The seven with-skill arms were re-gathered as **round 3** at
-`07e1769`, after external review pass 7's fixes changed both loaded skills; the round-2 arms
-they replace were marked expired in the same commit as those fixes, which is the sequencing
-`phase-workflow` now requires. The baselines are round 1 and unaffected — neither their prompts
-nor their conditions changed.
+That is a worse result than round 3 reported, and three of the five come from grading errors
+found in pass 9 rather than from the skill getting worse. Round 3 graded S07's Fixture unit a
+pass because its replacement fixture was checked on a UTC host; `gpt-6-astra` executed it under
+`TZ=Asia/Tokyo`, where the fixture's own guard is False and the test errors before reaching
+production code. Both arms carry that defect, so both are regraded.
+
+All fifteen units are current as of round 4.
 
 | Unit | Rule | Without the skill | With it | Evidence status |
 | --- | --- | --- | --- | --- |
-| R1 | Only what fired | **Rule needed** | **Rule works** | Current |
-| R4 | No filler verdicts | **Rule needed** | **Rule works** | Current |
-| G2 | Produce versus edit | **Rule needed** | **Rule works** | Current |
-| D2 | Direction | **Rule needed** | **Rule works** | Current |
+| D1 | Responsibility | **Rule needed** | **Rule ineffective** | Current |
+| R1 | Only what fired | **Rule needed** | **Rule ineffective** | Current |
+| R4 | No filler verdicts | **Rule needed** | **Rule ineffective** | Current |
 | P2 | Mutation reasoning | **Rule needed** | **Rule ineffective** | Current |
-| P3 | Fixture validity | **Rule needed** | **Rule works** | Current |
-| D1 | Responsibility | Rule not needed here | Rule works | Current |
-| D3 | Lifetime | Rule not needed here | Rule works | Current |
+| P3 | Fixture validity | **Rule needed** | **Rule ineffective** | Current |
+| D2 | Direction | **Rule needed** | **Rule works** | Current |
+| D3 | Lifetime | **Rule needed** | **Rule works** | Current |
 | D4 | Surface | Rule not needed here | Rule works | Current |
 | D5 | Duplication | Rule not needed here | Rule works | Current |
 | D6 | Variation / YAGNI cap | Rule not needed here | Rule works | Current |
 | R2 | Resolution not observation | Rule not needed here | Rule works | Current |
 | R3 | Record the declined check | Rule not needed here | Rule works | Current |
 | G1 | Diagram distinctness | Rule not needed here | Rule works | Current |
+| G2 | Produce versus edit | Rule not needed here | Rule works | Current |
 | P1 | Skip vs partial coverage | Rule not needed here | Rule works | Current |
 
 ### Corrections — three grades were wrong, and external review found them

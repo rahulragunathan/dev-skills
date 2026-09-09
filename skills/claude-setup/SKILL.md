@@ -107,17 +107,28 @@ Finish with the usual reminder: changes take effect only after a full Cmd+Q + re
 
 This is the user's **complete global standard** — the goal is that a re-run brings a *stale* file **up to date**, not merely appends the sections when they're absent. So **reconcile**, don't just check-for-presence. The canonical block below is wrapped in managed markers so re-runs can replace it cleanly. `claude-toggle-backend` uses the same pattern for its `~/.zshrc` block; if you change the marker handling here, change it there too.
 
-**Read the file first if it exists**, then install the canonical block verbatim between the markers.
+**Install it with the bundled script, not by hand.** Write the canonical text from the fenced
+block below to a scratchpad file, then:
 
-**Take the canonical text from inside the fenced block below, not by searching this file for a marker.** This section discusses the markers, so a prefix search finds prose before it finds the real delimiters. Match **whole marker lines only**. **Refuse a file that has more than one managed block**, and a file whose opening and closing markers do not balance: both mean an earlier run went wrong, which one is current is not knowable from the file, and every automatic reading of it discards content. Say which state was found and stop.
+```bash
+bash "$CLAUDE_PLUGIN_ROOT/skills/claude-setup/install-standards.sh" "<scratchpad>/standards.md"
+```
 
-- **Markers already present** → replace everything between them with the current canonical block. This is how a stale copy gets refreshed: a file missing the whole `## Development process` section, or one whose `Co-Authored-By` trailer still names a fixed model instead of the model that wrote the commit.
-- **Standards present without markers** (an older machine — e.g. bare `## Shell commands` / `## Git` and nothing else) → replace those sections in place with the marked block, preserving any unrelated content the user keeps elsewhere in the file.
-- **Neither** (missing file, or unrelated content only) → create or append the marked block.
+**Take the canonical text from inside the fenced block below, not by searching this file for a
+marker.** This section discusses the markers, so a search finds prose before it finds the real
+delimiters. That is the one part the script cannot do for you, because only you can tell which
+of this file's marker-shaped lines is the real one.
 
-Preserve any non-standard content the user keeps **outside** the managed block.
+The script does the rest, and it is what the tests cover. It matches whole marker lines only,
+refuses a file with more than one managed block or with unbalanced markers, refuses a symlinked
+target including a dangling one, assembles a candidate and verifies *that* before it replaces
+anything, and preserves content outside the block. Each of those is a way this step has gone
+wrong or could: a re-run must bring a stale file up to date rather than append to it, and a bad
+slice here corrupts the file that governs every session on every machine. Change its behavior in
+`install-standards.sh` and verify it with `tests/install-standards.bats`.
 
-**Then verify, because a wrong slice here corrupts the file that governs every session.** The result must start with the opening marker, end with the closing marker, contain exactly one of each, and carry no stray code fence. Diff the installed block against the canonical text and confirm they match, that no section was dropped, and that the trailer wording is the dynamic-model-name form.
+`claude-toggle-backend` uses the same marker pattern for its `~/.zshrc` block; if you change the
+marker handling here, change it there too.
 
 ```markdown
 <!-- >>> localclaude standards (managed — edit here + re-run claude-setup to sync every machine) >>> -->

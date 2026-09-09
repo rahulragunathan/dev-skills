@@ -132,45 +132,27 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 
    **Commit the task before you mutate it.** That is what makes the restore safe.
 
-   Run this as one Bash script. Replace the edit comment with the mutation command before starting. Do not make concurrent edits during the audit. The saved task commit must contain the target file.
+   Do not make concurrent edits during the audit: the restore covers the mutation target, and a
+   change elsewhere is not its to put back.
 
    ```bash
-   set -euo pipefail
-   [ -f "<file>" ] && [ ! -L "<file>" ] || { echo "NOT A REGULAR FILE — restore would not cover the target"; exit 1; }
-   TREE_STATE="$(git status --porcelain=v1 --untracked-files=all)"
-   [ -z "$TREE_STATE" ] || { echo "TREE DIRTY — commit the task before auditing it"; exit 1; }
-   TASK_SHA="$(git rev-parse --verify HEAD)"
-   git cat-file -e "$TASK_SHA:<file>"
-   restore_task_file() {
-     git restore --source="$TASK_SHA" --staged --worktree -- "<file>" || return 1
-     git diff --quiet "$TASK_SHA" -- && git diff --cached --quiet "$TASK_SHA" --
-   }
-   cleanup_mutation() {
-     rc=$?
-     trap - EXIT INT TERM
-     if ! restore_task_file; then
-       echo "RESTORE FAILED — inspect index and working tree before continuing"
-       exit 1
-     fi
-     exit "$rc"
-   }
-   trap cleanup_mutation EXIT
-   trap 'exit 130' INT
-   trap 'exit 143' TERM
-
-   # --- edit <file> now: break exactly the behaviour the failure condition names ---
-
-   rc=0
-   .venv/bin/python -m pytest <the test> -x || rc=$?
-   restore_task_file || { echo "RESTORE FAILED — stop"; exit 1; }
-   trap - EXIT INT TERM
-   [ "$rc" -eq 1 ] || { echo "NOT AN ASSERTION RED — pytest exit $rc; inspect the output"; exit 1; }
-   .venv/bin/python -m pytest <the test>
-   git diff --quiet "$TASK_SHA" -- && git diff --cached --quiet "$TASK_SHA" -- \
-     || { echo "AUDIT CHANGED TRACKED FILES — stop"; exit 1; }
+   bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/mutation-restore.sh" \
+     "<task-sha>" "<file>" '<sed-expression>' <test-command...>
    ```
 
-   The cleanup restores only the mutation target. A change elsewhere fails verification and stays available for inspection. INT, TERM and normal shell exit run cleanup; after an untrappable kill or power loss, inspect the tree and restore the target from the recorded task SHA before resuming.
+   Use the bundled script rather than pasting shell. It refuses a dirty tree, a symlinked or
+   non-regular target, a SHA that is not HEAD, and a mutation that matches nothing; it restores
+   the target across index and worktree on every exit path including INT and TERM; it verifies
+   the file matches the SHA afterwards rather than trusting the restore's exit status; and it
+   requires exit 1 specifically, because a fixture or collection error also returns non-zero.
+   Change its behavior in `mutation-restore.sh` and verify it with `tests/phase-git.bats`.
+
+   **Why the SHA must be HEAD:** the mutation is applied to the current checkout, so restoring
+   from any earlier commit would revert every change committed since — work that looks safe
+   because it was committed, which is why the script checks rather than trusts.
+
+   After an untrappable kill or a power loss, no trap runs: inspect the tree and restore the
+   target from the recorded task SHA by hand before resuming.
 
    **A red that is an import error, a collection error, or a fixture failure does not count.** It has to be the failure named in the condition. **That named failure may be a production exception** — if removing the behaviour makes the code under test raise, and the condition says so, that raise *is* the discrimination and the test passes the audit. What does not count is an error from the harness rather than the code: a missing import, a collection error, or a fixture that fell over before the production call. Do not invent a second mutation to manufacture an `AssertionError` when the named failure is already an exception the condition predicted. A false red is worth exactly as much as no check, and it is the easier of the two to mistake for success.
 
