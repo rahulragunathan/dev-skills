@@ -242,6 +242,25 @@ here — the plugin manifest's version is the only record of them.
 
 ### Fixed
 
+- **A review scope exclusion now removes files from the bundle, not only from the prompt.**
+  `capture.sh` takes `--exclude <pathspec>`, repeatable, and the excluded paths leave the
+  manifest and appear in the excluded count. Naming an out-of-scope skill in the preamble did
+  not hold: pass 8 named `drive-backup` and the reviewer reported on it anyway, because its
+  files were in front of it. Refused in `plan` mode, which captures one named file.
+- **Deletions reach the reviewer again.** Phase capture ran the worktree checks on every path
+  in the raw diff, so a file the diff deleted was withheld as absent from the tree and its
+  removal never appeared in the patch. Classification is now split: containment — allowed roots
+  and symlinks — applies to every path, and the worktree checks apply only where capture reads
+  the worktree copy. A deletion is covered by containment plus the checks on its committed
+  blobs, which is where its content actually comes from.
+- **Capture is anchored to the repository root, not the working directory.** Pathspecs carry
+  `:(top)` and paths resolve from the root, so a bundle built from a subdirectory covers the
+  whole repository and the credential exclusions still match at the root.
+- **An output directory inside the repository is refused.** The untracked sweep listed the
+  bundle, appended it to itself, and reported counts that could not reconcile.
+- **The phase preflight records the push URL the guard compares.** It used
+  `git remote get-url --push --all` while `publish-release.sh` compares `--push`.
+
 - **Review capture now classifies tracked paths before building the patch.** Symlinks,
   binaries and paths outside the allowed roots are withheld, including binaries forced to
   text by a diff attribute. Absolute plan paths retain their root. Tracked capture counts

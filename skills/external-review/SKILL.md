@@ -182,6 +182,8 @@ Prompt drift between the two reviewers corrupts the agree/disagree triage. Compo
    Without this the reviewers re-derive the whole backlog and the duplicates swamp the genuinely new findings. With it they stay on what the phase actually changed.
 
    **Send only the entries in scope for this phase.** Where a component is being rebuilt or is otherwise off the table, its entries are noise: the reviewers spend the pass re-deriving bugs in code nobody is going to touch, and the real findings compete with them. Name the excluded area in the preamble — *"`local-models` and `claude-toggle-backend` are being rebuilt; their open issues are out of scope, do not report on those two skills"* — rather than silently dropping the IDs, so a reviewer that finds something there can still say so in one line. Scope exclusions are per-review; nothing leaves the roadmap files.
+
+   **Keep an excluded area out of the bundle as well as out of the preamble.** A reviewer reads what it is given, and an instruction not to report on a skill whose files sit in front of it does not hold — that was measured, not assumed. Pass `--exclude <path>` to `capture.sh` once per excluded area, and keep the preamble sentence too, so a reviewer meeting a reference to the area elsewhere can still say so in one line. The excluded files leave the manifest and appear in the excluded count, so the reconciliation still names them. `--exclude` is refused in `plan` mode, which captures a single named file.
 3. **Focus list** by mode:
    - *plan*: gaps and missing steps, risks and failure modes, sequencing problems, simpler approaches missed, anything underspecified.
    - *phase / repo*: real bugs (report everything, do not self-filter for severity), silent failures, security issues, design choices that will not hold up, code duplication/consolidation opportunities, genuinely missing test coverage; plus doc-vs-code contradictions (README, ARCHITECTURE, CLAUDE.md, ROADMAP + KNOWN_ISSUES/ENHANCEMENTS/OPEN_QUESTIONS, CHANGELOG).
@@ -225,6 +227,8 @@ Build the bundle with the bundled script rather than by pasting shell:
 
 ```bash
 bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/capture.sh" phase "<scratchpad>" "<base>"
+bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/capture.sh" \
+  --exclude <out-of-scope-path> phase "<scratchpad>" "<base>"
 ```
 
 It writes `bundle.txt`, a NUL-delimited `withheld.txt`, `manifest.z`, `all.z`, `captured.z` and
@@ -239,15 +243,20 @@ third and adds that file's directory to the allowed roots, because plans live in
 Change capture behavior in `capture.sh` and verify it with `tests/capture.bats`.
 
 **Write the bundle outside the repo.** The untracked sweep lists whatever is untracked, so a
-bundle written inside the working tree is listed, appended to itself, and grows until the disk
-fills. The scratchpad is outside the repo; keep it that way.
+bundle written inside the working tree is listed, appended to itself, and reported with counts
+that no longer reconcile. `capture.sh` refuses an output directory inside the repository for that
+reason. Use the scratchpad.
 
 **Classify tracked paths before building the diff.** The script applies the same symlink,
 binary and allowed-root checks to tracked and untracked paths. It also checks both committed
 blobs for binary content and non-regular file modes. It excludes withheld tracked
 paths from the diff with literal pathspecs and records each reason in `withheld.txt`. Rename
-sides are enumerated separately. Absent paths are withheld. Absolute inputs keep their root;
-relative inputs resolve from the repository root, including in plan mode.
+sides are enumerated separately. A path absent from the worktree is withheld unless the diff is
+what deleted it, in which case the patch carries the old blob and the blob checks are the whole
+defence — withholding deletions hides exactly what a review needs to see. Absolute inputs keep
+their root; tracked and untracked paths come from git and resolve from the repository root, so
+capture covers the whole repository from any working directory inside it. A relative plan
+argument resolves from the working directory that named it.
 
 **Turn conversion off for the tracked diff.** A repo that configures `textconv` or an external
 diff driver — for PDFs, notebooks, or an encrypted-file helper — otherwise runs it during capture,

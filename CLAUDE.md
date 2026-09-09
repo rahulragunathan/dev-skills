@@ -43,16 +43,22 @@ repo:
 defect in these files, and it is mechanical to catch.
 
 **Held is not closed.** `local-models` and `claude-toggle-backend` are being rebuilt, so their
-entries stay filed and unworked: they are the rebuild's requirements. Never close one, and
-keep them out of external review bundles until the rebuild lands. The Held sections in
+entries stay filed and unworked: they are the rebuild's requirements. Never close one, and keep
+them out of external review until the rebuild lands:
+`--exclude skills/local-models --exclude skills/claude-toggle-backend`. The Held sections in
 `KNOWN_ISSUES.md` and `ENHANCEMENTS.md` say which entries are held and how to tell.
 
 **`drive-backup` is out of scope for external review while the process phase runs.** It is not
 held — KI-06, KI-07, KI-08, KI-14 and KI-28 through KI-34 are active — but it has its own phase
 with its own `bats` harness (ENH-03), and reviewing it now spends findings on code nobody is
-about to touch while the real ones compete for attention. Name the exclusion in the review
-prompt rather than dropping it silently, so a reviewer that finds something exceptional there
-can still say so in one line. Everything found meanwhile is filed, never fixed in this phase.
+about to touch while the real ones compete for attention. Exclude it with
+`--exclude skills/drive-backup`. Anything found there meanwhile is filed, never fixed in this
+phase.
+
+Both exclusions follow `external-review`'s rule for an out-of-scope area — remove the files
+from the bundle **and** name the exclusion in the preamble — which is stated there and not
+restated here. The reason it is a rule at all is this repo: pass 8 named `drive-backup` in the
+preamble alone, the files went in the bundle anyway, and the reviewer reported on them.
 
 ## Decisions taken and not taken
 

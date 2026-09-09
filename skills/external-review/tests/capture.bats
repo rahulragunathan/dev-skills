@@ -241,3 +241,112 @@ refute_canary() {
   grep -q 'SAFE-TEXT' "$OUT/bundle.txt"
   grep -q 'bundle contains 2 of 3 files; 1 withheld, 0 excluded' "$OUT/counts.txt"
 }
+
+# --- repo anchoring and scope ----------------------------------------------
+
+@test "phase: a deleted file reaches the reviewer as a deletion" {
+  # Red while the worktree checks run on a path the diff deletes: the file is
+  # absent from the tree, so it is withheld and its removal never appears in
+  # the patch. A review that cannot see deletions cannot see what was dropped.
+  printf 'DOOMED-LINE\n' > gone.txt
+  git add -A && git commit -qm add
+  git rm -q gone.txt
+  git commit -qm delete
+
+  run bash "$CAPTURE" phase "$OUT" HEAD~1
+  [ "$status" -eq 0 ]
+  grep -q 'deleted file' "$OUT/bundle.txt"
+  grep -q 'DOOMED-LINE' "$OUT/bundle.txt"
+}
+
+@test "repo: capture from a subdirectory still covers the whole repository" {
+  # Red while pathspecs are cwd-relative: `-- .` scopes the manifest to the
+  # subdirectory, so files above it vanish from the bundle and the credential
+  # exclusions, anchored at the same place, stop matching the root.
+  mkdir -p sub
+  printf 'SUBDIR-CONTENT\n' > sub/inner.txt
+  printf 'AWS_SECRET=SECRET-CANARY\n' > .env
+  git add -A && git commit -qm sub
+  cd sub
+
+  run bash "$CAPTURE" repo "$OUT"
+  [ "$status" -eq 0 ]
+  grep -q 'hello' "$OUT/bundle.txt"
+  grep -q 'SUBDIR-CONTENT' "$OUT/bundle.txt"
+  refute_canary
+}
+
+@test "repo: an output directory inside the repository is refused" {
+  # Red while the bundle can be written into the working tree: the untracked
+  # sweep lists it, appends it to itself, and the reconciled counts go negative.
+  run bash "$CAPTURE" repo "$REPO/inside-out"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"INSIDE THE REPOSITORY"* ]]
+}
+
+@test "repo: --exclude keeps a named directory out of the bundle and counts it" {
+  # Red while a scope exclusion exists only in the review prompt: the files are
+  # in the bundle, the reviewer reads them, and reports on them.
+  mkdir -p skills/held
+  printf 'HELD-CONTENT\n' > skills/held/notes.md
+  git add -A && git commit -qm held
+
+  run bash "$CAPTURE" --exclude skills/held repo "$OUT"
+  [ "$status" -eq 0 ]
+  ! grep -q 'HELD-CONTENT' "$OUT/bundle.txt"
+  grep -q '1 excluded' "$OUT/counts.txt"
+}
+
+@test "phase: --exclude keeps a named directory out of the diff" {
+  mkdir -p skills/held
+  printf 'HELD-CONTENT\n' > skills/held/notes.md
+  git add -A && git commit -qm held
+
+  run bash "$CAPTURE" --exclude skills/held phase "$OUT" HEAD~1
+  [ "$status" -eq 0 ]
+  ! grep -q 'HELD-CONTENT' "$OUT/bundle.txt"
+}
+
+@test "phase: a deletion under a symlinked parent is withheld" {
+  # Red while deletions bypass containment as well as the worktree checks. The
+  # rule that a symlinked parent is never read has to hold for every path, not
+  # only the ones that still have a copy in the tree.
+  mkdir sub
+  printf 'PRIVATE-PATCH-CANARY\n' > sub/ok.txt
+  printf 'keep\n' > sub/other.txt
+  git add -A && git commit -qm sub
+  git rm -q sub/ok.txt
+  git commit -qm delete
+  rm -r sub && ln -s "$OUTSIDE" sub
+
+  run bash "$CAPTURE" phase "$OUT" HEAD~1
+  [ "$status" -eq 0 ]
+  withheld_for "sub/ok.txt" "outside every allowed root"
+  run grep -q 'PRIVATE-PATCH-CANARY' "$OUT/bundle.txt"
+  [ "$status" -eq 1 ]
+}
+
+@test "phase: a deletion that empties its directory still reaches the reviewer" {
+  # The guard on the fix above. A deletion that removes the last file in a
+  # directory leaves no parent to resolve, and refusing on that would withhold
+  # exactly the deletions the containment check was never about.
+  mkdir -p only
+  printf 'LAST-LINE\n' > only/last.txt
+  git add -A && git commit -qm add
+  git rm -q only/last.txt
+  git commit -qm delete
+
+  run bash "$CAPTURE" phase "$OUT" HEAD~1
+  [ "$status" -eq 0 ]
+  grep -q 'LAST-LINE' "$OUT/bundle.txt"
+}
+
+@test "plan: --exclude is refused rather than silently ignored" {
+  # Red while the flag is parsed for every mode but wired into only two: plan
+  # mode captures one named file, so an exclusion there does nothing and saying
+  # nothing about it is how a scope exclusion is believed and not applied.
+  printf 'PLAN-BODY\n' > "$OUTSIDE/plan.md"
+  run bash "$CAPTURE" --exclude skills/held plan "$OUT" "$OUTSIDE/plan.md"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"--exclude"* ]]
+}
