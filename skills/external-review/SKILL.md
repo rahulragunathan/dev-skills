@@ -19,31 +19,25 @@ Neither CLI is a hard requirement of this plugin. Check both **before** composin
 - **One missing** → say which reviewer is unavailable and its install hint (`codex` → the OpenAI Codex CLI, then `codex login`; `agy` → the Antigravity CLI), then review with the other.
 - **Both missing** → **skip the review entirely.** Report: *"External review skipped — neither `codex` nor `agy` is installed"*, with both install hints. Do not fall back to a Claude-run review: a second opinion from the same model is not a second opinion, and presenting one as this checkpoint's output would be misleading. This is a skip, not a failure — never block the user's workflow on it.
 
-### A skip and partial coverage are different things
+### Coverage classification
 
-**The step is skipped only when it did not run.** That is the both-missing case above, and nothing else.
+Record an outcome for every required reviewer/chunk pair in each pass. An invocation succeeds
+only when it exits zero and returns a non-empty findings list or `No findings.`. An empty or
+absent output, or a failed invocation, leaves that pair uncovered. Preserve its error verbatim
+and identify missing CLIs. Retries replace the outcome only for the same pair.
 
-**Classify by how many reviewers produced output, not by how many are installed.** Count the
-reviewers that returned a findings list — `No findings.` counts, an empty or absent file does
-not — and read the outcome off that count:
-
-| Reviewers that produced output | Outcome |
+| Required reviewer/chunk pairs with successful output | Outcome |
 | --- | --- |
-| Both | **Full coverage** |
-| Exactly one | **Partial coverage** — name the other and give its error verbatim |
-| Neither | **No coverage** |
+| All pairs | **Full coverage** |
+| Some pairs, but not all | **Partial coverage** |
+| No pairs | **No coverage** |
 
-*Skipped* is the one case that is not about output at all: **both CLIs missing**, so the step
-never ran. Everything else with zero output is **no coverage** — including one CLI missing and
-the other out of quota, which the earlier both-installed wording let slip through as "partial"
-while nothing had been reviewed. No coverage is emphatically not a skip, must never be recorded
-as a clean pass, and a phase cannot reach its gate on one.
-
-**A reviewer that ran and produced nothing is a failed reviewer, not automatically partial coverage.** Record that outcome per reviewer; the aggregate is then read off the table below, and it is *partial* only when some other reviewer did produce output. A CLI that is installed and then fails on **quota**, **auth**, **timeout** or **sandbox denial** did not cause a skip — it ran and came back empty. Say so in the coverage line, name the reviewer, and give the reason verbatim:
-
-> *Coverage: Codex `gpt-5.6-sol` 9 findings. Gemini installed but returned `Individual quota reached` (resets 23h26m) — no findings this pass. Single-reviewer coverage, not a clean review.*
-
-Never record partial coverage as "both reviewers clean". A single-reviewer report has no agree/disagree axis, so its findings carry less weight, and the hand-off must say which reviewer is missing and why.
+**Skipped** applies only when both CLIs are missing and the step never ran. A failed reviewer
+permits partial coverage only when another invocation succeeded. If both reviewers answer
+chunk 1 and fail chunk 2, the pass has partial coverage and chunk 2 has no coverage. Report
+both the pass outcome and each chunk's gaps. Never record incomplete coverage as a clean pass.
+A phase with no coverage needs a successful re-run or the user's recorded decision to land
+without external review.
 
 Offer the install commands; never install a CLI or change the user's login state yourself.
 
@@ -138,13 +132,9 @@ for m in $(codex_ladder); do
 done
 ```
 
-- `-C` replaces `cd "…" &&` (which the global shell rules prohibit); `--sandbox read-only` makes review-only enforced, not requested; `-o` writes only the final message (no event noise).
 - **`-o` captures the final message and nothing else.** A quota, auth or availability failure never reaches it, so the file is absent or empty and says nothing about why. The `.log` beside it holds stderr, and it is what the coverage line quotes verbatim.
-- **`codex exec` exits 0 on a quota failure.** Verified 2026-09-08: it printed
-  `ERROR: You've hit your usage limit … try again at 4:06 AM` and still returned status 0, with
-  no `-o` file written at all. **Exit status alone cannot tell a finished review from an
-  exhausted account**, which is why the loop above requires a non-empty output file before it
-  accepts a rung. A caller that trusts `$?` records an empty quota failure as a clean review.
+- **Codex can exit zero on a quota failure.** Require the output artifact as specified in
+  [Coverage classification](#coverage-classification), and retain the diagnostic log.
 - **Name every invocation uniquely: mode, pass, chunk, attempt and model.**
   `codex_<mode>_p<n>_c<chunk>_a<attempt>_<model>.txt`. Pass and model alone are not enough once
   a bundle is chunked or a rung is retried: chunk 2 overwrites chunk 1's findings, and a retry
@@ -171,7 +161,7 @@ for m in $(gemini_ladder); do
 done
 ```
 
-- Build the prompt in a file (rubric + inlined material); the default 5m print-timeout is too short for big inputs — set ~15m.
+- Build the prompt in a file (rubric + inlined material). Use the print timeout in the invocation above.
 
 **Classify availability only after a failed invocation, and keep stderr in its own file.**
 Grepping a combined stream for `not supported` misreads a *successful* review whose findings
@@ -246,29 +236,18 @@ means do not send.
 third and adds that file's directory to the allowed roots, because plans live in
 `~/.claude/plans` by design.
 
-**Why a script and not a fenced block.** This procedure decides what source leaves the machine,
-and while it lived only in prose nothing ever ran it: external review pass 8 found four separate
-defects in it at once, including a symlinked parent directory that `cat` would read straight
-through. `tests/capture.bats` now exercises it against scratch repositories — a planted secret
-outside the repo, a file named `-n`, a filename containing a newline, a tracked file deleted from
-the worktree, an unreadable file. Change the procedure by changing the script and its tests, and
-keep the rules below, which say why the script does what it does.
-
-**Feed the loop from a file, not from a pipe.** On the right-hand side of a pipe the loop runs in
-a subshell, so an `exit` inside it ends the subshell and the script carries on to send a bundle it
-already knows is incomplete.
+Change capture behavior in `capture.sh` and verify it with `tests/capture.bats`.
 
 **Write the bundle outside the repo.** The untracked sweep lists whatever is untracked, so a
 bundle written inside the working tree is listed, appended to itself, and grows until the disk
 fills. The scratchpad is outside the repo; keep it that way.
 
-**The tracked diff bypasses `capture()`, so filter tracked paths before building it.** Only
-untracked files go through the function; everything in `git diff` reaches the bundle as a patch.
-`--no-textconv --no-ext-diff` stops conversion *filters*, but a `diff` attribute set in
-`.gitattributes` can still force a binary blob to be emitted as text, and a tracked path that
-became a symlink is patched rather than withheld. Classify the changed paths first — same
-symlink, binary and allowed-root tests — and exclude the disallowed ones from the diff pathspec,
-naming them in the withheld list like any other.
+**Classify tracked paths before building the diff.** The script applies the same symlink,
+binary and allowed-root checks to tracked and untracked paths. It also checks both committed
+blobs for binary content and non-regular file modes. It excludes withheld tracked
+paths from the diff with literal pathspecs and records each reason in `withheld.txt`. Rename
+sides are enumerated separately. Absent paths are withheld. Absolute inputs keep their root;
+relative inputs resolve from the repository root, including in plan mode.
 
 **Turn conversion off for the tracked diff.** A repo that configures `textconv` or an external
 diff driver — for PDFs, notebooks, or an encrypted-file helper — otherwise runs it during capture,
@@ -279,71 +258,20 @@ out.
 
 **The exclusions protect Gemini only. Codex reads the repository itself**, so `--sandbox read-only` stops writes, not reads, and `permissions.filesystem.deny_read` is an enterprise-managed layer that `-c` does not enforce. The control that remains is the prompt, so the rubric carries an explicit instruction not to open credential-shaped files (below). It is a soft instruction and a determined agent, or a broad recursive grep, can defeat it — so a repo whose secrets must never leave the machine needs the secrets moved out of it, not a better prompt. Use `git` pathspecs rather than a `grep` filter: `grep` inside Claude Code is a shadowed ugrep with injected `--ignore-files`, `-I` and `--exclude-dir` defaults, so a filter written with it searches a different file set than you think.
 
-**Skip symlinks explicitly; the pathspecs cannot.** `git ls-files` matches an untracked symlink by *its own name*, so an innocuous `notes.txt` pointing at `~/.ssh/id_rsa`, or at a `.env` outside the repo, passes every exclusion — and `cat` then reads the target. Test `-L` **before** `-f`, because `-f` follows the link and reports the target's type.
+Do **not** use `git add -N` to include untracked files. Capture must leave the index unchanged.
 
-**Check each step.** A failed `git diff` leaves a truncated bundle that looks exactly like a small phase, and a failed `cat` inside the loop disappears the moment a later iteration succeeds.
-
-Skip binaries the same way, with no grep involved:
-
-```bash
-perl -e 'exit(-B $ARGV[0] ? 0 : 1)' "$f" && continue   # skip binary files
-```
-
-Do **not** use `git add -N` to sweep untracked files into the diff. It mutates the index, and phase-workflow's gate checks that the tree is clean.
-
-**Reconcile the bundle, and say the count out loud.** This failure is silent — a short bundle looks exactly like a small phase — so a better command is not the fix; a stated count is:
-
-```bash
-# Build ONE NUL-delimited manifest per mode, then count off it. Never mix a
-# newline count with a NUL count, and never compare a pre-exclusion total with a
-# post-exclusion selection.
-#   phase mode:
-{ git diff -z --name-only "<base>"...HEAD; git ls-files --others --exclude-standard -z; } \
-  > "<scratchpad>/all.z"
-#   repo mode:
-git ls-files -z > "<scratchpad>/all.z"
-
-# manifest.z is the same enumeration with the exclusion pathspecs applied. It is what
-# the capture loop reads, so the counts describe the bundle that was actually built.
-#   phase mode:
-{ git diff -z --name-only "<base>"...HEAD -- . "${EXCL[@]}"
-  git ls-files --others --exclude-standard -z -- . "${EXCL[@]}"; } > "<scratchpad>/manifest.z" \
-  || { echo "MANIFEST FAILED — do not send this bundle"; exit 1; }
-#   repo mode:
-git ls-files -z -- . "${EXCL[@]}" > "<scratchpad>/manifest.z" \
-  || { echo "MANIFEST FAILED — do not send this bundle"; exit 1; }
-
-nul() { tr -cd '\0' < "$1" | wc -c | tr -d ' '; }   # every list here is NUL-delimited
-TOTAL="$(nul "<scratchpad>/all.z")"                 # everything in scope, before exclusions
-SELECTED="$(nul "<scratchpad>/manifest.z")"         # what the exclusions left
-WITHHELD_N="$(nul "$WITHHELD")"                     # symlinks, binaries, escapes, absences
-CAPTURED=$(( SELECTED - WITHHELD_N ))               # what actually reached the bundle
-echo "bundle contains $CAPTURED of $TOTAL files; $WITHHELD_N withheld, $(( TOTAL - SELECTED )) excluded"
-[ "$CAPTURED" -ge 0 ] || { echo "COUNTS DO NOT RECONCILE — do not send this bundle"; exit 1; }
-```
-
-**All three counts come from the same NUL-delimited manifest.** A filename containing a newline
-inflates a `wc -l` count, and counting the total before exclusions against a selection made
-after them produces a difference that looks like data loss. `INCLUDED + WITHHELD_N` need not
-equal `TOTAL` — the excluded credential-shaped paths are the remainder, and the report names
-them.
-
-**Use the count that matches the mode.** `git status --porcelain` counts *changed* files, so on
-the clean committed tree a phase review is supposed to run against it returns zero while the
-bundle is large — the check can never fire in the mode it was written for.
+**Reconcile the bundle.** Use the script's `counts.txt` in the prompt and coverage line.
+`all.z` records scope before exclusions; `manifest.z` records the selected paths; `captured.z`
+records included paths. Selected paths must reconcile as captured plus withheld. Report
+excluded paths separately, and name withheld paths with their reasons. These lists are
+NUL-delimited, including filenames that contain newlines.
 
 **Phase capture covers commits plus untracked files, not staged or unstaged edits to tracked
 files.** At a proper review point the tree is clean and that is complete. If a review is
 requested mid-task, say so and either commit first or state in the report that working-tree
 edits to tracked files were not captured — never let the diff silently stand in for them.
 
-Once exclusions are applied the bundle can no longer equal that count, so report both and name what was withheld:
-
-> *This bundle contains 23 of 25 changed files. Withheld: `.env.staging`, `fixtures/sample.db` (credential-shaped or binary).*
-
-A reviewer told what was withheld never reports it as missing. `-z` in the bundle loop protects the *loop*; it does nothing for the count, which is why the count command above is NUL-delimited too. (A rename still emits two paths for one entry — rare, and worth knowing before trusting the number blindly.)
-
-Put that count in the prompt (*"this bundle contains all N changed files"*) and in the report's coverage line. Codex reads the working tree and sees untracked files on its own, but give it the same manifest so it is not inferring the scope of the phase.
+Give Codex the same manifest and count so both reviewers have the same scope.
 
 **`repo`** — no in-flight branch; review current state (workflow adoption, periodic health check). Codex: repo-rooted as above. Gemini: one bundle of the source, inlined.
 
@@ -358,7 +286,8 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/capture.sh" repo "<scratchpad>"
 Same outputs, same exclusions, same symlink, binary and read-failure handling as `phase`. One
 capture procedure serves every mode; none rolls its own.
 
-**Chunk when the bundle is too large, and measure before sending. The binding limit is wall-clock, not input size.** Measured on 2026-09-08: a 125,000-character prompt answered comfortably, a 198,000-character one hit `Error: timeout waiting for response` at `--print-timeout 15m` and produced nothing. Keep a chunk near **120,000 characters** and raise the timeout to 25m; a bigger single call does not fail with a truncated answer, it fails with no answer at all after burning the whole timeout.
+**Measure before sending and chunk large bundles.** Keep each chunk near **120,000 characters**
+and use the timeout in the Gemini invocation above. A timeout can leave no answer.
 
 ```bash
 wc -c "$BUNDLE"    # split by directory or concern if this is over ~120000
@@ -366,7 +295,8 @@ wc -c "$BUNDLE"    # split by directory or concern if this is over ~120000
 
 **Split on a seam, and repeat the shared context in every chunk.** Cross-file contradiction is the main thing a review of prose is for, and chunking is exactly what hides it — so the files every other file must agree with (the repo `CLAUDE.md`, `README.md`, `docs/ARCHITECTURE.md`) go into *each* chunk, and each prompt says which chunk it is and that the others cover the rest, so nothing is reported missing merely because it is elsewhere.
 
-Never silently review a subset. Say in the report exactly what each call covered, and reconcile the chunks against the file count the same way a single bundle is reconciled.
+State exactly what each invocation covered. Reconcile the chunks against the file count and
+apply [Coverage classification](#coverage-classification) to every required pair.
 
 ## Failure handling — classify, don't guess
 
@@ -377,16 +307,12 @@ codex exec -C "<repo-root>" --sandbox read-only -m <same model as the real run> 
   "Do not open .env, .env.*, *.pem, *.key, credentials*, .netrc, .npmrc, id_rsa*, id_ed25519*, or anything else shaped like a secret. List the three most obvious code-quality issues in this repository. Be brief."   # or the agy equivalent with inline text
 ```
 
-**Availability is per-model; quota is account-wide.** Probe on the SAME model as the real run,
-because that is what diagnoses an *availability* failure. A *quota* failure needs no probe at
-all — the error text already says so, and walking the ladder just spends the window on three
-identical refusals. Measured 2026-09-08: Gemini returned the same account-wide quota error with
-the same countdown on both its top rung and its flash rung, and Codex, Gemini and Claude all
-meter usage per account rather than per model. **The probe carries the do-not-read instruction too.** It is a real agentic run over the repo, and a diagnostic is not an exemption.
+**Probe availability on the same model as the real run.** A quota error needs no probe or
+model downshift. The probe must carry the same do-not-read instruction as the review.
 
 - Probe succeeds → the real prompt was the problem (too large, malformed) — fix and re-run.
-- Probe fails → read the error: quota/usage → **no output from that reviewer, and not a skip** (the CLI is installed and it ran); report "Codex/Gemini out of usage" with the error verbatim, per *A skip and partial coverage are different things* above; `model ... is not supported` → an unavailable model tier, not a quota problem (see the pins above); auth → say re-login is needed (`codex login` / `agy` interactive); tool-permission denial (Gemini) → the prompt asked it to use tools — inline the material instead.
-- `command not found` → the CLI is not installed; that is a preflight case, not a runtime failure. Don't probe — report the skip per *Preflight* above.
+- Probe fails → read the error: quota/usage → **no output from that reviewer, and not a skip** (the CLI is installed and it ran); report "Codex/Gemini out of usage" with the error verbatim, per [Coverage classification](#coverage-classification); `model ... is not supported` → an unavailable model tier, not a quota problem (see the pins above); auth → say re-login is needed (`codex login` / `agy` interactive); tool-permission denial (Gemini) → the prompt asked it to use tools — inline the material instead.
+- `command not found` → return to *Preflight* and apply [Coverage classification](#coverage-classification). Do not probe a missing CLI.
 - Never silently drop a reviewer; the report names which ran, which didn't, and why.
 
 ## Triage — verify before presenting
@@ -401,7 +327,10 @@ meter usage per account rather than per model. **The probe carries the do-not-re
 
 Every finding the reviewers returned gets a row, **including rejected and duplicate ones** — the user has to see what was thrown away. Never summarize the list down.
 
-**A reviewer that returned `No findings.` is covered and contributes no rows.** Say so in the coverage line (`Gemini gemini-3.1-pro-high 0`). That is a clean result, not partial coverage. A reviewer that returned *nothing* is the partial-coverage case instead — name it and give the error verbatim. When both reviewers return `No findings.`, present the empty table under its coverage line rather than omitting the table: an absent table has to keep meaning "no review ran".
+Build the coverage line from [Coverage classification](#coverage-classification). Successful
+`No findings.` outputs contribute zero rows. Present an empty combined table when successful
+invocations return no findings, and retain any uncovered reviewer/chunk pairs in the coverage
+line.
 
 Open with a coverage line so the count is unambiguous:
 
@@ -463,7 +392,7 @@ Column rules:
 
 `Incorporated — <where>` | `Already covered — <where>` | `Filed KI-nn / ENH-nn / UNK-nn` | `Not incorporated` (Verdict `Rejected`).
 
-A valid finding that is out of scope for this phase is **filed, not dropped** — it gets a `KI-nn`, `ENH-nn` or `UNK-nn` entry with its ROADMAP pointer row, the same as at phase end. **A reviewer reading a plan often finds a real defect in the existing code; that is a `KI-nn`.** Forcing it into `UNK-nn` because plan mode once listed only two buckets files defined wrong behaviour as an open question, which the `OPEN_QUESTIONS` template forbids. Present the whole table in one pass regardless of severity: a confirmed Critical does not block the plan reaching the user, who is in plan mode and can send it back.
+A valid finding that is out of scope for this phase is **filed, not dropped** — it gets a `KI-nn`, `ENH-nn` or `UNK-nn` entry with its ROADMAP pointer row, the same as at phase end. **A reviewer reading a plan often finds a real defect in the existing code; that is a `KI-nn`.** Use `UNK-nn` only for unsettled questions, per the `OPEN_QUESTIONS` template. Present the whole table in one pass regardless of severity: a confirmed Critical does not block the plan reaching the user, who is in plan mode and can send it back.
 
 ### Disposition vocabulary — *phase / repo* mode
 

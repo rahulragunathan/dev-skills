@@ -34,7 +34,7 @@ exceptions. **KI-22 is held only in its `claude-toggle-backend` half**; the same
 `claude-setup` is fixed. **KI-16 is held only in its `local-models` half**; the missing
 `~/.zshrc` installer behind it is machine setup and is in scope.
 
-Active: **KI-06, KI-07, KI-08, KI-14 and KI-28 through KI-33** — the `drive-backup` cluster,
+Active: **KI-06, KI-07, KI-08, KI-14 and KI-28 through KI-34** — the `drive-backup` cluster,
 scheduled as its own phase with a bats harness (ENH-03). Held is the default for the two skills
 being rebuilt, not for everything else.
 
@@ -126,190 +126,6 @@ and is verified against a hand-deleted closing marker.
 
 ---
 
-<a id="ki-02"></a>
-
-## KI-02 — a failed switch leaves the config pointing at a stopped server
-
-**Severity:** High
-**Likelihood:** Likely
-**Where:** [toggle.sh:63-96](../skills/claude-toggle-backend/toggle.sh#L63-L96)
-
-### What happens
-
-Each branch stops the other backend before starting its own:
-
-```bash
-mlx)
-  bash "$SCRIPT_DIR/llama-serve.sh" stop >/dev/null 2>&1 || true
-  bash "$SCRIPT_DIR/mlx-serve.sh" start "$MODEL_ARG"
-```
-
-Under `set -euo pipefail`, a failed `start` aborts the script before the settings write. The
-old server is already stopped and the settings still name its URL.
-
-### Example scenario
-
-`toggle.sh mlx` is run with the MLX model not in the HF cache. `mlx-serve.sh start` exits
-non-zero, the script stops, and `settings.json` still points at `http://127.0.0.1:8730` with
-`llama-server` no longer running. Claude Code then fails on every request until the user
-notices and switches back by hand.
-
-### Notes for a fix
-
-Start the new server first, verify readiness, write settings, and only then stop the old
-one. Where that is impossible because both want the same port, capture enough state to roll
-back to the previous backend on failure.
-
-**Source:** gpt-5.6-sol — repo review, 2026-09-05.
-
----
-
-<a id="ki-03"></a>
-
-## KI-03 — a PID file is trusted without checking what the process is
-
-**Severity:** High
-**Likelihood:** Rare
-**Where:** [llama-serve.sh:31-35](../skills/claude-toggle-backend/llama-serve.sh#L31-L35), [mlx-serve.sh:51-55](../skills/claude-toggle-backend/mlx-serve.sh#L51-L55)
-
-### What happens
-
-```bash
-is_alive() {
-  [ -f "$PID_FILE" ] || return 1
-  local pid; pid="$(cat "$PID_FILE" 2>/dev/null || true)"
-  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
-}
-```
-
-`kill -0` proves only that *some* process with that number exists and is signalable. Nothing
-confirms the executable is `llama-server` or `vllm-mlx`. `do_stop` then sends `TERM` and
-`KILL` to it.
-
-### Example scenario
-
-The server is killed by the OS during a memory spike and the stale PID file survives. The
-kernel later reuses that PID for the user's editor. The next `toggle.sh anthropic` calls
-`do_stop`, which signals the editor and kills it.
-
-### Notes for a fix
-
-Before signalling, confirm the process command matches — `ps -o comm= -p "$pid"` on macOS —
-and treat a mismatch as a stale file to delete rather than a process to kill. Reject a PID
-file whose content is not a positive integer, which also removes the negative-PID path where
-`kill` would target a process group.
-
-**Source:** gpt-5.6-sol — repo review, 2026-09-05.
-
----
-
-<a id="ki-04"></a>
-
-## KI-04 — the stray-process sweep kills servers this plugin did not start
-
-**Severity:** High
-**Likelihood:** Rare
-**Where:** [llama-serve.sh:49-57](../skills/claude-toggle-backend/llama-serve.sh#L49-L57), [mlx-serve.sh:67-75](../skills/claude-toggle-backend/mlx-serve.sh#L67-L75)
-
-### What happens
-
-```bash
-local stray; stray="$(pgrep -f 'llama-server -m' 2>/dev/null || true)"
-if [ -n "$stray" ]; then
-  for p in $stray; do kill "$p" 2>/dev/null || true; done
-```
-
-Every matching process owned by the user is killed. The code comment says this is deliberate
-("e.g. one launched outside this script"), so the defect is that the behaviour is undocumented
-for the user, not that it is unintentional.
-
-### Example scenario
-
-A `llama-server` is running by hand on a different port for an unrelated experiment.
-Switching the Claude Code backend to `anthropic` kills it without warning, and nothing in the
-skill documentation says it will.
-
-### Notes for a fix
-
-Two options, and the choice is the user's. Either narrow the sweep to processes whose port or
-PID file this plugin owns, or keep the sweep and document it plainly in
-`claude-toggle-backend/SKILL.md`, including in the `stop` command's output. Decide before
-touching the code.
-
-**Source:** gpt-5.6-sol — repo review, 2026-09-05.
-
----
-
-<a id="ki-05"></a>
-
-## KI-05 — the "one model resident" guarantee does not hold for direct starts
-
-**Severity:** High
-**Likelihood:** Likely
-**Where:** [local-models/SKILL.md:175](../skills/local-models/SKILL.md#L175), [local-models/SKILL.md:81](../skills/local-models/SKILL.md#L81)
-
-### What happens
-
-The skill states the backends are "mutually exclusive at runtime (one model resident)". That
-is enforced only inside `toggle.sh`, which stops the other server before starting its own.
-Calling `llama-serve.sh start` or `mlx-serve.sh start` directly bypasses it entirely.
-Switching away from Ollama also does not unload Ollama's resident model, which idles out on
-its own schedule.
-
-### Example scenario
-
-`mlx-serve.sh start <repo>` is run directly while `llama-server` holds a 22 GB model. Both
-stay resident, the machine swaps hard, and the documented guarantee gave no warning.
-
-### Notes for a fix
-
-Either move the mutual stop into the two serve scripts so it holds however they are invoked,
-or narrow the claim in the docs to "`toggle.sh` enforces this; direct starts do not". The
-second is a one-line change and is honest.
-
-**Source:** gpt-5.6-sol — repo review, 2026-09-05.
-
----
-
-<a id="ki-06"></a>
-
-## KI-06 — a stale lock silently disables every later backup
-
-**Severity:** High
-**Likelihood:** Rare
-**Where:** [backup-projects.sh:73-77](../skills/drive-backup/backup-projects.sh#L73-L77)
-
-### What happens
-
-```bash
-lock="${TMPDIR:-/tmp}/claude-projects-backup.lock"
-if ! mkdir "$lock" 2>/dev/null; then
-  exit 0   # a run is already in progress
-fi
-trap 'rmdir "$lock" 2>/dev/null' EXIT
-```
-
-The `EXIT` trap does not fire on `SIGKILL` or on power loss. A surviving lock directory makes
-every later run take the `exit 0` path, writing nothing to the log. The Stop hook discards
-output, so nothing surfaces.
-
-### Example scenario
-
-The machine loses power mid-backup. Every subsequent Stop hook exits successfully and copies
-nothing. Transcripts stop reaching Drive and the first sign is a missing project weeks later.
-
-### Notes for a fix
-
-Record the PID in the lock and treat a lock whose PID is not alive as stale. Log the skip
-rather than exiting silently, so `projects-backup.log` shows the reason. Note that `TMPDIR`
-on macOS is per-user and cleared periodically, so the lock is not permanent — the silent exit
-is the defect, not the lock's lifetime. Related: KI-14, the same file reporting `ok` on
-failure.
-
-**Source:** gpt-5.6-sol — repo review, 2026-09-05.
-
----
-
 <a id="ki-07"></a>
 
 ## KI-07 — credentials are copied to Drive with no scan or warning
@@ -346,41 +162,6 @@ Decide the policy first: either redact known credential keys on copy, or state p
 `claude-setup/SKILL.md` that the backup contains secrets and the destination must be treated
 accordingly. Redaction has a cost — `~/.claude.json` is backed up precisely because its state
 is otherwise unrecoverable, so stripping fields makes the copy less useful for restore.
-
-**Source:** gpt-5.6-sol — repo review, 2026-09-05.
-
----
-
-<a id="ki-08"></a>
-
-## KI-08 — backup destination discovery picks the first Drive account it finds
-
-**Severity:** High
-**Likelihood:** Likely
-**Where:** [backup-projects.sh:47-67](../skills/drive-backup/backup-projects.sh#L47-L67), [drive-backup/SKILL.md](../skills/drive-backup/SKILL.md)
-
-### What happens
-
-```bash
-for c in "$HOME/Library/CloudStorage/"GoogleDrive-*"/My Drive/AnswerRocket/Code/Claude-Projects" \
-         "$HOME/Library/CloudStorage/"GoogleDrive-*"/My Drive/Code/Claude-Projects" \
-  [ -d "$c" ] && { dest="$c"; break; }
-```
-
-With two signed-in Google accounts the glob expands to both, and the first match by glob
-order wins. The same first-match approach picks the skills source directory during setup.
-
-### Example scenario
-
-A personal and a work Drive are both mounted. Glob order puts the work account first, so
-personal transcripts, plans and the config snapshot are written into the work Drive.
-
-### Notes for a fix
-
-`~/.claude/projects-backup.dest` already takes precedence and is the intended escape hatch,
-so the fix is mostly about failing loudly: when the glob matches more than one candidate,
-refuse to guess and tell the user to write the path to that file. Same treatment for the
-skills-source discovery in `claude-setup`.
 
 **Source:** gpt-5.6-sol — repo review, 2026-09-05.
 
@@ -522,6 +303,233 @@ appears in the output. Capture the PID before calling stop.
 
 ---
 
+<a id="ki-14"></a>
+
+## KI-14 — every backup failure is logged as `ok` and exits 0
+
+**Severity:** High
+**Likelihood:** Almost always
+**Where:** [backup-projects.sh:133](../skills/drive-backup/backup-projects.sh#L133)
+
+### What happens
+
+```bash
+echo "$(ts) ok (rc=$rc_any) ->$synced -> $dest" >> "$log"
+```
+
+The literal word `ok` is written whatever `rc_any` holds, and the script ends with a bare
+`exit 0`. The no-destination path also exits 0 after logging `ERROR`.
+
+### Example scenario
+
+Drive is unmounted, so every `rsync` fails. The log fills with `ok (rc=23)` lines. Grepping
+the log for failures finds nothing, and the Stop hook reports success.
+
+### Notes for a fix
+
+Keep the exit code and correct the log line. **That alone is not sufficient**: rsync exit 24 is
+*partial transfer due to vanished source files*, not "the transcript grew while we read it" as
+the operating notes claim, and the script excludes 24 from `rc_any`. A run that lost files to a
+vanishing source would still be logged `ok` after the log word is fixed. Retain the partial
+status, report which inputs vanished, and correct the description in
+[drive-backup/SKILL.md](../skills/drive-backup/SKILL.md) at the same time.
+
+**Source:** gpt-5.6-sol — repo review, 2026-09-05.
+
+---
+
+<a id="ki-28"></a>
+
+## KI-28 — `drive-backup` uses `$CODE_ROOT` without defining it
+
+**Severity:** High
+**Likelihood:** Almost always
+**Where:** [drive-backup/SKILL.md:51](../skills/drive-backup/SKILL.md#L51)
+
+### What happens
+
+Step 1 sets `BACKUP_DEST="$CODE_ROOT/Claude-Projects"`, but `CODE_ROOT` is defined in
+`claude-setup` step 4 and nowhere in `drive-backup`. The skill advertises itself as the way to
+install the backup on a machine, so it will be invoked directly.
+
+### Example scenario
+
+A user runs `/localclaude:drive-backup` on a new machine without running `claude-setup` first.
+`$CODE_ROOT` is empty, `BACKUP_DEST` becomes `/Claude-Projects`, and `mkdir -p` either fails or
+creates directories at the volume root.
+
+### Notes for a fix
+
+Copy the `CODE_ROOT` detection from `claude-setup` step 4 into `drive-backup`, or make the skill
+refuse with a clear message when the variable is unset. **Introduced by ENH-08**, which split
+this skill out of `claude-setup` and left the variable behind.
+
+**Source:** gemini-3.1-pro-high — phase review pass 5, 2026-09-08.
+
+---
+
+<a id="ki-29"></a>
+
+## KI-29 — the "already set up" shortcut accepts a hook pointing at the old path
+
+**Severity:** High
+**Likelihood:** Almost always
+**Where:** [drive-backup/SKILL.md:87-89](../skills/drive-backup/SKILL.md#L87-L89)
+
+### What happens
+
+The idempotence check passes when the `Stop` hook "calls `backup-projects.sh`". A hook still
+pointing at the pre-ENH-08 `skills/claude-setup/backup-projects.sh` satisfies that string test,
+so the shortcut seeds once and leaves every later turn backing up nothing.
+
+### Example scenario
+
+A machine set up before the split is re-run through the skill. The check passes, the seed run
+writes a fresh `rc=0` line, and the log then stops growing — which KI-14 makes indistinguishable
+from success.
+
+### Notes for a fix
+
+Compare the hook's command against the exact current path, not a substring, and require a log
+line newer than the seed run.
+
+**Source:** gpt-6-astra — phase review pass 5, 2026-09-08.
+
+---
+
+<a id="ki-30"></a>
+
+## KI-30 — two machines overwrite each other's config snapshot
+
+**Severity:** High
+**Likelihood:** Almost always
+**Where:** [backup-projects.sh:112-129](../skills/drive-backup/backup-projects.sh#L112-L129)
+
+### What happens
+
+The config snapshot writes `settings.json`, `history.jsonl`, `.claude.json` and
+`projects-backup.dest` into one shared `Config/` directory on Drive. Every machine writes the
+same filenames to the same synced destination.
+
+### Example scenario
+
+A laptop and a desktop both run the hook. Whichever ran last owns `Config/settings.json`, so the
+other machine's allowlist and its per-project approval state are gone from the backup — the one
+thing the snapshot exists to make recoverable.
+
+### Notes for a fix
+
+Namespace by a stable machine identifier (`Config/<hostname>/…`), keeping each machine
+independently restorable.
+
+**Source:** gpt-6-astra — phase review pass 5, 2026-09-08.
+
+---
+
+<a id="ki-02"></a>
+
+## KI-02 — a failed switch leaves the config pointing at a stopped server
+
+**Severity:** High
+**Likelihood:** Likely
+**Where:** [toggle.sh:63-96](../skills/claude-toggle-backend/toggle.sh#L63-L96)
+
+### What happens
+
+Each branch stops the other backend before starting its own:
+
+```bash
+mlx)
+  bash "$SCRIPT_DIR/llama-serve.sh" stop >/dev/null 2>&1 || true
+  bash "$SCRIPT_DIR/mlx-serve.sh" start "$MODEL_ARG"
+```
+
+Under `set -euo pipefail`, a failed `start` aborts the script before the settings write. The
+old server is already stopped and the settings still name its URL.
+
+### Example scenario
+
+`toggle.sh mlx` is run with the MLX model not in the HF cache. `mlx-serve.sh start` exits
+non-zero, the script stops, and `settings.json` still points at `http://127.0.0.1:8730` with
+`llama-server` no longer running. Claude Code then fails on every request until the user
+notices and switches back by hand.
+
+### Notes for a fix
+
+Start the new server first, verify readiness, write settings, and only then stop the old
+one. Where that is impossible because both want the same port, capture enough state to roll
+back to the previous backend on failure.
+
+**Source:** gpt-5.6-sol — repo review, 2026-09-05.
+
+---
+
+<a id="ki-05"></a>
+
+## KI-05 — the "one model resident" guarantee does not hold for direct starts
+
+**Severity:** High
+**Likelihood:** Likely
+**Where:** [local-models/SKILL.md:175](../skills/local-models/SKILL.md#L175), [local-models/SKILL.md:81](../skills/local-models/SKILL.md#L81)
+
+### What happens
+
+The skill states the backends are "mutually exclusive at runtime (one model resident)". That
+is enforced only inside `toggle.sh`, which stops the other server before starting its own.
+Calling `llama-serve.sh start` or `mlx-serve.sh start` directly bypasses it entirely.
+Switching away from Ollama also does not unload Ollama's resident model, which idles out on
+its own schedule.
+
+### Example scenario
+
+`mlx-serve.sh start <repo>` is run directly while `llama-server` holds a 22 GB model. Both
+stay resident, the machine swaps hard, and the documented guarantee gave no warning.
+
+### Notes for a fix
+
+Either move the mutual stop into the two serve scripts so it holds however they are invoked,
+or narrow the claim in the docs to "`toggle.sh` enforces this; direct starts do not". The
+second is a one-line change and is honest.
+
+**Source:** gpt-5.6-sol — repo review, 2026-09-05.
+
+---
+
+<a id="ki-08"></a>
+
+## KI-08 — backup destination discovery picks the first Drive account it finds
+
+**Severity:** High
+**Likelihood:** Likely
+**Where:** [backup-projects.sh:47-67](../skills/drive-backup/backup-projects.sh#L47-L67), [drive-backup/SKILL.md](../skills/drive-backup/SKILL.md)
+
+### What happens
+
+```bash
+for c in "$HOME/Library/CloudStorage/"GoogleDrive-*"/My Drive/AnswerRocket/Code/Claude-Projects" \
+         "$HOME/Library/CloudStorage/"GoogleDrive-*"/My Drive/Code/Claude-Projects" \
+  [ -d "$c" ] && { dest="$c"; break; }
+```
+
+With two signed-in Google accounts the glob expands to both, and the first match by glob
+order wins. The same first-match approach picks the skills source directory during setup.
+
+### Example scenario
+
+A personal and a work Drive are both mounted. Glob order puts the work account first, so
+personal transcripts, plans and the config snapshot are written into the work Drive.
+
+### Notes for a fix
+
+`~/.claude/projects-backup.dest` already takes precedence and is the intended escape hatch,
+so the fix is mostly about failing loudly: when the glob matches more than one candidate,
+refuse to guess and tell the user to write the path to that file. Same treatment for the
+skills-source discovery in `claude-setup`.
+
+**Source:** gpt-5.6-sol — repo review, 2026-09-05.
+
+---
+
 <a id="ki-13"></a>
 
 ## KI-13 — test cleanup kills unrelated processes on the machine
@@ -555,36 +563,147 @@ group rather than searching by name.
 
 ---
 
-<a id="ki-14"></a>
+<a id="ki-33"></a>
 
-## KI-14 — every backup failure is logged as `ok` and exits 0
+## KI-33 — symlinked backup inputs are skipped without a failure status
 
 **Severity:** High
-**Likelihood:** Almost always
-**Where:** [backup-projects.sh:133](../skills/drive-backup/backup-projects.sh#L133)
+**Likelihood:** Likely
+**Where:** [backup-projects.sh:101-102](../skills/drive-backup/backup-projects.sh#L101-L102), [backup-projects.sh:123-129](../skills/drive-backup/backup-projects.sh#L123-L129)
+
+### What happens
+
+The transfers use `rsync -rt`, with neither `-l` (recreate symlinks) nor `-L` (follow them). A
+symlink inside a source tree, or an individually listed config file that is a symlink, is
+skipped with a "skipping non-regular file" warning on stdout — which the `Stop` hook discards to
+`/dev/null`. Nothing reaches the log and `rc_any` is unaffected.
+
+### Example scenario
+
+A config file under `~/.claude` is a symlink to a file kept elsewhere. It is silently absent
+from every backup, and the log says `ok` each time. The omission is discovered only when the
+backup is used to restore a machine.
+
+### Notes for a fix
+
+Decide the policy explicitly rather than inheriting rsync's default — `-l` to preserve the links
+or `-L` to copy their targets — and report anything omitted. Separate from KI-14: that entry is
+about the log word, this one is about inputs never attempted.
+
+**Source:** gpt-6-astra — phase review pass 6, 2026-09-08.
+
+---
+
+<a id="ki-03"></a>
+
+## KI-03 — a PID file is trusted without checking what the process is
+
+**Severity:** High
+**Likelihood:** Rare
+**Where:** [llama-serve.sh:31-35](../skills/claude-toggle-backend/llama-serve.sh#L31-L35), [mlx-serve.sh:51-55](../skills/claude-toggle-backend/mlx-serve.sh#L51-L55)
 
 ### What happens
 
 ```bash
-echo "$(ts) ok (rc=$rc_any) ->$synced -> $dest" >> "$log"
+is_alive() {
+  [ -f "$PID_FILE" ] || return 1
+  local pid; pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+}
 ```
 
-The literal word `ok` is written whatever `rc_any` holds, and the script ends with a bare
-`exit 0`. The no-destination path also exits 0 after logging `ERROR`.
+`kill -0` proves only that *some* process with that number exists and is signalable. Nothing
+confirms the executable is `llama-server` or `vllm-mlx`. `do_stop` then sends `TERM` and
+`KILL` to it.
 
 ### Example scenario
 
-Drive is unmounted, so every `rsync` fails. The log fills with `ok (rc=23)` lines. Grepping
-the log for failures finds nothing, and the Stop hook reports success.
+The server is killed by the OS during a memory spike and the stale PID file survives. The
+kernel later reuses that PID for the user's editor. The next `toggle.sh anthropic` calls
+`do_stop`, which signals the editor and kills it.
 
 ### Notes for a fix
 
-Keep the exit code and correct the log line. **That alone is not sufficient**: rsync exit 24 is
-*partial transfer due to vanished source files*, not "the transcript grew while we read it" as
-the operating notes claim, and the script excludes 24 from `rc_any`. A run that lost files to a
-vanishing source would still be logged `ok` after the log word is fixed. Retain the partial
-status, report which inputs vanished, and correct the description in
-[drive-backup/SKILL.md](../skills/drive-backup/SKILL.md) at the same time.
+Before signalling, confirm the process command matches — `ps -o comm= -p "$pid"` on macOS —
+and treat a mismatch as a stale file to delete rather than a process to kill. Reject a PID
+file whose content is not a positive integer, which also removes the negative-PID path where
+`kill` would target a process group.
+
+**Source:** gpt-5.6-sol — repo review, 2026-09-05.
+
+---
+
+<a id="ki-04"></a>
+
+## KI-04 — the stray-process sweep kills servers this plugin did not start
+
+**Severity:** High
+**Likelihood:** Rare
+**Where:** [llama-serve.sh:49-57](../skills/claude-toggle-backend/llama-serve.sh#L49-L57), [mlx-serve.sh:67-75](../skills/claude-toggle-backend/mlx-serve.sh#L67-L75)
+
+### What happens
+
+```bash
+local stray; stray="$(pgrep -f 'llama-server -m' 2>/dev/null || true)"
+if [ -n "$stray" ]; then
+  for p in $stray; do kill "$p" 2>/dev/null || true; done
+```
+
+Every matching process owned by the user is killed. The code comment says this is deliberate
+("e.g. one launched outside this script"), so the defect is that the behaviour is undocumented
+for the user, not that it is unintentional.
+
+### Example scenario
+
+A `llama-server` is running by hand on a different port for an unrelated experiment.
+Switching the Claude Code backend to `anthropic` kills it without warning, and nothing in the
+skill documentation says it will.
+
+### Notes for a fix
+
+Two options, and the choice is the user's. Either narrow the sweep to processes whose port or
+PID file this plugin owns, or keep the sweep and document it plainly in
+`claude-toggle-backend/SKILL.md`, including in the `stop` command's output. Decide before
+touching the code.
+
+**Source:** gpt-5.6-sol — repo review, 2026-09-05.
+
+---
+
+<a id="ki-06"></a>
+
+## KI-06 — a stale lock silently disables every later backup
+
+**Severity:** High
+**Likelihood:** Rare
+**Where:** [backup-projects.sh:73-77](../skills/drive-backup/backup-projects.sh#L73-L77)
+
+### What happens
+
+```bash
+lock="${TMPDIR:-/tmp}/claude-projects-backup.lock"
+if ! mkdir "$lock" 2>/dev/null; then
+  exit 0   # a run is already in progress
+fi
+trap 'rmdir "$lock" 2>/dev/null' EXIT
+```
+
+The `EXIT` trap does not fire on `SIGKILL` or on power loss. A surviving lock directory makes
+every later run take the `exit 0` path, writing nothing to the log. The Stop hook discards
+output, so nothing surfaces.
+
+### Example scenario
+
+The machine loses power mid-backup. Every subsequent Stop hook exits successfully and copies
+nothing. Transcripts stop reaching Drive and the first sign is a missing project weeks later.
+
+### Notes for a fix
+
+Record the PID in the lock and treat a lock whose PID is not alive as stale. Log the skip
+rather than exiting silently, so `projects-backup.log` shows the reason. Note that `TMPDIR`
+on macOS is per-user and cleared periodically, so the lock is not permanent — the silent exit
+is the defect, not the lock's lifetime. Related: KI-14, the same file reporting `ok` on
+failure.
 
 **Source:** gpt-5.6-sol — repo review, 2026-09-05.
 
@@ -679,100 +798,6 @@ detected value or point at `local-models` instead of restating a number.
 whose injected `--ignore-files` and exclude defaults returned no matches, and it was briefly
 recorded as not reproduced. `/usr/bin/grep` shows all four lines. Use the system grep when a
 negative result is meant as evidence.
-
-**Source:** gpt-5.6-sol — repo review, 2026-09-05.
-
----
-
-<a id="ki-18"></a>
-
-## KI-18 — `toggle.sh` needs `python3` and never checks for it
-
-**Severity:** Medium
-**Likelihood:** Likely
-**Where:** [toggle.sh:27](../skills/claude-toggle-backend/toggle.sh#L27), [README.md:30](../README.md#L30)
-
-### What happens
-
-`toggle.sh` shells out to `python3` for backend detection and for the settings write. There is
-no `command -v python3` preflight anywhere in the script. README states the opposite:
-*"Each skill checks the tools its current task needs and, if one is missing, stops and gives
-you the install command rather than failing mid-run."*
-
-### Example scenario
-
-On a Mac without Command Line Tools installed, `toggle.sh status` fails with a raw
-`command not found: python3` partway through, after the stop calls have already run.
-
-### Notes for a fix
-
-Add the preflight beside the existing `[ -f "$SETTINGS" ]` check, with the install hint
-(`xcode-select --install`). Alternatively drop the Python dependency: the JSON edits are
-small enough for `jq`, which would then need its own preflight.
-
-**Source:** gpt-5.6-sol — repo review, 2026-09-05.
-
----
-
-<a id="ki-19"></a>
-
-## KI-19 — port selection releases the socket before the server binds
-
-**Severity:** Medium
-**Likelihood:** Rare
-**Where:** [llama-serve.sh:85-92](../skills/claude-toggle-backend/llama-serve.sh#L85-L92), [mlx-serve.sh:80](../skills/claude-toggle-backend/mlx-serve.sh#L80)
-
-### What happens
-
-`pick_port` bind-tests candidate ports in a short-lived Python process, closes the socket, and
-prints the number. The server binds it some moments later. Anything else on the machine may
-take the port in between. The `port` command also prints whatever the port file holds without
-confirming a process is listening.
-
-### Example scenario
-
-A dev server starts in another terminal during the gap and takes 8730. `llama-server` then
-fails to bind, and `toggle.sh` has already stopped the previous backend (see KI-02).
-
-### Notes for a fix
-
-Retry the whole select-and-bind sequence on failure rather than trying to make the check
-atomic, which is not possible from a separate process. For `port`, verify liveness before
-printing, or say the value is last-known rather than current.
-
-**Source:** gpt-5.6-sol — repo review, 2026-09-05.
-
----
-
-<a id="ki-20"></a>
-
-## KI-20 — LaunchAgent plist values are not XML-escaped
-
-**Severity:** Medium
-**Likelihood:** Rare
-**Where:** [llama-autostart.sh:28-35](../skills/claude-toggle-backend/llama-autostart.sh#L28-L35)
-
-### What happens
-
-The plist is a heredoc with shell interpolation straight into `<string>` elements:
-
-```bash
-cat > "$PLIST" <<PLIST
-  <key>Label</key><string>$LABEL</string>
-```
-
-`&`, `<` and `>` in an interpolated path or value produce invalid XML.
-
-### Example scenario
-
-The plugin is installed under a path containing `&` — a Drive folder named `R&D`, for
-instance. `launchctl` then refuses the plist with a parse error that does not name the cause.
-
-### Notes for a fix
-
-Escape the five XML entities before interpolation, or build the plist with `plutil` /
-`PlistBuddy` rather than string concatenation. Low likelihood on the current machine, cheap to
-fix.
 
 **Source:** gpt-5.6-sol — repo review, 2026-09-05.
 
@@ -940,149 +965,33 @@ same argv-recording fake). Bundle these two into one pass.
 
 ---
 
-<a id="ki-27"></a>
+<a id="ki-18"></a>
 
-## KI-27 — status tests depend on the host's real processes
+## KI-18 — `toggle.sh` needs `python3` and never checks for it
 
-**Severity:** Low
+**Severity:** Medium
 **Likelihood:** Likely
-**Where:** [llama-serve.bats:7](../skills/claude-toggle-backend/tests/llama-serve.bats#L7)
+**Where:** [toggle.sh:27](../skills/claude-toggle-backend/toggle.sh#L27), [README.md:30](../README.md#L30)
 
 ### What happens
 
-The status tests call the host's real `pgrep` rather than a fake, so any unrelated
-`llama-server` process on the machine changes their result.
+`toggle.sh` shells out to `python3` for backend detection and for the settings write. There is
+no `command -v python3` preflight anywhere in the script. README states the opposite:
+*"Each skill checks the tools its current task needs and, if one is missing, stops and gives
+you the install command rather than failing mid-run."*
 
 ### Example scenario
 
-A developer has a `llama-server` running for their own use. The suite reports a failure that
-has nothing to do with the change under test, or hides one that does.
+On a Mac without Command Line Tools installed, `toggle.sh status` fails with a raw
+`command not found: python3` partway through, after the stop calls have already run.
 
 ### Notes for a fix
 
-Put a fake `pgrep` on `PATH` in the test helper, as the suite already does for `curl` and
-`vllm-mlx`. Related: KI-13, which is the other place these tests reach outside their sandbox.
+Add the preflight beside the existing `[ -f "$SETTINGS" ]` check, with the install hint
+(`xcode-select --install`). Alternatively drop the Python dependency: the JSON edits are
+small enough for `jq`, which would then need its own preflight.
 
 **Source:** gpt-5.6-sol — repo review, 2026-09-05.
-
----
-
-<a id="ki-28"></a>
-
-## KI-28 — `drive-backup` uses `$CODE_ROOT` without defining it
-
-**Severity:** High
-**Likelihood:** Almost always
-**Where:** [drive-backup/SKILL.md:51](../skills/drive-backup/SKILL.md#L51)
-
-### What happens
-
-Step 1 sets `BACKUP_DEST="$CODE_ROOT/Claude-Projects"`, but `CODE_ROOT` is defined in
-`claude-setup` step 4 and nowhere in `drive-backup`. The skill advertises itself as the way to
-install the backup on a machine, so it will be invoked directly.
-
-### Example scenario
-
-A user runs `/localclaude:drive-backup` on a new machine without running `claude-setup` first.
-`$CODE_ROOT` is empty, `BACKUP_DEST` becomes `/Claude-Projects`, and `mkdir -p` either fails or
-creates directories at the volume root.
-
-### Notes for a fix
-
-Copy the `CODE_ROOT` detection from `claude-setup` step 4 into `drive-backup`, or make the skill
-refuse with a clear message when the variable is unset. **Introduced by ENH-08**, which split
-this skill out of `claude-setup` and left the variable behind.
-
-**Source:** gemini-3.1-pro-high — phase review pass 5, 2026-09-08.
-
----
-
-<a id="ki-29"></a>
-
-## KI-29 — the "already set up" shortcut accepts a hook pointing at the old path
-
-**Severity:** High
-**Likelihood:** Almost always
-**Where:** [drive-backup/SKILL.md:87-89](../skills/drive-backup/SKILL.md#L87-L89)
-
-### What happens
-
-The idempotence check passes when the `Stop` hook "calls `backup-projects.sh`". A hook still
-pointing at the pre-ENH-08 `skills/claude-setup/backup-projects.sh` satisfies that string test,
-so the shortcut seeds once and leaves every later turn backing up nothing.
-
-### Example scenario
-
-A machine set up before the split is re-run through the skill. The check passes, the seed run
-writes a fresh `rc=0` line, and the log then stops growing — which KI-14 makes indistinguishable
-from success.
-
-### Notes for a fix
-
-Compare the hook's command against the exact current path, not a substring, and require a log
-line newer than the seed run.
-
-**Source:** gpt-6-astra — phase review pass 5, 2026-09-08.
-
----
-
-<a id="ki-30"></a>
-
-## KI-30 — two machines overwrite each other's config snapshot
-
-**Severity:** High
-**Likelihood:** Almost always
-**Where:** [backup-projects.sh:112-129](../skills/drive-backup/backup-projects.sh#L112-L129)
-
-### What happens
-
-The config snapshot writes `settings.json`, `history.jsonl`, `.claude.json` and
-`projects-backup.dest` into one shared `Config/` directory on Drive. Every machine writes the
-same filenames to the same synced destination.
-
-### Example scenario
-
-A laptop and a desktop both run the hook. Whichever ran last owns `Config/settings.json`, so the
-other machine's allowlist and its per-project approval state are gone from the backup — the one
-thing the snapshot exists to make recoverable.
-
-### Notes for a fix
-
-Namespace by a stable machine identifier (`Config/<hostname>/…`), keeping each machine
-independently restorable.
-
-**Source:** gpt-6-astra — phase review pass 5, 2026-09-08.
-
----
-
-<a id="ki-33"></a>
-
-## KI-33 — symlinked backup inputs are skipped without a failure status
-
-**Severity:** High
-**Likelihood:** Likely
-**Where:** [backup-projects.sh:101-102](../skills/drive-backup/backup-projects.sh#L101-L102), [backup-projects.sh:123-129](../skills/drive-backup/backup-projects.sh#L123-L129)
-
-### What happens
-
-The transfers use `rsync -rt`, with neither `-l` (recreate symlinks) nor `-L` (follow them). A
-symlink inside a source tree, or an individually listed config file that is a symlink, is
-skipped with a "skipping non-regular file" warning on stdout — which the `Stop` hook discards to
-`/dev/null`. Nothing reaches the log and `rc_any` is unaffected.
-
-### Example scenario
-
-A config file under `~/.claude` is a symlink to a file kept elsewhere. It is silently absent
-from every backup, and the log says `ok` each time. The omission is discovered only when the
-backup is used to restore a machine.
-
-### Notes for a fix
-
-Decide the policy explicitly rather than inheriting rsync's default — `-l` to preserve the links
-or `-L` to copy their targets — and report anything omitted. Separate from KI-14: that entry is
-about the log word, this one is about inputs never attempted.
-
-**Source:** gpt-6-astra — phase review pass 6, 2026-09-08.
 
 ---
 
@@ -1111,6 +1020,70 @@ Record a pending rerun when the lock is held and run once more on release. Disti
 which is about a lock left behind by a killed process.
 
 **Source:** gpt-6-astra — phase review pass 5, 2026-09-08.
+
+---
+
+<a id="ki-19"></a>
+
+## KI-19 — port selection releases the socket before the server binds
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [llama-serve.sh:85-92](../skills/claude-toggle-backend/llama-serve.sh#L85-L92), [mlx-serve.sh:80](../skills/claude-toggle-backend/mlx-serve.sh#L80)
+
+### What happens
+
+`pick_port` bind-tests candidate ports in a short-lived Python process, closes the socket, and
+prints the number. The server binds it some moments later. Anything else on the machine may
+take the port in between. The `port` command also prints whatever the port file holds without
+confirming a process is listening.
+
+### Example scenario
+
+A dev server starts in another terminal during the gap and takes 8730. `llama-server` then
+fails to bind, and `toggle.sh` has already stopped the previous backend (see KI-02).
+
+### Notes for a fix
+
+Retry the whole select-and-bind sequence on failure rather than trying to make the check
+atomic, which is not possible from a separate process. For `port`, verify liveness before
+printing, or say the value is last-known rather than current.
+
+**Source:** gpt-5.6-sol — repo review, 2026-09-05.
+
+---
+
+<a id="ki-20"></a>
+
+## KI-20 — LaunchAgent plist values are not XML-escaped
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [llama-autostart.sh:28-35](../skills/claude-toggle-backend/llama-autostart.sh#L28-L35)
+
+### What happens
+
+The plist is a heredoc with shell interpolation straight into `<string>` elements:
+
+```bash
+cat > "$PLIST" <<PLIST
+  <key>Label</key><string>$LABEL</string>
+```
+
+`&`, `<` and `>` in an interpolated path or value produce invalid XML.
+
+### Example scenario
+
+The plugin is installed under a path containing `&` — a Drive folder named `R&D`, for
+instance. `launchctl` then refuses the plist with a parse error that does not name the cause.
+
+### Notes for a fix
+
+Escape the five XML entities before interpolation, or build the plist with `plutil` /
+`PlistBuddy` rather than string concatenation. Low likelihood on the current machine, cheap to
+fix.
+
+**Source:** gpt-5.6-sol — repo review, 2026-09-05.
 
 ---
 
@@ -1170,3 +1143,30 @@ Resolve source and destination to physical paths with `pwd -P` before copying an
 either contains the other, including overlap reached through a directory symlink.
 
 **Source:** gpt-6-astra — phase review pass 7, 2026-09-08.
+
+---
+
+<a id="ki-27"></a>
+
+## KI-27 — status tests depend on the host's real processes
+
+**Severity:** Low
+**Likelihood:** Likely
+**Where:** [llama-serve.bats:7](../skills/claude-toggle-backend/tests/llama-serve.bats#L7)
+
+### What happens
+
+The status tests call the host's real `pgrep` rather than a fake, so any unrelated
+`llama-server` process on the machine changes their result.
+
+### Example scenario
+
+A developer has a `llama-server` running for their own use. The suite reports a failure that
+has nothing to do with the change under test, or hides one that does.
+
+### Notes for a fix
+
+Put a fake `pgrep` on `PATH` in the test helper, as the suite already does for `curl` and
+`vllm-mlx`. Related: KI-13, which is the other place these tests reach outside their sandbox.
+
+**Source:** gpt-5.6-sol — repo review, 2026-09-05.

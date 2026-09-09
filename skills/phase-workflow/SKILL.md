@@ -9,7 +9,9 @@ license: MIT
 
 Phase-based development for solo projects. One feature branch per phase, branch rules per global CLAUDE.md. **Work is committed per task as it goes, onto a draft pull request opened at phase start.** The PR is the gate: it goes ready-for-review at phase end, and sign-off is what authorizes the merge. Four checkpoints: **plan review** (before the user approves the plan), **phase start** (after approval), **phase end** (retrospective + hand-off), **post-sign-off** (merge cycle).
 
-**The CLIs are best-effort. Running the review is not.** The `/localclaude:external-review` steps need the `codex` and/or `agy` CLI. **Both missing is the only legitimate reason the step does not run**, and it is stated in writing on the line where the findings table would have gone. One missing CLI is not a skip — the review runs with the other. An installed CLI that fails on quota, auth, timeout or sandbox denial is **partial coverage**, not a skip: the step ran and one reviewer came back empty. `external-review` is canonical for the wording.
+**Run the external review checkpoint.** Follow `external-review`'s
+[coverage classification](../external-review/SKILL.md#coverage-classification) for missing CLIs,
+failed invocations and chunked reviews.
 
 Nothing else exempts the step: not a clean `/code-review`, not a green suite, not a small phase, not the user waiting.
 
@@ -37,13 +39,15 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 
 1. **Preflight before any phase-start mutation.** Use Bash for these blocks. Replace angle-bracket placeholders before running them. Run from the repo root. Stop on any failed command.
 
-   **Reusable discovery and refresh.** Later sections run only this block, never the branch-creation block. `gh` must be installed and able to read the repository and its merge settings. Resolve the repository from `origin`, not an upstream setting.
+   **Initial discovery.** Run this block once at phase start. Later sections load the recorded values; they do not re-run discovery. `gh` must be installed and able to read the repository and its merge settings. Resolve the repository from `origin`, not an upstream setting.
 
    ```bash
    set -euo pipefail
    command -v gh >/dev/null || { echo "GH MISSING — stop"; exit 1; }
    ORIGIN_URL="$(git remote get-url origin)"
-   ORIGIN_PUSH_URL="$(git remote get-url --push origin)"   # may differ from the fetch URL
+   ORIGIN_PUSH_URL="$(git remote get-url --push --all origin)"
+   bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
+     --check-origin "$ORIGIN_URL" "$ORIGIN_PUSH_URL"
    REPO="$(gh repo view "$ORIGIN_URL" --json nameWithOwner --jq .nameWithOwner)"
    DEFAULT_BRANCH="$(gh repo view "$REPO" --json defaultBranchRef --jq '.defaultBranchRef.name // empty')"
    [ -n "$REPO" ] && [ -n "$DEFAULT_BRANCH" ] || { echo "REPO OR DEFAULT BRANCH UNKNOWN — stop"; exit 1; }
@@ -66,7 +70,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    ```
 
    **This is the only place a phase branch is created.**
-2. **Open the draft PR as soon as the first task is committed.** A PR needs at least one commit ahead of the base, so this runs immediately after task one lands, not before it. From then on it accumulates the per-task commits and gives the user a live comprehensive diff at any moment rather than only at the gate.
+2. **Open the draft PR immediately after the first task is committed.** Keep the phase diff available for review as later tasks land.
 
    ```bash
    gh pr create --draft --base "$DEFAULT_BRANCH" --head "feature/<slug>" \
@@ -75,8 +79,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 
    Body ends with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
 
-   **This does not conflict with "open a PR only when I explicitly ask."** That rule guards against surprise PRs on work the user has not approved. This one opens *after* plan approval, as a draft, and lands nothing.
-3. **Record exactly one allowed merge method at phase start.** The preflight selects `squash`, then `rebase`, then `merge`, taking the first allowed method. Record `REPO`, `DEFAULT_BRANCH`, `PHASE_BRANCH` and that selection with the phase. If the user specifies another method, verify it is allowed before selecting it. Later discovery refreshes do not replace this record. At the gate and merge, load the recorded method into `MERGE_METHOD`. A disabled method ends the merge attempt; do not silently substitute one. Repo rules and required reviews still apply.
+3. **Record exactly one allowed merge method at phase start.** The preflight selects `squash`, then `rebase`, then `merge`, taking the first allowed method. Persist `ORIGIN_URL`, `ORIGIN_PUSH_URL`, `REPO`, `DEFAULT_BRANCH`, `PHASE_BRANCH` and that selection in the phase record before publishing the branch. Preserve that record across sessions. If the user specifies another method, verify it is allowed before selecting it. Later checks do not replace this record. At the gate and merge, load the recorded method into `MERGE_METHOD`. A disabled method ends the merge attempt; do not silently substitute one. Repo rules and required reviews still apply.
 
 4. **Land the plan's diagram generators.** `design-review` builds them into the scratchpad at §1, because §1 runs before this branch exists, and the plan's front matter records their filenames. Copy **every** generator the plan recorded into `docs/` as this phase's first task **and commit it**. That commit is the baseline `design-review phase` compares against at §3 step 2. Skip this step entirely when the plan recorded none, which is the no-`drawio` path.
 5. Seed/refresh `ROADMAP.md`, `KNOWN_ISSUES.md`, `ENHANCEMENTS.md`, and `OPEN_QUESTIONS.md` under `docs/` from the templates next to this file, if the project doesn't have them.
@@ -243,7 +246,8 @@ what remains expired.
 
 5. **External review loop:** `/localclaude:external-review phase` (Codex + Gemini). Use its disposition vocabulary and filing rules. Pause after every external review pass. Report the findings trend and your recommendation; the user decides whether to run another pass or land the phase.
    - **It runs after the docs pass**, including release preparation. Fold later phase fixes into that unpublished release and commit them before the next pass or gate.
-   - **Every reviewer emits a findings list**, and the single line `No findings.` when it has none — that is `external-review`'s output contract, and a reviewer cannot satisfy a demand for a formatted table. **The combined table is yours to build**, one per pass, presented with the coverage line. A reviewer's empty result is output and counts as covered; no output at all means it produced nothing, which is partial coverage. Report the error verbatim and present an empty combined table when no findings survive; never attribute a table you wrote to a reviewer that failed.
+   - Build the combined table using `external-review`'s output contract and
+     [coverage classification](../external-review/SKILL.md#coverage-classification).
    - Any test written to close a finding here goes through step 3's audit before the loop moves on.
 6. **Post-fix drift re-check — narrow, not another holistic pass.** If step 5's fixes moved a module, the diagrams are back in scope: regenerate and compare. Step 5 changed code after step 4 declared the docs true. Re-check only what those fixes touched: the docs and code comments the changed files invalidate, and the CHANGELOG entries whose claims moved. Then confirm every filing from every pass has both its full entry and its ROADMAP pointer row, with ratings that agree. Report what you found, not only what you fixed.
 7. **Present to the user and stop** — the phase gate.
@@ -251,7 +255,7 @@ what remains expired.
    - **Do not merge.** The merge is the post-sign-off action; it happens in §4 and nowhere else. Committing and pushing are not — those happened per task, throughout the phase.
    - **The gate has two checkable states.** First, **the work is committed, pushed, and on a PR marked ready for review** — every one of those is a fact git or `gh` will answer, none is self-attested:
 
-     Run §2's reusable discovery block, then load the phase's recorded `REPO`, `DEFAULT_BRANCH`, `PHASE_BRANCH` and `MERGE_METHOD`; stop if repository or base discovery disagrees with the record. Set `PR` to this phase's PR number. This workflow uses a same-repository PR.
+     Load the phase's recorded `ORIGIN_URL`, `ORIGIN_PUSH_URL`, `REPO`, `DEFAULT_BRANCH`, `PHASE_BRANCH` and `MERGE_METHOD`. Preserve the §2 URL values in the hand-off; do not refresh them from the current remote. Set `PR` to this phase's PR number. This workflow uses a same-repository PR.
 
      ```bash
      set -euo pipefail
@@ -260,9 +264,11 @@ what remains expired.
      BRANCH="$(git symbolic-ref --quiet --short HEAD)"
      [ "$BRANCH" = "$PHASE_BRANCH" ] || { echo "WRONG BRANCH — stop"; exit 1; }
      LOCAL_SHA="$(git rev-parse --verify HEAD)"
-     [ "$(git remote get-url origin)" = "$ORIGIN_URL" ] \
-       && [ "$(git remote get-url --push origin)" = "$ORIGIN_PUSH_URL" ] \
-       || { echo "ORIGIN CHANGED SINCE THE GATE — refusing to publish or delete"; exit 1; }
+     bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
+       --check-origin "$ORIGIN_URL" "$ORIGIN_PUSH_URL"
+     [ "$(gh repo view "$ORIGIN_URL" --json nameWithOwner --jq .nameWithOwner)" = "$REPO" ] \
+       && [ "$(gh repo view "$REPO" --json defaultBranchRef --jq .defaultBranchRef.name)" = "$DEFAULT_BRANCH" ] \
+       || { echo "REPOSITORY OR BASE CHANGED — stop"; exit 1; }
      REMOTE_SHA="$(git ls-remote --exit-code --heads origin "refs/heads/$PHASE_BRANCH" | awk '{print $1}')"
      PR_SHA="$(gh pr view "$PR" -R "$REPO" --json headRefOid --jq .headRefOid)"
      [ "$LOCAL_SHA" = "$REMOTE_SHA" ] && [ "$LOCAL_SHA" = "$PR_SHA" ] \
@@ -287,7 +293,14 @@ what remains expired.
 
      Record these SHAs, the repository, PR number and link, base branch, phase branch, merge method and release tag in the hand-off. Give the phase diff command: `git diff "origin/$DEFAULT_BRANCH"..."$GATE_SHA"`. The user signs off on `GATE_SHA`. Set `APPROVED_SHA` to that recorded value only after approval; never refresh it from a later HEAD.
 
-     Second, **the reviewer artifacts exist on disk**. Include a coverage line and a combined findings table for every pass, empty when the reviewers ran and found nothing. **An empty table with zero reviewer outputs is not a pass state**: that is no coverage, and the gate rejects it — re-run when a reviewer is available, or record in writing that the phase is landing without external review. Name each reviewer, its exact model identifier and its outcome: finding count, empty table, verbatim error, or not installed. Cite each reviewer output file and byte count, plus the error log for a failed invocation. A missing or zero-byte output is no output, not an empty findings table. Report it as missing coverage. A reviewer returns a findings **list**, or the single line `No findings.`; building the combined table is the agent's job, not the reviewer's, so a list without a table is a met contract. What fails the contract is a reviewer that returned nothing at all. If both CLIs are absent, state the skip explicitly. No coverage line means step 5 has not been accounted for.
+     Second, **the reviewer artifacts exist on disk**. Apply
+     `external-review`'s [coverage classification](../external-review/SKILL.md#coverage-classification)
+     to every required chunk of every pass. Include each pass's coverage line and combined
+     findings table. Cite each invocation's exact model ID, output path and byte count, plus
+     the error log for a failed invocation. For no coverage, re-run when a reviewer is available
+     or record the user's decision to land without external review. Account for skipped reviews
+     explicitly. No coverage line means step 5 has not been accounted for.
+
    - **Name the single merge method** recorded at §2 step 3.
    - **End the hand-off with the actual state:** "Committed and pushed on `<branch>`, PR `<n>` ready at `<gate SHA>`, awaiting your sign-off to merge."
    - **Any edit while waiting for sign-off invalidates approval**, including a typo or release metadata edit. Commit and push it, name it in a follow-up, repeat the gate and obtain sign-off on the new SHA.
@@ -296,7 +309,17 @@ what remains expired.
 
 Sign-off — as defined at the top of this file — is the only trigger. Once it comes, run the whole cycle without re-asking.
 
-**Resume from recorded state.** Load `REPO`, `PR`, `PHASE_BRANCH`, `DEFAULT_BRANCH`, `MERGE_METHOD`, `APPROVED_SHA` and `TAG` from the approved hand-off. `TAG` includes the `v` prefix. Never derive approval from the current PR head. A later head needs a new gate and sign-off.
+**Resume from recorded state.** Load `ORIGIN_URL`, `ORIGIN_PUSH_URL`, `REPO`, `PR`, `PHASE_BRANCH`, `DEFAULT_BRANCH`, `MERGE_METHOD`, `APPROVED_SHA` and `TAG` from the approved hand-off. `TAG` includes the `v` prefix. Never derive approval from the current PR head. A later head needs a new gate and sign-off.
+
+Run the remote check before resuming. `publish-release.sh --check-origin` validates the
+recorded fetch and push destinations and rejects multiple push destinations without changing
+refs. Use this mode at the gate and before each publication or deletion below; the script owns
+the remote-check logic.
+
+```bash
+bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
+  --check-origin "$ORIGIN_URL" "$ORIGIN_PUSH_URL" || exit 1
+```
 
 1. **Confirm release preparation.** The approved commit already contains the release heading and compare link from §3 step 4. Do not repeat those edits. If anything is missing, return to §3 and obtain approval for the new SHA.
 2. **Confirm publication.** The gate recorded matching local, origin and PR SHAs. Do not add a release commit after sign-off. On resume, inspect the PR state first: `MERGED` proceeds to step 5, an open PR proceeds to step 3, and a closed unmerged PR stops. Require its `headRefOid` to equal `APPROVED_SHA` in every case.
@@ -342,6 +365,8 @@ Sign-off — as defined at the top of this file — is the only trigger. Once it
           --jq 'if .state=="MERGED" and .mergeCommit then .mergeCommit.oid else empty end')"
    [ -n "$SHA" ] || { echo "NOT MERGED — stop; do not tag"; exit 1; }
    git check-ref-format "refs/tags/$TAG"
+   bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
+     --check-origin "$ORIGIN_URL" "$ORIGIN_PUSH_URL"
    git fetch origin
    git cat-file -e "$SHA^{commit}"
    TAG_REF="refs/tags/$TAG"
@@ -360,6 +385,8 @@ Sign-off — as defined at the top of this file — is the only trigger. Once it
      git tag "$TAG" "$SHA"
    fi
    if [ -z "$REMOTE_TAG" ]; then
+     bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
+       --check-origin "$ORIGIN_URL" "$ORIGIN_PUSH_URL"
      git push origin "$TAG_REF:$TAG_REF" || { echo "TAG PUSH FAILED — retain local tag; resume step 5"; exit 1; }
    fi
    echo "TAG VERIFIED AND PUBLISHED: $TAG at $SHA"
@@ -375,6 +402,8 @@ Sign-off — as defined at the top of this file — is the only trigger. Once it
    REMOTE_HEAD="$(git ls-remote --heads origin "refs/heads/$PHASE_BRANCH" | awk '{print $1}')"
    if [ -n "$REMOTE_HEAD" ]; then
      [ "$REMOTE_HEAD" = "$APPROVED_SHA" ] || { echo "BRANCH ADVANCED — retain it"; exit 1; }
+     bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
+       --check-origin "$ORIGIN_URL" "$ORIGIN_PUSH_URL"
      git push --force-with-lease="refs/heads/$PHASE_BRANCH:$APPROVED_SHA" origin ":refs/heads/$PHASE_BRANCH"
    fi
    ```
@@ -396,16 +425,6 @@ Sign-off — as defined at the top of this file — is the only trigger. Once it
    Cleanup failures resume at step 6 and do not repeat release edits or merge.
 
 Then stop. The next phase's branch is created at phase start (§2 step 1) — never here.
-
-**Revalidate `origin` before anything is published or deleted, and check both of its URLs.**
-The approved PR is looked up through the `REPO` recorded at the gate, but fetches, tag pushes and
-branch deletions go to whatever remote is named `origin` *now*. If it was repointed between
-sign-off and the merge cycle — a fork switch, a mistyped `set-url` — those operations land in a
-different repository. **`git` keeps a separate push URL**, so a remote can fetch from the
-approved repository while pushing somewhere else: a fork holding the same approved SHA would
-satisfy every SHA check and then receive the tag and the branch deletion. Capture
-`git remote get-url origin` *and* `git remote get-url --push origin` at §2 and require both to
-match before publishing or deleting.
 
 **`git reset --hard` appears nowhere in this workflow; do not add it.** Where a reset is genuinely required, branch first (`git branch backup/<phase>-$(date +%s)`) or use `git reset --keep`, which refuses rather than discarding.
 

@@ -298,10 +298,16 @@ echo "CODE_ROOT=$CODE_ROOT"   # set by hand if empty, e.g. CODE_ROOT="$HOME/.../
 Then symlink the loose-skills folder (every subfolder with a top-level `SKILL.md` auto-loads, e.g. `drawio`):
 
 ```bash
-SKILLS_SRC="$CODE_ROOT/Skills"
-mkdir -p "$HOME/.claude"
-[ -e "$HOME/.claude/skills" ] && [ ! -L "$HOME/.claude/skills" ] && mv "$HOME/.claude/skills" "$HOME/.claude/skills.local.bak"
-ln -sfn "$SKILLS_SRC" "$HOME/.claude/skills"
+SRC="$CODE_ROOT/Skills"
+LINK="$HOME/.claude/skills"
+mkdir -p "$HOME/.claude" || exit 1
+if [ -e "$LINK" ] && [ ! -L "$LINK" ]; then
+  [ ! -e "$LINK.local.bak" ] && [ ! -L "$LINK.local.bak" ] || { echo "BACKUP EXISTS — stop"; exit 1; }
+  mv "$LINK" "$LINK.local.bak" || { echo "MOVE FAILED — stop"; exit 1; }
+fi
+[ -L "$LINK" ] || [ ! -e "$LINK" ] || { echo "LINK PATH OCCUPIED — stop"; exit 1; }
+ln -sfn "$SRC" "$LINK" || exit 1
+[ -L "$LINK" ] && [ "$(readlink "$LINK")" = "$SRC" ] || { echo "LINK NOT ESTABLISHED"; exit 1; }
 ```
 
 Only subfolders with a `SKILL.md` load; `RCLONE_TEST`/`.DS_Store` and the plugin folder are ignored. (The `localclaude` plugin is **not** loaded this way — it loads via the marketplace in step 5, and won't double-load because it has no top-level `SKILL.md`.)
@@ -310,25 +316,19 @@ Only subfolders with a `SKILL.md` load; `RCLONE_TEST`/`.DS_Store` and the plugin
 
 The bundled skills (`claude-setup`, `claude-toggle-backend`, `local-models`, `phase-workflow`, `external-review`, `design-review`, `project-env`, `drive-backup`) ship as the `localclaude` plugin in the sibling `Code/Plugins` folder.
 
-**`ln -sfn` does not replace an existing real directory — it creates the link *inside* it.**
-Check first and remove or move the directory, then verify the result is actually a symlink
-resolving where you meant:
+**Gotcha:** `/plugin marketplace add` **cannot parse the Drive path** — "My Drive" has a space, the slash-command parser doesn't honor quotes, and it falls back to treating the arg as a GitHub `owner/repo`. So point it at a **space-free symlink** instead — derived from `CODE_ROOT` (step 4; set `CODE_ROOT` by hand if it was empty):
 
 ```bash
-[ -L "$LINK" ] || [ ! -e "$LINK" ] || { echo "$LINK is a real directory — move it, do not link over it"; exit 1; }
-ln -sfn "$SRC" "$LINK"
+SRC="$CODE_ROOT/Plugins"
+LINK="$HOME/.claude/localclaude-plugins"
+mkdir -p "$HOME/.claude" || exit 1
+if [ -e "$LINK" ] && [ ! -L "$LINK" ]; then
+  [ ! -e "$LINK.local.bak" ] && [ ! -L "$LINK.local.bak" ] || { echo "BACKUP EXISTS — stop"; exit 1; }
+  mv "$LINK" "$LINK.local.bak" || { echo "MOVE FAILED — stop"; exit 1; }
+fi
+[ -L "$LINK" ] || [ ! -e "$LINK" ] || { echo "LINK PATH OCCUPIED — stop"; exit 1; }
+ln -sfn "$SRC" "$LINK" || exit 1
 [ -L "$LINK" ] && [ "$(readlink "$LINK")" = "$SRC" ] || { echo "LINK NOT ESTABLISHED"; exit 1; }
-```
-
-**Stop after a failed move.** Where a step moves an existing path aside before linking, a failed
-move must abort rather than fall through to the link command, which would then link into the
-directory it failed to clear.
-
-**Gotcha:** `/plugin marketplace add` **cannot parse the Drive path** — "My Drive" has a space, the slash-command parser doesn't honor quotes, and it falls back to treating the arg as a GitHub `owner/repo`. So point it at a **space-free symlink** instead — derived from `CODE_ROOT` (step 4; set `PLUGINS_SRC` by hand if `CODE_ROOT` was empty):
-
-```bash
-PLUGINS_SRC="$CODE_ROOT/Plugins"
-ln -sfn "$PLUGINS_SRC" "$HOME/.claude/localclaude-plugins"
 ```
 
 Then in Claude Code, using the **literal absolute path** (no quotes, no spaces, and not `~` — the slash command won't expand it):

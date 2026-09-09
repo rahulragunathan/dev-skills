@@ -29,10 +29,10 @@ Why each rule in `SKILL.md` exists, and how to debug "I allow-listed it but stil
 
 ## Why these specific commands
 
-- **Allowed (read-only):** `cd ls find grep head tail cat diff echo ps wc sort uniq cut tr nl column jq` + the `Grep`/`Glob`/`Read` tools. None modify files without an explicit `> file` redirect (itself gated as a write).
+- **Allowed for routine exploration:** `cd ls find grep head tail cat diff echo ps wc sort uniq cut tr nl column jq` + the `Grep`/`Glob`/`Read` tools. This is a prompt-reduction list, not a security boundary. Allowed prefixes can mutate files: `find` supports `-delete` and `-exec` without redirection.
 - **Allowed despite writing — the everyday dev loop.** `pytest`, `black`, `ruff` and `markdownlint-cli2` run project code or rewrite files, and are allow-listed anyway because they are invoked constantly and are project-scoped. `ruff check --fix` and `markdownlint-cli2 --fix` ride in on a shared prefix that cannot be split; that is accepted, not overlooked. The venv forms (`.venv/bin/python -m pytest`, `.venv/bin/ruff`, …) are listed separately because a bare `pytest` rule never matches them. `uv` is allowed only for env creation and inspection — `uv pip install` is deliberately excluded. `npm test` and `npx vitest` are allowed; `npm run` and `npm install` are not.
 - **Denied (catastrophic):** root/home recursive force-deletes, `--no-preserve-root`, `mkfs`, `dd`, `shutdown`, `reboot`. Prefix matching is literal — `rm --recursive --force /` or flag reordering won't match, so the real protection is still the default prompt on everything non-allow-listed.
-- **Deliberately NOT allowed (so they still prompt):** `sed` (`-i` writes), `awk`, `tee`, `xargs` (`find | xargs rm` would bypass the "ask before file changes" intent), and any `> realfile` redirect. **`rm` is never allow-listed** — deletes always prompt; to delete use `rm -r` (no `-f`), `rmdir`, or Finder (`rm -rf` on home/abs paths is denied outright).
+- **Deliberately NOT allowed (so they still prompt):** `sed` (`-i` writes), `awk`, `tee`, `xargs` (`find | xargs rm` would bypass the "ask before file changes" intent), and any `> realfile` redirect. **`rm` is never allow-listed**; to delete use `rm -r` (no `-f`), `rmdir`, or Finder (`rm -rf` on home/abs paths is denied outright).
 
 ## What this skill no longer owns
 

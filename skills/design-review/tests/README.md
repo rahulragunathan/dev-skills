@@ -122,7 +122,8 @@ of either skill has been tested.
 
 ## Results
 
-**Six of fifteen units need their rule. The skill fixes all six.** The other nine record a strong
+**Six of fifteen units need their rule. The skill fixes five of six; P2 (Mutation reasoning)
+remains ineffective.** The other nine record a strong
 model already doing the right thing unaided.
 
 All fifteen units are current. The seven with-skill arms were re-gathered as **round 3** at
@@ -137,7 +138,7 @@ nor their conditions changed.
 | R4 | No filler verdicts | **Rule needed** | **Rule works** | Current |
 | G2 | Produce versus edit | **Rule needed** | **Rule works** | Current |
 | D2 | Direction | **Rule needed** | **Rule works** | Current |
-| P2 | Mutation reasoning | **Rule needed** | **Rule works** | Current |
+| P2 | Mutation reasoning | **Rule needed** | **Rule ineffective** | Current |
 | P3 | Fixture validity | **Rule needed** | **Rule works** | Current |
 | D1 | Responsibility | Rule not needed here | Rule works | Current |
 | D3 | Lifetime | Rule not needed here | Rule works | Current |
@@ -182,9 +183,10 @@ Re-gathering is not bookkeeping — the clarified conditions changed what the ag
   exemption applies. The delivery-content clause is what moved it.
 - **S02 and S03** applied the same clause unprompted, to rejection message copy and to the
   exporter dispatch root respectively.
-- **S07** answered the P2 host-independence requirement by pinning `TZ=UTC` in a fixture, making
-  its substitute mutation equivalent to the literal one, and applied the new audit rule that a
-  predicted production exception is itself the discrimination.
+- **S07** pins `TZ=UTC` only in the replacement test. Its substitute mutation does not meet P2's
+  requirement for the original test on every host. See the round-3 Notes in
+  [S07](s07-process-rules.md#results) for the corrected grade and the two additional evidence
+  observations that leave grades unchanged.
 
 ### Conditions reworded this round
 

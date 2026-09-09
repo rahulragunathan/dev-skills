@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
 # capture.sh — build the review bundle that leaves this machine.
 #
-# Extracted from external-review/SKILL.md so it can be executed and tested. The
-# skill documented ~120 lines of shell that nothing ever ran; four of the eight
-# High findings in review pass 8 were in it. Prose cannot be given a test suite.
-#
 # Usage:
 #   capture.sh phase <outdir> <base-ref>    committed changes since <base-ref>, plus untracked
 #   capture.sh repo  <outdir>               every tracked file
@@ -41,23 +37,30 @@ EXCL=(':(exclude,icase)*.env' ':(exclude,icase)*.env.*' ':(exclude,icase)*.pem'
 
 withhold() { printf '%s\t(%s)\0' "$1" "$2" >> "$WITHHELD"; }
 
-# Append one file to the bundle, or record why it was not appended.
-capture() {
-  local f="$1" label="${2:-}" d ok=0 r
-  d="$(cd -- "$(dirname -- "./$f")" 2>/dev/null && pwd -P)" || {
-    withhold "$f" "unreadable parent"; return 0; }
+# Apply the same checks before either a file append or a tracked diff.
+classify() {
+  local f="$1" d ok=0 r
+  case "$f" in /*) CAPTURE_PATH="$f" ;; *) CAPTURE_PATH="./$f" ;; esac
+  d="$(cd -- "$(dirname -- "$CAPTURE_PATH")" 2>/dev/null && pwd -P)" || {
+    withhold "$f" "unreadable parent"; return 1; }
   for r in "${ALLOWED_ROOTS[@]}"; do
     case "$d/" in "$r"/*|"$r"/) ok=1 ;; esac
   done
-  [ "$ok" = 1 ] || { withhold "$f" "parent outside every allowed root"; return 0; }
-  [ -L "./$f" ] && { withhold "$f" "symlink"; return 0; }
-  [ -e "./$f" ] || { withhold "$f" "tracked, absent from the tree"; return 0; }
-  [ -f "./$f" ] || { withhold "$f" "not a regular file"; return 0; }
-  if perl -e 'exit(-B $ARGV[0] ? 0 : 1)' "./$f"; then
-    withhold "$f" "binary"; return 0
+  [ "$ok" = 1 ] || { withhold "$f" "parent outside every allowed root"; return 1; }
+  [ -L "$CAPTURE_PATH" ] && { withhold "$f" "symlink"; return 1; }
+  [ -e "$CAPTURE_PATH" ] || { withhold "$f" "tracked, absent from the tree"; return 1; }
+  [ -f "$CAPTURE_PATH" ] || { withhold "$f" "not a regular file"; return 1; }
+  if perl -e 'exit(-B $ARGV[0] ? 0 : 1)' "$CAPTURE_PATH"; then
+    withhold "$f" "binary"; return 1
   fi
+  return 0
+}
+
+capture() {
+  local f="$1" label="${2:-}"
+  classify "$f" || return 0
   printf '\n===== %s%s =====\n' "$label" "$f" >> "$BUNDLE"
-  cat -- "./$f" >> "$BUNDLE" || { withhold "$f" "read failed"; return 0; }
+  cat -- "$CAPTURE_PATH" >> "$BUNDLE" || { withhold "$f" "read failed"; return 0; }
   printf '%s\0' "$f" >> "$OUT/captured.z"
   return 0
 }
@@ -74,17 +77,49 @@ case "$MODE" in
     ;;
   phase)
     [ -n "$ARG" ] || { echo "phase mode needs a base ref"; exit 1; }
-    { git diff -z --name-only "$ARG"...HEAD; git ls-files --others --exclude-standard -z; } \
-      > "$OUT/all.z" || { echo "ENUMERATION FAILED — do not send this bundle"; exit 1; }
-    { git diff -z --name-only "$ARG"...HEAD -- . "${EXCL[@]}"
-      git ls-files --others --exclude-standard -z -- . "${EXCL[@]}"; } \
-      > "$OUT/manifest.z" || { echo "MANIFEST FAILED — do not send this bundle"; exit 1; }
-    git -c diff.external= diff --no-textconv --no-ext-diff "$ARG"...HEAD -- . "${EXCL[@]}" \
-      >> "$BUNDLE" || { echo "DIFF FAILED — do not send this bundle"; exit 1; }
+    git diff --no-renames -z --name-only "$ARG"...HEAD > "$OUT/tracked-all.z" \
+      && git ls-files --others --exclude-standard -z > "$OUT/untracked-all.z" \
+      && cat "$OUT/tracked-all.z" "$OUT/untracked-all.z" > "$OUT/all.z" \
+      || { echo "ENUMERATION FAILED — do not send this bundle"; exit 1; }
+    git diff --no-renames -z --name-only "$ARG"...HEAD -- . "${EXCL[@]}" > "$OUT/tracked.z" \
+      && git ls-files --others --exclude-standard -z -- . "${EXCL[@]}" > "$OUT/untracked.z" \
+      && cat "$OUT/tracked.z" "$OUT/untracked.z" > "$OUT/manifest.z" \
+      || { echo "MANIFEST FAILED — do not send this bundle"; exit 1; }
+    git diff --raw --no-abbrev --no-renames -z "$ARG"...HEAD -- . "${EXCL[@]}" \
+      > "$OUT/tracked-raw.z" || { echo "ENUMERATION FAILED — do not send this bundle"; exit 1; }
+    DIFF_PATHS=(.)
+    while IFS= read -r -d '' metadata && IFS= read -r -d '' f; do
+      allowed=1
+      classify "$f" || allowed=0
+      if [ "$allowed" = 1 ]; then
+        read -r old_mode new_mode old_blob new_blob change <<< "${metadata#:}"
+        # A patch can expose either committed blob, even when the worktree is text.
+        for side in "$old_mode:$old_blob" "$new_mode:$new_blob"; do
+          mode="${side%%:*}"; blob="${side#*:}"
+          [ "$mode" = 000000 ] && continue
+          if [ "$mode" != 100644 ] && [ "$mode" != 100755 ]; then
+            withhold "$f" "not a regular file in diff"; allowed=0; break
+          fi
+          git cat-file blob "$blob" > "$OUT/diff-blob" \
+            || { echo "BLOB READ FAILED — do not send this bundle"; exit 1; }
+          if perl -e 'exit(-B $ARGV[0] ? 0 : 1)' "$OUT/diff-blob"; then
+            withhold "$f" "binary in diff"; allowed=0; break
+          fi
+        done
+      fi
+      if [ "$allowed" = 1 ]; then
+        printf '%s\0' "$f" >> "$OUT/captured.z"
+      else
+        DIFF_PATHS+=(":(exclude,literal)$f")
+      fi
+    done < "$OUT/tracked-raw.z"
+    rm -f "$OUT/diff-blob"
+    git -c diff.external= diff --no-renames --no-textconv --no-ext-diff "$ARG"...HEAD \
+      -- "${DIFF_PATHS[@]}" "${EXCL[@]}" >> "$BUNDLE" \
+      || { echo "DIFF FAILED — do not send this bundle"; exit 1; }
     while IFS= read -r -d '' f; do
-      git ls-files --error-unmatch -- "$f" >/dev/null 2>&1 && continue   # tracked: in the diff
       capture "$f" "UNTRACKED FILE: "
-    done < "$OUT/manifest.z"
+    done < "$OUT/untracked.z"
     ;;
   plan)
     [ -n "$ARG" ] || { echo "plan mode needs a plan file"; exit 1; }

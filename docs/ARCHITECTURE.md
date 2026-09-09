@@ -90,8 +90,8 @@ skills write `settings.json`, so whichever runs second must merge.
 the two Drive symlinks, and Homebrew packages. Its `~/.zshrc` block went to
 `claude-toggle-backend`, which is the skill those aliases control, and it offers the VS Code
 parity step rather than performing it — so it touches neither the shell nor the editor.
-Neither delegate is depended on by anything else; both are invoked directly, at the moment the
-thing they configure is set up or repaired.
+`claude-setup` step 6 invokes `drive-backup` to install backups. `project-env` is invoked
+directly when a project environment is set up or repaired.
 
 **Local backends** — `claude-toggle-backend` switches which server Claude Code talks to and
 `local-models` decides which model that server should load. Both are being rebuilt, so their
@@ -101,8 +101,8 @@ open issues are held rather than worked; see the Held sections in
 ## External tools are all optional
 
 `codex`, `agy` and the `drawio` skill are each invoked by exactly one skill, and a missing one
-degrades that step rather than blocking the workflow. **`gh` is the exception and is required.** `external-review` reports
-partial coverage; `design-review` records "no diagram" and carries on. `gh` is the closest to
+degrades that step rather than blocking the workflow. **`gh` is the exception and is required.** `external-review` reports its
+[coverage classification](../skills/external-review/SKILL.md#coverage-classification); `design-review` records "no diagram" and carries on. `gh` is the closest to
 required — `phase-workflow` cannot open or merge a PR without it — so it is preflighted before
 the first phase-start mutation rather than discovered at merge time.
 

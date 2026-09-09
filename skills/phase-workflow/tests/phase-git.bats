@@ -171,3 +171,32 @@ teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/nul
   [ "$status" -eq 1 ]
   git rev-parse --verify --quiet refs/heads/feature
 }
+
+@test "origin check: accepts recorded destinations without changing refs" {
+  local before; before="$(git show-ref)"
+  run bash "$PUBLISH" --check-origin "$FETCH_URL" "$PUSH_URL"
+  [ "$status" -eq 0 ]
+  [ "$(git show-ref)" = "$before" ]
+}
+
+@test "origin check: rejects a changed fetch URL" {
+  git remote set-url origin "$TEST_TMP/other.git"
+  run bash "$PUBLISH" --check-origin "$FETCH_URL" "$PUSH_URL"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"FETCH URL CHANGED"* ]]
+}
+
+@test "origin check: rejects a changed push URL" {
+  git remote set-url --push origin "$TEST_TMP/other.git"
+  run bash "$PUBLISH" --check-origin "$FETCH_URL" "$PUSH_URL"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"PUSH URL CHANGED"* ]]
+}
+
+@test "origin check: rejects a second push URL even when the first matches" {
+  git remote set-url --add --push origin "$PUSH_URL"
+  git remote set-url --add --push origin "$TEST_TMP/second.git"
+  run bash "$PUBLISH" --check-origin "$FETCH_URL" "$PUSH_URL"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"MULTIPLE PUSH URLS"* ]]
+}

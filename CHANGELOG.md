@@ -18,7 +18,7 @@ here — the plugin manifest's version is the only record of them.
   `install-standards.sh` (the block inside `~/.claude/CLAUDE.md`),
   `mutation-restore.sh` and `publish-release.sh` (the destructive git
   operations), and `write_results.py` (the results-table writer). Forty-five
-  tests; two are red on purpose and reproduce open findings.
+  tests at extraction; the two capture regressions are fixed below.
   Each suite carries a canary — a planted secret outside the repo, user content
   outside the managed block, uncommitted work, the columns not named — so a
   regression fails loudly instead of quietly, which is how all four of these
@@ -47,11 +47,12 @@ here — the plugin manifest's version is the only record of them.
   changed the loaded skills — round 2 at `a850251`, round 3 at `07e1769`. Only
   round 3 is current, and the re-gather earned its cost: the clarified
   delivery-content clause moved the email subject out of the composition root in
-  S01, two other scenarios applied the same clause unprompted, and S07 answered
-  the mutation condition's host-independence requirement by pinning `TZ` in a
-  fixture rather than arguing around it. **Six of fifteen units need their rule and the skill
-  fixes all six** — Only what fired, No filler verdicts, produce versus edit,
-  Direction, Mutation reasoning and Fixture validity. The other nine record a
+  S01 and two other scenarios applied the same clause unprompted. The S07
+  mutation grade was corrected under *Fixed*; its replacement fixture did not
+  establish the original test's behavior on every host. **Six of fifteen units
+  need their rule and the skill fixes five**: Only what fired, No filler verdicts,
+  produce versus edit, Direction and Fixture validity. Mutation reasoning remains
+  ineffective. The other nine record a
   strong model already doing the right thing unaided. Transcripts, dispatched
   prompts and hash-verified skill snapshots for both rounds are archived outside
   the repo under
@@ -240,6 +241,30 @@ here — the plugin manifest's version is the only record of them.
   163→49, `external-review` 187→59. They are resident in every session.
 
 ### Fixed
+
+- **Review capture now classifies tracked paths before building the patch.** Symlinks,
+  binaries and paths outside the allowed roots are withheld, including binaries forced to
+  text by a diff attribute. Absolute plan paths retain their root. Tracked capture counts
+  include the paths sent, and phase enumeration failures stop capture. Four added capture
+  regressions cover both patch sides, symlinks, parent escapes and literal path exclusions.
+  Four added phase-git tests cover the check-only remote guard.
+- **Remote checks use the destinations recorded at phase start.** The workflow calls
+  `publish-release.sh --check-origin`, a check-only entry point to the existing guard, at the
+  gate and before publication or deletion. It rejects changed or multiple push destinations.
+- **Coverage is classified for every required reviewer/chunk pair.** Failed invocations cannot
+  count as successful coverage, and a later chunk failure cannot leave a pass marked full.
+  `external-review` owns the classification and Gemini timeout; callers point to it. Removed
+  duplicated capture commands, tool tutorials and superseded wording from the skills.
+- **Both setup symlink sequences bind their paths and guard the actual move and link.** A failed
+  move stops installation, existing backups are retained, and the result is checked. The
+  reference calls the exploration allowlist a prompt-reduction list and names `find`'s writes.
+- **Roadmap ownership and ordering match the supporting records.** Backup work belongs to
+  `drive-backup`, KI-34 appears in the active list, issues follow severity and likelihood, and
+  verification questions precede risks. Architecture records setup's backup dependency.
+- **S07 round-3 P2 is `Rule ineffective`.** Its substitute mutation does not keep the original
+  test green on every host; pinning `TZ` in the replacement cannot establish that property.
+  The summary now records five of six discriminating units fixed. Evidence notes also record
+  the false H1 window finding and the timezone teardown defect, without changing other grades.
 
 - **External review pass 7 — 19 findings, five of them in pass 6's own fixes.**
   The bundle counts read a `manifest.z` that was never created; the invocation

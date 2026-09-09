@@ -3,10 +3,8 @@
 # Capture suite. Every test names the condition that turns it red.
 #
 # The bundle is the one artifact in this repo that leaves the machine, so these
-# tests are about containment first and completeness second. Several were written
-# from external review pass 8 findings and are expected to fail until those are
-# fixed; each says so in its own comment rather than being skipped, because a
-# skipped test is invisible and a red one is not.
+# tests are about containment first and completeness second. Each test names
+# the condition that must be rejected or captured without losing content.
 
 load helpers/setup
 
@@ -148,8 +146,7 @@ teardown() { teardown_capture_env; }
 
 @test "phase: a binary forced to text by a diff attribute stays out of the bundle" {
   # Red while tracked paths reach the bundle through git diff without passing
-  # the same binary test untracked files face. This is pass 8 finding H-04 and
-  # is expected to fail until tracked classification moves before the diff.
+  # the same binary test untracked files face.
   printf '\x00\x01BINARY-CANARY\x00' > forced.bin
   printf 'forced.bin diff\n' > .gitattributes
   git add -A && git commit -qm forced
@@ -189,4 +186,58 @@ refute_canary() {
     echo "LEAK: canary content reached the bundle"
     return 1
   fi
+}
+
+@test "phase: binary content on the old side is withheld after replacement with text" {
+  printf '\x00BINARY-CANARY\x00' > forced.bin
+  printf 'forced.bin diff\n' > .gitattributes
+  git add -A && git commit -qm binary
+  printf 'plain text\n' > forced.bin
+  git add -A && git commit -qm text
+
+  run bash "$CAPTURE" phase "$OUT" HEAD~1
+  [ "$status" -eq 0 ]
+  run grep -q 'BINARY-CANARY' "$OUT/bundle.txt"
+  [ "$status" -eq 1 ]
+  withheld_for "forced.bin" "binary"
+}
+
+@test "phase: tracked symlinks are withheld before building the diff" {
+  ln -s "$OUTSIDE/secret.txt" link.txt
+  git add -A && git commit -qm link
+
+  run bash "$CAPTURE" phase "$OUT" HEAD~1
+  [ "$status" -eq 0 ]
+  withheld_for "link.txt" "symlink"
+  run grep -q 'diff --git' "$OUT/bundle.txt"
+  [ "$status" -eq 1 ]
+  grep -q 'bundle contains 0 of 1 files; 1 withheld, 0 excluded' "$OUT/counts.txt"
+}
+
+@test "phase: a symlinked parent is withheld before building the diff" {
+  mkdir sub
+  printf 'PRIVATE-PATCH-CANARY\n' > sub/ok.txt
+  git add -A && git commit -qm sub
+  rm -r sub && ln -s "$OUTSIDE" sub
+
+  run bash "$CAPTURE" phase "$OUT" HEAD~1
+  [ "$status" -eq 0 ]
+  withheld_for "sub/ok.txt" "outside every allowed root"
+  run grep -q 'PRIVATE-PATCH-CANARY' "$OUT/bundle.txt"
+  [ "$status" -eq 1 ]
+}
+
+@test "phase: a withheld pathspec-shaped name does not exclude a safe tracked file" {
+  printf '\x00BINARY-CANARY\x00' > 'blob[1].bin'
+  printf 'SAFE-TEXT\n' > blob1.bin
+  printf '*.bin diff\n' > .gitattributes
+  git add -A && git commit -qm names
+
+  run bash "$CAPTURE" phase "$OUT" HEAD~1
+  [ "$status" -eq 0 ]
+  withheld_for 'blob[1].bin' "binary"
+  run grep -q 'BINARY-CANARY' "$OUT/bundle.txt"
+  [ "$status" -eq 1 ]
+  grep -q 'SAFE-TEXT' "$OUT/bundle.txt"
+  grep -q 'bundle contains 2 of 3 files; 1 withheld, 0 excluded' "$OUT/counts.txt"
 }
