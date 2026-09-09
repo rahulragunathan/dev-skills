@@ -245,6 +245,17 @@ here — the plugin manifest's version is the only record of them.
 
 ### Fixed
 
+- **Evidence provenance is tracked per scenario, not per repository.** `evidence.py`
+  records, for each scenario, the skill it loads, that file's git SHA and content hash,
+  its prompt hash and its grading-condition hash; `check` recomputes all four and names
+  exactly the scenarios that must be re-run. A single repository SHA could only mark
+  everything stale or nothing, which is why S07's evidence outlived two changes to the
+  skill it tests. The scenario files now declare `**Loads:**` rather than having the
+  skill inferred from their prose. Eleven tests, including the baseline-contamination
+  refusal that previously depended on someone reading a tool-use count by eye.
+- **The round-3 results rows carried notes in the `Condition revision` column.** The
+  provenance value was overwritten in all seven scenarios. Recomputed from the grading
+  conditions and restored; the displaced prose is retained in `Notes` rather than dropped.
 - **A scope exclusion now binds Codex, which reads the repository rather than the bundle.**
   `codex-root.sh` builds a detached worktree at HEAD, deletes the excluded paths inside it, and
   verifies each deletion before returning the path to root the reviewer at. The real working

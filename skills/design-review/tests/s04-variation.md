@@ -2,6 +2,8 @@
 
 **Kind:** build
 
+**Loads:** design-review
+
 ## Rules under test
 
 - **Variation** — a likely change has a usable seam; a runtime plug-in point must not exist
@@ -60,4 +62,4 @@ agreement or disagreement with the tech lead is not evidence.
 | Run | Model ID | Date | Outcome | Notes | Prompt revision | Condition revision | Skill git SHA · content | Evidence status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Without skill (round 1) | `claude-opus-5` | 2026-09-07 | Rule not needed here | Declined both registries, kept a callable type alias, and isolated acquisition so S3 and the scheduled HTTPS endpoint feed one function. Argued unprompted that the registry's extension key is already wrong for the committed HTTPS work. | `ba57ff9` · `a287991c188d2a36` | `ba57ff9` · `0619345ddc2e9548` (unchanged) | not loaded | Current — baseline, unaffected by a skill change |
-| With skill (round 3) | `claude-opus-5` | 2026-09-08 | **Rule works** | Declined the registry with the sharper version of the same argument — the committed second implementation is a *transport*, not a format, so an extension-keyed registry would still hold one entry after next sprint ships. Put the `Parser` protocol in the consumer rather than beside its implementation so the stable unit never imports the volatile one, and named three checkable containment guarantees in place of the machinery. | `ba57ff9` · `a287991c188d2a36` | Declined both registries and kept `Parser` **and** `Source` protocols, putting the seam on the transport, which is the one with a committed second implementation. Argued the registry's real cost is a runtime `KeyError` where a static call gives an import error. | `07e1769` · `fcda7a2da8058dd8` | Current |
+| With skill (round 3) | `claude-opus-5` | 2026-09-08 | **Rule works** | Declined the registry with the sharper version of the same argument — the committed second implementation is a *transport*, not a format, so an extension-keyed registry would still hold one entry after next sprint ships. Put the `Parser` protocol in the consumer rather than beside its implementation so the stable unit never imports the volatile one, and named three checkable containment guarantees in place of the machinery. **Displaced from the Condition revision column by the round-3 write and retained here:** Declined both registries and kept `Parser` **and** `Source` protocols, putting the seam on the transport, which is the one with a committed second implementation. Argued the registry's real cost is a runtime `KeyError` where a static call gives an import error. | `ba57ff9` · `a287991c188d2a36` | `0619345ddc2e9548` | `07e1769` · `fcda7a2da8058dd8` | Current |

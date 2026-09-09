@@ -2,6 +2,8 @@
 
 **Kind:** report
 
+**Loads:** design-review
+
 ## Rules under test
 
 1. Only fired checks get a line, including collective summaries.
@@ -91,4 +93,4 @@ produces; do not ask it afterwards what it considered.
 | Run | Model ID | Date | Rule 1 | Rule 2 | Rule 3 | Rule 4 | Notes | Prompt revision | Condition revision | Skill git SHA · content | Evidence status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Without skill (round 1) | `claude-opus-5` | 2026-09-07 | **Rule needed** | Rule not needed here | Rule not needed here | **Rule needed** | Opened with a six-row verdict table reading `Variation | Pass`, `Lifetime | Pass`, `Surface | Pass` for checks the fixture makes silent, then wrote prose sections headed "Lifetime: pass". Fails rule 1 on naming silent checks and rule 4 on the banned verdict. Substance was right on all three decisions. | `ba57ff9` · `a0032527302c3acf` | `ba57ff9` · `1c72d3ab44485175` (unchanged) | not loaded | Current — baseline, unaffected by a skill change |
-| With skill (round 3) | `claude-opus-5` | 2026-09-08 | **Rule works** | **Rule works** | **Rule works** | **Rule works** | Three entries and nothing else — Responsibility resolved, Duplication resolved, Duplication deliberately kept with its reason. Variation, Lifetime and Surface absent rather than summarised. No banned verdict. Same three substantive decisions as the baseline. | `ba57ff9` · `a0032527302c3acf` | Three entries and nothing else. Variation, Lifetime and Surface absent rather than summarised; no banned verdict. Counted the rounding rule as three occurrences including `taxes.py` itself rather than two-plus-existing-home — different route, same placement. | `07e1769` · `fcda7a2da8058dd8` | Current |
+| With skill (round 3) | `claude-opus-5` | 2026-09-08 | **Rule works** | **Rule works** | **Rule works** | **Rule works** | Three entries and nothing else — Responsibility resolved, Duplication resolved, Duplication deliberately kept with its reason. Variation, Lifetime and Surface absent rather than summarised. No banned verdict. Same three substantive decisions as the baseline. **Displaced from the Condition revision column by the round-3 write and retained here:** Three entries and nothing else. Variation, Lifetime and Surface absent rather than summarised; no banned verdict. Counted the rounding rule as three occurrences including `taxes.py` itself rather than two-plus-existing-home — different route, same placement. | `ba57ff9` · `a0032527302c3acf` | `1c72d3ab44485175` | `07e1769` · `fcda7a2da8058dd8` | Current |

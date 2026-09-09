@@ -2,6 +2,8 @@
 
 **Kind:** build
 
+**Loads:** design-review
+
 ## Rules under test
 
 - **Duplication** — three occurrences justify creating a shared home. Two may move into a
@@ -61,4 +63,4 @@ extraction does not excuse the resulting design.
 | Run | Model ID | Date | Under side | Over side | Notes | Prompt revision | Condition revision | Skill git SHA · content | Evidence status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Without skill (round 1) | `claude-opus-5` | 2026-09-07 | Rule not needed here | Rule not needed here | Created a shared provenance module with three consumers, deleted `_fmt_timestamp` into the existing `time_text.format_utc`, and kept `_fmt_money` duplicated in CSV and XLSX. All three subcases correct without the skill. | `ba57ff9` · `7e1ef621d32bdd1d` | `ba57ff9` · `a6b60af770d5d478` (unchanged) | not loaded | Current — baseline, unaffected by a skill change |
-| With skill (round 3) | `claude-opus-5` | 2026-09-08 | **Rule works** | **Rule works** | Identical placement for all three helpers. Stated the asymmetry as the point worth reviewing — the timestamp helper has an owner whose responsibility it matches exactly, money display has none — and noted that Parquet using neither helper is the evidence the seam sits in the right place. | `ba57ff9` · `7e1ef621d32bdd1d` | Identical placement for all three helpers. Invoked the composition-root exemption for `reports.py` in the skill's new terms — "nothing a stakeholder edits on their own schedule lives in the root". | `07e1769` · `fcda7a2da8058dd8` | Current |
+| With skill (round 3) | `claude-opus-5` | 2026-09-08 | **Rule works** | **Rule works** | Identical placement for all three helpers. Stated the asymmetry as the point worth reviewing — the timestamp helper has an owner whose responsibility it matches exactly, money display has none — and noted that Parquet using neither helper is the evidence the seam sits in the right place. **Displaced from the Condition revision column by the round-3 write and retained here:** Identical placement for all three helpers. Invoked the composition-root exemption for `reports.py` in the skill's new terms — "nothing a stakeholder edits on their own schedule lives in the root". | `ba57ff9` · `7e1ef621d32bdd1d` | `a6b60af770d5d478` | `07e1769` · `fcda7a2da8058dd8` | Current |

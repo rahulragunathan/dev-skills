@@ -2,6 +2,8 @@
 
 **Kind:** build
 
+**Loads:** design-review
+
 ## Rules under test
 
 - **Lifetime** — state reused across calls must have a safe owner and scope.
@@ -59,4 +61,4 @@ needed to establish these properties fails the affected check; naming a risk is 
 | Run | Model ID | Date | Lifetime | Surface | Notes | Prompt revision | Condition revision | Skill git SHA · content | Evidence status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Without skill (round 1) | `claude-opus-5` | 2026-09-07 | Rule not needed here | Rule not needed here | Bounded `lru_cache` of frozen `CompiledCategory`, overrides applied as a read-time overlay and never merged in, stated as an invariant with a concurrency test proposed against it. `run_upload(merchant_id, stream, override_payload)` needs no warmup. **This is the second attempt: the first baseline invoked the installed `design-review` plugin skill and was voided.** | `ba57ff9` · `7ce7ec8fb0454659` | `ba57ff9` · `f2d9d679e9b917fb` (unchanged) | not loaded | Current — baseline, unaffected by a skill change |
-| With skill (round 3) | `claude-opus-5` | 2026-09-08 | **Rule works** | **Rule works** | Same split of lifetimes — the cache holds only the deploy-lifetime half, keyed by category name, and `validate_row` takes overrides as a third argument unioned at check time. Named the race on a cold key and left it deliberately, because the two results are equal and immutable. Inverted `service` → `csv_reader` so the upload's steps stop depending on the merchants' file format. | `ba57ff9` · `7ce7ec8fb0454659` | Same frozen cache and override-overlay split. Applied the delivery-content clause unprompted: moved rejection message copy out of the service because "message copy is policy that merchandising edits on its own schedule". `UploadResult` now reports `rejected_total` and `truncated`, so no caller has to read the service to learn the cap. | `07e1769` · `fcda7a2da8058dd8` | Current |
+| With skill (round 3) | `claude-opus-5` | 2026-09-08 | **Rule works** | **Rule works** | Same split of lifetimes — the cache holds only the deploy-lifetime half, keyed by category name, and `validate_row` takes overrides as a third argument unioned at check time. Named the race on a cold key and left it deliberately, because the two results are equal and immutable. Inverted `service` → `csv_reader` so the upload's steps stop depending on the merchants' file format. **Displaced from the Condition revision column by the round-3 write and retained here:** Same frozen cache and override-overlay split. Applied the delivery-content clause unprompted: moved rejection message copy out of the service because "message copy is policy that merchandising edits on its own schedule". `UploadResult` now reports `rejected_total` and `truncated`, so no caller has to read the service to learn the cap. | `ba57ff9` · `7ce7ec8fb0454659` | `f2d9d679e9b917fb` | `07e1769` · `fcda7a2da8058dd8` | Current |
