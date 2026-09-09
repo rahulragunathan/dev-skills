@@ -45,7 +45,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    set -euo pipefail
    command -v gh >/dev/null || { echo "GH MISSING — stop"; exit 1; }
    ORIGIN_URL="$(git remote get-url origin)"
-   ORIGIN_PUSH_URL="$(git remote get-url --push --all origin)"
+   ORIGIN_PUSH_URL="$(git remote get-url --push origin)"
    bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
      --check-origin "$ORIGIN_URL" "$ORIGIN_PUSH_URL"
    REPO="$(gh repo view "$ORIGIN_URL" --json nameWithOwner --jq .nameWithOwner)"

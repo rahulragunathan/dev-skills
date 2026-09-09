@@ -200,3 +200,12 @@ teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/nul
   [ "$status" -eq 1 ]
   [[ "$output" == *"MULTIPLE PUSH URLS"* ]]
 }
+
+@test "origin check: the preflight records the push URL the guard compares" {
+  # Red when the documented preflight and the guard drift apart. The guard
+  # compares `git remote get-url --push`; a preflight that records
+  # `--push --all` hands it a different shape, and only the merge gate finds
+  # out. Brittle to rewording on purpose: the two must be edited together.
+  local skill; skill="$(dirname "$PUBLISH")/SKILL.md"
+  grep -q 'ORIGIN_PUSH_URL="\$(git remote get-url --push origin)"' "$skill"
+}
