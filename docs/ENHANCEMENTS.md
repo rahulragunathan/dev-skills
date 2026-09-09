@@ -164,3 +164,142 @@ that is already done and cannot tell that from the file.
 asked to keep both files in place until they have gone back through them, so this is not
 ready to start. Read them first and decide what is durable — the design rationale probably
 is, the task-by-task plan probably is not.
+
+---
+
+<a id="enh-07"></a>
+
+## ENH-07 — Honour `$CLAUDE_CONFIG_DIR` in the bundled scripts
+
+**Priority:** Low · **Effort:** ~2 hours · **Partly held**
+
+**Where:** [backup-projects.sh](../skills/drive-backup/backup-projects.sh), [claude-setup/SKILL.md](../skills/claude-setup/SKILL.md) (inline bash), and the four scripts under [claude-toggle-backend](../skills/claude-toggle-backend) — `toggle.sh`, `llama-serve.sh`, `mlx-serve.sh`, `llama-autostart.sh`
+
+**Scope now:** `backup-projects.sh` and `claude-setup`'s inline bash. The
+`claude-toggle-backend` scripts are held for the rebuild, which should resolve the config dir
+once in whatever replaces them rather than inherit four more hardcoded copies.
+
+### What it is
+
+Every script in the plugin resolves `$HOME/.claude` directly. Claude Code reads
+`$CLAUDE_CONFIG_DIR` when it is set, so on such a machine they would disagree: the skills write
+the standards and settings to one place while Claude Code reads another.
+
+The documentation used to claim the variable was honoured, which was the defect recorded as
+KI-15. That claim is gone, and no skill asserts the opposite either: the decision lives once,
+in the repo `CLAUDE.md` under "Decisions taken and not taken", because it is a plugin-wide
+choice rather than a step in anyone's procedure. This entry is the remaining capability, not
+a bug.
+
+### Why it matters
+
+Low, because a single-machine setup never sets the variable and the docs no longer mislead.
+It becomes real the moment a second config root is wanted — a work profile beside a personal
+one on the same machine.
+
+**The held half is the sharper one, which is why the scope split is recorded rather than
+assumed.** `backup-projects.sh` writing to a stale config root copies files to the wrong
+folder, which is recoverable. `toggle.sh` resolves `settings.json` the same way and *patches*
+it: on a machine with the variable set it would edit a file Claude Code is not reading, so the
+backend would appear to switch and would not, with no error. That is the shared-state file
+three skills already write, and KI-01 is what a bad write to it costs.
+
+### Notes for the work
+
+One resolver near the top of each script, `CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"`,
+substituted for the hardcoded paths: ten occurrences over eight distinct paths in
+`backup-projects.sh`; six over three in `claude-setup`'s inline bash, which are the
+`skills` and `localclaude-plugins` symlinks and one backup of the first — Claude Code would
+look for those under the relocated root, so they count; and four in `toggle.sh` once the held
+half is unblocked. **`~/.claude.json` is not under the config dir** and stays as it
+is; check that against the current Claude Code behaviour before assuming either way. Do this
+inside the ENH-03 harness so the substitution has tests, rather than as a blind rename.
+
+Deferred from the phase that closed KI-15, to keep the fix beside its tests.
+
+---
+
+<a id="enh-10"></a>
+
+## ENH-10 — make the project-env name mapping unambiguous
+
+**Priority:** Low · **Effort:** ~2 hours
+**Where:** [project-env/SKILL.md:18-21](../skills/project-env/SKILL.md#L18-L21)
+
+### What it is
+
+The env name is the project path relative to the code root with separators flattened to `_`.
+That is not injective: `Code/a/b` and `Code/a_b` both become `a_b`, so two projects can name the
+same environment.
+
+### Why it matters
+
+Low, because the collision needs a project whose directory name already contains an underscore
+at the right position. When it happens, two projects silently share one `.venv`, and the symptom
+is a dependency appearing from nowhere. The skill now says to resolve the project's own `.venv` symlink and confirm where it lands
+before adopting an existing env. That is a weak workaround and worth stating as one: the link
+runs project → environment, so nothing in the environment records which project owns it, and
+detecting a collision means inspecting every candidate project rather than reading one backlink.
+
+### Notes for the work
+
+Append a short digest of the normalized path, or encode the separator. Either changes existing
+env names, so it needs a migration path in `standardize-*-envs.sh` rather than a rename in the
+docs.
+
+**Source:** gpt-6-astra — phase review pass 5, 2026-09-08.
+
+---
+
+<a id="enh-11"></a>
+
+## ENH-11 — reconcile an existing global markdownlint config instead of skipping it
+
+**Priority:** Low · **Effort:** ~1 hour
+**Where:** [claude-setup/SKILL.md](../skills/claude-setup/SKILL.md) step 3b
+
+### What it is
+
+Step 3b writes `~/.markdownlint.jsonc` only when the file is absent. A machine with an existing
+config keeps it, so the four rules the step says "have to be set" are not set, and a re-run
+reports success.
+
+### Why it matters
+
+Same class as the standards block: the skill is supposed to bring a stale machine up to the
+current standard, and here it silently does not. The consequence is mild — lint findings that
+disagree with the house style — but the pattern is the one this skill exists to avoid.
+
+### Notes for the work
+
+Merge the four required keys into an existing config, preserving unrelated rules, the same way
+step 2 merges `settings.json`.
+
+**Source:** gpt-6-astra — phase review pass 5, 2026-09-08.
+
+---
+
+<a id="enh-12"></a>
+
+## ENH-12 — feed the Gemini prompt through stdin rather than argv
+
+**Priority:** Low · **Effort:** ~1 hour
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) Gemini invocation
+
+### What it is
+
+The prompt is passed as `agy -p "$(cat …)"`, so the whole bundle travels as a command-line
+argument and is bounded by `ARG_MAX` (~1 MB on macOS).
+
+### Why it matters
+
+Low today: the chunk ceiling is now ~120,000 characters for timeout reasons, well under the
+limit. It becomes real if the ceiling is ever raised, and the failure mode is `argument list too
+long` rather than anything that reads as a review problem.
+
+### Notes for the work
+
+Check whether `agy` accepts a prompt on stdin or from a file flag. If it does, use it; if not,
+record that argv is the only channel and keep the chunk ceiling as the control.
+
+**Source:** gemini-3.1-pro-high — phase review pass 5, 2026-09-08.
