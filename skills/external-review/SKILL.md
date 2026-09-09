@@ -265,9 +265,33 @@ out.
 
 **Bundling sends your source to a third party.** Exclude credential-shaped files from **both** lists — a tracked `.env` reaches the reviewer through `git diff` just as easily as an untracked one. **Every pattern needs a leading `*` and `icase`**: without them a pathspec anchors at the repo root and is case-sensitive, so `config/credentials.json` and `Credentials.yaml` both pass.
 
-**The exclusions protect Gemini only. Codex reads the repository itself**, so `--sandbox read-only` stops writes, not reads, and `permissions.filesystem.deny_read` is an enterprise-managed layer that `-c` does not enforce. The control that remains is the prompt, so the rubric carries an explicit instruction not to open credential-shaped files (below). It is a soft instruction and a determined agent, or a broad recursive grep, can defeat it — so a repo whose secrets must never leave the machine needs the secrets moved out of it, not a better prompt. Use `git` pathspecs rather than a `grep` filter: `grep` inside Claude Code is a shadowed ugrep with injected `--ignore-files`, `-I` and `--exclude-dir` defaults, so a filter written with it searches a different file set than you think.
+**The bundle exclusions protect Gemini only. Codex reads the repository itself**, so `--sandbox read-only` stops writes, not reads, and `permissions.filesystem.deny_read` is an enterprise-managed layer that `-c` does not enforce. The control that remains is the prompt, so the rubric carries an explicit instruction not to open credential-shaped files (below). It is a soft instruction and a determined agent, or a broad recursive grep, can defeat it — so a repo whose secrets must never leave the machine needs the secrets moved out of it, not a better prompt. Use `git` pathspecs rather than a `grep` filter: `grep` inside Claude Code is a shadowed ugrep with injected `--ignore-files`, `-I` and `--exclude-dir` defaults, so a filter written with it searches a different file set than you think.
 
 Do **not** use `git add -N` to include untracked files. Capture must leave the index unchanged.
+
+**Root Codex at a pruned copy, not at the repository.** A scope exclusion that Codex can walk
+around is not an exclusion. `--exclude` removes files from the bundle, which is what Gemini
+reads; Codex reads the tree it is rooted at, so the only thing standing between it and an
+out-of-scope skill is a sentence in the prompt. That does not hold — pass 8 named `drive-backup`
+as out of scope and the reviewer reported on it anyway.
+
+```bash
+ROOT="$(bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/codex-root.sh" \
+  "<scratchpad>/codex-root" --exclude <out-of-scope-path>)"
+codex exec -C "$ROOT" ...
+git worktree remove --force "<scratchpad>/codex-root"    # when the review is done
+```
+
+It builds a detached worktree at HEAD, deletes the excluded paths inside it, and verifies each
+deletion before returning the path. The real working tree is never touched. It refuses a dirty
+tree, because the worktree carries HEAD and uncommitted work would be invisible to the reviewer,
+and it refuses an exclusion that matches nothing tracked — a typo would otherwise leave the area
+in place while you believed it pruned. Change its behavior in `codex-root.sh` and verify it with
+`tests/codex-root.bats`.
+
+**This does not make Codex safe to point at secrets.** The pruned root removes what you named;
+everything else is still readable, and the credential instruction in the rubric is still a soft
+one. A repo whose secrets must never leave the machine needs the secrets moved out of it.
 
 **Reconcile the bundle.** Use the script's `counts.txt` in the prompt and coverage line.
 `all.z` records scope before exclusions; `manifest.z` records the selected paths; `captured.z`

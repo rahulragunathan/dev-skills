@@ -245,6 +245,12 @@ here — the plugin manifest's version is the only record of them.
 
 ### Fixed
 
+- **A scope exclusion now binds Codex, which reads the repository rather than the bundle.**
+  `codex-root.sh` builds a detached worktree at HEAD, deletes the excluded paths inside it, and
+  verifies each deletion before returning the path to root the reviewer at. The real working
+  tree is untouched. It refuses a dirty tree, since the worktree carries HEAD, and refuses an
+  exclusion matching nothing tracked, since a typo leaves the area in place while the caller
+  believes it pruned. Seven tests.
 - **A review scope exclusion now removes files from the bundle, not only from the prompt.**
   `capture.sh` takes `--exclude <pathspec>`, repeatable, and the excluded paths leave the
   manifest and appear in the excluded count. Naming an out-of-scope skill in the preamble did
