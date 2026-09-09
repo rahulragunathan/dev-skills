@@ -129,8 +129,36 @@ def cmd_init(args) -> int:
     return 0
 
 
-def read_transcript(path: pathlib.Path) -> tuple[str, int]:
-    """Final assistant text, and how many tools the run used."""
+def first_user_text(path: pathlib.Path) -> str:
+    """What the run was actually dispatched with."""
+    for line in path.read_text(errors="replace").splitlines():
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        m = row.get("message") or {}
+        if m.get("role") != "user":
+            continue
+        content = m.get("content")
+        if isinstance(content, str):
+            return content
+        for c in content or []:
+            if c.get("type") == "text":
+                return c["text"]
+    return ""
+
+
+def read_transcript(path: pathlib.Path) -> tuple[str, int, bool]:
+    """Final assistant text, how many tools the run used, and whether it finished.
+
+    A transcript copied while the agent is still working ends on a tool call or
+    a thinking block, and its last text is whatever preamble the run opened
+    with. That reads as a valid short answer, so completeness is checked here
+    rather than left to whoever looks at the byte count.
+    """
+    last_msg_had_text = False
     texts, tools = [], 0
     for line in path.read_text(errors="replace").splitlines():
         if not line.strip():
@@ -145,13 +173,16 @@ def read_transcript(path: pathlib.Path) -> tuple[str, int]:
         content = m.get("content")
         if isinstance(content, str):
             texts.append(content)
+            last_msg_had_text = True
             continue
+        last_msg_had_text = False
         for c in content or []:
             if c.get("type") == "text":
                 texts.append(c["text"])
+                last_msg_had_text = True
             elif c.get("type") == "tool_use":
                 tools += 1
-    return (texts[-1] if texts else ""), tools
+    return (texts[-1] if texts else ""), tools, last_msg_had_text
 
 
 def cmd_record(args) -> int:
@@ -162,9 +193,24 @@ def cmd_record(args) -> int:
     manifest = json.loads(mpath.read_text())
     if args.scenario not in manifest["scenarios"]:
         fail(f"refusing: unknown scenario {args.scenario}")
-    body, tools = read_transcript(pathlib.Path(args.transcript))
+    tpath = pathlib.Path(args.transcript)
+    body, tools, finished = read_transcript(tpath)
     if not body.strip():
         fail(f"refusing: {args.transcript} carries no assistant answer")
+    if not finished:
+        fail(f"refusing: {args.transcript} is incomplete — its last assistant "
+             f"message is not an answer, so the run had not finished when it "
+             f"was captured")
+    # The run must have been dispatched with the prompt this batch recorded. A
+    # hand-assembled paste that drops a section leaves the answer looking valid
+    # while it answers a different question — that is the S01 failure, and it
+    # was caught last time only because a hash happened to be compared by hand.
+    want = (ev / f"{args.scenario}-prompt.txt").read_text().strip()
+    got = first_user_text(tpath)
+    if want and want not in got:
+        fail(f"refusing: {args.transcript} was not dispatched with "
+             f"{args.scenario}-prompt.txt; the recorded prompt is not in the "
+             f"first user message")
     # A baseline that reached for the skill under test is not a baseline. This
     # is the S02 contamination, which was previously caught only by eye.
     if args.arm == "baseline" and tools > 0:

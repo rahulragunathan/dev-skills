@@ -129,10 +129,13 @@ PY
 
 @test "record: stores an answer with its arm, hash and tool-use count" {
   python3 "$EVPY" init "$EV" --round 4 --model claude-opus-5 --tests skills/design-review/tests
-  cat > "$TEST_TMP/t.jsonl" <<'EOF'
-{"type":"user","message":{"role":"user","content":"go"}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ANSWER BODY"}]}}
-EOF
+  P="$(cat "$EV/S01-prompt.txt")"
+  python3 - "$TEST_TMP/t.jsonl" "$P" <<'MKJSON'
+import json, sys
+rows = [{"type":"user","message":{"role":"user","content":sys.argv[2]}},
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ANSWER BODY"}]}}]
+open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in rows) + "\n")
+MKJSON
   run python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --transcript "$TEST_TMP/t.jsonl"
   [ "$status" -eq 0 ]
   grep -q 'ANSWER BODY' "$EV/answers/S01-baseline.md"
@@ -143,10 +146,14 @@ EOF
   # THE canary. A baseline that invoked the skill under test is not a baseline;
   # this happened to S02 in round 1 and was caught only by eye.
   python3 "$EVPY" init "$EV" --round 4 --model claude-opus-5 --tests skills/design-review/tests
-  cat > "$TEST_TMP/t.jsonl" <<'EOF'
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Skill","input":{}}]}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ANSWER BODY"}]}}
-EOF
+  P="$(cat "$EV/S01-prompt.txt")"
+  python3 - "$TEST_TMP/t.jsonl" "$P" <<'MKJSON'
+import json, sys
+rows = [{"type":"user","message":{"role":"user","content":sys.argv[2]}},
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Skill","input":{}}]}},
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ANSWER BODY"}]}}]
+open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in rows) + "\n")
+MKJSON
   run python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --transcript "$TEST_TMP/t.jsonl"
   [ "$status" -eq 1 ]
   [[ "$output" == *"contaminated"* || "$output" == *"tool"* ]]
@@ -183,4 +190,52 @@ PY
   run python3 "$EVPY" init "$EV" --round 4 --model claude-opus-5 --tests skills/design-review/tests
   [ "$status" -eq 1 ]
   [[ "$output" == *"Loads"* ]]
+}
+
+@test "record: a run dispatched with a different prompt is refused" {
+  # THE S01 failure. A hand-assembled paste dropped the skill's frontmatter and
+  # the Evidence section; the answer looked valid because nothing compared what
+  # the run was actually given against what the batch says it was given.
+  python3 "$EVPY" init "$EV" --round 4 --model claude-opus-5 --tests skills/design-review/tests
+  cat > "$TEST_TMP/t.jsonl" <<'EOF'
+{"type":"user","message":{"role":"user","content":"Do a completely different thing."}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ANSWER BODY"}]}}
+EOF
+  run python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --transcript "$TEST_TMP/t.jsonl"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"not dispatched with"* ]]
+  [ ! -e "$EV/answers/S01-baseline.md" ]
+}
+
+@test "record: the matching prompt is accepted even with a preamble around it" {
+  python3 "$EVPY" init "$EV" --round 4 --model claude-opus-5 --tests skills/design-review/tests
+  P="$(cat "$EV/S01-prompt.txt")"
+  python3 - "$TEST_TMP/t.jsonl" "$P" <<'PY'
+import json, sys
+rows = [{"type":"user","message":{"role":"user","content":"Answer cold, no tools.\n\n" + sys.argv[2]}},
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ANSWER BODY"}]}}]
+open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in rows) + "\n")
+PY
+  run python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --transcript "$TEST_TMP/t.jsonl"
+  [ "$status" -eq 0 ]
+  grep -q 'ANSWER BODY' "$EV/answers/S01-baseline.md"
+}
+
+@test "record: a transcript captured mid-run is refused" {
+  # Red while completeness is judged by "is there any text": a transcript copied
+  # while the agent is still working ends on a tool call, and its last text is
+  # the preamble the run opened with. That records as a valid short answer.
+  python3 "$EVPY" init "$EV" --round 4 --model claude-opus-5 --tests skills/design-review/tests
+  P="$(cat "$EV/S01-prompt.txt")"
+  python3 - "$TEST_TMP/t.jsonl" "$P" <<'PY'
+import json, sys
+rows = [{"type":"user","message":{"role":"user","content":sys.argv[2]}},
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I'll read the skill first."}]}},
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Read","input":{}}]}}]
+open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in rows) + "\n")
+PY
+  run python3 "$EVPY" record "$EV" --scenario S01 --arm with-skill --transcript "$TEST_TMP/t.jsonl"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"incomplete"* ]]
+  [ ! -e "$EV/answers/S01-with-skill.md" ]
 }
