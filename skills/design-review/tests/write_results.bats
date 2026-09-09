@@ -90,3 +90,39 @@ cell() { python3 "$W" "$SCEN" --show | awk -v r="$1" -v c="$2" '
   run python3 "$W" "$TEST_TMP/empty.md" --run "x" --set "Notes=y"
   [ "$status" -eq 1 ]
 }
+
+
+@test "add: appends a row and leaves every existing row byte-identical" {
+  local before; before="$(grep '^| With skill (round 2)' "$SCEN")"
+  run python3 "$W" "$SCEN" --add --run "With skill (round 4)" \
+      --set "Model ID=\`claude-opus-5\`" --set "Date=2026-09-09" \
+      --set "Responsibility=**Rule ineffective**"
+  [ "$status" -eq 0 ]
+  [ "$(grep '^| With skill (round 2)' "$SCEN")" = "$before" ]
+  [ "$(cell 'With skill (round 4)' 'Responsibility')" = "**Rule ineffective**" ]
+  [ "$(cell 'Without skill' 'Notes')" = "baseline note" ]
+}
+
+@test "add: a duplicate Run value is refused" {
+  # Red if add appends blindly: two rows sharing a Run value make every later
+  # update ambiguous, and the writer would silently pick the first.
+  local before; before="$(cat "$SCEN")"
+  run python3 "$W" "$SCEN" --add --run "With skill (round 2)" --set "Date=2026-09-09"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"already"* ]]
+  [ "$(cat "$SCEN")" = "$before" ]
+}
+
+@test "add: an unknown column is refused and nothing is written" {
+  local before; before="$(cat "$SCEN")"
+  run python3 "$W" "$SCEN" --add --run "With skill (round 4)" --set "Reviewer=someone"
+  [ "$status" -ne 0 ]
+  [ "$(cat "$SCEN")" = "$before" ]
+}
+
+@test "add: columns not named are left empty rather than guessed at" {
+  run python3 "$W" "$SCEN" --add --run "With skill (round 4)" --set "Date=2026-09-09"
+  [ "$status" -eq 0 ]
+  [ "$(cell 'With skill (round 4)' 'Date')" = "2026-09-09" ]
+  [ "$(cell 'With skill (round 4)' 'Notes')" = "" ]
+}

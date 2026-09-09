@@ -52,6 +52,8 @@ def main() -> int:
     ap.add_argument("--run", help="value of the Run column identifying the row")
     ap.add_argument("--set", action="append", default=[], metavar="COLUMN=VALUE")
     ap.add_argument("--show", action="store_true")
+    ap.add_argument("--add", action="store_true",
+                    help="append a new row instead of updating an existing one")
     args = ap.parse_args()
 
     if not args.scenario.is_file():
@@ -86,6 +88,31 @@ def main() -> int:
         sys.exit("a cell value may not contain '|' — it would split the row")
 
     run_i = headers.index("Run")
+
+    if args.add:
+        end = hdr_i + 2
+        while end < len(lines) and lines[end].lstrip().startswith("|"):
+            if split_row(lines[end])[run_i] == args.run:
+                sys.exit(f"refusing: a row for {args.run!r} already exists; "
+                         f"drop --add to update it")
+            end += 1
+        cells = ["" for _ in headers]
+        cells[run_i] = args.run
+        for col, val in updates.items():
+            cells[headers.index(col)] = val
+        new_line = join_row(cells)
+        if len(split_row(new_line)) != len(headers):
+            sys.exit("refusing: the new row would not match the table's shape")
+        before_rows = lines[hdr_i + 2:end]
+        lines.insert(end, new_line)
+        # The rows already there are the record; adding to it must not touch them.
+        after_rows = [l for l in lines[hdr_i + 2:end]]
+        if after_rows != before_rows:
+            sys.exit("refusing: adding the row would change an existing one")
+        args.scenario.write_text("".join(lines))
+        print(f"added row {args.run!r} with {len(updates)} column(s) set")
+        return 0
+
     target = None
     for i in range(hdr_i + 2, len(lines)):
         if not lines[i].lstrip().startswith("|"):
