@@ -36,6 +36,17 @@ def fail(msg: str) -> None:
     raise SystemExit(1)
 
 
+def _entry_start(text: str, anchor) -> int:
+    """Where an entry begins: at its separator rule when only blank lines sit
+    between the two, otherwise at the anchor itself. One rule, one place, so
+    the header slice and the entry slice can never disagree about it."""
+    start = anchor.start()
+    sep = text.rfind("\n---\n", 0, start)
+    if sep != -1 and text[sep + len("\n---\n"):start].strip() == "":
+        return sep
+    return start
+
+
 def split_entries(text: str) -> tuple[str, dict[str, str]]:
     """Return (header, {entry-id: body}).
 
@@ -49,35 +60,65 @@ def split_entries(text: str) -> tuple[str, dict[str, str]]:
         return text, {}
     entries: dict[str, str] = {}
     for i, m in enumerate(anchors):
-        start = m.start()
-        sep = text.rfind("\n---\n", 0, start)
-        # Only treat the rule as this entry's if nothing but blank lines sits between.
-        if sep != -1 and text[sep + len("\n---\n"):start].strip() == "":
-            start = sep
-        end = anchors[i + 1].start() if i + 1 < len(anchors) else len(text)
-        if i + 1 < len(anchors):
-            nsep = text.rfind("\n---\n", 0, anchors[i + 1].start())
-            if nsep > start and text[nsep + len("\n---\n"):anchors[i + 1].start()].strip() == "":
-                end = nsep
+        start = _entry_start(text, m)
+        end = (_entry_start(text, anchors[i + 1]) if i + 1 < len(anchors)
+               else len(text))
         eid = m.group(1).upper()
         if eid in entries:
             fail(f"refusing: {eid} appears twice in the detail file")
         entries[eid] = text[start:end]
-    return text[: anchors[0].start() if anchors[0].start() == 0 else
-                 (text.rfind("\n---\n", 0, anchors[0].start()) if
-                  text.rfind("\n---\n", 0, anchors[0].start()) != -1 else anchors[0].start())], entries
+    # The header ends exactly where the first entry begins. Computing that
+    # boundary twice, by two different rules, left prose between the last rule
+    # and the first anchor belonging to neither slice — so it vanished on the
+    # next write.
+    first_start = min(_entry_start(text, m) for m in [anchors[0]])
+    return text[:first_start], entries
 
 
-def index_rows(roadmap: str, prefix: str) -> dict[str, str]:
+def index_rows(roadmap: str, prefix: str) -> dict[str, dict]:
+    """{entry-id: {"line": the row, "anchor": what the link actually targets}}.
+
+    The anchor is kept because comparing displayed IDs alone let a row point at
+    a heading that does not exist: the table looked reconciled and the link
+    went nowhere.
+    """
     fname = FILES[prefix]
-    rows: dict[str, str] = {}
+    rows: dict[str, dict] = {}
     for line in roadmap.splitlines(keepends=True):
-        m = re.match(rf'^\| \[({prefix}-\d+)\]\({re.escape(fname)}#', line)
+        m = re.match(rf'^\| \[({prefix}-\d+)\]\({re.escape(fname)}#([^)]*)\)', line)
         if m:
             if m.group(1) in rows:
                 fail(f"refusing: {m.group(1)} has two index rows")
-            rows[m.group(1)] = line
+            rows[m.group(1)] = {"line": line, "anchor": m.group(2)}
     return rows
+
+
+def reconcile(docs: pathlib.Path, proposed: dict[str, str] | None = None):
+    """Check the index against the detail files. `proposed` replaces a file's
+    text in memory, so a change can be reconciled before anything is written."""
+    proposed = proposed or {}
+    def text_of(name):
+        return proposed[name] if name in proposed else (docs / name).read_text()
+
+    roadmap = text_of("ROADMAP.md")
+    ok, problems = True, []
+    for prefix, name in FILES.items():
+        _, entries = split_entries(text_of(name))
+        rows = index_rows(roadmap, prefix)
+        dangling = sorted(set(rows) - set(entries))
+        orphaned = sorted(set(entries) - set(rows))
+        wrong = sorted(e for e in set(rows) & set(entries)
+                       if rows[e]["anchor"] != e.lower())
+        status = "ok" if not (dangling or orphaned or wrong) else "MISMATCH"
+        problems.append(f"{name:22} entries={len(entries):3} pointers={len(rows):3}  {status}")
+        if dangling:
+            problems.append(f"  index points at missing entries: {dangling}"); ok = False
+        if orphaned:
+            problems.append(f"  entries with no index row:      {orphaned}"); ok = False
+        if wrong:
+            detail = [f"{e} -> #{rows[e]['anchor']}" for e in wrong]
+            problems.append(f"  index rows pointing at the wrong anchor: {detail}"); ok = False
+    return ok, problems
 
 
 def load(docs: pathlib.Path) -> tuple[str, dict[str, tuple[str, dict[str, str]]]]:
@@ -94,20 +135,10 @@ def load(docs: pathlib.Path) -> tuple[str, dict[str, tuple[str, dict[str, str]]]
 
 
 def cmd_check(docs: pathlib.Path) -> int:
-    roadmap, detail = load(docs)
-    ok = True
-    for prefix, (_, entries) in detail.items():
-        rows = index_rows(roadmap, prefix)
-        dangling = sorted(set(rows) - set(entries))
-        orphaned = sorted(set(entries) - set(rows))
-        status = "ok" if not dangling and not orphaned else "MISMATCH"
-        print(f"{FILES[prefix]:22} entries={len(entries):3} pointers={len(rows):3}  {status}")
-        if dangling:
-            print(f"  index points at missing entries: {dangling}")
-            ok = False
-        if orphaned:
-            print(f"  entries with no index row:      {orphaned}")
-            ok = False
+    load(docs)          # refuses early if a file is missing or malformed
+    ok, problems = reconcile(docs)
+    for line in problems:
+        print(line)
     return 0 if ok else 1
 
 
@@ -137,14 +168,25 @@ def cmd_close(docs: pathlib.Path, eid: str) -> int:
         if reparsed[k].strip() != survivors[k].strip():
             fail(f"refusing: {k} would not survive byte-identical")
 
-    new_roadmap = "".join(l for l in roadmap.splitlines(keepends=True) if l != rows[eid])
+    new_roadmap = "".join(l for l in roadmap.splitlines(keepends=True)
+                          if l != rows[eid]["line"])
     if len(new_roadmap.splitlines()) != len(roadmap.splitlines()) - 1:
         fail("refusing: removing the index row would change more than one line")
+
+    # Reconcile the proposed documents before writing either. Writing first and
+    # checking after meant a refusal happened with the edits already on disk,
+    # and a failure on the second write left the first one changed.
+    proposed = {FILES[prefix]: new_detail, "ROADMAP.md": new_roadmap}
+    ok, problems = reconcile(docs, proposed)
+    if not ok:
+        for line in problems:
+            print(line, file=sys.stderr)
+        fail(f"refusing: closing {eid} would leave the roadmap inconsistent")
 
     (docs / FILES[prefix]).write_text(new_detail)
     (docs / "ROADMAP.md").write_text(new_roadmap)
     print(f"closed {eid}: {len(entries)} entries -> {len(survivors)}, index row removed")
-    return cmd_check(docs)
+    return 0
 
 
 def main() -> int:

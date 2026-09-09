@@ -236,3 +236,50 @@ EOF
   [ "$status" -eq 1 ]
   grep -q 'DOOMED-BODY' "$DOCS/KNOWN_ISSUES.md"
 }
+
+@test "close: nothing is written when the result would not reconcile" {
+  # THE ordering bug. close wrote both files and then ran the reconcile check,
+  # so a refusal happened after the edits, and a failure writing the second
+  # file left the first already changed.
+  python3 - "$DOCS/ROADMAP.md" <<'PY'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1])
+p.write_text("".join(l for l in p.read_text().splitlines(keepends=True) if 'ki-03' not in l))
+PY
+  local before_detail; before_detail="$(cat "$DOCS/KNOWN_ISSUES.md")"
+  local before_index; before_index="$(cat "$DOCS/ROADMAP.md")"
+  run python3 "$RM" close KI-02 --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [ "$(cat "$DOCS/KNOWN_ISSUES.md")" = "$before_detail" ]
+  [ "$(cat "$DOCS/ROADMAP.md")" = "$before_index" ]
+}
+
+@test "close: prose between the last rule and the first anchor survives" {
+  # Red while the header ends at the last preceding rule unconditionally while
+  # entry parsing claims that rule only when the gap is blank. Text in the gap
+  # then belongs to neither slice and is dropped on the next write.
+  python3 - "$DOCS/KNOWN_ISSUES.md" <<'PY'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+i = t.index('<a id="ki-01"></a>')
+p.write_text(t[:i] + "HEADER-PROSE-IN-THE-GAP\n\n" + t[i:])
+PY
+  run python3 "$RM" close KI-02 --docs "$DOCS"
+  [ "$status" -eq 0 ]
+  grep -q 'HEADER-PROSE-IN-THE-GAP' "$DOCS/KNOWN_ISSUES.md"
+  grep -q 'SURVIVOR-ONE' "$DOCS/KNOWN_ISSUES.md"
+  grep -q 'SURVIVOR-THREE' "$DOCS/KNOWN_ISSUES.md"
+}
+
+@test "check: an index row pointing at the wrong anchor is reported" {
+  # Red while reconciliation compares only the displayed ID. The link target is
+  # what a reader follows, so a row can look right and go nowhere.
+  python3 - "$DOCS/ROADMAP.md" <<'PY'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1])
+p.write_text(p.read_text().replace("KNOWN_ISSUES.md#ki-01", "KNOWN_ISSUES.md#wrong-anchor"))
+PY
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"KI-01"* ]]
+}

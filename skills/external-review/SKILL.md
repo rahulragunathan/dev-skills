@@ -301,15 +301,20 @@ as out of scope and the reviewer reported on it anyway.
 ROOT="$(bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/codex-root.sh" \
   "<scratchpad>/codex-root" --exclude <out-of-scope-path>)"
 codex exec -C "$ROOT" ...
-git worktree remove --force "<scratchpad>/codex-root"    # when the review is done
+rm -r "<scratchpad>/codex-root"    # when the review is done
 ```
 
-It builds a detached worktree at HEAD, deletes the excluded paths inside it, and verifies each
-deletion before returning the path. The real working tree is never touched. It refuses a dirty
-tree, because the worktree carries HEAD and uncommitted work would be invisible to the reviewer,
-and it refuses an exclusion that matches nothing tracked — a typo would otherwise leave the area
-in place while you believed it pruned. Change its behavior in `codex-root.sh` and verify it with
-`tests/codex-root.bats`.
+It **exports** HEAD, deletes the excluded paths from the export, and verifies each deletion
+before returning the path. The export is what makes the exclusion real: a linked worktree shares
+the repository's object database, so `git show HEAD:<excluded path>` returns a file whose copy
+has just been deleted — absent from the filesystem and still fully readable. An export carries
+no `.git`, so nothing remains to read them out of, and the script refuses if a `.git` appears.
+
+**The cost is history.** The reviewer gets the tree at HEAD and no log, so do not offer it
+history in the prompt. It also refuses a dirty tree, because the export carries HEAD and
+uncommitted work would be invisible, and refuses an exclusion matching nothing tracked — a typo
+would otherwise leave the area in place while you believed it pruned. Change its behavior in
+`codex-root.sh` and verify it with `tests/codex-root.bats`.
 
 **This does not make Codex safe to point at secrets.** The pruned root removes what you named;
 everything else is still readable, and the credential instruction in the rubric is still a soft

@@ -6,11 +6,18 @@
 #
 # Codex reads the tree it is rooted at, so a bundle exclusion does not reach it
 # and neither does a sentence in the prompt telling it what to ignore. This
-# builds a detached worktree at <dir>, deletes the excluded paths inside it, and
-# prints the path to root the reviewer at. What is not there cannot be read.
+# exports HEAD to <dir> and deletes the excluded paths from the export.
 #
-# The worktree is a copy: the real working tree is never modified. Remove it
-# afterwards with `git worktree remove --force <dir>`.
+# It exports rather than adding a worktree, and that is the whole point. A
+# linked worktree shares the repository's object database, so `git show
+# HEAD:<excluded path>` returned the file whose copy had just been deleted:
+# absent from the filesystem, still fully readable. An export carries no `.git`,
+# so there is nothing left to read the excluded paths out of.
+#
+# The cost is history: the reviewer gets the tree at HEAD and no log. Say so in
+# the prompt rather than offering history the export does not have.
+#
+# The real working tree is never modified. Remove the export with `rm -r <dir>`.
 #
 # Exit 0 when the pruned root is ready; exit 1 on any refusal or failure.
 
@@ -46,15 +53,21 @@ if [ "${#EXCL[@]}" -gt 0 ]; then
   done
 fi
 
-git worktree add --detach -q "$DEST" HEAD || { echo "WORKTREE CREATE FAILED"; exit 1; }
+mkdir -p "$DEST" || { echo "CANNOT CREATE $DEST"; exit 1; }
+git archive --format=tar HEAD | tar -x -C "$DEST" \
+  || { echo "EXPORT FAILED — do not root a reviewer here"; exit 1; }
+
+# An export must carry no repository. If one appeared, the excluded paths would
+# be readable through it and the exclusion would be filesystem theatre.
+[ ! -e "$DEST/.git" ] || { echo "EXPORT CONTAINS .git — refusing"; exit 1; }
 
 if [ "${#EXCL[@]}" -gt 0 ]; then
   for e in "${EXCL[@]}"; do
-    git -C "$DEST" rm -r -q -- "$e" \
-      || { echo "PRUNE FAILED for $e — do not root a reviewer here"; exit 1; }
+    [ -e "$DEST/$e" ] || { echo "EXCLUDED PATH NOT IN THE EXPORT: $e"; exit 1; }
+    rm -r "$DEST/$e" || { echo "PRUNE FAILED for $e — do not root a reviewer here"; exit 1; }
     # Verify the prune rather than trusting the exit status: this is the whole
     # point of the script, and a partial delete looks like a clean one.
-    [ ! -e "$DEST/$e" ] && [ -z "$(git -C "$DEST" ls-files -- "$e")" ] \
+    [ ! -e "$DEST/$e" ] \
       || { echo "PRUNE INCOMPLETE for $e — do not root a reviewer here"; exit 1; }
   done
 fi

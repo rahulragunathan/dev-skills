@@ -86,6 +86,22 @@ def main() -> int:
         updates[col] = val
     if "|" in "".join(updates.values()):
         sys.exit("a cell value may not contain '|' — it would split the row")
+    # A newline ends the row early and leaves its remainder outside the table,
+    # which markdownlint will not flag because what is left is still well formed.
+    if any(("\n" in v) or ("\r" in v) for v in updates.values()):
+        sys.exit("a cell value may not contain a line break — it would end the row")
+
+    # A duplicate Run value makes every later update ambiguous, and the writer
+    # resolves the ambiguity by silently taking the first match.
+    if "Run" in updates:
+        run_col = headers.index("Run")
+        for i in range(hdr_i + 2, len(lines)):
+            if not lines[i].lstrip().startswith("|"):
+                break
+            cells = split_row(lines[i])
+            if len(cells) == len(headers) and cells[run_col] == updates["Run"] \
+                    and cells[run_col] != args.run:
+                sys.exit(f"refusing: a row for {updates['Run']!r} already exists")
 
     run_i = headers.index("Run")
 

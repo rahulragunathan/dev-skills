@@ -93,3 +93,23 @@ teardown() {
   run bash "$CODEX_ROOT" "$ROOT" --exclude skills/held
   [ "$status" -eq 1 ]
 }
+
+@test "an excluded path is not reachable through git either" {
+  # THE claim that was false. A linked worktree shares the object database, so
+  # `git show HEAD:<excluded>` returned the file whose files had been deleted.
+  # Filesystem absence is not unreadability while the objects are still there.
+  run bash "$CODEX_ROOT" "$ROOT" --exclude skills/held
+  [ "$status" -eq 0 ]
+  run git -C "$ROOT" show "HEAD:skills/held/SKILL.md"
+  [ "$status" -ne 0 ]
+  run bash -c "git -C '$ROOT' log --all -p 2>/dev/null | grep -c EXCLUDED-CONTENT || true"
+  [[ "$output" == "0" ]]
+}
+
+@test "the in-scope history is still available to the reviewer" {
+  # The exclusion must not cost the reviewer everything else. Red if the fix
+  # throws away the whole repository rather than the excluded paths.
+  run bash "$CODEX_ROOT" "$ROOT" --exclude skills/held
+  [ "$status" -eq 0 ]
+  grep -q 'IN-SCOPE-CONTENT' "$ROOT/skills/kept/SKILL.md"
+}

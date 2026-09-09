@@ -126,3 +126,22 @@ cell() { python3 "$W" "$SCEN" --show | awk -v r="$1" -v c="$2" '
   [ "$(cell 'With skill (round 4)' 'Date')" = "2026-09-09" ]
   [ "$(cell 'With skill (round 4)' 'Notes')" = "" ]
 }
+
+@test "a value containing a newline is refused" {
+  # Red while only '|' is rejected. A newline splits one row into two, and the
+  # second half is not a table row at all, so the table silently loses its shape.
+  local before; before="$(cat "$SCEN")"
+  run python3 "$W" "$SCEN" --run "With skill (round 2)" --set "Notes=line one
+line two"
+  [ "$status" -ne 0 ]
+  [ "$(cat "$SCEN")" = "$before" ]
+}
+
+@test "renaming a row onto an existing Run value is refused" {
+  # Red while --set can write the Run column freely: two rows sharing a Run
+  # value make every later update ambiguous, and the writer picks the first.
+  local before; before="$(cat "$SCEN")"
+  run python3 "$W" "$SCEN" --run "With skill (round 2)" --set "Run=Without skill"
+  [ "$status" -ne 0 ]
+  [ "$(cat "$SCEN")" = "$before" ]
+}
