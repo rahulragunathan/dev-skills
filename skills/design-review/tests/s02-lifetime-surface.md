@@ -49,7 +49,9 @@ needed to establish these properties fails the affected check; naming a risk is 
 > Catalogue edits ship with a deploy a few times a week. Workers restart on every deploy.
 >
 > `db.py` wraps the Postgres pool; `listings.py` has the `Listing` model and CRUD;
-> `taxonomy.category_for(sku_prefix) -> str` caches its static lookup with `lru_cache`.
+> `taxonomy.category_for(sku_prefix) -> str` caches its static lookup with a bare
+`@lru_cache` and **no `maxsize`, so it is unbounded, and it caches misses as well as
+hits — an unrecognised prefix from an upload becomes a cache entry**.
 > Gunicorn uses four worker processes, each with eight request threads. Uploads overlap.
 >
 > Give the design you would build and a short paragraph for its reviewer.

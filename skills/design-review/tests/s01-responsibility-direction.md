@@ -24,8 +24,11 @@ extraction trigger does not repair a failing artifact.
 
 1. **Responsibility** — any changed unit owns two policies drawn from **different** entries in
    this list. The entries are: (a) invoice selection *or* grouping — these two count as one
-   entry, not two; (b) PDF layout; (c) email delivery; (d) sent-record persistence. Fail any
-   cross-entry pair, not only summary-plus-email. Renaming the responsibility to "handle summaries", splitting
+   entry, not two; (b) PDF layout; (c) email delivery, including the subject and body copy;
+   (d) sent-record persistence. Fail any cross-entry pair, not only summary-plus-email. A unit
+   holding the email copy together with the PDF layout is such a pair: the fixture gives them
+   different owners on different schedules, so they are unrelated reasons to change however
+   naturally they read together as "what the customer receives". Renaming the responsibility to "handle summaries", splitting
    functions inside the same unit, or noting the trade-off does not change the result. A
    coordinator that only passes data between these units is not a second policy owner.
 2. **Direction** — the table has a cycle, orders rows by call order instead of the fixture's
@@ -68,6 +71,8 @@ extraction trigger does not repair a failing artifact.
 > Job scheduling changes yearly. The invoice schema changes quarterly. Finance changes PDF
 > layout every two months, independently of grouping. The mail provider API changes monthly.
 > Sent-record retention and fields follow support requirements, independently of finance.
+> The email subject and body are support's copy, not finance's, and support rewords them
+> about monthly on their own schedule, unrelated to the PDF layout.
 >
 > Python 3.13. No new runtime dependencies beyond a PDF library. Produce the design you would
 > build and a short paragraph for its reviewer.

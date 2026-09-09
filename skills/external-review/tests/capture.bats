@@ -375,3 +375,13 @@ refute_canary() {
   [ "$status" -eq 1 ]
   ! grep -q 'BINARY-CANARY' "$OUT/bundle.txt"
 }
+
+@test "repo: a failed artifact write refuses the bundle instead of reporting success" {
+  # Red while truncations, record appends and the final count write go
+  # unchecked. A directory where captured.z belongs makes every append fail,
+  # the counts go wrong, and the run still exits 0 — a bundle reported complete
+  # that is not.
+  mkdir -p "$OUT/captured.z"
+  run bash "$CAPTURE" repo "$OUT"
+  [ "$status" -eq 1 ]
+}

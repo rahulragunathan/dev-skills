@@ -317,9 +317,18 @@ if [ -e "$LINK" ] && [ ! -L "$LINK" ]; then
   mv "$LINK" "$LINK.local.bak" || { echo "MOVE FAILED — stop"; exit 1; }
 fi
 [ -L "$LINK" ] || [ ! -e "$LINK" ] || { echo "LINK PATH OCCUPIED — stop"; exit 1; }
+[ -d "$SRC" ] || { echo "SOURCE DOES NOT EXIST: $SRC — refusing to link"; exit 1; }
 ln -sfn "$SRC" "$LINK" || exit 1
-[ -L "$LINK" ] && [ "$(readlink "$LINK")" = "$SRC" ] || { echo "LINK NOT ESTABLISHED"; exit 1; }
+[ -L "$LINK" ] && [ -d "$LINK/" ] || { echo "LINK DOES NOT RESOLVE TO A DIRECTORY"; exit 1; }
+[ "$(cd -- "$LINK/" && pwd -P)" = "$(cd -- "$SRC" && pwd -P)" ] \
+  || { echo "LINK RESOLVES SOMEWHERE ELSE"; exit 1; }
 ```
+
+**Check the source exists before linking, and check the link resolves after.** The probe accepts
+a code root containing *either* `Skills/` or `Plugins/`, then installs both links. On a root
+holding only one of them, the other `ln -sfn` replaces a working directory with a link to
+nothing — and comparing `readlink` against `$SRC` still passes, because the spelling is right and
+only the destination is missing. Test what the link reaches, not what it says.
 
 Only subfolders with a `SKILL.md` load; `RCLONE_TEST`/`.DS_Store` and the plugin folder are ignored. (The `localclaude` plugin is **not** loaded this way — it loads via the marketplace in step 5, and won't double-load because it has no top-level `SKILL.md`.)
 
@@ -338,8 +347,11 @@ if [ -e "$LINK" ] && [ ! -L "$LINK" ]; then
   mv "$LINK" "$LINK.local.bak" || { echo "MOVE FAILED — stop"; exit 1; }
 fi
 [ -L "$LINK" ] || [ ! -e "$LINK" ] || { echo "LINK PATH OCCUPIED — stop"; exit 1; }
+[ -d "$SRC" ] || { echo "SOURCE DOES NOT EXIST: $SRC — refusing to link"; exit 1; }
 ln -sfn "$SRC" "$LINK" || exit 1
-[ -L "$LINK" ] && [ "$(readlink "$LINK")" = "$SRC" ] || { echo "LINK NOT ESTABLISHED"; exit 1; }
+[ -L "$LINK" ] && [ -d "$LINK/" ] || { echo "LINK DOES NOT RESOLVE TO A DIRECTORY"; exit 1; }
+[ "$(cd -- "$LINK/" && pwd -P)" = "$(cd -- "$SRC" && pwd -P)" ] \
+  || { echo "LINK RESOLVES SOMEWHERE ELSE"; exit 1; }
 ```
 
 Then in Claude Code, using the **literal absolute path** (no quotes, no spaces, and not `~` — the slash command won't expand it):

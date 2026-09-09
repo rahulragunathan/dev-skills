@@ -151,6 +151,25 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    from any earlier commit would revert every change committed since — work that looks safe
    because it was committed, which is why the script checks rather than trusts.
 
+   **Choose a mutation whose predicted outcome is the same on every host.** A mutation models
+   the defect, and several usually can. Pick one whose prediction does not depend on the machine
+   the suite runs on: an environment-dependent red is not discrimination, because the same test
+   and the same code give a different answer somewhere else, and the audit then certifies the
+   runner rather than the test.
+
+   The worked case, from this repo's own pressure tests. The defect is "the window was computed
+   in server local time". `local = now.astimezone()` models it faithfully and is the wrong
+   choice: it leaves the window in the runner's zone, so a UTC-fixture test stays green on a UTC
+   host and goes red elsewhere. `local = now` and `local = now.astimezone(timezone.utc)` both
+   model the same defect and both hold on every host. There is rarely one correct mutation, so
+   the test is not "which expression" but "does its prediction survive a change of machine".
+
+   The same rule applies to the fixture. **Every property a test asserts about its own input
+   must hold wherever the suite runs.** A guard like `assert account_offset != host_offset` reads
+   as diligence and is a trap: on a host in that zone it is False, the test errors before it
+   reaches production code, and it discriminates nothing whatever the mutation does. Establish
+   the property from values the test controls, never from the environment.
+
    After an untrappable kill or a power loss, no trap runs: inspect the tree and restore the
    target from the recorded task SHA by hand before resuming.
 

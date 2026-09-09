@@ -65,8 +65,12 @@ if [ -n "$REPO_TOP" ] && under_root "$OUT_PHYS" "$REPO_PHYS"; then
   exit 1
 fi
 
-BUNDLE="$OUT/bundle.txt";  : > "$BUNDLE"
-WITHHELD="$OUT/withheld.txt"; : > "$WITHHELD"
+# Every artifact write is checked. An unchecked truncation or append leaves the
+# counts describing a bundle that was never written, and the run still exits 0.
+BUNDLE="$OUT/bundle.txt"
+: > "$BUNDLE" || { echo "CANNOT WRITE $BUNDLE"; exit 1; }
+WITHHELD="$OUT/withheld.txt"
+: > "$WITHHELD" || { echo "CANNOT WRITE $WITHHELD"; exit 1; }
 
 # Every pattern carries `top` so it anchors at the repository root rather than
 # at the working directory, and `icase` so a capitalised name cannot pass.
@@ -146,11 +150,12 @@ capture() {
   classify "$f" || return 0
   printf '\n===== %s%s =====\n' "$label" "$f" >> "$BUNDLE"
   cat -- "$CAPTURE_PATH" >> "$BUNDLE" || { withhold "$f" "read failed"; return 0; }
-  printf '%s\0' "$f" >> "$OUT/captured.z"
+  printf '%s\0' "$f" >> "$OUT/captured.z" \
+    || { echo "CANNOT RECORD A CAPTURED PATH — do not send this bundle"; exit 1; }
   return 0
 }
 
-: > "$OUT/captured.z"
+: > "$OUT/captured.z" || { echo "CANNOT WRITE $OUT/captured.z"; exit 1; }
 
 case "$MODE" in
   repo)
@@ -236,7 +241,8 @@ case "$MODE" in
   *) echo "unknown mode: $MODE"; exit 1 ;;
 esac
 
-nul() { tr -cd '\0' < "$1" | wc -c | tr -d ' '; }
+nul() { tr -cd '\0' < "$1" 2>/dev/null | wc -c | tr -d ' '; }
+numeric() { case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
 TOTAL="$(nul "$OUT/all.z")"
 SELECTED="$(nul "$OUT/manifest.z")"
 WITHHELD_N="$(nul "$WITHHELD")"
@@ -249,6 +255,16 @@ if tr '\0' '\n' < "$WITHHELD" | grep -q '(read failed)'; then
   echo "A FILE FAILED TO READ — do not send this bundle"; exit 1
 fi
 
+# A count that is not a number means an artifact could not be read, and the
+# reconciliation below would be arithmetic on nothing.
+for n in "$TOTAL" "$SELECTED" "$WITHHELD_N" "$CAPTURED"; do
+  numeric "$n" || { echo "COUNTS ARE NOT NUMERIC — do not send this bundle"; exit 1; }
+done
+[ "$SELECTED" -le "$TOTAL" ] \
+  || { echo "MORE SELECTED THAN IN SCOPE — do not send this bundle"; exit 1; }
+
 printf 'bundle contains %s of %s files; %s withheld, %s excluded\n' \
-  "$CAPTURED" "$TOTAL" "$WITHHELD_N" "$(( TOTAL - SELECTED ))" | tee "$OUT/counts.txt"
+  "$CAPTURED" "$TOTAL" "$WITHHELD_N" "$(( TOTAL - SELECTED ))" > "$OUT/counts.txt" \
+  || { echo "CANNOT WRITE THE COUNT LINE — do not send this bundle"; exit 1; }
+cat "$OUT/counts.txt"
 exit 0

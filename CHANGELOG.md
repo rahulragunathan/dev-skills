@@ -244,6 +244,30 @@ here — the plugin manifest's version is the only record of them.
 
 ### Fixed
 
+- **Fourteen defects found by `gpt-6-astra` in external review pass 9**, each verified
+  before acceptance and five of them Critical or High. The mutation helper accepted any
+  commit containing the file and restored from it, discarding work committed since; its
+  cleanup ran in a bare EXIT trap, which cannot change an exit status, so a failed restore
+  reported success. The standards installer matched markers as prefixes while its comment
+  claimed whole lines, and its symlink refusal sat behind an existence test a dangling link
+  satisfies. Plan capture never applied the credential exclusions — the one mode whose input
+  a human types. Binary detection treated a missing `perl` as text. Capture exited 0 after
+  unchecked artifact writes. `evidence.py` reported a batch current with every answer file
+  deleted. `roadmap.py` dropped header prose between the last rule and the first anchor,
+  wrote both files before reconciling, and compared displayed IDs without their link targets.
+  The results writer accepted line breaks and duplicate `Run` values. Setup linked without
+  checking the source existed or that the link resolved.
+
+- **The skills now invoke the scripts their tests cover.** `claude-setup` step 3 and
+  `phase-workflow` §3 step 3 each described a procedure in prose while a tested
+  implementation of it sat unused beside them, so 35 tests proved things about code the
+  documented workflow never ran.
+
+- **The mutation audit says how to choose a mutation.** It must have the same predicted
+  outcome on every host, and so must every property a test asserts about its own fixture. An
+  environment-dependent red certifies the runner, not the test — which is how the same
+  fixture defect was graded a pass twice.
+
 - **Reviewer availability is probed before a pass is committed.** `preflight.sh` asks
   each CLI one cheap question and separates the outcomes that demand different
   responses: `QUOTA` with its reset window (account-wide, so a downshift cannot help),
