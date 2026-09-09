@@ -103,7 +103,10 @@ here — the plugin manifest's version is the only record of them.
   misleads after something else failed, and a setup step the docs instruct is
   `Almost always` for everyone who follows it. Keyed notes now open with *When it
   fires* and *What happens*, the same pair that makes a `KNOWN_ISSUES` entry
-  assessable, and both travel with a row that gets filed.
+  assessable, and both travel with a row that gets filed. A third line, *Reviewer's
+  fix*, carries the remediation the reviewer proposed in its own words. Rubric item
+  7 asks for one with every finding, but nothing in the presentation format held it,
+  so it reached the triage and stopped there.
 
 - **Two rules added to the global standards**, both from failures in this phase's
   own doc work. A bulk edit to a structured file is now verified against that

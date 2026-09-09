@@ -362,14 +362,22 @@ If neither CLI is installed, print the skip line in its place — `External revi
 *The dispositions above are **plan** mode; phase and repo mode use the five buckets further down. The columns are the same in every mode.*
 
 **F-01** — *When it fires:* `the condition that has to hold` *What happens:* `the observable
-consequence, concretely` *Commentary:* `what you found verifying it, and why the disposition
-follows`
+consequence, concretely` *Reviewer's fix:* `the remediation the reviewer proposed, in its own
+words` *Commentary:* `what you found verifying it, and why the disposition follows`
 
-**Every keyed note carries those first two lines.** They are the same pair that makes a
-`KNOWN_ISSUES` entry assessable — *What happens* and *Example scenario* — and a findings row
-without them asks the reader to take the severity on trust. They also travel: a row filed as
-`KI-nn` inherits both, so the entry starts with the two things a reader needs first.
-**F-02** — *Explanation:* … *Commentary:* …
+**Every keyed note carries those first three lines.** *When it fires* and *What happens* are the
+pair that makes a `KNOWN_ISSUES` entry assessable, and a findings row without them asks the
+reader to take the severity on trust. They also travel: a row filed as `KI-nn` inherits both, so
+the entry starts with the two things a reader needs first.
+
+**Carry the reviewer's fix through, in the reviewer's words.** Rubric item 7 asks every finding
+for a remediation sketch, so one comes back with each; summarizing it into your own commentary
+loses the thing the user is deciding about. Two sentences at most, and where they disagree with
+what you would do, say so in the commentary rather than replacing the sketch. Write
+`none offered` when the reviewer gave none — that is itself worth seeing, because a finding
+whose author cannot say how to fix it is usually underspecified.
+
+**F-02** — *Explanation:* … *Reviewer's fix:* … *Commentary:* …
 
 Column rules:
 
