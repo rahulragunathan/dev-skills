@@ -170,6 +170,28 @@ overwrites it. Check exit status and a non-empty answer first; only then read th
 
 **Both:** run as background tasks; **capture to scratchpad files and Read them — never pipe through `tail`/`head`**, which truncates the top of the findings list (the highest-severity items).
 
+**Probe each reviewer before committing a pass.**
+
+```bash
+bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/preflight.sh"
+```
+
+It asks each CLI one cheap question and reports `READY`, `QUOTA` with the reset
+window, `UNAVAILABLE`, `TIMEOUT`, `NO ANSWER` or `MISSING`. Exit 0 means at
+least one reviewer can answer; exit 1 means none can and the pass does not
+start. Those outcomes are not interchangeable: quota is account-wide so a
+downshift cannot help and the only options are waiting or proceeding partial;
+availability is per model so the next rung may answer; a timeout is
+inconclusive and says to retry with a longer print timeout.
+
+Pass 9 skipped this and spent about 100 minutes discovering, one chunk at a
+time, that the Gemini account had been out of quota from the first call and
+would stay out for another 110 hours. Every one of eleven chunks returned zero
+bytes. **A reviewer that produced nothing is partial coverage, never a clean
+pass** — knowing that at the start changes how the pass is planned, not just
+how it is reported. Change its behavior in `preflight.sh` and verify it with
+`tests/preflight.bats`.
+
 ## Shared rubric — both reviewers get this text VERBATIM
 
 Prompt drift between the two reviewers corrupts the agree/disagree triage. Compose once, per mode:

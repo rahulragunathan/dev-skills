@@ -245,6 +245,16 @@ here — the plugin manifest's version is the only record of them.
 
 ### Fixed
 
+- **Reviewer availability is probed before a pass is committed.** `preflight.sh` asks
+  each CLI one cheap question and separates the outcomes that demand different
+  responses: `QUOTA` with its reset window (account-wide, so a downshift cannot help),
+  `UNAVAILABLE` (per model, so the next rung may answer), `TIMEOUT` (inconclusive,
+  retry longer), `NO ANSWER` (exit 0 with nothing produced — the trap both CLIs
+  share), and `MISSING`. Pass 9 skipped this and spent about 100 minutes learning one
+  chunk at a time that the Gemini account had been out of quota from the first call,
+  with 110 hours still to run; all eleven attempted chunks returned zero bytes.
+  Eleven tests, with both CLIs faked at the process boundary.
+
 - **Evidence provenance is tracked per scenario, not per repository.** `evidence.py`
   records, for each scenario, the skill it loads, that file's git SHA and content hash,
   its prompt hash and its grading-condition hash; `check` recomputes all four and names
