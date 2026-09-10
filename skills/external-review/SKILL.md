@@ -77,7 +77,7 @@ print(" ".join(sorted(ms,key=rank)[:3]))'
 `claude-*` and `gpt-oss-*`. A Claude model is not a second opinion on Claude's work, and the
 filter keeps the run inside the Gemini subscription.
 
-**At most three rungs, and the floor is a refusal.** The loops above walk them — selecting only
+**At most three rungs, and the floor is a refusal.** The invocation loops below walk them — selecting only
 the first rung would document a downshift that can never run. Downshift only when a model fails
 with an **availability** error (`model ... is not supported`, unknown or retired model,
 entitlement error). Quota, auth and timeout are **not** downshift triggers — see *Failure
@@ -113,14 +113,16 @@ Note a downshift plainly there: a lighter model changes how much weight a findin
 - **Top-tier availability is a PLAN issue, not an auth-method one.** The strongest Codex tiers need a paid ChatGPT subscription; the **free** tier does not include them. The CLI's error is misleading — it says *"not supported when using Codex with a ChatGPT account"* when the real cause is the account's plan. Diagnose with `codex login status`, which reports the plan without opening the token store. **Do not read `~/.codex/auth.json`** — it holds credentials, and the do-not-read rule in the rubric applies to us as much as to the reviewers. If it reads `free`, say so, and that `codex logout && codex login` switches accounts; Codex auth is global per machine.
 - If every rung is rejected, the cached list is likely stale. `agy models` is live and `codex` refreshes `models_cache.json` itself, so re-run discovery before concluding.
 
-**Codex is agentic** — it explores the repo itself. Point it at the repo root and pin it read-only at the tool level (never rely on prompt wording alone):
+**Codex is agentic.** First prepare `ROOT` with `codex-root.sh` as described under
+[Modes](#modes), applying every scope exclusion. Use that root for reviews and diagnostic
+probes. Pin writes off at the tool level:
 
 ```bash
 for m in $(codex_ladder); do
   OUT="<scratchpad>/codex_<mode>_p<n>_c<chunk>_a<attempt>_$m.txt"
   LOG="${OUT%.txt}.log"
   rm -f "$OUT" "$LOG"          # never inherit a previous attempt's answer
-  codex exec -C "<repo-root>" --sandbox read-only \
+  codex exec -C "$ROOT" --sandbox read-only --skip-git-repo-check \
     -m "$m" -c model_reasoning_effort="high" \
     -o "$OUT" "<prompt>" > "$LOG" 2>&1 < /dev/null
   rc=$?
@@ -190,13 +192,9 @@ downshift cannot help and the only options are waiting or proceeding partial;
 availability is per model so the next rung may answer; a timeout is
 inconclusive and says to retry with a longer print timeout.
 
-Pass 9 skipped this and spent about 100 minutes discovering, one chunk at a
-time, that the Gemini account had been out of quota from the first call and
-would stay out for another 110 hours. Every one of eleven chunks returned zero
-bytes. **A reviewer that produced nothing is partial coverage, never a clean
-pass** — knowing that at the start changes how the pass is planned, not just
-how it is reported. Change its behavior in `preflight.sh` and verify it with
-`tests/preflight.bats`.
+A failed probe leaves that reviewer uncovered. Report partial coverage only if another
+required invocation succeeded; otherwise report no coverage. Change probe behavior in
+`preflight.sh` and verify it with `tests/preflight.bats`.
 
 ## Shared rubric — both reviewers get this text VERBATIM
 
@@ -236,9 +234,9 @@ Prompt drift between the two reviewers corrupts the agree/disagree triage. Compo
 
 **Every mode bundles through the same procedure below.** The exclusions, the symlink test, the binary test and the reconciled count are not phase-mode details — they are what stops source and secrets reaching a third party, and they apply whenever anything is inlined. Only the *selection* differs by mode.
 
-**`plan <plan-file>`** — **name the plan file explicitly.** Fall back to the newest file in `~/.claude/plans/` only when the user gave no path and you have confirmed the newest file is this phase's plan; say which file you selected. Newest-in-directory silently reviews an unrelated plan when a plan was drafted for other work in between. Inline the plan text for BOTH reviewers (Codex may also explore the repo for context; Gemini gets text only). A plan can quote configuration and connection strings, so run it through the same exclusion check before inlining.
+**`plan <plan-file>`** — **name the plan file explicitly.** Fall back to the newest file in `~/.claude/plans/` only when the user gave no path and you have confirmed the newest file is this phase's plan; say which file you selected. Newest-in-directory silently reviews an unrelated plan when a plan was drafted for other work in between. Inline the plan text for BOTH reviewers (Codex may also explore the prepared export for context; Gemini gets text only). A plan can quote configuration and connection strings, so run it through the same exclusion check before inlining.
 
-**`phase [base-branch]`** — detect base via `git remote show origin` if not given. Codex: repo-rooted with the rubric framed around the phase's changes. Gemini: the change bundle below, written to a scratchpad file and inlined into the prompt.
+**`phase [base-branch]`** — detect base via `git remote show origin` if not given. Codex: rooted at the prepared export, with the captured phase diff inlined for change context. Gemini: the change bundle below, written to a scratchpad file and inlined into the prompt.
 
 ### Capturing the phase's changes
 
@@ -293,19 +291,22 @@ out.
 
 **Bundling sends your source to a third party.** Exclude credential-shaped files from **both** lists — a tracked `.env` reaches the reviewer through `git diff` just as easily as an untracked one. **Every pattern needs a leading `*` and `icase`**: without them a pathspec anchors at the repo root and is case-sensitive, so `config/credentials.json` and `Credentials.yaml` both pass.
 
-**The bundle exclusions protect Gemini only. Codex reads the repository itself**, so `--sandbox read-only` stops writes, not reads, and `permissions.filesystem.deny_read` is an enterprise-managed layer that `-c` does not enforce. The control that remains is the prompt, so the rubric carries an explicit instruction not to open credential-shaped files (below). It is a soft instruction and a determined agent, or a broad recursive grep, can defeat it — so a repo whose secrets must never leave the machine needs the secrets moved out of it, not a better prompt. Use `git` pathspecs rather than a `grep` filter: `grep` inside Claude Code is a shadowed ugrep with injected `--ignore-files`, `-I` and `--exclude-dir` defaults, so a filter written with it searches a different file set than you think.
+**Bundle filtering and export pruning are separate controls.** Pass the same scope exclusions
+to both scripts. Codex's read-only sandbox limits writes; it does not isolate filesystem reads.
+The export reduces accidental exposure inside the review root, but the reviewer could still
+read the original repository by absolute path. Keep secrets outside its accessible filesystem
+when read isolation is required. Retain the credential instruction in the rubric.
 
+Use Git pathspecs for bundle filtering rather than a host-dependent `grep` wrapper.
 Do **not** use `git add -N` to include untracked files. Capture must leave the index unchanged.
 
-**Root Codex at a pruned copy, not at the repository.** A scope exclusion that Codex can walk
-around is not an exclusion. `--exclude` removes files from the bundle, which is what Gemini
-reads; Codex reads the tree it is rooted at, so the only thing standing between it and an
-out-of-scope skill is a sentence in the prompt. That does not hold — pass 8 named `drive-backup`
-as out of scope and the reviewer reported on it anyway.
+**Prepare the Codex root before invoking it, in every mode.** `--exclude` removes paths from
+the bundle Gemini reads; repeat each exclusion when building the export Codex explores.
+Keep the preamble's scope instruction too. Omit the exclusion flag when the review has none.
 
 ```bash
 ROOT="$(bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/codex-root.sh" \
-  "<scratchpad>/codex-root" --exclude <out-of-scope-path>)"
+  "<scratchpad>/codex-root" --exclude <out-of-scope-path>)" || exit 1
 codex exec -C "$ROOT" --sandbox read-only --skip-git-repo-check ...
 rm -r "<scratchpad>/codex-root"    # when the review is done
 ```
@@ -317,21 +318,22 @@ the flag every invocation fails before it reads a byte. The check exists to stop
 working loose in unversioned files; the export is a read-only sandbox over a throwaway copy of a
 commit, so waiving it costs nothing that matters.
 
-It **exports** HEAD, deletes the excluded paths from the export, and verifies each deletion
-before returning the path. The export is what makes the exclusion real: a linked worktree shares
-the repository's object database, so `git show HEAD:<excluded path>` returns a file whose copy
-has just been deleted — absent from the filesystem and still fully readable. An export carries
-no `.git`, so nothing remains to read them out of, and the script refuses if a `.git` appears.
+The script copies regular-file blobs from the repository root at HEAD, ignoring archive
+attributes that could remove files or substitute their content. It omits symlinks and submodules,
+listing each omission on stderr; include those gaps in the coverage report. It then removes
+literal root-relative exclusion paths and verifies each deletion. Preserve the export log.
 
-**The cost is history.** The reviewer gets the tree at HEAD and no log, so do not offer it
-history in the prompt. It also refuses a dirty tree, because the export carries HEAD and
-uncommitted work would be invisible, and refuses an exclusion matching nothing tracked — a typo
-would otherwise leave the area in place while you believed it pruned. Change its behavior in
-`codex-root.sh` and verify it with `tests/codex-root.bats`.
+The export has no `.git` and no history. Inline the captured diff in phase prompts, including
+follow-up passes, so the reviewer can see deletions and the exact changes under review. Inline
+the captured plan in plan mode. Do not ask the reviewer to run Git commands in the export.
 
-**This does not make Codex safe to point at secrets.** The pruned root removes what you named;
-everything else is still readable, and the credential instruction in the rubric is still a soft
-one. A repo whose secrets must never leave the machine needs the secrets moved out of it.
+The script refuses a dirty tree or a failed status query. Commit first when the review must
+include pending work, or explicitly narrow the review to HEAD with the user's agreement.
+Exclusions must name tracked paths relative to the repository root. Run tests with
+`bats skills/external-review/tests/codex-root.bats` when changing the exporter.
+
+The export is a scope aid, not filesystem read isolation. Credential-shaped files that were
+not explicitly excluded remain readable to Codex, as does material elsewhere on the machine.
 
 **Reconcile the bundle.** Use the script's `counts.txt` in the prompt and coverage line.
 `all.z` records scope before exclusions; `manifest.z` records the selected paths; `captured.z`
@@ -346,7 +348,7 @@ edits to tracked files were not captured — never let the diff silently stand i
 
 Give Codex the same manifest and count so both reviewers have the same scope.
 
-**`repo`** — no in-flight branch; review current state (workflow adoption, periodic health check). Codex: repo-rooted as above. Gemini: one bundle of the source, inlined.
+**`repo`** — no in-flight branch; review current state (workflow adoption, periodic health check). Codex: rooted at the prepared export as above. Gemini: one bundle of the source, inlined.
 
 **Build the `repo` bundle from `git ls-files`, never from a filesystem walk.** A walk that
 follows symlinks goes straight out through `node_modules` and `.venv` into the environment root
@@ -376,7 +378,7 @@ apply [Coverage classification](#coverage-classification) to every required pair
 On empty output or non-zero exit, run a tiny probe before reporting:
 
 ```bash
-codex exec -C "<repo-root>" --sandbox read-only -m <same model as the real run> \
+codex exec -C "$ROOT" --sandbox read-only --skip-git-repo-check -m <same model as the real run> \
   "Do not open .env, .env.*, *.pem, *.key, credentials*, .netrc, .npmrc, id_rsa*, id_ed25519*, or anything else shaped like a secret. List the three most obvious code-quality issues in this repository. Be brief."   # or the agy equivalent with inline text
 ```
 

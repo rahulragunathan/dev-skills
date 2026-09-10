@@ -6,8 +6,8 @@ only what is specific to this repository. Structure is in
 
 ## What makes this repo different
 
-**Six of the eight skills are prose, so a regression is a contradiction.** There is nothing to
-compile and no test that fails when two files disagree. Whenever you change a rule, grep for
+**The eight skills combine instructions with tested shell and Python helpers.** Tests cover
+executable behavior; prose can still contradict another file without a test failing. Whenever you change a rule, grep for
 every place that states it and fix them together — the recurring failure here has been fixing
 one site and leaving the others asserting the old rule.
 
@@ -105,9 +105,9 @@ exception is a subagent that returns quoted file lines or command output while t
 stays with the main agent — that parallelises lookup without asking yourself whether you were
 right.
 
-**Codex reads the repository, and the exclusions cannot stop it.** `--sandbox read-only`
-prevents writes, not reads, and `permissions.filesystem.deny_read` was tested and not enforced
-through `-c`. The bundle exclusions protect Gemini, which only ever sees inlined text. What
-remains for Codex is a prompt instruction, which a determined agent or a broad recursive grep
-can defeat. A repository whose secrets must never leave the machine needs the secrets moved
-out of it, not a better prompt.
+**Codex uses a pruned export for review scope.** `external-review` invokes it at the root
+returned by `codex-root.sh`, with `--skip-git-repo-check`. The export contains regular files
+from HEAD, no Git history, and no symlinks. Phase diffs and plans travel as inlined text.
+This prevents routine exploration inside that root from including excluded files. It is not
+read isolation: the sandbox still permits reads elsewhere, including the source repository.
+Secrets that require isolation must be outside the reviewer's accessible filesystem.

@@ -129,3 +129,68 @@ teardown() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"ENCLOSING REPOSITORY"* ]]
 }
+
+@test "adversarial: export from a subdirectory still contains the whole root" {
+  cd skills/kept
+  run bash "$CODEX_ROOT" "$ROOT"
+  [ "$status" -eq 0 ]
+  cmp "$ROOT/README.md" "$REPO/README.md"
+}
+
+@test "adversarial: archive attributes cannot silently omit or substitute tracked bytes" {
+  printf 'README.md export-ignore\nskills/kept/SKILL.md export-subst\n' > .gitattributes
+  printf '$Format:%%H$\n' > skills/kept/SKILL.md
+  git add -A && git commit -qm attributes
+  run bash "$CODEX_ROOT" "$ROOT"
+  [ "$status" -eq 0 ]
+  cmp "$ROOT/README.md" "$REPO/README.md"
+  cmp "$ROOT/skills/kept/SKILL.md" "$REPO/skills/kept/SKILL.md"
+}
+
+@test "adversarial: surviving export links cannot reach an excluded source" {
+  ln -s "$REPO/skills/held" alias
+  git add alias && git commit -qm alias
+  run bash "$CODEX_ROOT" "$ROOT" --exclude skills/held
+  [ "$status" -eq 0 ]
+  [ ! -L "$ROOT/alias" ]
+  [ ! -e "$ROOT/alias/SKILL.md" ]
+  grep -q IN-SCOPE-CONTENT "$ROOT/skills/kept/SKILL.md"
+}
+
+@test "adversarial: failed status refuses export before creating a destination" {
+  local real_git; real_git="$(command -v git)"
+  mkdir "$TEST_TMP/bin"
+  printf '#!/bin/bash\n[ "$1" != status ] || exit 128\nexec "%s" "$@"\n' "$real_git" > "$TEST_TMP/bin/git"
+  chmod +x "$TEST_TMP/bin/git"
+  PATH="$TEST_TMP/bin:$PATH" run bash "$CODEX_ROOT" "$ROOT"
+  [ "$status" -eq 1 ]
+  [ ! -e "$ROOT" ]
+}
+
+@test "adversarial: documented Codex loop uses the prepared root and export flag" {
+  python3 - "$CODEX_ROOT" "$TEST_TMP/invoke.sh" "$TEST_TMP" <<'PY'
+import pathlib,re,sys
+text=pathlib.Path(sys.argv[1]).with_name('SKILL.md').read_text()
+block=next(b for b in re.findall(r'```bash\n(.*?)```',text,re.S) if 'for m in $(codex_ladder)' in b and 'codex exec' in b)
+prelude='codex_ladder() { echo fixture-model; }\ncodex() { printf "%s\\n" "$@" > "$ARGS"; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2"; }\n'
+pathlib.Path(sys.argv[2]).write_text(prelude+block.replace('<scratchpad>',sys.argv[3]).replace('<repo-root>','SOURCE-REPO'))
+PY
+  ARGS="$TEST_TMP/args" run bash "$TEST_TMP/invoke.sh"
+  [ "$status" -eq 0 ]
+  python3 - "$TEST_TMP/args" "$ROOT" <<'PY'
+import pathlib,sys
+args=pathlib.Path(sys.argv[1]).read_text().splitlines()
+assert args[args.index('-C')+1] == sys.argv[2], args
+assert '--skip-git-repo-check' in args, args
+PY
+}
+
+@test "recheck: explicitly excluding an omitted link still produces a usable root" {
+  ln -s "$REPO/skills/held" alias
+  git add alias && git commit -qm link
+  run bash "$CODEX_ROOT" "$ROOT" --exclude alias --exclude skills/held
+  [ "$status" -eq 0 ]
+  [ ! -L "$ROOT/alias" ]
+  [ ! -e "$ROOT/skills/held" ]
+  grep -q IN-SCOPE-CONTENT "$ROOT/skills/kept/SKILL.md"
+}
