@@ -359,12 +359,12 @@ MKJSON
   [ "$status" -eq 1 ]
 }
 
-@test "transcript: truncation missing terminal reason and malformed tails cannot finish" {
+@test "transcript: an explicitly unfinished reason and malformed tails cannot finish" {
   run python3 - "$EVPY" "$TEST_TMP" <<'PY'
 import importlib.util, json, pathlib, sys
 s=importlib.util.spec_from_file_location('e',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
 p=pathlib.Path(sys.argv[2])/'t.jsonl'
-for reason,tail in [('max_tokens',''), (None,''), ('end_turn','\n{broken')]:
+for reason,tail in [('max_tokens',''), ('tool_use',''), ('end_turn','\n{broken')]:
     p.write_text(json.dumps({'message':{'role':'assistant','content':'answer','stop_reason':reason}})+tail)
     assert m.read_transcript(p)[2] is False, (reason,tail)
 p.write_text(json.dumps({'message':{'role':'assistant','content':'answer','stop_reason':'end_turn'}}))
@@ -412,5 +412,29 @@ spec=importlib.util.spec_from_file_location('evidence',sys.argv[1]);m=importlib.
 p=pathlib.Path(sys.argv[2]);p.write_text('\n'.join(json.dumps({'message':v}) for v in [{'role':'assistant','stop_reason':'end_turn','content':'finished earlier'}, {'role':'user','content':'continue'}])+'\n')
 assert m.read_transcript(p)[2] is False
 PYCODE
+  [ "$status" -eq 0 ]
+}
+
+@test "transcript: a finished run that omits stop_reason is not called incomplete" {
+  # Red when read_transcript demands stop_reason == "end_turn": the Claude Code
+  # transcript writer omits the field on most assistant messages, so 109 of the
+  # 141 real subagent transcripts measured carried null on their final answer.
+  # Absence is no signal; only an explicitly unfinished reason is.
+  run python3 - "$EVPY" "$TEST_TMP" <<'PY'
+import importlib.util, json, pathlib, sys
+s=importlib.util.spec_from_file_location('e',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+p=pathlib.Path(sys.argv[2])/'t.jsonl'
+answer={'type':'text','text':'COMPLETE FINAL ANSWER BODY'}
+for reason in (None, 'end_turn', 'stop_sequence'):
+    p.write_text(json.dumps({'message':{'role':'assistant','stop_reason':reason,
+                                        'content':[answer]}})+'\n')
+    body, tools, finished = m.read_transcript(p)
+    assert finished is True, ('should be finished', reason)
+    assert body == 'COMPLETE FINAL ANSWER BODY', body
+for reason in ('max_tokens', 'tool_use', 'pause_turn'):
+    p.write_text(json.dumps({'message':{'role':'assistant','stop_reason':reason,
+                                        'content':[answer]}})+'\n')
+    assert m.read_transcript(p)[2] is False, ('should be unfinished', reason)
+PY
   [ "$status" -eq 0 ]
 }

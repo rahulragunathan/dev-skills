@@ -160,6 +160,13 @@ def first_user_text(path: pathlib.Path) -> str:
     return ""
 
 
+# Reasons that positively mean the turn stopped before it answered. The
+# transcript writer omits stop_reason on most assistant messages, so absence
+# carries no signal: 109 of 141 real subagent transcripts ended their final
+# answer with no reason recorded. Requiring "end_turn" refused all of them.
+UNFINISHED_STOP_REASONS = {"tool_use", "max_tokens", "pause_turn"}
+
+
 def read_transcript(path: pathlib.Path) -> tuple[str, int, bool]:
     """Final assistant text, how many tools the run used, and whether it finished.
 
@@ -185,7 +192,7 @@ def read_transcript(path: pathlib.Path) -> tuple[str, int, bool]:
         content = m.get("content")
         if isinstance(content, str):
             texts.append(content)
-            last_msg_complete = m.get("stop_reason") == "end_turn"
+            last_msg_complete = m.get("stop_reason") not in UNFINISHED_STOP_REASONS
             continue
         msg_text, msg_tool = False, False
         message_texts = []
@@ -201,7 +208,8 @@ def read_transcript(path: pathlib.Path) -> tuple[str, int, bool]:
         # A message carrying both a preamble and a tool call is a run still in
         # flight, not an answer. Treating any text as completion recorded four
         # of round 4's answers as their opening sentence.
-        last_msg_complete = msg_text and not msg_tool and m.get("stop_reason") == "end_turn"
+        last_msg_complete = (msg_text and not msg_tool
+                             and m.get("stop_reason") not in UNFINISHED_STOP_REASONS)
     return (texts[-1] if texts else ""), tools, last_msg_complete
 
 
