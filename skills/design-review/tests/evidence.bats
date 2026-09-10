@@ -133,7 +133,7 @@ PY
   python3 - "$TEST_TMP/t.jsonl" "$P" <<'MKJSON'
 import json, sys
 rows = [{"type":"user","message":{"role":"user","content":sys.argv[2]}},
-        {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ANSWER BODY"}]}}]
+        {"type":"assistant","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"ANSWER BODY"}]}}]
 open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in rows) + "\n")
 MKJSON
   run python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --transcript "$TEST_TMP/t.jsonl"
@@ -150,8 +150,8 @@ MKJSON
   python3 - "$TEST_TMP/t.jsonl" "$P" <<'MKJSON'
 import json, sys
 rows = [{"type":"user","message":{"role":"user","content":sys.argv[2]}},
-        {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Skill","input":{}}]}},
-        {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ANSWER BODY"}]}}]
+        {"type":"assistant","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"tool_use","name":"Skill","input":{}}]}},
+        {"type":"assistant","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"ANSWER BODY"}]}}]
 open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in rows) + "\n")
 MKJSON
   run python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --transcript "$TEST_TMP/t.jsonl"
@@ -162,7 +162,7 @@ MKJSON
 
 @test "record: an unknown scenario or arm is refused" {
   python3 "$EVPY" init "$EV" --round 4 --model claude-opus-5 --tests skills/design-review/tests
-  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"x"}]}}\n' > "$TEST_TMP/t.jsonl"
+  printf '{"type":"assistant","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"x"}]}}\n' > "$TEST_TMP/t.jsonl"
   run python3 "$EVPY" record "$EV" --scenario S99 --arm baseline --transcript "$TEST_TMP/t.jsonl"
   [ "$status" -eq 1 ]
   run python3 "$EVPY" record "$EV" --scenario S01 --arm sideways --transcript "$TEST_TMP/t.jsonl"
@@ -199,7 +199,7 @@ PY
   python3 "$EVPY" init "$EV" --round 4 --model claude-opus-5 --tests skills/design-review/tests
   cat > "$TEST_TMP/t.jsonl" <<'EOF'
 {"type":"user","message":{"role":"user","content":"Do a completely different thing."}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ANSWER BODY"}]}}
+{"type":"assistant","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"ANSWER BODY"}]}}
 EOF
   run python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --transcript "$TEST_TMP/t.jsonl"
   [ "$status" -eq 1 ]
@@ -213,7 +213,7 @@ EOF
   python3 - "$TEST_TMP/t.jsonl" "$P" <<'PY'
 import json, sys
 rows = [{"type":"user","message":{"role":"user","content":"Answer cold, no tools.\n\n" + sys.argv[2]}},
-        {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ANSWER BODY"}]}}]
+        {"type":"assistant","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"ANSWER BODY"}]}}]
 open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in rows) + "\n")
 PY
   run python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --transcript "$TEST_TMP/t.jsonl"
@@ -230,8 +230,8 @@ PY
   python3 - "$TEST_TMP/t.jsonl" "$P" <<'PY'
 import json, sys
 rows = [{"type":"user","message":{"role":"user","content":sys.argv[2]}},
-        {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I'll read the skill first."}]}},
-        {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Read","input":{}}]}}]
+        {"type":"assistant","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"I'll read the skill first."}]}},
+        {"type":"assistant","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"tool_use","name":"Read","input":{}}]}}]
 open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in rows) + "\n")
 PY
   run python3 "$EVPY" record "$EV" --scenario S01 --arm with-skill --transcript "$TEST_TMP/t.jsonl"
@@ -249,7 +249,7 @@ PY
   python3 - "$TEST_TMP/t.jsonl" "$P" <<'MKJSON'
 import json, sys
 rows = [{"type":"user","message":{"role":"user","content":sys.argv[2]}},
-        {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ANSWER BODY"}]}}]
+        {"type":"assistant","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"ANSWER BODY"}]}}]
 open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in rows) + "\n")
 MKJSON
   python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --transcript "$TEST_TMP/t.jsonl"
@@ -268,7 +268,7 @@ MKJSON
   python3 - "$TEST_TMP/t.jsonl" "$P" <<'MKJSON'
 import json, sys
 rows = [{"type":"user","message":{"role":"user","content":sys.argv[2]}},
-        {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ANSWER BODY"}]}}]
+        {"type":"assistant","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"ANSWER BODY"}]}}]
 open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in rows) + "\n")
 MKJSON
   python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --transcript "$TEST_TMP/t.jsonl"
@@ -286,7 +286,7 @@ MKJSON
   python3 - "$TEST_TMP/t.jsonl" "$P" <<'MKJSON'
 import json, sys
 rows = [{"type":"user","message":{"role":"user","content":sys.argv[2]}},
-        {"type":"assistant","message":{"role":"assistant","content":[
+        {"type":"assistant","message":{"role":"assistant","stop_reason":"end_turn","content":[
             {"type":"text","text":"Let me read the skill first."},
             {"type":"tool_use","name":"Read","input":{}}]}}]
 open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in rows) + "\n")
@@ -305,7 +305,7 @@ MKJSON
     python3 - "$TEST_TMP/t$i.jsonl" "$P" "$i" <<'MKJSON'
 import json, sys
 rows = [{"type":"user","message":{"role":"user","content":sys.argv[2]}},
-        {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ANSWER " + sys.argv[3]}]}}]
+        {"type":"assistant","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"ANSWER " + sys.argv[3]}]}}]
 open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in rows) + "\n")
 MKJSON
     run python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --replicate "$i" \
@@ -317,20 +317,33 @@ MKJSON
 }
 
 @test "check: a batch missing a replicate is not complete" {
-  # Red while completeness counts arms rather than runs: two of three replicates
-  # reconciles against the skills and still cannot show whether a unit is stable.
-  python3 "$EVPY" init "$EV" --round 6 --model claude-opus-5 --tests skills/design-review/tests --replicates 3
-  P="$(cat "$EV/S01-prompt.txt")"
-  python3 - "$TEST_TMP/t.jsonl" "$P" <<'MKJSON'
-import json, sys
-rows = [{"type":"user","message":{"role":"user","content":sys.argv[2]}},
-        {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ANSWER"}]}}]
-open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in rows) + "\n")
+  python3 "$EVPY" init "$EV" --round 6 --model test --replicates 3
+  python3 - "$EV/manifest.json" <<'MKJSON'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]);m=json.loads(p.read_text())
+for s in m['scenarios'].values():
+    for arm in ('baseline','with-skill'):
+        for i in (1,2):
+            name=f"answers/{arm}-{i}.md";(p.parent/name).write_text('answer')
+            s['arms'][f'{arm}#{i}']={'answer':name}
+p.write_text(json.dumps(m))
 MKJSON
-  python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --replicate 1 --transcript "$TEST_TMP/t.jsonl"
   run python3 "$EVPY" check "$EV" --require-complete
   [ "$status" -eq 1 ]
-  [[ "$output" == *"S01"*"baseline"* ]]
+  [[ "$output" == *"missing baseline#3, with-skill#3"* ]]
+  [[ "$output" != *"missing baseline,"* ]]
+  [[ "$output" != *"baseline#1"* ]]
+  python3 - "$EV/manifest.json" <<'MKJSON'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]);m=json.loads(p.read_text())
+for s in m['scenarios'].values():
+    for arm in ('baseline','with-skill'):
+        name=f"answers/{arm}-3.md";(p.parent/name).write_text('answer')
+        s['arms'][f'{arm}#3']={'answer':name}
+p.write_text(json.dumps(m))
+MKJSON
+  run python3 "$EVPY" check "$EV" --require-complete
+  [ "$status" -eq 0 ]
 }
 
 @test "record: a replicate outside the declared count is refused" {
@@ -339,9 +352,44 @@ MKJSON
   python3 - "$TEST_TMP/t.jsonl" "$P" <<'MKJSON'
 import json, sys
 rows = [{"type":"user","message":{"role":"user","content":sys.argv[2]}},
-        {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ANSWER"}]}}]
+        {"type":"assistant","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"ANSWER"}]}}]
 open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in rows) + "\n")
 MKJSON
   run python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --replicate 4 --transcript "$TEST_TMP/t.jsonl"
   [ "$status" -eq 1 ]
+}
+
+@test "transcript: truncation missing terminal reason and malformed tails cannot finish" {
+  run python3 - "$EVPY" "$TEST_TMP" <<'PY'
+import importlib.util, json, pathlib, sys
+s=importlib.util.spec_from_file_location('e',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+p=pathlib.Path(sys.argv[2])/'t.jsonl'
+for reason,tail in [('max_tokens',''), (None,''), ('end_turn','\n{broken')]:
+    p.write_text(json.dumps({'message':{'role':'assistant','content':'answer','stop_reason':reason}})+tail)
+    assert m.read_transcript(p)[2] is False, (reason,tail)
+p.write_text(json.dumps({'message':{'role':'assistant','content':'answer','stop_reason':'end_turn'}}))
+assert m.read_transcript(p)[2] is True
+PY
+  [ "$status" -eq 0 ]
+}
+
+@test "init: zero and negative replicate counts are refused before creating a batch" {
+  for count in 0 -1; do
+    run python3 "$EVPY" init "$EV" --round 6 --model test --replicates "$count"
+    [ "$status" -ne 0 ]
+    [ ! -e "$EV/manifest.json" ]
+  done
+}
+
+@test "check: malformed manifest replicate counts cannot bypass completeness" {
+  python3 "$EVPY" init "$EV" --round 6 --model test
+  for count in 0 -1; do
+    python3 - "$EV/manifest.json" "$count" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]);m=json.loads(p.read_text());m['replicates']=int(sys.argv[2]);p.write_text(json.dumps(m))
+PY
+    run python3 "$EVPY" check "$EV" --require-complete
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"positive"* ]]
+  done
 }

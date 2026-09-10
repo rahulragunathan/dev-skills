@@ -22,6 +22,9 @@ from __future__ import annotations
 
 import argparse
 import pathlib
+import re
+import json
+import hashlib
 import sys
 
 
@@ -48,6 +51,39 @@ def find_table(lines: list[str]) -> tuple[int, list[str]]:
     sys.exit("no results table under '## Results'")
 
 
+def validate_table(lines):
+    hdr_i, headers = find_table(lines)
+    if len(set(headers)) != len(headers) or not all(headers):
+        sys.exit("refusing: duplicate or empty headers")
+    separator = split_row(lines[hdr_i + 1])
+    if len(separator) != len(headers) or not all(re.fullmatch(r':?-{3,}:?', c) for c in separator):
+        sys.exit("refusing: malformed separator")
+    runs = []
+    for line in lines[hdr_i + 2:]:
+        if not line.lstrip().startswith("|"):
+            break
+        cells = split_row(line)
+        if len(cells) != len(headers):
+            sys.exit("refusing: row width does not match headers")
+        for cell in cells:
+            validate_cell(cell)
+        runs.append(cells[headers.index("Run")])
+    if len(set(runs)) != len(runs) or any(not r for r in runs):
+        sys.exit("refusing: duplicate or empty Run values")
+    return hdr_i, headers
+
+
+def validate_cell(value):
+    if any(c in value for c in "|\n\r"):
+        sys.exit("a cell value may not contain '|' or a line break")
+    return value.strip()
+
+
+def write_table(path, lines):
+    validate_table(lines)
+    path.write_text("".join(lines))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("scenario", type=pathlib.Path)
@@ -58,12 +94,34 @@ def main() -> int:
                     help="append a new row instead of updating an existing one")
     ap.add_argument("--add-column", metavar="NAME",
                     help="append a column, empty in every existing row")
+    ap.add_argument("--repair-layout", type=pathlib.Path, help="explicit hash-bound row mappings and separator repair")
     args = ap.parse_args()
 
     if not args.scenario.is_file():
         sys.exit(f"not a file: {args.scenario}")
     lines = args.scenario.read_text().splitlines(keepends=True)
-    hdr_i, headers = find_table(lines)
+    if args.repair_layout:
+        hdr_i, headers = find_table(lines)
+        spec = json.loads(args.repair_layout.read_text())
+        if spec.get("separator") is True:
+            lines[hdr_i + 1] = join_row(["---"] * len(headers))
+        for repair in spec.get("rows", []):
+            candidates = [i for i in range(hdr_i + 2, len(lines))
+                          if lines[i].startswith("|") and split_row(lines[i])[0] == repair["run"]]
+            if len(candidates) != 1:
+                sys.exit("refusing: repair Run is ambiguous or missing")
+            i = candidates[0]
+            if hashlib.sha256(lines[i].encode()).hexdigest() != repair["sha256"]:
+                sys.exit("refusing: repair row hash changed")
+            if set(repair["set"]) != set(headers):
+                sys.exit("refusing: repair must name every resulting column")
+            lines[i] = join_row([validate_cell(repair["set"][h]) for h in headers])
+        write_table(args.scenario, lines)
+        print("repaired explicitly named layout")
+        return 0
+    hdr_i, headers = validate_table(lines)
+    if args.run is not None:
+        args.run = validate_cell(args.run)
 
     if args.show:
         for line in lines[hdr_i + 2:]:
@@ -104,7 +162,7 @@ def main() -> int:
         if len(split_row(lines[hdr_i])) != len(split_row(lines[hdr_i + 1])):
             sys.exit("refusing: header and separator would disagree")
 
-        args.scenario.write_text("".join(lines))
+        write_table(args.scenario, lines)
         print(f"added column {name!r} to {len(after)} row(s)")
         return 0
 
@@ -121,7 +179,7 @@ def main() -> int:
             sys.exit(f"no such column: {col!r}; columns are {headers}")
         if col in updates:
             sys.exit(f"column named twice: {col!r}")
-        updates[col] = val
+        updates[col] = validate_cell(val)
     if "|" in "".join(updates.values()):
         sys.exit("a cell value may not contain '|' — it would split the row")
     # A newline ends the row early and leaves its remainder outside the table,
@@ -163,7 +221,7 @@ def main() -> int:
         after_rows = [l for l in lines[hdr_i + 2:end]]
         if after_rows != before_rows:
             sys.exit("refusing: adding the row would change an existing one")
-        args.scenario.write_text("".join(lines))
+        write_table(args.scenario, lines)
         print(f"added row {args.run!r} with {len(updates)} column(s) set")
         return 0
 
@@ -194,7 +252,7 @@ def main() -> int:
             sys.exit(f"refusing: column {name!r} changed but was not named")
 
     lines[target] = new_line
-    args.scenario.write_text("".join(lines))
+    write_table(args.scenario, lines)
     print(f"updated {len(updates)} column(s) in row {args.run!r}")
     return 0
 

@@ -102,7 +102,14 @@ def scan(tests: pathlib.Path) -> dict:
     return out
 
 
+def replicate_count(value):
+    if type(value) is not int or value < 1:
+        fail("replicates must be a positive integer")
+    return value
+
+
 def cmd_init(args) -> int:
+    replicate_count(args.replicates)
     ev = pathlib.Path(args.dir)
     if ev.exists() and any(ev.iterdir()):
         fail(f"refusing: {ev} exists and is not empty; a batch is never appended to")
@@ -169,14 +176,14 @@ def read_transcript(path: pathlib.Path) -> tuple[str, int, bool]:
         try:
             row = json.loads(line)
         except json.JSONDecodeError:
-            continue
+            return (texts[-1] if texts else ""), tools, False
         m = row.get("message") or {}
         if m.get("role") != "assistant":
             continue
         content = m.get("content")
         if isinstance(content, str):
             texts.append(content)
-            last_msg_complete = True
+            last_msg_complete = m.get("stop_reason") == "end_turn"
             continue
         msg_text, msg_tool = False, False
         for c in content or []:
@@ -189,7 +196,7 @@ def read_transcript(path: pathlib.Path) -> tuple[str, int, bool]:
         # A message carrying both a preamble and a tool call is a run still in
         # flight, not an answer. Treating any text as completion recorded four
         # of round 4's answers as their opening sentence.
-        last_msg_complete = msg_text and not msg_tool
+        last_msg_complete = msg_text and not msg_tool and m.get("stop_reason") == "end_turn"
     return (texts[-1] if texts else ""), tools, last_msg_complete
 
 
@@ -199,6 +206,7 @@ def cmd_record(args) -> int:
     if not mpath.is_file():
         fail(f"no manifest under {ev}; run init first")
     manifest = json.loads(mpath.read_text())
+    replicate_count(manifest.get("replicates", 1))
     if args.scenario not in manifest["scenarios"]:
         fail(f"refusing: unknown scenario {args.scenario}")
     tpath = pathlib.Path(args.transcript)
@@ -223,7 +231,7 @@ def cmd_record(args) -> int:
     # is the S02 contamination, which was previously caught only by eye.
     if args.arm == "baseline" and tools > 0:
         fail(f"refusing: baseline is contaminated — {tools} tool use(s) in {args.transcript}")
-    reps = int(manifest.get("replicates", 1))
+    reps = replicate_count(manifest.get("replicates", 1))
     if not (1 <= args.replicate <= reps):
         fail(f"refusing: replicate {args.replicate} is outside the batch's "
              f"declared count of {reps}")
@@ -251,6 +259,7 @@ def cmd_check(args) -> int:
     if not mpath.is_file():
         fail(f"no manifest under {ev}")
     manifest = json.loads(mpath.read_text())
+    replicate_count(manifest.get("replicates", 1))
     ok = True
     for sid, s in sorted(manifest["scenarios"].items()):
         reasons = []
@@ -280,7 +289,7 @@ def cmd_check(args) -> int:
             elif "answer_hash" in rec and h16(ap.read_text()) != rec["answer_hash"]:
                 reasons.append(f"{arm} answer changed after it was recorded")
         if args.require_complete:
-            reps = int(manifest.get("replicates", 1))
+            reps = replicate_count(manifest.get("replicates", 1))
             want = ([a for a in ARMS] if reps == 1
                     else [f"{a}#{i}" for a in ARMS for i in range(1, reps + 1)])
             missing = [k for k in want if k not in s.get("arms", {})]

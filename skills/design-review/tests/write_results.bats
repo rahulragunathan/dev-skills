@@ -150,7 +150,9 @@ line two"
   # Adding a column by hand is the edit that destroyed this table twice: the
   # header gains a name, the separator gains a dash, and every row must gain a
   # cell in the same position or the columns silently shift by one.
+  cp "$SCEN" "$TEST_TMP/before-column"
   run python3 "$W" "$SCEN" --add-column "Mutation choice"
+  assert_column_added
   [ "$status" -eq 0 ]
   [ "$(cell 'Without skill' 'Responsibility')" = "Rule not needed here" ]
   [ "$(cell 'Without skill' 'Notes')" = "baseline note" ]
@@ -160,7 +162,9 @@ line two"
 }
 
 @test "add-column: the separator row gains a column too" {
+  cp "$SCEN" "$TEST_TMP/before-column"
   run python3 "$W" "$SCEN" --add-column "Mutation choice"
+  assert_column_added
   [ "$status" -eq 0 ]
   local hdr sep
   hdr="$(grep -c '|' <<< "$(grep '^| Run |' "$SCEN")")"
@@ -181,4 +185,63 @@ line two"
   run python3 "$W" "$SCEN" --add-column "bad | name"
   [ "$status" -ne 0 ]
   [ "$(cat "$SCEN")" = "$before" ]
+}
+
+@test "add: multiline Run is refused before writing any cell" {
+  cp "$SCEN" "$TEST_TMP/before"
+  run python3 "$W" "$SCEN" --add --run $'new\ninjected' --set Notes=x
+  [ "$status" -eq 1 ]
+  cmp "$SCEN" "$TEST_TMP/before"
+}
+
+@test "update: padded duplicate Run is refused after normalization" {
+  run python3 "$W" "$SCEN" --run 'With skill (round 2)' --set 'Run= Without skill '
+  [ "$status" -eq 1 ]
+}
+
+@test "existing duplicate Runs refuse any transformation" {
+  sed -i.bak 's/With skill (round 2)/Without skill/' "$SCEN"
+  run python3 "$W" "$SCEN" --run 'Without skill' --set Notes=x
+  [ "$status" -eq 1 ]
+}
+
+@test "add-column: malformed widths headers and separators refuse before writing" {
+  for defect in width duplicate separator; do
+    printf '## Results\n\n| Run | Notes |\n| --- | --- |\n| A | note |\n' > "$SCEN"
+    case "$defect" in
+      width) sed -i.bak 's/| A | note |/| A | note | extra |/' "$SCEN" ;;
+      duplicate) sed -i.bak 's/| Run | Notes |/| Run | Run |/' "$SCEN" ;;
+      separator) sed -i.bak 's/| --- | --- |/| --- | rubbish |/' "$SCEN" ;;
+    esac
+    cp "$SCEN" "$TEST_TMP/before"
+    run python3 "$W" "$SCEN" --add-column Extra
+    [ "$status" -eq 1 ]
+    cmp "$SCEN" "$TEST_TMP/before"
+  done
+}
+
+assert_column_added() {
+  python3 - "$TEST_TMP/before-column" "$SCEN" <<'PYCODE'
+import pathlib,sys
+rows=lambda p:[l.split('|')[1:-1] for l in pathlib.Path(p).read_text().splitlines() if l.startswith('|')]
+a,b=map(rows,sys.argv[1:]);assert len(a)==len(b)
+assert [c.strip() for c in b[0]].count('Mutation choice')==1
+assert all(len(y)==len(x)+1 for x,y in zip(a,b))
+PYCODE
+}
+
+@test "explicit layout repair requires exact old row and names every resulting column" {
+  printf '## Results\n\n| Run | Notes |\n| --- |\n| A | left | right |\n' > "$SCEN"
+  python3 - "$SCEN" "$TEST_TMP/repair.json" <<'PY'
+import hashlib,json,pathlib,sys
+line=pathlib.Path(sys.argv[1]).read_text().splitlines(True)[4]
+pathlib.Path(sys.argv[2]).write_text(json.dumps({'separator':True,'rows':[{'run':'A','sha256':hashlib.sha256(line.encode()).hexdigest(),'set':{'Run':'A','Notes':'left / right'}}]}))
+PY
+  run python3 "$W" "$SCEN" --repair-layout "$TEST_TMP/repair.json"
+  [ "$status" -eq 0 ]
+  [ "$(cell A Notes)" = 'left / right' ]
+  cp "$SCEN" "$TEST_TMP/before"
+  run python3 "$W" "$SCEN" --repair-layout "$TEST_TMP/repair.json"
+  [ "$status" -ne 0 ]
+  cmp "$SCEN" "$TEST_TMP/before"
 }
