@@ -231,3 +231,30 @@ EOF
   [ "$status" -eq 1 ]
   cmp "$TARGET" "$TEST_TMP/before"
 }
+
+@test "adversarial: malformed canonical input never creates the target" {
+  cat "$CANON" "$CANON" > "$TEST_TMP/duplicate"
+  run bash "$SCRIPT" "$TEST_TMP/duplicate" "$TARGET"
+  [ "$status" -eq 1 ]
+  [ ! -e "$TARGET" ]
+}
+
+@test "adversarial: a backup symlink cannot overwrite unrelated content" {
+  echo USER-CONTENT > "$TARGET"
+  echo KEEP > "$TEST_TMP/canary"
+  ln -s "$TEST_TMP/canary" "$TARGET.localclaude.bak"
+  run bash "$SCRIPT" "$CANON" "$TARGET"
+  [ "$status" -eq 1 ]
+  [ "$(cat "$TEST_TMP/canary")" = KEEP ]
+  [ "$(cat "$TARGET")" = USER-CONTENT ]
+}
+
+@test "recheck: a hardlinked backup cannot overwrite unrelated content" {
+  echo USER-CONTENT > "$TARGET"
+  echo KEEP > "$TEST_TMP/canary"
+  ln "$TEST_TMP/canary" "$TARGET.localclaude.bak"
+  run bash "$SCRIPT" "$CANON" "$TARGET"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TEST_TMP/canary")" = KEEP ]
+  [ "$(cat "$TARGET.localclaude.bak")" = USER-CONTENT ]
+}

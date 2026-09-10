@@ -45,6 +45,11 @@ printf '%s' "$block" | head -n 1 | grep -qE "$OPEN_RE" \
 printf '%s' "$block" | tail -n 1 | grep -qE "$CLOSE_RE" \
   || { echo "CANONICAL BLOCK DOES NOT END WITH THE CLOSING MARKER"; exit 1; }
 
+# Reject malformed input before either the create or reconcile path can write.
+[ "$(grep -cE "$OPEN_RE" "$CANON")" = 1 ] &&
+  [ "$(grep -cE "$CLOSE_RE" "$CANON")" = 1 ] \
+  || { echo "CANONICAL BLOCK MUST CONTAIN EXACTLY ONE MARKER PAIR"; exit 1; }
+
 mkdir -p "$(dirname "$TARGET")" || { echo "CANNOT CREATE TARGET DIRECTORY"; exit 1; }
 
 # Test the link before testing existence. A dangling symlink satisfies `! -e`,
@@ -75,7 +80,15 @@ else
     exit 1
   fi
 
-  cp -p "$TARGET" "$TARGET.localclaude.bak" || { echo "BACKUP FAILED"; exit 1; }
+  [ ! -L "$TARGET.localclaude.bak" ] &&
+    { [ ! -e "$TARGET.localclaude.bak" ] || [ -f "$TARGET.localclaude.bak" ]; } \
+    || { echo "BACKUP IS NOT A REGULAR FILE — refusing"; exit 1; }
+  # Replace the backup inode instead of writing through a possible hard link.
+  BACKUP_TMP="$(mktemp "${TARGET}.backup.XXXXXX")" || { echo "MKTEMP FAILED"; exit 1; }
+  trap 'rm -f "$BACKUP_TMP"' EXIT
+  cp -p "$TARGET" "$BACKUP_TMP" && mv "$BACKUP_TMP" "$TARGET.localclaude.bak" \
+    || { echo "BACKUP FAILED"; exit 1; }
+  trap - EXIT
   TMP="$(mktemp "${TMPDIR:-/tmp}/claudemd.XXXXXX")" || { echo "MKTEMP FAILED"; exit 1; }
   trap 'rm -f "$TMP"' EXIT
 

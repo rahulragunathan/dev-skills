@@ -35,3 +35,18 @@ teardown() { rm -rf "$T"; }
   [ "$status" -eq 0 ]
   [ -f "$T/link.local.bak/keep" ]
 }
+
+@test "adversarial: README installation replaces a real directory with a verified link" {
+  local plugin; plugin="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
+  mkdir -p "$T/home/.claude/localclaude-plugins"
+  echo KEEP > "$T/home/.claude/localclaude-plugins/keep"
+  python3 - "$plugin/README.md" "$T/source" "$T/readme.sh" <<'PY'
+import pathlib,re,sys
+block=re.search(r'```bash\n(.*?)```',pathlib.Path(sys.argv[1]).read_text(),re.S)[1]
+pathlib.Path(sys.argv[3]).write_text(block.replace('<abs path to Code/Plugins>',sys.argv[2]).replace('$HOME', '$SETUP_TEST_HOME'))
+PY
+  SETUP_TEST_HOME="$T/home" CLAUDE_PLUGIN_ROOT="$plugin" run bash "$T/readme.sh"
+  [ "$status" -eq 0 ]
+  [ -L "$T/home/.claude/localclaude-plugins" ]
+  [ -f "$T/home/.claude/localclaude-plugins.local.bak/keep" ]
+}

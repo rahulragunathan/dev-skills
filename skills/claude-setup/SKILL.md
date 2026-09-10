@@ -66,13 +66,20 @@ this file) for the full rationale and troubleshooting.
 
 Rules that matter:
 
-- **Bash rule syntax MUST use the colon form `Bash(cmd:*)`.** `Bash(cmd*)` (no colon) silently never matches — the #1 reason an allowlist "doesn't work."
+- **Keep the command boundary in prefix rules.** This configuration uses `Bash(cmd:*)`;
+  `Bash(cmd *)` is equivalent. `Bash(cmd*)` also matches command names beginning with `cmd`,
+  so it is broader, not inert. See the [permission reference](https://code.claude.com/docs/en/permissions).
 - **Do NOT add `sed`, `awk`, `tee`, `xargs`, or a blanket `Bash(*)`.** They can modify files; leaving them to prompt is intentional.
-- **`pytest`/`black`/`ruff` are a deliberate exception to the read-only rule** — they run project code / rewrite files, but they're the everyday dev loop and project-scoped, so they're allow-listed on purpose. Note `Bash(ruff:*)` also permits `ruff check --fix` (edits code); that's accepted, since `ruff format` and `ruff check` share the `ruff` prefix and can't be split cleanly.
+- **`pytest`/`black`/`ruff` are a deliberate exception to the read-only rule** — they run project code / rewrite files, but they're the everyday dev loop and project-scoped, so they're allow-listed on purpose. Note `Bash(ruff:*)` also permits `ruff check --fix` (edits code); that's accepted, since `ruff format` and `ruff check` share the deliberately broad `ruff` allow rule.
 - **The venv forms are allow-listed too** (`.venv/bin/python -m pytest`, `.venv/bin/pytest`, `.venv/bin/ruff`, `.venv/bin/black`, plus bare `python -m pytest`). A bare `Bash(pytest:*)` never matches the venv-path invocation the Python convention actually uses, so the everyday test run still prompted — and stayed exposed to permission-classifier outages. These prefixes make routine test/format runs prompt-free.
-- **uv is allow-listed for env creation and inspection only** (`uv venv`, `uv python install`, `uv python list`, `uv pip list`, `uv pip freeze`). These build or read an env and never install code, so the documented new-project setup in `localclaude:project-env` runs without a prompt. `uv pip install` is deliberately left out: installing packages stays a conscious approval.
+- **uv is allow-listed for environment creation, Python installation and inspection**
+  (`uv venv`, `uv python install`, `uv python list`, `uv pip list`, `uv pip freeze`).
+  [uv can download and install a Python interpreter](https://docs.astral.sh/uv/concepts/python-versions/),
+  including during env creation. That is an accepted installation capability. `uv pip install`
+  remains outside this allowlist. These prefixes do not approve the external
+  `standardize-*-envs.sh` wrapper commands themselves.
 - **Node's everyday test loop is allow-listed the same way** (`npm test`, `npx vitest`), run from the project root through the `node_modules` symlink. `npm run` is deliberately left out: it executes whatever a project's `package.json` defines, so it stays a conscious approval. So does `npm install`, which additionally replaces the symlink with a real directory on Drive (see `localclaude:project-env`).
-- **`markdownlint-cli2` is allow-listed on the same terms as `ruff`.** It reads by default but rewrites files with `--fix`, and the two share one prefix that can't be split. It's the everyday docs loop, so the write case is accepted rather than prompted. Step 3b sets it up.
+- **`markdownlint-cli2` is allow-listed on the same terms as `ruff`.** It reads by default but rewrites files with `--fix`, and this configuration deliberately grants their shared prefix. It's the everyday docs loop, so the write case is accepted rather than prompted. Step 3b sets it up.
 - **Deliberately no leading `*`.** Bash rules do accept `*` anywhere, so `Bash(*.venv/bin/python -m pytest*)` would also catch absolute paths — but a leading wildcard in an **allow** rule matches arbitrary text before the venv path, which is a wider grant than intended. The relative prefixes are exact, so the standard is: run tests and formatters from the project root with the relative path (recorded in the CLAUDE.md `### Project environments` section, with the detail in `localclaude:project-env`). An absolute venv path prompts, by design.
 - **Validate after writing:** `python3 -m json.tool ~/.claude/settings.json`. Malformed JSON silently disables **all** settings in the file.
 
@@ -318,10 +325,8 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/claude-setup/install-link.sh" "$SRC" "$LINK" ||
 
 **The helper validates the source before moving anything and restores the old destination if
 link creation or verification fails.** The probe accepts
-a code root containing *either* `Skills/` or `Plugins/`, then installs both links. On a root
-holding only one of them, the other `ln -sfn` replaces a working directory with a link to
-nothing — and comparing `readlink` against `$SRC` still passes, because the spelling is right and
-only the destination is missing. Test what the link reaches, not what it says.
+a code root containing *either* `Skills/` or `Plugins/`. The helper refuses a missing source
+for either link, so an incomplete root cannot replace a working destination with a dangling link.
 
 Only subfolders with a `SKILL.md` load; `RCLONE_TEST`/`.DS_Store` and the plugin folder are ignored. (The `localclaude` plugin is **not** loaded this way — it loads via the marketplace in step 5, and won't double-load because it has no top-level `SKILL.md`.)
 

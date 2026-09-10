@@ -4,11 +4,13 @@ Why each rule in `SKILL.md` exists, and how to debug "I allow-listed it but stil
 
 ## The permission model in one paragraph
 
-`~/.claude/settings.json` (`permissions.allow` / `deny`) is the declarative, cross-project allowlist — it applies to every project. A Bash command is auto-approved only when **every** segment of the command (split on `&&`, `||`, `|`, `;`) matches an allow rule, the command has no risky construct, **and** every file path it touches is inside a trusted root. Anything not allow-listed prompts (that's the safety net for file-modifying commands). A `deny` rule is un-appealable — it blocks even at an approval prompt and in accept-edits/bypass modes — so reserve it for catastrophes.
+`~/.claude/settings.json` (`permissions.allow` / `deny`) is the declarative, cross-project allowlist — it applies to every project. A Bash command is auto-approved only when **every** segment of the command (split on `&&`, `||`, `|`, `;`) matches an allow rule, the command has no risky construct, **and** every file path it touches is inside a trusted root. Built-in read-only commands and the selected permission mode also affect approval; this allowlist alone does not determine every prompt. A `deny` rule is un-appealable — it blocks even at an approval prompt and in accept-edits/bypass modes — so reserve it for catastrophes.
 
 ## Gotchas that cause "still prompting" despite an allowlist
 
-1. **Wrong Bash rule syntax.** Use `Bash(cmd:*)` (colon). `Bash(cmd*)` (no colon) silently never matches. Most common mistake.
+1. **Overbroad Bash rule syntax.** `Bash(cmd:*)` and `Bash(cmd *)` preserve a command boundary.
+   `Bash(cmd*)` matches longer command names too. The
+   [permission reference](https://code.claude.com/docs/en/permissions) documents both forms.
 
 2. **Edits don't apply until a full restart.** Config is read at process start. The VS Code extension runs one long-lived `claude` process per chat tab, several launched with `--resume`. "Developer: Reload Window" *resumes* those same processes with stale in-memory config. Only **`Cmd+Q` + reopen** (or a brand-new session) re-reads the file. A "new chat" in the same window is often not enough. Check with `ps -ax | grep "[c]laude"`.
 
@@ -29,8 +31,8 @@ Why each rule in `SKILL.md` exists, and how to debug "I allow-listed it but stil
 
 ## Why these specific commands
 
-- **Allowed for routine exploration:** `cd ls find grep head tail cat diff echo ps wc sort uniq cut tr nl column jq` + the `Grep`/`Glob`/`Read` tools. This is a prompt-reduction list, not a security boundary. Allowed prefixes can mutate files: `find` supports `-delete` and `-exec` without redirection.
-- **Allowed despite writing — the everyday dev loop.** `pytest`, `black`, `ruff` and `markdownlint-cli2` run project code or rewrite files, and are allow-listed anyway because they are invoked constantly and are project-scoped. `ruff check --fix` and `markdownlint-cli2 --fix` ride in on a shared prefix that cannot be split; that is accepted, not overlooked. The venv forms (`.venv/bin/python -m pytest`, `.venv/bin/ruff`, …) are listed separately because a bare `pytest` rule never matches them. `uv` is allowed only for env creation and inspection — `uv pip install` is deliberately excluded. `npm test` and `npx vitest` are allowed; `npm run` and `npm install` are not.
+- **Allowed for routine exploration:** `cd ls find grep head tail cat diff echo ps wc sort uniq cut tr nl column jq` + the `Grep`/`Glob`/`Read` tools. This is a prompt-reduction list, not a security boundary. Test runners and formatters in the allowlist can execute code and write files.
+- **Allowed despite writing — the everyday dev loop.** `pytest`, `black`, `ruff` and `markdownlint-cli2` run project code or rewrite files, and are allow-listed anyway because they are invoked constantly and are project-scoped. `ruff check --fix` and `markdownlint-cli2 --fix` are covered by deliberately broad shared prefixes; that is accepted, not overlooked. The venv forms (`.venv/bin/python -m pytest`, `.venv/bin/ruff`, …) are listed separately because a bare `pytest` rule never matches them. `uv` is allowed for env creation, interpreter installation and inspection; it can download Python. `uv pip install` and the external environment scripts are not allow-listed. `npm test` and `npx vitest` are allowed; `npm run` and `npm install` are not.
 - **Denied (catastrophic):** root/home recursive force-deletes, `--no-preserve-root`, `mkfs`, `dd`, `shutdown`, `reboot`. Prefix matching is literal — `rm --recursive --force /` or flag reordering won't match, so the real protection is still the default prompt on everything non-allow-listed.
 - **Deliberately NOT allowed (so they still prompt):** `sed` (`-i` writes), `awk`, `tee`, `xargs` (`find | xargs rm` would bypass the "ask before file changes" intent), and any `> realfile` redirect. **`rm` is never allow-listed**; to delete use `rm -r` (no `-f`), `rmdir`, or Finder (`rm -rf` on home/abs paths is denied outright).
 
