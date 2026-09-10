@@ -144,7 +144,12 @@ To record a human judgement for the report, pass `--judgements /path/to/judgemen
 
 Use the condition IDs printed by the harness, including `2b` for S07 Mutation choice. Omitted
 conditions stay open. Every human judgement requires a reviewer, reason, evidence and matching
-hashes. It cannot override an executed fixture failure. Transfer approved grades separately with
+hashes. Passing a condition the harness failed on an executed fixture assertion additionally
+requires a `disputes` list naming the failing check IDs, and those IDs must be checks that
+actually did not hold. The dissent is recorded on the condition as `overrides`. This exists
+because S07 asks the answer to diagnose a supplied broken guard, so a correct answer quotes
+that guard and the evaluator cannot tell quoted code from authored code. Transfer approved
+grades separately with
 `write_results.py`, naming only the cells to change. The writer refuses malformed tables;
 `--repair-layout` accepts an explicit JSON mapping with a separator repair flag and hash-bound
 rows whose `set` object names every resulting column. It never infers displaced cells.

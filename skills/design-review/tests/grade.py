@@ -124,7 +124,17 @@ def build_report(scenario, answer, provenance, production, judgements=None):
                 raise ValueError('each judgement needs a known condition, pass/fail, reason and extracted evidence')
             q = by_id[key]
             if q['status'] == 'fail' and judgement['verdict'] == 'pass':
-                raise ValueError('human judgement cannot override an executed failure')
+                # An executed failure is not waved away, but it can be disputed.
+                # S07 asks the answer to diagnose a supplied broken guard, so a
+                # correct answer quotes that guard, and the evaluator cannot tell
+                # quoted code from authored code. Dissent is allowed only when it
+                # names the checks it disputes, and they actually failed.
+                failed = {c['id'] for c in checks if c['status'] == 'did-not-hold'}
+                disputed = judgement.get('disputes') or []
+                if not disputed or not set(disputed) <= failed:
+                    raise ValueError('overriding an executed failure requires "disputes" '
+                                     'naming the failing check ids it disputes')
+                q['overrides'] = list(disputed)
             q.update(status=judgement['verdict'], human={'reviewer': judgements['reviewer'], **judgement})
     result['verdict'] = ('fail' if any(q['status']=='fail' for q in questions) else
                          'pass' if all(q['status']=='pass' for q in questions) else 'open')

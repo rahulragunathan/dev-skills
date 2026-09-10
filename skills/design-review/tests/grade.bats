@@ -274,3 +274,111 @@ PY
   report || true
   check_report "r['checks'][0]['status']=='could-not-evaluate'"
 }
+
+@test "a guard sharing a compound statement with production is never dropped silently" {
+  # Red when statements() abandons a with/for/try that calls production before
+  # walking its body: the false 23-hour guard vanished from checks entirely,
+  # making the answer indistinguishable from one carrying no guards at all.
+  cat > "$T/answer.md" <<'PY'
+```python
+from datetime import datetime, timedelta, timezone
+
+def test_guard():
+    with freeze_time("2026-03-08"):
+        midnight = datetime(2026, 3, 8, 0, 0, tzinfo=timezone.utc)
+        next_midnight = datetime(2026, 3, 9, 0, 0, tzinfo=timezone.utc)
+        assert next_midnight - midnight == timedelta(hours=23)
+        in_window(midnight, next_midnight)
+```
+PY
+  report || true
+  check_report "len(r['checks'])>=1"
+  check_report "any('hours=23' in c['expression'] for c in r['checks'])"
+  check_report "any(c['status']=='did-not-hold' for c in r['checks'])"
+}
+
+@test "a guard inside a production-calling for loop is recorded, not discarded" {
+  cat > "$T/answer.md" <<'PY'
+```python
+from datetime import datetime, timedelta, timezone
+
+def test_cases():
+    for _ in range(2):
+        start = datetime(2026, 3, 8, tzinfo=timezone.utc)
+        assert start + timedelta(days=1) - start == timedelta(hours=23)
+        in_window(start, start)
+```
+PY
+  report || true
+  check_report "len(r['checks'])>=1"
+  check_report "any('hours=23' in c['expression'] for c in r['checks'])"
+}
+
+@test "an executed failure is overridden only by a judgement naming the disputed check" {
+  # Red while any pass judgement on a failed condition is refused outright: an
+  # S07 answer that quotes the supplied broken guard, which the task asks it to
+  # diagnose, fails condition 3 and no human grade can correct it.
+  cat > "$T/answer.md" <<'PY'
+```python
+from datetime import datetime, timedelta, timezone
+midnight = datetime(2026, 3, 8, 0, 0, tzinfo=timezone.utc)
+next_midnight = datetime(2026, 3, 9, 0, 0, tzinfo=timezone.utc)
+assert next_midnight - midnight == timedelta(hours=23)
+```
+PY
+  report || true
+  check_report "r['verdict']=='fail'"
+  # no disputes named: still refused
+  python3 - "$T/report.json" "$T/bare.json" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1]))
+json.dump({'reviewer':'rr','answer_hash':r['answer_hash'],'condition_hash':r['condition_hash'],
+           'judgements':{'3':{'verdict':'pass','reason':'quoted from the prompt',
+                              'evidence':'the fence is the supplied fixture'}}}, open(sys.argv[2],'w'))
+PY
+  run python3 "$G" --scenario "$S" --answer "$T/answer.md" --judgements "$T/bare.json"
+  [ "$status" -eq 3 ]
+  # disputes naming the failing check id: accepted, and recorded
+  python3 - "$T/report.json" "$T/named.json" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1]))
+ids=[c['id'] for c in r['checks'] if c['status']=='did-not-hold']
+json.dump({'reviewer':'rr','answer_hash':r['answer_hash'],'condition_hash':r['condition_hash'],
+           'judgements':{'3':{'verdict':'pass','reason':'quoted from the prompt',
+                              'evidence':'the fence is the supplied fixture','disputes':ids}}},
+          open(sys.argv[2],'w'))
+PY
+  run python3 "$G" --scenario "$S" --answer "$T/answer.md" --judgements "$T/named.json" --json
+  [ "$status" -eq 2 ]
+  printf '%s' "$output" > "$T/ov.json"
+  check_dispute() { python3 - "$T/ov.json" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1]))
+q=[q for q in r['questions'] if q['id']=='3'][0]
+assert q['status']=='pass', q
+assert q.get('overrides'), q
+PY
+  }
+  check_dispute
+}
+
+@test "a disputed check id that did not fail cannot launder an override" {
+  cat > "$T/answer.md" <<'PY'
+```python
+from datetime import datetime, timedelta, timezone
+midnight = datetime(2026, 3, 8, 0, 0, tzinfo=timezone.utc)
+next_midnight = datetime(2026, 3, 9, 0, 0, tzinfo=timezone.utc)
+assert next_midnight - midnight == timedelta(hours=23)
+```
+PY
+  report || true
+  python3 - "$T/report.json" "$T/bogus.json" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1]))
+json.dump({'reviewer':'rr','answer_hash':r['answer_hash'],'condition_hash':r['condition_hash'],
+           'judgements':{'3':{'verdict':'pass','reason':'x','evidence':'y',
+                              'disputes':['no-such-check']}}}, open(sys.argv[2],'w'))
+PY
+  run python3 "$G" --scenario "$S" --answer "$T/answer.md" --judgements "$T/bogus.json"
+  [ "$status" -eq 3 ]
+}

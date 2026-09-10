@@ -12,6 +12,11 @@ import types
 import zoneinfo
 
 
+# Compound statements whose body runs in sequence with the code around it, so a
+# guard inside is an ordinary guard rather than opaque control flow.
+INLINE_BODY = (ast.If, ast.With, ast.AsyncWith, ast.Try)
+
+
 class Gap(Exception):
     pass
 
@@ -172,7 +177,15 @@ class Evaluator:
         for node in nodes:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 continue
-            if not isinstance(node, ast.If) and self.calls_production(node):
+            if not isinstance(node, INLINE_BODY) and self.calls_production(node):
+                # Never abandon a statement without recording the guards inside
+                # it. Returning here silently made an answer whose false guard
+                # shares a loop with a production call indistinguishable from
+                # one carrying no guards at all.
+                for inner in ast.walk(node):
+                    if isinstance(inner, ast.Assert):
+                        self.assertion(inner, env, scope,
+                                       'guard shares a statement with a production call')
                 return True
             if isinstance(node, ast.Assert):
                 self.assertion(node, env, scope)
@@ -201,6 +214,15 @@ class Evaluator:
                 else:
                     if self.statements(branch, env, scope):
                         return True
+            elif isinstance(node, (ast.With, ast.AsyncWith)):
+                for item in node.items:
+                    if self.calls_production(item.context_expr):
+                        return True
+                if self.statements(node.body, env, scope):
+                    return True
+            elif isinstance(node, ast.Try):
+                if self.statements(node.body, env, scope):
+                    return True
             elif isinstance(node, (ast.Import, ast.ImportFrom)):
                 self.imports(node, env)
             elif isinstance(node, ast.Expr) and not isinstance(node.value, ast.Constant):
