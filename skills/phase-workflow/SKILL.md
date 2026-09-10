@@ -412,12 +412,15 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
    Then prune the local branches whose upstream is gone. **Run these commands rather than a shell alias** — the workflow must not depend on the user's `~/.zshrc`, which a fresh machine, a subagent or a non-interactive shell may not have loaded.
 
    ```bash
-   git fetch --prune
-   GONE="$(git branch -vv | grep ': gone]' | grep -v '^\*' | awk '{print $1}' || true)"
+   set -euo pipefail
+   git fetch --prune origin
+   BRANCHES="$(git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads/)"
+   CURRENT="$(git symbolic-ref --quiet --short HEAD || true)"
+   GONE="$(printf '%s\n' "$BRANCHES" | awk -v current="$CURRENT" '$2 == "[gone]" && $1 != current {print $1}')"
    if [ -n "$GONE" ]; then
      # -d refuses a branch holding unmerged work, which is exactly the retain rule.
      # Never -D here: a force-delete discards commits that were never pushed.
-     echo "$GONE" | xargs git branch -d || echo "RETAINED — a branch holds unmerged work; inspect it by hand"
+     echo "$GONE" | xargs git branch -d || { echo "RETAINED — branch deletion failed; inspect it by hand"; exit 1; }
    else
      echo "Nothing to clean up."
    fi

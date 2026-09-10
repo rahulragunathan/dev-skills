@@ -262,3 +262,84 @@ EOF
   grep -q DRIFT README.md
   ! git diff --cached --quiet
 }
+
+@test "adversarial: failed status cannot discard uncommitted mutation target" {
+  printf 'UNCOMMITTED\n' >> calc.py
+  cp calc.py "$TEST_TMP/before"
+  local real_git; real_git="$(command -v git)"
+  mkdir "$TEST_TMP/bin"
+  printf '#!/bin/bash\n[ "$1" != status ] || exit 128\nexec "%s" "$@"\n' "$real_git" > "$TEST_TMP/bin/git"
+  chmod +x "$TEST_TMP/bin/git"
+  PATH="$TEST_TMP/bin:$PATH" run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a - b/' bash -c 'grep -q "a + b" calc.py'
+  [ "$status" -eq 1 ]
+  cmp calc.py "$TEST_TMP/before"
+}
+
+@test "adversarial: documented cleanup returns failure when fetch fails" {
+  python3 - "$(dirname "$PUBLISH")/SKILL.md" "$TEST_TMP/cleanup.sh" <<'PYCODE'
+import pathlib,re,sys
+blocks=re.findall(r'```bash\n(.*?)```',pathlib.Path(sys.argv[1]).read_text(),re.S)
+pathlib.Path(sys.argv[2]).write_text(next(b for b in blocks if 'GONE=' in b))
+PYCODE
+  mkdir "$TEST_TMP/bin"
+  printf '#!/bin/sh\nexit 128\n' > "$TEST_TMP/bin/git"
+  chmod +x "$TEST_TMP/bin/git"
+  PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/cleanup.sh"
+  [ "$status" -ne 0 ]
+  [[ "$output" != *'Nothing to clean up.'* ]]
+}
+
+prepare_documented_release() {
+  export CLAUDE_PLUGIN_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
+  export APPROVED_SHA="$TASK_SHA" ORIGIN_URL="$FETCH_URL" ORIGIN_PUSH_URL="$PUSH_URL"
+  export PR=1 REPO_ID=fixture/repo TAG=v2.0.0
+  git commit -q --allow-empty -m merge
+  export MERGE_SHA="$(git rev-parse HEAD)"
+  git push -q origin main
+  mkdir -p "$TEST_TMP/bin"
+  cat > "$TEST_TMP/bin/gh" <<'SH'
+#!/bin/bash
+case "$*" in *mergeCommit*) echo "$MERGE_SHA" ;; *) echo "$APPROVED_SHA" ;; esac
+SH
+  chmod +x "$TEST_TMP/bin/gh"
+  python3 - "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/SKILL.md" "$TEST_TMP/release.sh" <<'PY'
+import pathlib,re,sys
+blocks=re.findall(r'```bash\n(.*?)```',pathlib.Path(sys.argv[1]).read_text(),re.S)
+pathlib.Path(sys.argv[2]).write_text(next(b for b in blocks if 'REMOTE_TAG=' in b))
+PY
+}
+
+@test "documented release: publishes the merge commit rather than the approved PR head" {
+  prepare_documented_release
+  [ "$MERGE_SHA" != "$APPROVED_SHA" ]
+  PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/release.sh"
+  [ "$status" -eq 0 ]
+  [ "$(git rev-parse "$TAG^{commit}")" = "$MERGE_SHA" ]
+  [ "$(git --git-dir="$FORK" rev-parse "$TAG^{commit}")" = "$MERGE_SHA" ]
+}
+
+@test "documented release: a conflicting remote tag is retained" {
+  prepare_documented_release
+  git tag "$TAG" "$TASK_SHA"
+  git push -q origin "refs/tags/$TAG"
+  git tag -d "$TAG"
+  PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/release.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'REMOTE TAG CONFLICT'* ]]
+  [ "$(git --git-dir="$FORK" rev-parse "$TAG^{commit}")" = "$TASK_SHA" ]
+}
+
+@test "documented release: failed tag push can resume without moving the retained local tag" {
+  prepare_documented_release
+  local real_git; real_git="$(command -v git)"
+  printf '#!/bin/bash\n[ "$1" != push ] || exit 1\nexec "%s" "$@"\n' "$real_git" > "$TEST_TMP/bin/git"
+  chmod +x "$TEST_TMP/bin/git"
+  PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/release.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'TAG PUSH FAILED'* ]]
+  [ "$(git rev-parse "$TAG^{commit}")" = "$MERGE_SHA" ]
+  rm "$TEST_TMP/bin/git"
+  PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/release.sh"
+  [ "$status" -eq 0 ]
+  [ "$(git --git-dir="$FORK" rev-parse "$TAG^{commit}")" = "$MERGE_SHA" ]
+}

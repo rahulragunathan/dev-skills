@@ -9,7 +9,9 @@
 # here, because a guard that reads the value it is checking guards nothing.
 #
 # --check-origin exits before any ref changes.
-# The full form creates a local tag and deletes the merged local branch.
+# The full form is a local-only utility; the phase SOP uses --check-origin.
+# Actual remote publication and cleanup are in SKILL.md, whose fences are
+# executed directly by phase-git.bats. The local utility does not push a tag.
 # Exit 0 on completion; exit 1 on refusal or failure.
 
 set -uo pipefail

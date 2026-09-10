@@ -25,7 +25,9 @@ shift 3
 git rev-parse --git-dir >/dev/null 2>&1 || { echo "NOT A GIT REPOSITORY"; exit 1; }
 
 # A dirty tree means the restore would discard work that was never committed.
-if [ -n "$(git status --porcelain -uall)" ]; then
+TREE_STATE="$(git status --porcelain -uall)" \
+  || { echo "CANNOT READ TREE STATUS — refusing"; exit 1; }
+if [ -n "$TREE_STATE" ]; then
   echo "TREE IS DIRTY — commit or stash before a mutation audit; refusing"
   exit 1
 fi
