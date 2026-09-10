@@ -283,3 +283,55 @@ PY
   [ "$status" -eq 1 ]
   [[ "$output" == *"KI-01"* ]]
 }
+
+@test "close: failure installing the second document restores both originals" {
+  run python3 - "$RM" "$DOCS" <<'PY'
+import importlib.util, pathlib, sys, os
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+d = pathlib.Path(sys.argv[2]); before = {p: p.read_bytes() for p in d.iterdir()}
+write, replace = pathlib.Path.write_text, os.replace
+failed = False
+def bad_write(p, *a, **kw):
+    if p.parent == d and p.name == 'ROADMAP.md': raise OSError('injected second installation failure')
+    return write(p, *a, **kw)
+def bad_replace(src, dst):
+    global failed
+    if pathlib.Path(dst).name == 'ROADMAP.md' and not failed:
+        failed = True
+        raise OSError('injected second installation failure')
+    return replace(src, dst)
+pathlib.Path.write_text, os.replace = bad_write, bad_replace
+try: m.cmd_close(d, 'KI-02')
+except (OSError, SystemExit): pass
+else: raise AssertionError('injection never fired')
+assert all(p.read_bytes() == b for p,b in before.items()), 'partial close changed original'
+PY
+  [ "$status" -eq 0 ]
+}
+
+@test "check: wrong-file displayed IDs cannot disappear from reconciliation" {
+  sed -i.bak 's/KNOWN_ISSUES.md#ki-01/WRONG.md#ki-01/' "$DOCS/ROADMAP.md"
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"wrong destination"* ]]
+}
+
+@test "check: mismatched detail and pointer ratings are refused" {
+  sed -i.bak 's/first issue | Rare | High/first issue | Rare | Low/' "$DOCS/ROADMAP.md"
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"rating"* ]]
+}
+
+@test "check: rating order is validated independently of agreement" {
+  python3 - "$DOCS/ROADMAP.md" <<'PY'
+import pathlib,sys
+p=pathlib.Path(sys.argv[1]); s=p.read_text().splitlines(True)
+a=next(i for i,l in enumerate(s) if '[KI-01]' in l); b=a+2
+s[a],s[b]=s[b],s[a];p.write_text(''.join(s))
+PY
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"order"* ]]
+}

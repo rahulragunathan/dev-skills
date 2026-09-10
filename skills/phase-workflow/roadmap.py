@@ -20,6 +20,9 @@ Exit 0 on success, 1 on refusal. Nothing is written unless every check passes.
 from __future__ import annotations
 
 import argparse
+import os
+import tempfile
+import shutil
 import pathlib
 import re
 import sys
@@ -82,14 +85,22 @@ def index_rows(roadmap: str, prefix: str) -> dict[str, dict]:
     a heading that does not exist: the table looked reconciled and the link
     went nowhere.
     """
-    fname = FILES[prefix]
     rows: dict[str, dict] = {}
+    headers = []
     for line in roadmap.splitlines(keepends=True):
-        m = re.match(rf'^\| \[({prefix}-\d+)\]\({re.escape(fname)}#([^)]*)\)', line)
+        cells = [c.strip() for c in line.strip().split("|")[1:-1]]
+        if cells and cells[0] == "ID":
+            headers = cells
+        m = re.match(rf'^\|\s*\[?({prefix}-\d+)\b', line)
         if m:
-            if m.group(1) in rows:
-                fail(f"refusing: {m.group(1)} has two index rows")
-            rows[m.group(1)] = {"line": line, "anchor": m.group(2)}
+            eid = m.group(1)
+            if eid in rows:
+                fail(f"refusing: {eid} has two index rows")
+            link = re.fullmatch(r'\[([^]]+)\]\(([^#)]+)#([^)]*)\)', cells[0])
+            rows[eid] = {"line": line, "anchor": link[3] if link else "",
+                         "filename": link[2] if link else "",
+                         "cells": dict(zip(headers, cells))}
+
     return rows
 
 
@@ -109,12 +120,33 @@ def reconcile(docs: pathlib.Path, proposed: dict[str, str] | None = None):
         orphaned = sorted(set(entries) - set(rows))
         wrong = sorted(e for e in set(rows) & set(entries)
                        if rows[e]["anchor"] != e.lower())
-        status = "ok" if not (dangling or orphaned or wrong) else "MISMATCH"
+        destinations = [e for e in rows if rows[e]["filename"] != name]
+        status = "ok" if not (dangling or orphaned or wrong or destinations) else "MISMATCH"
         problems.append(f"{name:22} entries={len(entries):3} pointers={len(rows):3}  {status}")
         if dangling:
             problems.append(f"  index points at missing entries: {dangling}"); ok = False
         if orphaned:
             problems.append(f"  entries with no index row:      {orphaned}"); ok = False
+        if destinations:
+            problems.append(f"  wrong destination: {destinations}"); ok = False
+        fields = {"KI": ["Severity", "Likelihood"], "ENH": ["Priority"], "UNK": ["Kind"]}[prefix]
+        ratings = {}
+        for eid, body in entries.items():
+            ratings[eid] = {}
+            for field in fields:
+                match = re.search(r'\*\*' + field + r':\*\*\s*([^\n·]+)', body)
+                val = match[1].strip() if match else ""
+                ratings[eid][field] = val
+                if eid in rows and (not val or rows[eid]["cells"].get(field) != val):
+                    problems.append(f"  rating mismatch: {eid} {field}"); ok = False
+        ranks = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3,
+                 "Almost always": 0, "Likely": 1, "Rare": 2}
+        if prefix != "UNK":
+            for label, ids in [("detail", entries), ("index", rows)]:
+                keys = [tuple(ranks.get(ratings[e][f], 99) for f in fields)
+                        for e in ids if e in ratings]
+                if keys != sorted(keys) or any(99 in k for k in keys):
+                    problems.append(f"  rating order invalid: {label}"); ok = False
         if wrong:
             detail = [f"{e} -> #{rows[e]['anchor']}" for e in wrong]
             problems.append(f"  index rows pointing at the wrong anchor: {detail}"); ok = False
@@ -183,10 +215,32 @@ def cmd_close(docs: pathlib.Path, eid: str) -> int:
             print(line, file=sys.stderr)
         fail(f"refusing: closing {eid} would leave the roadmap inconsistent")
 
-    (docs / FILES[prefix]).write_text(new_detail)
-    (docs / "ROADMAP.md").write_text(new_roadmap)
+    install_documents(docs, proposed)
     print(f"closed {eid}: {len(entries)} entries -> {len(survivors)}, index row removed")
     return 0
+
+
+def install_documents(docs: pathlib.Path, proposed: dict[str, str]) -> None:
+    # Prepare candidates and durable originals on the destination filesystem.
+    recovery = pathlib.Path(tempfile.mkdtemp(prefix=".roadmap-", dir=docs))
+    installed = []
+    try:
+        for name, body in proposed.items():
+            shutil.copy2(docs / name, recovery / (name + ".original"))
+            (recovery / name).write_text(body)
+            shutil.copymode(docs / name, recovery / name)
+        for name in proposed:
+            os.replace(recovery / name, docs / name)
+            installed.append(name)
+    except OSError as exc:
+        try:
+            for name in reversed(installed):
+                os.replace(recovery / (name + ".original"), docs / name)
+        except OSError:
+            fail(f"rollback failed; originals retained at {recovery}")
+        shutil.rmtree(recovery)
+        fail(f"installation failed; originals restored: {exc}")
+    shutil.rmtree(recovery)
 
 
 def main() -> int:
