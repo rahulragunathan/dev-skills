@@ -173,10 +173,16 @@ overwrites it. Check exit status and a non-empty answer first; only then read th
 **Probe each reviewer before committing a pass.**
 
 ```bash
-bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/preflight.sh"
+PROBE_MODELS=()
+for m in $(codex_ladder); do PROBE_MODELS+=(--codex-model "$m"); done
+for m in $(gemini_ladder); do PROBE_MODELS+=(--gemini-model "$m"); done
+[ "${#PROBE_MODELS[@]}" -gt 0 ] || { echo "No discovered models to probe"; exit 1; }
+bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/preflight.sh" "${PROBE_MODELS[@]}" --timeout 120
 ```
 
-It asks each CLI one cheap question and reports `READY`, `QUOTA` with the reset
+Supply the discovered candidates in ladder order. It tries the next candidate on availability
+failure. Each subprocess has a deadline and process-group cleanup, so a hung Codex cannot
+prevent the Gemini probe. It asks each CLI one cheap question and reports `READY`, `QUOTA` with the reset
 window, `UNAVAILABLE`, `TIMEOUT`, `NO ANSWER` or `MISSING`. Exit 0 means at
 least one reviewer can answer; exit 1 means none can and the pass does not
 start. Those outcomes are not interchangeable: quota is account-wide so a

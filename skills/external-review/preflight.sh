@@ -25,15 +25,23 @@
 
 set -uo pipefail
 
-CODEX_MODEL="gpt-6-astra"
-GEMINI_MODEL="gemini-3.1-pro-high"
+CODEX_MODELS=()
+GEMINI_MODELS=()
+DEADLINE="${PREFLIGHT_TIMEOUT:-120}"
 while [ $# -gt 0 ]; do
   case "$1" in
-    --codex-model)  CODEX_MODEL="${2:?--codex-model needs a value}"; shift 2 ;;
-    --gemini-model) GEMINI_MODEL="${2:?--gemini-model needs a value}"; shift 2 ;;
+    --codex-model) CODEX_MODELS+=("${2:?model required}"); shift 2 ;;
+    --gemini-model) GEMINI_MODELS+=("${2:?model required}"); shift 2 ;;
+    --timeout) DEADLINE="${2:?timeout required}"; shift 2 ;;
     *) echo "unknown argument: $1"; exit 1 ;;
   esac
 done
+if [ "${#CODEX_MODELS[@]}" -eq 0 ] && [ "${#GEMINI_MODELS[@]}" -eq 0 ]; then
+  echo "supply discovered candidates with --codex-model / --gemini-model (repeatable)"
+  exit 1
+fi
+case "$DEADLINE" in ''|*[!0-9]*|0) echo "timeout must be a positive integer"; exit 1;; esac
+RUNNER="$(cd -- "$(dirname -- "$0")" && pwd)/deadline.py"
 
 TMP="$(mktemp -d)" || { echo "CANNOT CREATE TEMP DIR"; exit 1; }
 trap 'rm -rf "$TMP"' EXIT
@@ -83,38 +91,54 @@ report() {
   esac
 }
 
-# --- codex ------------------------------------------------------------------
-if ! command -v codex >/dev/null 2>&1; then
-  report codex "$CODEX_MODEL" "MISSING"
-else
-  OUT="$TMP/codex.txt"; ERR="$TMP/codex.err"
-  codex exec --sandbox read-only -m "$CODEX_MODEL" -o "$OUT" "$PROBE" \
-    > "$ERR" 2>&1 < /dev/null
-  rc=$?
-  if [ "$rc" = 0 ] && [ -s "$OUT" ]; then
-    report codex "$CODEX_MODEL" "READY"
-  elif [ "$rc" = 0 ]; then
-    report codex "$CODEX_MODEL" "$(silent_zero "$ERR")"
-  else
-    report codex "$CODEX_MODEL" "$(classify_error "$ERR")"
+# Each reviewer gets its own deadline; availability follows the supplied ladder.
+probe() {
+  local reviewer="$1" cli="$2" model rc result
+  shift 2
+  if ! command -v "$cli" >/dev/null 2>&1; then
+    report "$reviewer" "—" MISSING; return
   fi
+  if [ "$#" -eq 0 ]; then
+    report "$reviewer" "—" "UNAVAILABLE — no discovered candidates supplied"; return
+  fi
+  for model in "$@"; do
+    OUT="$TMP/$reviewer.txt"; ERR="$TMP/$reviewer.err"
+    : > "$OUT"
+    if [ "$reviewer" = codex ]; then
+      python3 "$RUNNER" "$DEADLINE" codex exec --skip-git-repo-check --sandbox read-only \
+        -m "$model" -o "$OUT" "$PROBE" > "$ERR" 2>&1 < /dev/null
+    else
+      python3 "$RUNNER" "$DEADLINE" agy -p "$PROBE" --model "$model" \
+        --print-timeout "${DEADLINE}s" > "$OUT" 2> "$ERR" < /dev/null
+    fi
+    rc=$?
+    if grep -qiE 'timeout|timed out|turn in progress' "$ERR"; then
+      result="TIMEOUT — inconclusive"
+    elif [ "$rc" = 0 ] && [ "$(tr -d '\r\n' < "$OUT")" = ready ]; then
+      result=READY
+    elif [ "$rc" = 0 ] && [ -s "$OUT" ]; then
+      result="NO ANSWER — expected the single word ready"
+    elif [ "$rc" = 0 ]; then
+      result="$(silent_zero "$ERR")"
+    else
+      result="$(classify_error "$ERR")"
+    fi
+    case "$result" in
+      UNAVAILABLE*) printf '%-8s %-24s %s\n' "$reviewer" "$model" "$result" ;;
+      *) break ;;
+    esac
+  done
+  report "$reviewer" "$model" "$result"
+}
+if [ "${#CODEX_MODELS[@]}" -gt 0 ]; then
+  probe codex codex "${CODEX_MODELS[@]}"
+else
+  probe codex codex
 fi
-
-# --- gemini -----------------------------------------------------------------
-if ! command -v agy >/dev/null 2>&1; then
-  report gemini "$GEMINI_MODEL" "MISSING"
+if [ "${#GEMINI_MODELS[@]}" -gt 0 ]; then
+  probe gemini agy "${GEMINI_MODELS[@]}"
 else
-  OUT="$TMP/agy.txt"; ERR="$TMP/agy.err"
-  agy -p "$PROBE" --model "$GEMINI_MODEL" --print-timeout 2m \
-    > "$OUT" 2> "$ERR"
-  rc=$?
-  if [ "$rc" = 0 ] && [ -s "$OUT" ]; then
-    report gemini "$GEMINI_MODEL" "READY"
-  elif [ "$rc" = 0 ]; then
-    report gemini "$GEMINI_MODEL" "$(silent_zero "$ERR")"
-  else
-    report gemini "$GEMINI_MODEL" "$(classify_error "$ERR")"
-  fi
+  probe gemini agy
 fi
 
 echo

@@ -61,7 +61,7 @@ EOF
 
 @test "both reviewers ready: reports both and exits 0" {
   fake_codex_ready; fake_agy_ready
-  run bash "$PREFLIGHT"
+  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
   [ "$status" -eq 0 ]
   [[ "$output" == *"codex"*"READY"* ]]
   [[ "$output" == *"gemini"*"READY"* ]]
@@ -71,7 +71,7 @@ EOF
   # THE finding. Quota is account-wide and availability is per model, so the
   # two demand different responses: downshift for one, wait for the other.
   fake_codex_ready; fake_agy_quota
-  run bash "$PREFLIGHT"
+  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
   [[ "$output" == *"gemini"*"QUOTA"* ]]
   [[ "$output" != *"gemini"*"UNAVAILABLE"* ]]
 }
@@ -80,20 +80,20 @@ EOF
   # Red if the probe reports only pass/fail: the caller needs to know whether
   # to wait an hour or five days before planning the pass.
   fake_codex_ready; fake_agy_quota
-  run bash "$PREFLIGHT"
+  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
   [[ "$output" == *"110h19m32s"* ]]
 }
 
 @test "an availability error is UNAVAILABLE, so the caller downshifts instead of waiting" {
   fake_codex_ready; fake_agy_unavailable
-  run bash "$PREFLIGHT"
+  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
   [[ "$output" == *"gemini"*"UNAVAILABLE"* ]]
   [[ "$output" != *"gemini"*"QUOTA"* ]]
 }
 
 @test "one reviewer ready is exit 0: the pass runs with partial coverage" {
   fake_codex_ready; fake_agy_quota
-  run bash "$PREFLIGHT"
+  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
   [ "$status" -eq 0 ]
   [[ "$output" == *"PARTIAL"* ]]
 }
@@ -101,19 +101,19 @@ EOF
 @test "no reviewer able to answer is exit 1" {
   fake_agy_quota
   printf '#!/usr/bin/env bash\necho "error: quota" >&2\nexit 1\n' > "$BIN/codex"; chmod +x "$BIN/codex"
-  run bash "$PREFLIGHT"
+  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
   [ "$status" -eq 1 ]
 }
 
 @test "a missing CLI is MISSING, and is not confused with a failing one" {
   fake_agy_ready
-  run bash "$PREFLIGHT"
+  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
   [[ "$output" == *"codex"*"MISSING"* ]]
   [ "$status" -eq 0 ]
 }
 
 @test "both CLIs missing is exit 1 and says so" {
-  run bash "$PREFLIGHT"
+  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
   [ "$status" -eq 1 ]
   [[ "$output" == *"codex"*"MISSING"* ]]
   [[ "$output" == *"gemini"*"MISSING"* ]]
@@ -123,7 +123,7 @@ EOF
   # Codex exits 0 on some quota failures and writes no -o file. Exit status
   # alone cannot tell a finished review from an exhausted account.
   fake_codex_silent_zero; fake_agy_ready
-  run bash "$PREFLIGHT"
+  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
   [[ "$output" != *"codex"*"READY"* ]]
   [[ "$output" == *"codex"*"NO ANSWER"* ]]
 }
@@ -139,7 +139,7 @@ echo "[agy] print timeout after 2m0s with turn in progress; returning partial ou
 exit 0
 EOF
   chmod +x "$BIN/agy"
-  run bash "$PREFLIGHT"
+  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
   [[ "$output" == *"gemini"*"TIMEOUT"* ]]
   [[ "$output" != *"gemini"*"QUOTA"* ]]
   [[ "$output" != *"gemini"*"READY"* ]]
@@ -155,7 +155,71 @@ echo "error: Individual quota reached. Resets in 110h19m32s." >&2
 exit 0
 EOF
   chmod +x "$BIN/agy"
-  run bash "$PREFLIGHT"
+  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
   [[ "$output" == *"gemini"*"QUOTA"* ]]
   [[ "$output" == *"110h19m32s"* ]]
+}
+
+@test "preflight requires discovered candidates rather than fixed default models" {
+  fake_codex_ready; fake_agy_ready
+  run bash "$PREFLIGHT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"supply discovered"* ]]
+}
+
+@test "nonempty timeout output never reports readiness" {
+  fake_codex_ready
+  printf '#!/bin/sh\necho ready\necho "print timeout: turn in progress" >&2\n' > "$BIN/agy"
+  chmod +x "$BIN/agy"
+  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
+  [[ "$output" == *"gemini"*"TIMEOUT"* ]]
+  [[ "$output" != *"gemini"*"READY"* ]]
+}
+
+@test "unexpected nonempty answer is not the readiness token" {
+  fake_codex_ready
+  printf '#!/bin/sh\necho thinking\n' > "$BIN/agy"
+  chmod +x "$BIN/agy"
+  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
+  [[ "$output" == *"gemini"*"NO ANSWER"* ]]
+}
+
+@test "codex deadline kills the process group and still probes Gemini" {
+  fake_agy_ready
+  printf '#!/bin/sh\nsleep 20 &\necho $! > "%s"\nwait\n' "$TEST_TMP/child" > "$BIN/codex"
+  chmod +x "$BIN/codex"
+  local started=$SECONDS
+  PREFLIGHT_TIMEOUT=1 run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
+  [ "$status" -eq 0 ]
+  [ "$((SECONDS - started))" -lt 8 ]
+  [[ "$output" == *"codex"*"TIMEOUT"* ]]
+  [[ "$output" == *"gemini"*"READY"* ]]
+  ! kill -0 "$(cat "$TEST_TMP/child")" 2>/dev/null
+}
+
+@test "unavailable candidate falls through to the next supplied model" {
+  fake_agy_ready
+  cat > "$BIN/codex" <<'SH'
+#!/bin/bash
+out=""; model=""
+while [ $# -gt 0 ]; do
+ case "$1" in -m) model="$2"; shift;; -o) out="$2"; shift;; esac
+ shift
+done
+echo "$model" >> "$TEST_TMP/models"
+[ "$model" = unavailable ] && { echo 'model is not available' >&2; exit 1; }
+echo ready > "$out"
+SH
+  chmod +x "$BIN/codex"
+  run bash "$PREFLIGHT" --codex-model unavailable --codex-model discovered --gemini-model selected
+  [[ "$output" == *"codex"*"discovered"*"READY"* ]]
+  [ "$(cat "$TEST_TMP/models")" = $'unavailable\ndiscovered' ]
+}
+
+@test "one discovered ladder still reports a missing other reviewer" {
+  fake_codex_ready
+  run bash "$PREFLIGHT" --codex-model selected
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"gemini"*"MISSING"* ]]
+  [[ "$output" == *"PARTIAL COVERAGE"* ]]
 }
