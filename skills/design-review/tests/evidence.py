@@ -119,6 +119,9 @@ def cmd_init(args) -> int:
         "date": args.date,
         "model": args.model,
         "arms": list(ARMS),
+        # How many runs per arm. One run cannot separate "the rule is needed"
+        # from "that run drew badly", which is how two units were graded wrong.
+        "replicates": args.replicates,
         "scenarios": scenarios,
     }
     (ev / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
@@ -220,19 +223,25 @@ def cmd_record(args) -> int:
     # is the S02 contamination, which was previously caught only by eye.
     if args.arm == "baseline" and tools > 0:
         fail(f"refusing: baseline is contaminated — {tools} tool use(s) in {args.transcript}")
-    tgt = ev / "answers" / f"{args.scenario}-{args.arm}.md"
+    reps = int(manifest.get("replicates", 1))
+    if not (1 <= args.replicate <= reps):
+        fail(f"refusing: replicate {args.replicate} is outside the batch's "
+             f"declared count of {reps}")
+    key = args.arm if reps == 1 else f"{args.arm}#{args.replicate}"
+    suffix = args.arm if reps == 1 else f"{args.arm}-{args.replicate}"
+    tgt = ev / "answers" / f"{args.scenario}-{suffix}.md"
     # Hash what is written, not what was parsed. Hashing the pre-normalized body
     # made `check` report every untouched answer as edited.
     normalized = body.rstrip("\n") + "\n"
     tgt.write_text(normalized)
-    manifest["scenarios"][args.scenario]["arms"][args.arm] = {
+    manifest["scenarios"][args.scenario]["arms"][key] = {
         "answer": f"answers/{tgt.name}",
         "answer_hash": h16(normalized),
         "tool_uses": tools,
         "transcript": pathlib.Path(args.transcript).name,
     }
     mpath.write_text(json.dumps(manifest, indent=2) + "\n")
-    print(f"recorded {args.scenario} {args.arm}: {len(body)} bytes, {tools} tool uses")
+    print(f"recorded {args.scenario} {key}: {len(body)} bytes, {tools} tool uses")
     return 0
 
 
@@ -271,7 +280,10 @@ def cmd_check(args) -> int:
             elif "answer_hash" in rec and h16(ap.read_text()) != rec["answer_hash"]:
                 reasons.append(f"{arm} answer changed after it was recorded")
         if args.require_complete:
-            missing = [a for a in ARMS if a not in s.get("arms", {})]
+            reps = int(manifest.get("replicates", 1))
+            want = ([a for a in ARMS] if reps == 1
+                    else [f"{a}#{i}" for a in ARMS for i in range(1, reps + 1)])
+            missing = [k for k in want if k not in s.get("arms", {})]
             if missing:
                 reasons.append("missing " + ", ".join(missing))
         if reasons:
@@ -292,12 +304,14 @@ def main() -> int:
     p.add_argument("--model", required=True)
     p.add_argument("--date", default="")
     p.add_argument("--tests", default="skills/design-review/tests")
+    p.add_argument("--replicates", type=int, default=1)
     p.set_defaults(fn=cmd_init)
 
     p = sub.add_parser("record")
     p.add_argument("dir")
     p.add_argument("--scenario", required=True)
     p.add_argument("--arm", required=True, choices=list(ARMS))
+    p.add_argument("--replicate", type=int, default=1)
     p.add_argument("--transcript", required=True)
     p.set_defaults(fn=cmd_record)
 

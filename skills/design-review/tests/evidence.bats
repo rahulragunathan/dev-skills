@@ -295,3 +295,53 @@ MKJSON
   [ "$status" -eq 1 ]
   [[ "$output" == *"incomplete"* ]]
 }
+
+@test "record: replicates of one arm are stored side by side" {
+  # A single run per arm cannot separate "the rule is needed" from "that run
+  # drew badly" — two scenarios flipped on identical inputs before this existed.
+  python3 "$EVPY" init "$EV" --round 6 --model claude-opus-5 --tests skills/design-review/tests --replicates 3
+  P="$(cat "$EV/S01-prompt.txt")"
+  for i in 1 2 3; do
+    python3 - "$TEST_TMP/t$i.jsonl" "$P" "$i" <<'MKJSON'
+import json, sys
+rows = [{"type":"user","message":{"role":"user","content":sys.argv[2]}},
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ANSWER " + sys.argv[3]}]}}]
+open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in rows) + "\n")
+MKJSON
+    run python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --replicate "$i" \
+        --transcript "$TEST_TMP/t$i.jsonl"
+    [ "$status" -eq 0 ]
+  done
+  grep -q 'ANSWER 1' "$EV/answers/S01-baseline-1.md"
+  grep -q 'ANSWER 3' "$EV/answers/S01-baseline-3.md"
+}
+
+@test "check: a batch missing a replicate is not complete" {
+  # Red while completeness counts arms rather than runs: two of three replicates
+  # reconciles against the skills and still cannot show whether a unit is stable.
+  python3 "$EVPY" init "$EV" --round 6 --model claude-opus-5 --tests skills/design-review/tests --replicates 3
+  P="$(cat "$EV/S01-prompt.txt")"
+  python3 - "$TEST_TMP/t.jsonl" "$P" <<'MKJSON'
+import json, sys
+rows = [{"type":"user","message":{"role":"user","content":sys.argv[2]}},
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ANSWER"}]}}]
+open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in rows) + "\n")
+MKJSON
+  python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --replicate 1 --transcript "$TEST_TMP/t.jsonl"
+  run python3 "$EVPY" check "$EV" --require-complete
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"S01"*"baseline"* ]]
+}
+
+@test "record: a replicate outside the declared count is refused" {
+  python3 "$EVPY" init "$EV" --round 6 --model claude-opus-5 --tests skills/design-review/tests --replicates 3
+  P="$(cat "$EV/S01-prompt.txt")"
+  python3 - "$TEST_TMP/t.jsonl" "$P" <<'MKJSON'
+import json, sys
+rows = [{"type":"user","message":{"role":"user","content":sys.argv[2]}},
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ANSWER"}]}}]
+open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in rows) + "\n")
+MKJSON
+  run python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --replicate 4 --transcript "$TEST_TMP/t.jsonl"
+  [ "$status" -eq 1 ]
+}
