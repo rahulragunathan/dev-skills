@@ -94,5 +94,15 @@ if [ "$rc" -ne 1 ]; then
   echo "NOT AN ASSERTION RED — test command exited $rc; inspect the output"
   exit 1
 fi
+restore || exit 1
+# The mutation has been removed. Preserve any later unexpected change for inspection.
+trap - EXIT INT TERM
+"$@"
+normal_rc=$?
+if ! git diff --quiet "$SHA" -- ":(top)" || ! git diff --cached --quiet "$SHA" -- ":(top)"; then
+  echo "TRACKED TREE CHANGED — inspect index and worktree; unexpected changes retained"
+  exit 1
+fi
+[ "$normal_rc" -eq 0 ] || { echo "RESTORED TEST FAILED (rc=$normal_rc)"; exit 1; }
 echo "EXIT 1 — verify the named failure in the output before certifying"
 exit 0

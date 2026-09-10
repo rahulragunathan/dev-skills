@@ -35,7 +35,7 @@ teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/nul
 # --- mutation restore ------------------------------------------------------
 
 @test "restore: a failing test leaves the file byte-identical afterwards" {
-  run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a - b/' bash -c 'exit 1'
+  run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a - b/' bash -c 'grep -q "a + b" calc.py'
   [ "$status" -eq 0 ]
   [ -z "$(git status --porcelain)" ]
   grep -q 'a + b' calc.py
@@ -242,8 +242,23 @@ EOF
 }
 
 @test "restore: the happy path still leaves the file byte-identical" {
-  run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a - b/' bash -c 'exit 1'
+  run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a - b/' bash -c 'grep -q "a + b" calc.py'
   [ "$status" -eq 0 ]
   [ -z "$(git status --porcelain)" ]
   grep -q 'a + b' calc.py
+}
+
+@test "restore: a test still red on normal code refuses certification" {
+  run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a - b/' bash -c 'exit 1'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"RESTORED TEST FAILED"* ]]
+  [ -z "$(git status --porcelain)" ]
+}
+
+@test "restore: unrelated tracked index and worktree drift is retained and refused" {
+  run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a - b/' bash -c 'echo DRIFT >> README.md; git add README.md; grep -q "a + b" calc.py'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"TRACKED TREE CHANGED"* ]]
+  grep -q DRIFT README.md
+  ! git diff --cached --quiet
 }
