@@ -300,9 +300,16 @@ as out of scope and the reviewer reported on it anyway.
 ```bash
 ROOT="$(bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/codex-root.sh" \
   "<scratchpad>/codex-root" --exclude <out-of-scope-path>)"
-codex exec -C "$ROOT" ...
+codex exec -C "$ROOT" --sandbox read-only --skip-git-repo-check ...
 rm -r "<scratchpad>/codex-root"    # when the review is done
 ```
+
+**`--skip-git-repo-check` is required here, and it is the export's own doing.** `codex exec`
+refuses to start outside a git repository — *"Not inside a trusted directory and
+--skip-git-repo-check was not specified"* — and the export deliberately has no `.git`. Without
+the flag every invocation fails before it reads a byte. The check exists to stop an agent
+working loose in unversioned files; the export is a read-only sandbox over a throwaway copy of a
+commit, so waiving it costs nothing that matters.
 
 It **exports** HEAD, deletes the excluded paths from the export, and verifies each deletion
 before returning the path. The export is what makes the exclusion real: a linked worktree shares

@@ -19,6 +19,10 @@
 #
 # The real working tree is never modified. Remove the export with `rm -r <dir>`.
 #
+# The caller must pass `--skip-git-repo-check` to `codex exec`. Having no `.git`
+# is what seals the export, and it is also what makes codex refuse to start
+# there. The two are the same fact, so the flag is not optional.
+#
 # Exit 0 when the pruned root is ready; exit 1 on any refusal or failure.
 
 set -uo pipefail
