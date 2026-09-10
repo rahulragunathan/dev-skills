@@ -58,6 +58,13 @@ if [ "${#EXCL[@]}" -gt 0 ]; then
 fi
 
 mkdir -p "$DEST" || { echo "CANNOT CREATE $DEST"; exit 1; }
+# Git discovers parent repositories, including through symlinked parents.
+DEST="$(cd -- "$DEST" && pwd -P)" || exit 1
+if git -C "$DEST" rev-parse --git-dir >/dev/null 2>&1; then
+  echo "ENCLOSING REPOSITORY — refusing to export here"
+  rmdir "$DEST" 2>/dev/null || true
+  exit 1
+fi
 git archive --format=tar HEAD | tar -x -C "$DEST" \
   || { echo "EXPORT FAILED — do not root a reviewer here"; exit 1; }
 

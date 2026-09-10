@@ -84,18 +84,22 @@ if [ "${#EXTRA_EXCL[@]}" -gt 0 ]; then
 fi
 ALL=':(top)'
 
-withhold() { printf '%s\t(%s)\0' "$1" "$2" >> "$WITHHELD"; }
+artifact_failure() { echo "ARTIFACT FAILED — do not send this bundle"; exit 1; }
 
-# The same policy the pathspecs express, as a name test. git pathspecs filter
-# the repo and phase manifests, but plan mode names one file directly and never
-# builds a manifest, so that path had no credential filter at all — the one
-# mode whose input a human types was the one with nothing checking it.
+withhold() { printf '%s\t(%s)\0' "$1" "$2" >> "$WITHHELD" || artifact_failure; }
+
+# Apply the path policy to every component of the normalized physical path.
+# A credential-shaped directory excludes its descendants as Git pathspecs do.
 credential_shaped() {
-  local base; base="$(basename -- "$1" | tr '[:upper:]' '[:lower:]')"
-  case "$base" in
-    *.env|*.env.*|.env|*.pem|*.key|*.p12|*.pfx|*.crt|*id_rsa*|*id_ed25519*) return 0 ;;
-    *credentials*|*.netrc|*.npmrc|*.sqlite|*.sqlite3) return 0 ;;
-  esac
+  local path
+  path="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" || artifact_failure
+  while [ -n "$path" ]; do
+    case "$path" in
+      *.env|*.env.*|*.pem|*.key|*.p12|*.pfx|*.crt|*id_rsa*|*id_ed25519*) return 0 ;;
+      *credentials*|*.netrc|*.npmrc|*.sqlite|*.sqlite3) return 0 ;;
+    esac
+    case "$path" in */*) path="${path%/*}" ;; *) break ;; esac
+  done
   return 1
 }
 
@@ -122,6 +126,7 @@ contained() {
   local f="$1" d ok=0 r
   case "$f" in /*) CAPTURE_PATH="$f" ;; *) CAPTURE_PATH="$REPO_PHYS/$f" ;; esac
   d="$(cd -- "$(dirname -- "$CAPTURE_PATH")" 2>/dev/null && pwd -P)" || return 2
+  CAPTURE_PATH="$d/$(basename -- "$CAPTURE_PATH")"
   for r in "${ALLOWED_ROOTS[@]}"; do
     under_root "$d" "$r" && ok=1
   done
@@ -140,7 +145,7 @@ classify() {
   [ "$rc" = 0 ] || return 1
   [ -e "$CAPTURE_PATH" ] || { withhold "$f" "tracked, absent from the tree"; return 1; }
   [ -f "$CAPTURE_PATH" ] || { withhold "$f" "not a regular file"; return 1; }
-  credential_shaped "$f" && { withhold "$f" "credential-shaped name"; return 1; }
+  credential_shaped "$CAPTURE_PATH" && { withhold "$f" "credential-shaped name"; return 1; }
   is_binary "$CAPTURE_PATH" && { withhold "$f" "binary"; return 1; }
   return 0
 }
@@ -148,7 +153,7 @@ classify() {
 capture() {
   local f="$1" label="${2:-}"
   classify "$f" || return 0
-  printf '\n===== %s%s =====\n' "$label" "$f" >> "$BUNDLE"
+  printf '\n===== %s%s =====\n' "$label" "$f" >> "$BUNDLE" || artifact_failure
   cat -- "$CAPTURE_PATH" >> "$BUNDLE" || { withhold "$f" "read failed"; return 0; }
   printf '%s\0' "$f" >> "$OUT/captured.z" \
     || { echo "CANNOT RECORD A CAPTURED PATH — do not send this bundle"; exit 1; }
@@ -209,12 +214,12 @@ case "$MODE" in
         done
       fi
       if [ "$allowed" = 1 ]; then
-        printf '%s\0' "$f" >> "$OUT/captured.z"
+        printf '%s\0' "$f" >> "$OUT/captured.z" || artifact_failure
       else
         DIFF_PATHS+=(":(top,exclude,literal)$f")
       fi
     done < "$OUT/tracked-raw.z"
-    rm -f "$OUT/diff-blob"
+    rm -f "$OUT/diff-blob" || artifact_failure
     git -c diff.external= diff --no-renames --no-textconv --no-ext-diff "$ARG"...HEAD \
       -- "${DIFF_PATHS[@]}" "${EXCL[@]}" >> "$BUNDLE" \
       || { echo "DIFF FAILED — do not send this bundle"; exit 1; }
@@ -234,8 +239,8 @@ case "$MODE" in
     # the working directory that named it rather than from the repository root.
     ARG="$pdir/$(basename -- "$ARG")"
     ALLOWED_ROOTS+=("$pdir")
-    printf '%s\0' "$ARG" > "$OUT/all.z"
-    cp "$OUT/all.z" "$OUT/manifest.z"
+    printf '%s\0' "$ARG" > "$OUT/all.z" || artifact_failure
+    cat "$OUT/all.z" > "$OUT/manifest.z" || artifact_failure
     capture "$ARG" "PLAN: "
     ;;
   *) echo "unknown mode: $MODE"; exit 1 ;;
@@ -243,10 +248,10 @@ esac
 
 nul() { tr -cd '\0' < "$1" 2>/dev/null | wc -c | tr -d ' '; }
 numeric() { case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
-TOTAL="$(nul "$OUT/all.z")"
-SELECTED="$(nul "$OUT/manifest.z")"
-WITHHELD_N="$(nul "$WITHHELD")"
-CAPTURED="$(nul "$OUT/captured.z")"
+TOTAL="$(nul "$OUT/all.z")" || artifact_failure
+SELECTED="$(nul "$OUT/manifest.z")" || artifact_failure
+WITHHELD_N="$(nul "$WITHHELD")" || artifact_failure
+CAPTURED="$(nul "$OUT/captured.z")" || artifact_failure
 
 # A read failure means an incomplete bundle. Search the NUL records with a
 # NUL-aware reader: `grep` in some environments injects -I and ignores input it
@@ -263,8 +268,10 @@ done
 [ "$SELECTED" -le "$TOTAL" ] \
   || { echo "MORE SELECTED THAN IN SCOPE — do not send this bundle"; exit 1; }
 
+[ "$((CAPTURED + WITHHELD_N))" -eq "$SELECTED" ] || artifact_failure
+
 printf 'bundle contains %s of %s files; %s withheld, %s excluded\n' \
   "$CAPTURED" "$TOTAL" "$WITHHELD_N" "$(( TOTAL - SELECTED ))" > "$OUT/counts.txt" \
   || { echo "CANNOT WRITE THE COUNT LINE — do not send this bundle"; exit 1; }
-cat "$OUT/counts.txt"
+cat "$OUT/counts.txt" || artifact_failure
 exit 0

@@ -385,3 +385,42 @@ refute_canary() {
   run bash "$CAPTURE" repo "$OUT"
   [ "$status" -eq 1 ]
 }
+
+@test "plan: credential-shaped physical parents are withheld" {
+  mkdir -p "$OUTSIDE/Credentials"
+  printf 'SECRET-CANARY\n' > "$OUTSIDE/Credentials/deploy.md"
+  ln -s "$OUTSIDE/Credentials" "$OUTSIDE/alias"
+  run bash "$CAPTURE" plan "$OUT" "$OUTSIDE/alias/deploy.md"
+  [ "$status" -eq 0 ]
+  refute_canary
+  withheld_for "deploy.md" "credential"
+}
+
+@test "plan: a directory manifest refuses capture instead of contradictory success" {
+  mkdir -p "$OUT/manifest.z"
+  printf 'plan\n' > "$OUTSIDE/plan.md"
+  run bash "$CAPTURE" plan "$OUT" "$OUTSIDE/plan.md"
+  [ "$status" -eq 1 ]
+}
+
+@test "repo: count reader failure cannot become a numeric zero success" {
+  mkdir -p "$TEST_TMP/bin"
+  cat > "$TEST_TMP/bin/wc" <<'SH'
+#!/bin/sh
+printf '0\n'
+exit 1
+SH
+  chmod +x "$TEST_TMP/bin/wc"
+  PATH="$TEST_TMP/bin:$PATH" run bash "$CAPTURE" repo "$OUT"
+  [ "$status" -eq 1 ]
+}
+
+@test "plan: credential extension on a parent directory follows Git exclusion semantics" {
+  for parent in keys.pem settings.env secrets.sqlite; do
+    mkdir -p "$OUTSIDE/$parent"
+    printf 'SECRET-CANARY\n' > "$OUTSIDE/$parent/deploy.md"
+    run bash "$CAPTURE" plan "$OUT" "$OUTSIDE/$parent/deploy.md"
+    [ "$status" -eq 0 ]
+    refute_canary
+  done
+}

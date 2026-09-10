@@ -113,3 +113,19 @@ teardown() {
   [ "$status" -eq 0 ]
   grep -q 'IN-SCOPE-CONTENT' "$ROOT/skills/kept/SKILL.md"
 }
+
+@test "export inside the source repository is refused before exposing parent history" {
+  run bash "$CODEX_ROOT" "$REPO/export" --exclude skills/held
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"ENCLOSING REPOSITORY"* ]]
+  [ ! -e "$REPO/export/README.md" ]
+}
+
+@test "export through a symlink into another repository is refused" {
+  mkdir "$TEST_TMP/other"
+  git -C "$TEST_TMP/other" init -q
+  ln -s "$TEST_TMP/other" "$TEST_TMP/alias"
+  run bash "$CODEX_ROOT" "$TEST_TMP/alias/nested/export" --exclude skills/held
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"ENCLOSING REPOSITORY"* ]]
+}
