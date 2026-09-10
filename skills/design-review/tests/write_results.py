@@ -31,7 +31,9 @@ def split_row(line: str) -> list[str]:
 
 
 def join_row(cells: list[str]) -> str:
-    return "| " + " | ".join(cells) + " |\n"
+    # An empty cell is one space, not two. "|  |" trips markdownlint's compact
+    # table style, and a table the linter rejects is a table nobody re-reads.
+    return "|" + "|".join(f" {c} " if c else " " for c in cells) + "|\n"
 
 
 def find_table(lines: list[str]) -> tuple[int, list[str]]:
@@ -54,6 +56,8 @@ def main() -> int:
     ap.add_argument("--show", action="store_true")
     ap.add_argument("--add", action="store_true",
                     help="append a new row instead of updating an existing one")
+    ap.add_argument("--add-column", metavar="NAME",
+                    help="append a column, empty in every existing row")
     args = ap.parse_args()
 
     if not args.scenario.is_file():
@@ -68,6 +72,40 @@ def main() -> int:
             for name, val in zip(headers, split_row(line)):
                 print(f"{name}: {val}")
             print("---")
+        return 0
+
+    if args.add_column:
+        name = args.add_column.strip()
+        if not name:
+            sys.exit("--add-column needs a name")
+        if "|" in name or "\n" in name or "\r" in name:
+            sys.exit("a column name may not contain '|' or a line break")
+        if name in headers:
+            sys.exit(f"refusing: a column named {name!r} already exists")
+
+        end = hdr_i + 2
+        while end < len(lines) and lines[end].lstrip().startswith("|"):
+            end += 1
+        before = [split_row(l) for l in lines[hdr_i + 2:end]]
+
+        lines[hdr_i] = join_row(headers + [name])
+        lines[hdr_i + 1] = join_row(["---"] * (len(headers) + 1))
+        for i in range(hdr_i + 2, end):
+            lines[i] = join_row(split_row(lines[i]) + [""])
+
+        # Every existing cell must survive in place. A column added by hand
+        # shifts the row by one and the damage reads as well-formed markdown.
+        after = [split_row(l) for l in lines[hdr_i + 2:end]]
+        if len(after) != len(before):
+            sys.exit("refusing: the row count changed")
+        for old_cells, new_cells in zip(before, after):
+            if new_cells[:-1] != old_cells or new_cells[-1] != "":
+                sys.exit("refusing: an existing cell moved or changed")
+        if len(split_row(lines[hdr_i])) != len(split_row(lines[hdr_i + 1])):
+            sys.exit("refusing: header and separator would disagree")
+
+        args.scenario.write_text("".join(lines))
+        print(f"added column {name!r} to {len(after)} row(s)")
         return 0
 
     if not args.run:

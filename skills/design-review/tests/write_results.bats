@@ -145,3 +145,40 @@ line two"
   [ "$status" -ne 0 ]
   [ "$(cat "$SCEN")" = "$before" ]
 }
+
+@test "add-column: every existing row keeps its cells and gains one empty one" {
+  # Adding a column by hand is the edit that destroyed this table twice: the
+  # header gains a name, the separator gains a dash, and every row must gain a
+  # cell in the same position or the columns silently shift by one.
+  run python3 "$W" "$SCEN" --add-column "Mutation choice"
+  [ "$status" -eq 0 ]
+  [ "$(cell 'Without skill' 'Responsibility')" = "Rule not needed here" ]
+  [ "$(cell 'Without skill' 'Notes')" = "baseline note" ]
+  [ "$(cell 'With skill (round 2)' 'Condition revision')" = '`c1` · `h2`' ]
+  [ "$(cell 'With skill (round 2)' 'Skill git SHA · content')" = '`s1` · `h3`' ]
+  [ "$(cell 'Without skill' 'Mutation choice')" = "" ]
+}
+
+@test "add-column: the separator row gains a column too" {
+  run python3 "$W" "$SCEN" --add-column "Mutation choice"
+  [ "$status" -eq 0 ]
+  local hdr sep
+  hdr="$(grep -c '|' <<< "$(grep '^| Run |' "$SCEN")")"
+  sep="$(grep -A1 '^| Run |' "$SCEN" | tail -1)"
+  # header and separator must have the same number of cells, or the table breaks
+  [ "$(awk -F'|' '{print NF}' <<< "$(grep '^| Run |' "$SCEN")")" = "$(awk -F'|' '{print NF}' <<< "$sep")" ]
+}
+
+@test "add-column: a duplicate column name is refused" {
+  local before; before="$(cat "$SCEN")"
+  run python3 "$W" "$SCEN" --add-column "Notes"
+  [ "$status" -ne 0 ]
+  [ "$(cat "$SCEN")" = "$before" ]
+}
+
+@test "add-column: a name containing a pipe or newline is refused" {
+  local before; before="$(cat "$SCEN")"
+  run python3 "$W" "$SCEN" --add-column "bad | name"
+  [ "$status" -ne 0 ]
+  [ "$(cat "$SCEN")" = "$before" ]
+}
