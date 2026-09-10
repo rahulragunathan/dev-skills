@@ -4,12 +4,13 @@ Each scenario defines a normal-work artifact and failure conditions judged from 
 Run each prompt in a fresh agent with and without the indicated skill. Re-run affected pairs
 when their prompt, conditions or loaded skill changes.
 
-The evidence below spans four rounds on `claude-opus-5`. **Round 4 (2026-09-09) is the current
-one and the only complete one**: both arms of all seven scenarios were gathered on the same day
-against the same skill text, after the earlier batches were found to be mixing baselines from one
-round with with-skill answers from another. Rounds 1 to 3 are retained as history and marked
-superseded in each scenario's Results table.
-
+The scenario tables retain rounds 1–7 on `claude-opus-5`. Round 4 is the latest complete
+paired batch recorded across all seven scenarios, but its S01/S02 fixtures are superseded.
+Round 7 is a **partial batch: 23 of 42 declared answers**. It contains two answers per arm for
+S01, three per arm for S02, three baselines each for S03–S06, and two baselines plus three
+with-skill answers for S07. S03–S06 have no round-7 with-skill answers or round-7 Results rows.
+The rollup below uses the latest Results rows, and labels their batch and revision separately.
+It does not turn ungraded archived answers into results.
 Provenance is tracked per scenario, not per repository — `evidence.py check` recomputes each
 scenario's loaded-skill hash, prompt hash and condition hash, so it can say which single scenario
 has gone stale. A repository-wide SHA could only mark everything stale or nothing, which is how
@@ -20,34 +21,23 @@ Several grades have been corrected across rounds, always in the same direction �
 
 ## What a unit's result means
 
-The goal is that the answer is right, not that the skill can be shown to be necessary. A unit
-where the baseline already gets it right is not a mark against the skill; it is a situation the
-skill does not have to rescue. So the units divide three ways, and only two of them are worth
-spending runs on.
+Report observed passes and denominators for each arm, prompt revision, condition revision and
+loaded-skill hash. A single artifact can receive a supported grade; one run cannot establish an
+outcome rate. Disagreement among retained runs describes the sample, not a stable property of
+the model. Historical labels such as “Unstable” mean only that the recorded sample contains
+both passes and failures.
 
-| Baseline behaviour | What the skill has to do | Worth re-measuring |
-| --- | --- | --- |
-| Reliably right | Not break it | No. Consistency across rounds is the evidence. |
-| Reliably wrong | Fix it, and reliably | Yes — measure how often it holds. |
-| **Unstable** | **Make the outcome reliable** | **Yes. This is the highest-value case.** |
+Three passes out of three are three observed successes. A process with a 50% success probability
+would produce that outcome 12.5% of the time. Under independent, identically distributed trials,
+the exact two-sided 95% binomial interval for 3/3 is approximately 29%–100%. Those assumptions
+may not hold for these runs. Do not claim reliability or a causal improvement from these tallies.
+Quoting an instruction shows instruction uptake, not proof that the instruction caused a pass.
 
-The third row is the one this table could not express until round 6. A baseline that is a coin
-flip and a with-skill arm that is consistently right is the skill doing its most valuable work,
-and `Rule not needed here` / `Rule works` has no way to say so. Where an arm has been run more
-than once, the cell carries the tally, and a unit whose runs disagree is recorded as **Unstable**
-rather than graded from whichever run happened to be taken.
-
-**One run per arm cannot support a grade.** Two units flipped on byte-identical inputs before
-this was understood: S05's report-form rules across rounds 3 and 4, and S07's mutation choice,
-which has now gone FAIL, PASS, FAIL, PASS across four observations. Every single-run grade of
-those units reported a coin toss as a property, including grades that were presented as
-findings and acted on.
-
-Three replicates is the standard, five where three disagree. Neither measures a rate: S05's
-roughly one-in-seven tail survives five clean runs about 44% of the time. What replication buys
-is not precision but the ability to tell a stable direction from a toss.
-
-Transcripts, dispatched prompts and hash-verified skill snapshots for both rounds are archived
+For a future comparison, choose the sample size and stopping rule before dispatch. Record every
+scheduled replicate, including failures and incomplete runs; do not increase the sample only
+when the first three disagree. These historical batches used different sampling decisions and
+must remain descriptive.
+Transcripts, dispatched prompts and hash-verified skill snapshots are archived
 outside the repo, under this project's artifact folder — the standard home for run evidence, one
 dated directory per round — at
 `Claude-Projects/Project Artifacts/Plugins/localclaude/design-review-evidence-<date>/`.
@@ -98,6 +88,66 @@ The evaluator reads **Failure conditions** and the resulting artifacts. Do not p
 agent to spot its mistake afterwards. Missing required artifacts fail the relevant conditions.
 Run definitions are text-only; S06 supplies source diagrams without rendering, and S07 produces
 an unexecuted audit plan. S07 does not prove that an agent executed cleanup or mutation scripts.
+
+## Execute the grading checks
+
+`grade.py` reads an answer without editing it, executing production code, dispatching an agent,
+or writing Results. Run it before a human grades the artifact:
+
+```bash
+python3 skills/design-review/tests/grade.py \
+  --scenario skills/design-review/tests/s07-process-rules.md --answer /path/to/answer.md
+```
+
+Alternatively select a recorded answer with `--evidence /path/to/batch --arm baseline
+--replicate 1`. This checks the answer hash and requires matching grading conditions. Add
+`--json` for machine-readable output. Exit 0 means every condition has a supported pass;
+1 means a supported failure, 2 means questions remain open, and 3 means invalid input.
+
+The evaluator extracts fenced Python and evaluates pre-production assertions with the supplied
+constants. Each assertion reports **held**, **did-not-hold**, or **could-not-evaluate**. Datetime
+arithmetic, explicit ZoneInfo conversions and `lru_cache` decorators use Python's real standard
+library. It never substitutes a guessed Account object or a guessed pytest fixture. Unsupported
+imports, mutation of fixture objects, control flow and host timezone assumptions remain visible
+evaluation gaps. A guard's dependencies must be supplied before it can support a result.
+
+S07's three production entry points are recognized automatically. Nonstandard imported function
+calls also delimit production; add `--production qualified.name` for another boundary. Assertions
+after the first production call are excluded. Multiple guards are diagnostic evaluations; a
+prior false guard already prevents the real test from reaching production. This harness does
+not run pytest or certify mutation predictions. Its Bats suite includes a verbatim fenced Python
+excerpt from the real round-7 S07 baseline whose 23-hour guard fails.
+
+S05 scans banned verdict words, silent-check names, and literal cues for its three required
+decisions. A match includes its line and surrounding text. Literal cues cannot prove a concrete
+resolution, distinguish a legitimate operation name from a silent verdict, or recognize all
+paraphrases. Those judgements remain open, alongside the extracted module/dependency tables,
+code, diagrams, diff and complete answer. All other scenario failure conditions likewise appear
+as explicit questions; a held fixture assertion never grants a design unit a pass.
+
+To record a human judgement for the report, pass `--judgements /path/to/judgements.json`:
+
+```json
+{
+  "reviewer": "Human grader name",
+  "answer_hash": "copy from harness output",
+  "condition_hash": "copy from harness output",
+  "judgements": {
+    "1": {
+      "verdict": "pass",
+      "reason": "Explain why the artifact satisfies condition 1",
+      "evidence": "Quote the relevant artifact rows or lines"
+    }
+  }
+}
+```
+
+Use the condition IDs printed by the harness, including `2b` for S07 Mutation choice. Omitted
+conditions stay open. Every human judgement requires a reviewer, reason, evidence and matching
+hashes. It cannot override an executed fixture failure. Transfer approved grades separately with
+`write_results.py`, naming only the cells to change. The writer refuses malformed tables;
+`--repair-layout` accepts an explicit JSON mapping with a separator repair flag and hash-bound
+rows whose `set` object names every resulting column. It never infers displaced cells.
 
 ## Produce, don't spot
 
@@ -159,47 +209,66 @@ of either skill has been tested.
 
 ## Results
 
-**Rounds 6 and 7 replaced the single-run grades with replicated ones, and the picture changed.**
-Nine of the fifteen units are stable and already right without the skill; the skill's job there is
-not to break them, and five rounds show it does not. Two units are reliably wrong in the baseline
-and the skill fixes them most of the time. **Three units were unstable in the baseline** — S01
-Direction (2/3), S02 Lifetime (2/3), S07 Mutation choice (2/4) — **and the with-skill arm is
-consistent on all three**: 4/4, 3/3 and 3/3.
+The tables below are generated from the latest recorded Results rows by `rollup.py`; they are
+not a fresh grading pass. Numerators count recorded passes, denominators count recorded answers.
+Single-run grades become 0/1 or 1/1. D5 includes both duplication subcases, D6 includes all three
+variation conditions, and **P2 includes mechanics and mutation choice as separate subchecks**.
+There remain fifteen coverage units; the split does not create a sixteenth unit. Marginal
+subcheck tallies do not establish a joint per-replicate pass rate when failures may differ.
 
-The clearest result is S07's Mutation choice, because the skill text changed under it. Before
-`phase-workflow` carried the host-independence rule, the with-skill arm was 1 of 2. After, it is
-3 of 3, and every one of those three cites the rule in its own words — *"per the procedure's
-worked case"*, *"per the workflow's rule that a prediction must survive a change of machine"*.
-The baseline over the same period stayed at 2 of 4. That is a rule changing behaviour, measured
-rather than asserted, and it is the only such measurement in this suite.
+```bash
+python3 skills/design-review/tests/rollup.py
+```
 
-That is a worse result than round 3 reported, and three of the five come from grading errors
-found in pass 9 rather than from the skill getting worse. Round 3 graded S07's Fixture unit a
-pass because its replacement fixture was checked on a UTC host; `gpt-6-astra` executed it under
-`TZ=Asia/Tokyo`, where the fixture's own guard is False and the test errors before reaching
-production code. Both arms carry that defect, so both are regraded.
+<!-- BEGIN GENERATED ROLLUP -->
+| Unit | Scenario / batch | Without skill: observed passes | With skill: observed passes |
+| --- | --- | --- | --- |
+| D1 | [S01](s01-responsibility-direction.md#results) / round 7 | Responsibility: 2/2 | Responsibility: 2/2 |
+| D2 | [S01](s01-responsibility-direction.md#results) / round 7 | Direction: 2/2 | Direction: 2/2 |
+| D3 | [S02](s02-lifetime-surface.md#results) / round 7 | Lifetime: 2/3 | Lifetime: 2/3 |
+| D4 | [S02](s02-lifetime-surface.md#results) / round 7 | Surface: 3/3 | Surface: 3/3 |
+| D5 | [S03](s03-duplication.md#results) / round 4 | Under side: 1/1; Over side: 1/1 | Under side: 1/1; Over side: 1/1 |
+| D6 | [S04](s04-variation.md#results) / round 4 | Outcome: 1/1 | Outcome: 1/1 |
+| R1 | [S05](s05-report-form.md#results) / round 4 | Rule 1: 0/1 | Rule 1: 0/1 |
+| R2 | [S05](s05-report-form.md#results) / round 4 | Rule 2: 1/1 | Rule 2: 1/1 |
+| R3 | [S05](s05-report-form.md#results) / round 4 | Rule 3: 1/1 | Rule 3: 1/1 |
+| R4 | [S05](s05-report-form.md#results) / round 4 | Rule 4: 0/1 | Rule 4: 0/1 |
+| G1 | [S06](s06-diagram-cap.md#results) / round 4 | Diagrams: 1/1 | Diagrams: 1/1 |
+| G2 | [S06](s06-diagram-cap.md#results) / round 4 | Outcome: 1/1 | Outcome: 1/1 |
+| P1 | [S07](s07-process-rules.md#results) / round 7 | Skip/partial: 2/2 | Skip/partial: 3/3 |
+| P2 | [S07](s07-process-rules.md#results) / round 7 | Mutation: 2/2; Mutation choice: 1/2 | Mutation: 3/3; Mutation choice: 3/3 |
+| P3 | [S07](s07-process-rules.md#results) / round 7 | Fixture: 1/2 | Fixture: 2/3 |
 
-All fifteen units are current as of round 4.
-
-| Unit | Rule | Without the skill | With it | Evidence status |
+| Scenario | Prompt hash | Condition hash | Loaded skill hash | Record applicability |
 | --- | --- | --- | --- | --- |
-| D1 | Responsibility | **Rule needed** | **Rule ineffective** | Current |
-| R1 | Only what fired | **Rule needed** | **Rule ineffective** | Current |
-| R4 | No filler verdicts | **Rule needed** | **Rule ineffective** | Current |
-| P2 | Mutation reasoning | **Rule needed** | **Rule ineffective** | Current |
-| P3 | Fixture validity | **Rule needed** | **Rule ineffective** | Current |
-| D2 | Direction | **Rule needed** | **Rule works** | Current |
-| D3 | Lifetime | **Rule needed** | **Rule works** | Current |
-| D4 | Surface | Rule not needed here | Rule works | Current |
-| D5 | Duplication | Rule not needed here | Rule works | Current |
-| D6 | Variation / YAGNI cap | Rule not needed here | Rule works | Current |
-| R2 | Resolution not observation | Rule not needed here | Rule works | Current |
-| R3 | Record the declined check | Rule not needed here | Rule works | Current |
-| G1 | Diagram distinctness | Rule not needed here | Rule works | Current |
-| G2 | Produce versus edit | Rule not needed here | Rule works | Current |
-| P1 | Skip vs partial coverage | Rule not needed here | Rule works | Current |
+| S01 | `3d791568afe9334d` | `db4da67c54d1d7db` | `fcda7a2da8058dd8` | Current; Current |
+| S02 | `ff76fc3a6dc19f2a` | `f2d9d679e9b917fb` | `fcda7a2da8058dd8` | Current; Current |
+| S03 | `7e1ef621d32bdd1d` | `a6b60af770d5d478` | `fcda7a2da8058dd8` | Current; Current |
+| S04 | `a287991c188d2a36` | `0619345ddc2e9548` | `fcda7a2da8058dd8` | Current; Current |
+| S05 | `a0032527302c3acf` | `1c72d3ab44485175` | `fcda7a2da8058dd8` | Current; Current |
+| S06 | `790832afba8ba5fa` | `aa21e532b4457c8b` | `fcda7a2da8058dd8` | Current; Current |
+| S07 | `562115beedc26965` | `1c6a4c0f44c0d4bc` | `a38d6bbae3b7d55f` | Current; Current |
+<!-- END GENERATED ROLLUP -->
 
-### Corrections — three grades were wrong, and external review found them
+The revision table quotes the scenario records' applicability labels. “Current” is scoped to
+those prompt, condition and loaded-skill hashes; it does not mean all fifteen units share one
+batch. Older S01/S02 fixture rows are Expired with their historical grades retained.
+
+For S01's revised fixture, round 5 plus round 7 records Direction at baseline 2/3 and with-skill
+3/3. Round 4 used a different prompt and condition and is excluded from that tally. The latest
+round alone has 2/2 in each arm. For S02 round 7, Lifetime is 2/3 in each arm after correcting
+with-skill replicate 3. For S07 round 7, Fixture is baseline 1/2 and with-skill 2/3; the required
+awareness assertions are missing in with-skill replicate 3, and baseline replicate 1's 23-hour
+fixture assertion is false. Archived answers remain unchanged.
+
+S07 Mutation choice must be grouped by the loaded skill: round 4's
+`4ba576f25dab8154` has one with-skill failure; round 5's `a38d6bbae3b7d55f` has one
+with-skill pass; round 7 uses that same hash and has three with-skill passes. Round 5 belongs
+with the latter snapshot, not in a “before” bucket. The corresponding baseline choice tallies
+in rounds 4, 5 and 7 are 0/1, 1/1 and 1/2. These are table records from different batches,
+not contemporaneous randomized controls. No causal or reliability claim follows from them.
+
+### Historical corrections
 
 Recorded because the grading error is more instructive than the grades.
 
@@ -223,13 +292,13 @@ declared table rows or reachability. Reworded to say reachability, and to grant 
 root an explicit exemption when every domain policy it would otherwise hold has been extracted.
 Both existing outputs were judged fully against the new wording, so neither run expired.
 
-### What round 3 changed in the artifacts
+### Recorded round-3 artifact differences
 
-Re-gathering is not bookkeeping — the clarified conditions changed what the agent produced:
+The records describe these differences; they do not isolate their cause:
 
 - **S01** left the email subject inline in `run()` in round 2 and flagged it as an open question.
   Round 3 extracts it into the report module and cites that as why the composition-root
-  exemption applies. The delivery-content clause is what moved it.
+  exemption applies. The answer refers to the delivery-content clause.
 - **S02 and S03** applied the same clause unprompted, to rejection message copy and to the
   exporter dispatch root respectively.
 - **S07** pins `TZ=UTC` only in the replacement test. Its substitute mutation does not meet P2's
@@ -237,7 +306,7 @@ Re-gathering is not bookkeeping — the clarified conditions changed what the ag
   [S07](s07-process-rules.md#results) for the corrected grade and the two additional evidence
   observations that leave grades unchanged.
 
-### Conditions reworded this round
+### Conditions reworded in round 3
 
 Three, all because a careful reader could reach the opposite verdict:
 
@@ -251,8 +320,8 @@ Three, all because a careful reader could reach the opposite verdict:
 
 ### What the proposed tests inside the outputs do not establish
 
-Several runs propose test code. Grading judges the *design artifact*, not that code, and the two
-should not be conflated:
+Several runs propose test code. S01–S06 grade the design artifact. S07 also requires executing the
+fixture guards in supplied test code; that does not establish production mutation coverage:
 
 - S03's frozen-digest and cross-exporter hash-equality checks stay green if the shared
   computation is copied back into each exporter. They verify output values, not the extraction
