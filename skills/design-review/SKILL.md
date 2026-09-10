@@ -1,6 +1,6 @@
 ---
 name: design-review
-description: Structural design pass for plan time and phase end. Produces the module table, the expected-change and shared-state lines, and verdicts on six named checks covering SOLID, DRY, KISS and separation of concerns, with a YAGNI cap graded by cost. Optionally drives the drawio skill. Use at phase-workflow §1 and §3 step 2, or on any architectural change.
+description: Structural design pass for plan time and phase end. Produces the module table, the expected-change and shared-state lines, and resolutions for whichever of six named checks fire covering SOLID, DRY, KISS and separation of concerns, with a YAGNI cap graded by cost. Optionally drives the drawio skill. Use at phase-workflow §1 and §3 step 2, or on any architectural change.
 license: MIT
 ---
 
@@ -230,7 +230,7 @@ and the plan links that PNG; the plan's front matter records the generator filen
 produced. §2 moves each generator into `docs/` as task one, and that committed generator is the
 baseline `phase` mode compares against.
 
-**Four things that are easy to get wrong:**
+**Things that are easy to get wrong:**
 
 - **Never mark a box "new".** A new-in-this-phase marker is a diff, and it goes stale the moment
   the phase lands — leaving a diagram that quietly describes the wrong phase. The plan text

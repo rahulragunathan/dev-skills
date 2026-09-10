@@ -20,13 +20,14 @@ flattened with `_`: `Code/Skills/drawio` → `Skills_drawio`, `Clients/ClientX/C
 `ClientX_Code_api`. A repo with both languages gets `~/Python-Envs/<name>` and
 `~/Node-Envs/<name>`.
 
-**Flattening is not injective — check before reusing an env.** `Code/a/b` and `Code/a_b` both
-flatten to `a_b`, so two different projects can name the same env. Before adopting an existing
-env, resolve **this project's** `.venv` / `node_modules` symlink and confirm it lands on the env
-you are about to adopt — the link runs project → environment, so there is no backlink in the env
-to read. If a different project's link already resolves there, the two are sharing it; if it points
-somewhere else, pick an explicit name rather than sharing. ENH-10 tracks making the mapping
-unambiguous.
+**Flattening is not injective — establish ownership before reusing an env.** `Code/a/b` and
+`Code/a_b` both flatten to `a_b`. Resolve this project's link to find its current destination,
+then inspect the other candidate projects under the code root for links to that same physical
+env. This project's own link proves only where it points; it does not prove exclusive ownership.
+For a new project with no link, an existing env is unowned until that inspection establishes
+otherwise. If another project uses it, or ownership remains uncertain, stop before running
+`new`, `envs` or `install` against it. Resolve the mapping in the external scripts first;
+ENH-10 tracks that work. Do not invent a name argument those scripts do not accept.
 
 The code root is `…/My Drive/Code` on one machine and `…/My Drive/Clients` on the other, which
 is also where the two scripts live.

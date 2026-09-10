@@ -236,10 +236,9 @@ same environment.
 
 Low, because the collision needs a project whose directory name already contains an underscore
 at the right position. When it happens, two projects silently share one `.venv`, and the symptom
-is a dependency appearing from nowhere. The skill now says to resolve the project's own `.venv` symlink and confirm where it lands
-before adopting an existing env. That is a weak workaround and worth stating as one: the link
-runs project → environment, so nothing in the environment records which project owns it, and
-detecting a collision means inspecting every candidate project rather than reading one backlink.
+is a dependency appearing from nowhere. The skill requires inspecting candidate projects for shared destinations before adopting an
+existing env, and stopping if ownership remains uncertain. Nothing in the environment records
+its owner, so that manual check does not replace an unambiguous naming scheme.
 
 ### Notes for the work
 

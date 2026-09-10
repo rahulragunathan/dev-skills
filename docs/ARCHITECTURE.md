@@ -5,16 +5,14 @@ How `localclaude` is put together today. Planned work is in
 
 ## What this is
 
-A Claude Code plugin of eight skills. Six are **instructions, not code** — a `SKILL.md` that
-Claude reads and follows. The executable code is nine bash scripts and their `bats` tests, under
-`claude-toggle-backend`, `drive-backup`, `external-review`, `claude-setup` and `phase-workflow`,
-plus two Python tools: `docs/build_architecture.py` and
-`skills/design-review/tests/write_results.py`.
+A Claude Code plugin of eight skills. Each exposes a `SKILL.md` that Claude reads and follows.
+Shell helpers implement setup, review capture, reviewer preflight, mutation restoration and
+release checks. Python helpers handle reviewer deadlines, roadmap edits and design-review test
+tooling. `docs/build_architecture.py` generates the module diagram.
 
-That shapes everything else here. There is no build, no runtime and no entry point. A "module"
-is a skill directory, its interface is how the skill is invoked, and a regression is a
-sentence that contradicts another sentence somewhere else. The checks that matter are
-therefore consistency checks, not compilation.
+There is no application entry point. A module here is a skill directory, with an invocation
+as its interface. Verification covers both executable behavior and agreement between the
+instructions and the commands they tell a reader to run.
 
 ![Module map](architecture.png)
 
@@ -116,19 +114,24 @@ before reading them, and disables diff conversion filters, in every mode.
 `uname` and `vllm-mlx` and a sandboxed `$HOME`. Eight of them pass with the behaviour they
 name removed — see UNK-02.
 
-**Four suites now cover the shell that used to live only in prose**, all built the same way:
-extract the procedure into a script, then write tests over scratch fixtures.
+The process and setup suites run against scratch repositories and temporary directories:
 
-| Suite | Covers | Canary |
-| --- | --- | --- |
-| `external-review/tests/capture.bats` | the bundle that leaves the machine | planted secret outside the repo |
-| `claude-setup/tests/install-standards.bats` | the standards block in `~/.claude/CLAUDE.md` | user content outside the block |
-| `phase-workflow/tests/phase-git.bats` | mutation restore, tag publication, branch deletion | uncommitted work |
-| `design-review/tests/write_results.bats` | the results-table writer | the columns not named |
+| Skill | Executable checks |
+| --- | --- |
+| `claude-setup` | standards installation, link installation, README installation command |
+| `external-review` | bundle capture, pruned export, documented Codex invocation, preflight |
+| `phase-workflow` | mutation restoration, release checks, documented release and cleanup commands, roadmap edits |
+| `design-review` | transcript handling, fixture evaluation, Results writer, rollup tooling |
 
-Each canary is the thing that disappeared when the procedure went wrong before, so a regression
-fails loudly rather than quietly. Two of `capture.bats`'s fourteen are red on purpose: they
-reproduce open findings and go green when those are fixed.
+Run them with:
+
+```bash
+bats skills/claude-setup/tests skills/external-review/tests skills/phase-workflow/tests skills/design-review/tests
+```
+
+The canaries include excluded content, user configuration, uncommitted work and unrelated table
+cells. All tests in these suites must pass; none is intentionally left red. `project-env` owns
+instructions for scripts outside this repository and currently has no bundled Bats suite.
 
 `drive-backup`'s `backup-projects.sh` has no tests at all. That is ENH-03, and the next phase.
 

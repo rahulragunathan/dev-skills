@@ -23,7 +23,7 @@ completion is deleted from both, with the record written into CHANGELOG `[Unrele
 item dropped rather than built moves to "Decisions taken and not taken". IDs are never
 reused. Nothing here looks backward — completed phases are CHANGELOG releases.
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-09-10
 
 ## Status
 
@@ -64,6 +64,7 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-03](KNOWN_ISSUES.md#ki-03) | A PID file is trusted without checking what the process is | Rare | High |
 | [KI-04](KNOWN_ISSUES.md#ki-04) | The stray-process sweep kills servers this plugin did not start | Rare | High |
 | [KI-06](KNOWN_ISSUES.md#ki-06) | A stale lock silently disables every later backup | Rare | High |
+| [KI-35](KNOWN_ISSUES.md#ki-35) | Results writer can edit an indented code example | Rare | High |
 | [KI-16](KNOWN_ISSUES.md#ki-16) | `HF_HOME` is exported by an orphaned `~/.zshrc` block no skill installs | Almost always | Medium |
 | [KI-17](KNOWN_ISSUES.md#ki-17) | The machine is documented as both 64 GB and 24 GB | Almost always | Medium |
 | [KI-21](KNOWN_ISSUES.md#ki-21) | Uninstall says the server is left alone, then stops it | Almost always | Medium |
@@ -101,5 +102,5 @@ reasoning behind each in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
 | ID | Question | Kind |
 | ---- | ---------- | ------ |
-| [UNK-03](OPEN_QUESTIONS.md#unk-03) | Does `Bash(cmd*)` really never match? | Verification |
+| [UNK-03](OPEN_QUESTIONS.md#unk-03) | Verify installed Claude Code permission behavior | Verification |
 | [UNK-02](OPEN_QUESTIONS.md#unk-02) | No test in this repo can be shown to discriminate from git history alone | Risk |

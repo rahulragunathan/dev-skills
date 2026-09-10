@@ -244,6 +244,21 @@ here — the plugin manifest's version is the only record of them.
 
 ### Fixed
 
+- Standards installation rejects malformed canonical marker pairs before first creation and
+  refuses symlinked backup destinations and replaces hard-linked backups without writing through them. Failed Git status queries stop exports and mutation
+  audits before they can discard or omit uncommitted work.
+- Codex review exports preserve committed regular-file bytes regardless of working directory
+  or archive attributes, omit links and submodules with a coverage notice, and use one prepared
+  root for review and diagnostic invocations. The docs distinguish pruning from read isolation.
+- Fixture evaluation reports unsupported writes, invalid helper calls and host-dependent
+  timezone conversion as evaluation gaps. Transcript parsing retains every final text block
+  and rejects an unanswered later turn. Results-table selection and explicit repairs stay
+  inside the Results section. These tooling changes do not alter recorded grades or results.
+- Release tests execute the documented publication and cleanup commands. Cleanup reports Git
+  failures instead of returning success. Repo documentation reflects the executable helpers,
+  routes README installation through the tested link installer, and states the supported
+  permission syntax and the manual environment-ownership check accurately.
+
 - **Fourteen defects found by `gpt-6-astra` in external review pass 9**, each verified
   before acceptance and five of them Critical or High. The mutation helper accepted any
   commit containing the file and restored from it, discarding work committed since; its
