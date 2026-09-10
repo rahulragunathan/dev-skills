@@ -18,6 +18,35 @@ S07's evidence outlived two changes to `phase-workflow`.
 Several grades have been corrected across rounds, always in the same direction — see
 *Corrections* below.
 
+## What a unit's result means
+
+The goal is that the answer is right, not that the skill can be shown to be necessary. A unit
+where the baseline already gets it right is not a mark against the skill; it is a situation the
+skill does not have to rescue. So the units divide three ways, and only two of them are worth
+spending runs on.
+
+| Baseline behaviour | What the skill has to do | Worth re-measuring |
+| --- | --- | --- |
+| Reliably right | Not break it | No. Consistency across rounds is the evidence. |
+| Reliably wrong | Fix it, and reliably | Yes — measure how often it holds. |
+| **Unstable** | **Make the outcome reliable** | **Yes. This is the highest-value case.** |
+
+The third row is the one this table could not express until round 6. A baseline that is a coin
+flip and a with-skill arm that is consistently right is the skill doing its most valuable work,
+and `Rule not needed here` / `Rule works` has no way to say so. Where an arm has been run more
+than once, the cell carries the tally, and a unit whose runs disagree is recorded as **Unstable**
+rather than graded from whichever run happened to be taken.
+
+**One run per arm cannot support a grade.** Two units flipped on byte-identical inputs before
+this was understood: S05's report-form rules across rounds 3 and 4, and S07's mutation choice,
+which has now gone FAIL, PASS, FAIL, PASS across four observations. Every single-run grade of
+those units reported a coin toss as a property, including grades that were presented as
+findings and acted on.
+
+Three replicates is the standard, five where three disagree. Neither measures a rate: S05's
+roughly one-in-seven tail survives five clean runs about 44% of the time. What replication buys
+is not precision but the ability to tell a stable direction from a toss.
+
 Transcripts, dispatched prompts and hash-verified skill snapshots for both rounds are archived
 outside the repo, under this project's artifact folder — the standard home for run evidence, one
 dated directory per round — at
@@ -130,9 +159,19 @@ of either skill has been tested.
 
 ## Results
 
-**Seven of fifteen units need their rule, and the skill fixes two of them.** Five are
-`Rule ineffective`: the skill's text does not change the answer in the direction it intends. The
-other eight units record a strong model already doing the right thing unaided.
+**Rounds 6 and 7 replaced the single-run grades with replicated ones, and the picture changed.**
+Nine of the fifteen units are stable and already right without the skill; the skill's job there is
+not to break them, and five rounds show it does not. Two units are reliably wrong in the baseline
+and the skill fixes them most of the time. **Three units were unstable in the baseline** — S01
+Direction (2/3), S02 Lifetime (2/3), S07 Mutation choice (2/4) — **and the with-skill arm is
+consistent on all three**: 4/4, 3/3 and 3/3.
+
+The clearest result is S07's Mutation choice, because the skill text changed under it. Before
+`phase-workflow` carried the host-independence rule, the with-skill arm was 1 of 2. After, it is
+3 of 3, and every one of those three cites the rule in its own words — *"per the procedure's
+worked case"*, *"per the workflow's rule that a prediction must survive a change of machine"*.
+The baseline over the same period stayed at 2 of 4. That is a rule changing behaviour, measured
+rather than asserted, and it is the only such measurement in this suite.
 
 That is a worse result than round 3 reported, and three of the five come from grading errors
 found in pass 9 rather than from the skill getting worse. Round 3 graded S07's Fixture unit a
