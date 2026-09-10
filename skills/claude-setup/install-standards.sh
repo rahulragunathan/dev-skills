@@ -80,7 +80,21 @@ else
   trap 'rm -f "$TMP"' EXIT
 
   if [ "$n_open" = "0" ]; then
-    # No markers: append, preserving everything already there.
+    # A legacy section has no reliable end boundary. Refuse rather than
+    # silently keeping stale instructions alongside their replacement.
+    legacy_rc=0
+    python3 - "$CANON" "$TARGET" <<'PYCODE' || legacy_rc=$?
+import pathlib, re, sys
+headings = set(re.findall(r'^#{1,6} .+$', pathlib.Path(sys.argv[1]).read_text(), re.M))
+legacy = set(re.findall(r'^#{1,6} .+$', pathlib.Path(sys.argv[2]).read_text(), re.M))
+sys.exit(0 if headings & legacy else 1)
+PYCODE
+    case "$legacy_rc" in
+      0) echo "LEGACY UNMARKED STANDARDS — reconcile overlapping sections explicitly; target unchanged"; exit 1 ;;
+      1) : ;;
+      *) echo "LEGACY DETECTOR FAILED — target unchanged"; exit 1 ;;
+    esac
+    # No recognizable standards: preserve unrelated content and append.
     { cat "$TARGET"; printf '\n'; cat "$CANON"; } > "$TMP" \
       || { echo "ASSEMBLE FAILED"; exit 1; }
   else
@@ -88,8 +102,8 @@ else
     # Assemble with head/tail/cat: the block is multi-line and cannot travel
     # through `awk -v`, which silently truncates at the first newline.
     last_open="$(grep -nE "$OPEN_RE" "$TARGET" | tail -n 1 | cut -d: -f1)"
-    close_line="$(awk -v s="$last_open" -v c="$CLOSE" \
-      'NR >= s && index($0, c) == 1 { print NR; exit }' "$TARGET")"
+    close_line="$(awk -v s="$last_open" -v c="$CLOSE_RE" \
+      'NR >= s && $0 ~ c { print NR; exit }' "$TARGET")"
     [ -n "$close_line" ] \
       || { echo "NO CLOSING MARKER AFTER THE LAST OPENING MARKER — refusing"; exit 1; }
     { [ "$last_open" -gt 1 ] && head -n "$((last_open - 1))" "$TARGET"
@@ -105,8 +119,8 @@ else
   v_close="$(grep -cE "$CLOSE_RE" "$TMP" || true)"
   [ "$v_open" = "1" ] && [ "$v_close" = "1" ] \
     || { echo "CANDIDATE REJECTED — $v_open opening, $v_close closing; $TARGET untouched"; exit 1; }
-  diff -q <(awk -v o="$OPEN" -v c="$CLOSE" \
-      'index($0,o)==1{p=1} p{print} index($0,c)==1&&p{exit}' "$TMP") "$CANON" >/dev/null \
+  diff -q <(awk -v o="$OPEN_RE" -v c="$CLOSE_RE" \
+      '$0 ~ o{p=1} p{print} $0 ~ c&&p{exit}' "$TMP") "$CANON" >/dev/null \
     || { echo "CANDIDATE REJECTED — block differs from canonical; $TARGET untouched"; exit 1; }
 
   mv "$TMP" "$TARGET" || { echo "REPLACE FAILED"; exit 1; }

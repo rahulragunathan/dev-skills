@@ -122,7 +122,9 @@ of this file's marker-shaped lines is the real one.
 The script does the rest, and it is what the tests cover. It matches whole marker lines only,
 refuses a file with more than one managed block or with unbalanced markers, refuses a symlinked
 target including a dangling one, assembles a candidate and verifies *that* before it replaces
-anything, and preserves content outside the block. Each of those is a way this step has gone
+anything, and preserves content outside the block. Unmarked files with headings shared by the
+canonical standards are refused for explicit reconciliation; stale sections must not remain
+beside an appended replacement. Each of those is a way this step has gone
 wrong or could: a re-run must bring a stale file up to date rather than append to it, and a bad
 slice here corrupts the file that governs every session on every machine. Change its behavior in
 `install-standards.sh` and verify it with `tests/install-standards.bats`.
@@ -311,20 +313,11 @@ Then symlink the loose-skills folder (every subfolder with a top-level `SKILL.md
 ```bash
 SRC="$CODE_ROOT/Skills"
 LINK="$HOME/.claude/skills"
-mkdir -p "$HOME/.claude" || exit 1
-if [ -e "$LINK" ] && [ ! -L "$LINK" ]; then
-  [ ! -e "$LINK.local.bak" ] && [ ! -L "$LINK.local.bak" ] || { echo "BACKUP EXISTS — stop"; exit 1; }
-  mv "$LINK" "$LINK.local.bak" || { echo "MOVE FAILED — stop"; exit 1; }
-fi
-[ -L "$LINK" ] || [ ! -e "$LINK" ] || { echo "LINK PATH OCCUPIED — stop"; exit 1; }
-[ -d "$SRC" ] || { echo "SOURCE DOES NOT EXIST: $SRC — refusing to link"; exit 1; }
-ln -sfn "$SRC" "$LINK" || exit 1
-[ -L "$LINK" ] && [ -d "$LINK/" ] || { echo "LINK DOES NOT RESOLVE TO A DIRECTORY"; exit 1; }
-[ "$(cd -- "$LINK/" && pwd -P)" = "$(cd -- "$SRC" && pwd -P)" ] \
-  || { echo "LINK RESOLVES SOMEWHERE ELSE"; exit 1; }
+bash "$CLAUDE_PLUGIN_ROOT/skills/claude-setup/install-link.sh" "$SRC" "$LINK" || exit 1
 ```
 
-**Check the source exists before linking, and check the link resolves after.** The probe accepts
+**The helper validates the source before moving anything and restores the old destination if
+link creation or verification fails.** The probe accepts
 a code root containing *either* `Skills/` or `Plugins/`, then installs both links. On a root
 holding only one of them, the other `ln -sfn` replaces a working directory with a link to
 nothing — and comparing `readlink` against `$SRC` still passes, because the spelling is right and
@@ -341,17 +334,7 @@ The bundled skills (`claude-setup`, `claude-toggle-backend`, `local-models`, `ph
 ```bash
 SRC="$CODE_ROOT/Plugins"
 LINK="$HOME/.claude/localclaude-plugins"
-mkdir -p "$HOME/.claude" || exit 1
-if [ -e "$LINK" ] && [ ! -L "$LINK" ]; then
-  [ ! -e "$LINK.local.bak" ] && [ ! -L "$LINK.local.bak" ] || { echo "BACKUP EXISTS — stop"; exit 1; }
-  mv "$LINK" "$LINK.local.bak" || { echo "MOVE FAILED — stop"; exit 1; }
-fi
-[ -L "$LINK" ] || [ ! -e "$LINK" ] || { echo "LINK PATH OCCUPIED — stop"; exit 1; }
-[ -d "$SRC" ] || { echo "SOURCE DOES NOT EXIST: $SRC — refusing to link"; exit 1; }
-ln -sfn "$SRC" "$LINK" || exit 1
-[ -L "$LINK" ] && [ -d "$LINK/" ] || { echo "LINK DOES NOT RESOLVE TO A DIRECTORY"; exit 1; }
-[ "$(cd -- "$LINK/" && pwd -P)" = "$(cd -- "$SRC" && pwd -P)" ] \
-  || { echo "LINK RESOLVES SOMEWHERE ELSE"; exit 1; }
+bash "$CLAUDE_PLUGIN_ROOT/skills/claude-setup/install-link.sh" "$SRC" "$LINK" || exit 1
 ```
 
 Then in Claude Code, using the **literal absolute path** (no quotes, no spaces, and not `~` — the slash command won't expand it):

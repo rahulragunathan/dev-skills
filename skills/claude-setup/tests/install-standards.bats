@@ -195,3 +195,39 @@ EOF
   [ ! -e "$TEST_TMP/absent.md" ]
   grep -q 'USER-CONTENT outside the config dir' "$outside"
 }
+
+@test "complete block: prefix prose before and inside does not delimit replacement" {
+  {
+    echo '<!-- >>> localclaude standards quoted prose'
+    echo '<!-- >>> localclaude standards v0 >>> -->'
+    echo '<!-- <<< localclaude standards quoted prose'
+    echo 'STALE'
+    echo '<!-- <<< localclaude standards <<< -->'
+    echo 'USER-CONTENT'
+  } > "$TARGET"
+  run bash "$SCRIPT" "$CANON" "$TARGET"
+  [ "$status" -eq 0 ]
+  grep -q 'quoted prose' "$TARGET"
+  ! grep -q 'STALE' "$TARGET"
+  canary_survives
+}
+
+@test "legacy unmarked standards refuse ambiguous reconciliation without appending" {
+  printf '# Global standards\n\n## Shell commands\n\nStale instructions\n\nUSER-CONTENT\n' > "$TARGET"
+  cp "$TARGET" "$TEST_TMP/before"
+  run bash "$SCRIPT" "$CANON" "$TARGET"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"LEGACY"* ]]
+  cmp "$TARGET" "$TEST_TMP/before"
+}
+
+@test "legacy detector failure refuses without appending standards" {
+  printf 'USER-CONTENT\n' > "$TARGET"
+  cp "$TARGET" "$TEST_TMP/before"
+  mkdir "$TEST_TMP/bin"
+  printf '#!/bin/sh\nexit 127\n' > "$TEST_TMP/bin/python3"
+  chmod +x "$TEST_TMP/bin/python3"
+  PATH="$TEST_TMP/bin:$PATH" run bash "$SCRIPT" "$CANON" "$TARGET"
+  [ "$status" -eq 1 ]
+  cmp "$TARGET" "$TEST_TMP/before"
+}
