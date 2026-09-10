@@ -393,3 +393,24 @@ PY
     [[ "$output" == *"positive"* ]]
   done
 }
+
+@test "adversarial: transcript preserves all final text blocks" {
+  run python3 - "$EVPY" "$TEST_TMP/transcript" <<'PYCODE'
+import importlib.util, json, pathlib, sys
+spec=importlib.util.spec_from_file_location('evidence',sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+p=pathlib.Path(sys.argv[2]);p.write_text(json.dumps({'message':{'role':'assistant','stop_reason':'end_turn','content':[{'type':'text','text':'FIRST'},{'type':'text','text':'SECOND'}]}})+'\n')
+body, tools, complete=m.read_transcript(p)
+assert complete and body == 'FIRST\nSECOND', (body,complete)
+PYCODE
+  [ "$status" -eq 0 ]
+}
+
+@test "adversarial: an unanswered later user turn invalidates completion" {
+  run python3 - "$EVPY" "$TEST_TMP/transcript" <<'PYCODE'
+import importlib.util, json, pathlib, sys
+spec=importlib.util.spec_from_file_location('evidence',sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+p=pathlib.Path(sys.argv[2]);p.write_text('\n'.join(json.dumps({'message':v}) for v in [{'role':'assistant','stop_reason':'end_turn','content':'finished earlier'}, {'role':'user','content':'continue'}])+'\n')
+assert m.read_transcript(p)[2] is False
+PYCODE
+  [ "$status" -eq 0 ]
+}

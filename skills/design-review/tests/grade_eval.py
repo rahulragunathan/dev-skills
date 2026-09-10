@@ -6,6 +6,7 @@ Only the selected pure standard-library constructors/methods below can execute.
 import ast
 import datetime
 import functools
+import inspect
 import operator
 import types
 import zoneinfo
@@ -114,8 +115,10 @@ class Evaluator:
                 allowed |= (isinstance(owner, (datetime.datetime, datetime.date, datetime.time,
                     datetime.timedelta, datetime.tzinfo, functools._lru_cache_wrapper))
                     or owner is datetime.datetime)
-                if node.func.attr == 'astimezone' and not args and 'tz' not in kwargs:
-                    raise Gap('host timezone is not established; supply an explicit zone')
+                if node.func.attr == 'astimezone':
+                    zone = args[0] if args else kwargs.get('tz')
+                    if zone is None or not isinstance(owner, datetime.datetime) or owner.utcoffset() is None:
+                        raise Gap('host timezone is not established; use an aware datetime and explicit zone')
             if not allowed:
                 raise Gap('unsupported call: ' + ast.unparse(node.func))
             return fn(*args, **kwargs)
@@ -159,6 +162,12 @@ class Evaluator:
         else:
             raise Gap('assignment target unsupported')
 
+    def invalidate(self, env, reason):
+        # Unknown writes may affect aliases as well as their syntactic target.
+        for name, value in list(env.items()):
+            if name not in BUILTINS and not isinstance(value, types.ModuleType) and not any(value is f for f in SAFE_CALLS):
+                env[name] = Unknown(reason)
+
     def statements(self, nodes, env, scope):
         for node in nodes:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
@@ -175,8 +184,8 @@ class Evaluator:
                 for target in node.targets if isinstance(node, ast.Assign) else [node.target]:
                     try:
                         self.assign(target, value, env)
-                    except Gap:
-                        pass
+                    except Gap as exc:
+                        self.invalidate(env, str(exc))
             elif isinstance(node, ast.If):
                 if self.calls_production(node.test):
                     return True
@@ -186,9 +195,7 @@ class Evaluator:
                     for n in ast.walk(node):
                         if isinstance(n, ast.Assert):
                             self.assertion(n, env, scope, 'branch cannot be selected: ' + str(exc))
-                    for n in ast.walk(node):
-                        if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store):
-                            env[n.id] = Unknown('assignment in unresolved branch')
+                    self.invalidate(env, 'unresolved branch effects')
                     if self.calls_production(node):
                         return True
                 else:
@@ -200,18 +207,14 @@ class Evaluator:
                 try:
                     self.expression(node.value, env)
                 except Exception as exc:
-                    for name, value in list(env.items()):
-                        if name not in BUILTINS and not isinstance(value, types.ModuleType) and not any(value is f for f in SAFE_CALLS):
-                            env[name] = Unknown('unsupported setup expression: ' + str(exc))
+                    self.invalidate(env, 'unsupported setup expression: ' + str(exc))
             elif isinstance(node, ast.Return):
                 return True
             elif not isinstance(node, (ast.Expr, ast.Pass)):
                 for n in ast.walk(node):
                     if isinstance(n, ast.Assert):
                         self.assertion(n, env, scope, 'unsupported control flow: ' + type(node).__name__)
-                for n in ast.walk(node):
-                    if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store):
-                        env[n.id] = Unknown('assignment in unsupported control flow')
+                self.invalidate(env, 'unsupported control flow: ' + type(node).__name__)
 
     def imports(self, node, env):
         for alias in node.names:
@@ -227,10 +230,13 @@ class Evaluator:
 
     def helper(self, node):
         def call(*args, **kwargs):
-            if node.args.defaults or node.args.vararg or node.args.kwarg:
-                raise Gap('helper argument defaults/variadics unsupported')
+            if node.args.defaults or node.args.vararg or node.args.kwarg or node.args.kwonlyargs or node.args.posonlyargs:
+                raise Gap('helper argument defaults/variadics/keyword-only/positional-only unsupported')
+            signature = inspect.Signature([inspect.Parameter(a.arg, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+                                           for a in node.args.args])
+            bound = signature.bind(*args, **kwargs)
             env = dict(self.env)
-            env.update(zip([a.arg for a in node.args.args], args)); env.update(kwargs)
+            env.update(bound.arguments)
             for stmt in node.body:
                 if isinstance(stmt, ast.Return):
                     return self.expression(stmt.value, env)

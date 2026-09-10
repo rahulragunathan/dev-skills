@@ -211,3 +211,66 @@ PY
   report || true
   check_report "r['checks'][0]['status']=='could-not-evaluate'"
 }
+
+@test "adversarial: unsupported writes invalidate fixture values including aliases" {
+  cat > "$T/answer.md" <<'PYCODE'
+```python
+def test_assignment():
+    x = [1]
+    y = x
+    y[0] = 2
+    assert x[0] == 1
+
+def test_attribute():
+    from types import SimpleNamespace
+    x = SimpleNamespace(value=1)
+    x.value = 2
+    assert x.value == 1
+```
+PYCODE
+  report || true
+  check_report "len(r['checks'])==2 and all(c['status']=='could-not-evaluate' for c in r['checks'])"
+}
+
+@test "adversarial: helper arguments cannot fall back to module globals" {
+  cat > "$T/answer.md" <<'PYCODE'
+```python
+x = 7
+def helper(x):
+    return x
+assert helper() == 7
+assert helper(7, 8) == 7
+assert helper(x=7, unknown=8) == 7
+assert helper(7) == 7
+```
+PYCODE
+  report || true
+  check_report "[c['status'] for c in r['checks']]==['could-not-evaluate']*3+['held']"
+}
+
+@test "adversarial: naive or implicit-local timezone conversions remain evaluation gaps" {
+  cat > "$T/answer.md" <<'PYCODE'
+```python
+from datetime import datetime, timezone
+assert datetime(2026, 1, 1).astimezone(timezone.utc).hour == 0
+assert datetime(2026, 1, 1, tzinfo=timezone.utc).astimezone(None).hour == 0
+assert datetime(2026, 1, 1, tzinfo=timezone.utc).astimezone(timezone.utc).hour == 0
+```
+PYCODE
+  report || true
+  check_report "[c['status'] for c in r['checks']]==['could-not-evaluate','could-not-evaluate','held']"
+}
+
+@test "recheck: unresolved conditional writes invalidate aliased fixture state" {
+  cat > "$T/answer.md" <<'PY'
+```python
+x = [1]
+y = x
+if missing:
+    y[0] = 2
+assert x[0] == 1
+```
+PY
+  report || true
+  check_report "r['checks'][0]['status']=='could-not-evaluate'"
+}

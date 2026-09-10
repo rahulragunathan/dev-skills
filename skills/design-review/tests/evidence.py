@@ -178,6 +178,8 @@ def read_transcript(path: pathlib.Path) -> tuple[str, int, bool]:
         except json.JSONDecodeError:
             return (texts[-1] if texts else ""), tools, False
         m = row.get("message") or {}
+        if m.get("role") == "user":
+            last_msg_complete = False
         if m.get("role") != "assistant":
             continue
         content = m.get("content")
@@ -186,13 +188,16 @@ def read_transcript(path: pathlib.Path) -> tuple[str, int, bool]:
             last_msg_complete = m.get("stop_reason") == "end_turn"
             continue
         msg_text, msg_tool = False, False
+        message_texts = []
         for c in content or []:
             if c.get("type") == "text":
-                texts.append(c["text"])
+                message_texts.append(c["text"])
                 msg_text = True
             elif c.get("type") == "tool_use":
                 tools += 1
                 msg_tool = True
+        if message_texts:
+            texts.append("\n".join(message_texts))
         # A message carrying both a preamble and a tool call is a run still in
         # flight, not an answer. Treating any text as completion recorded four
         # of round 4's answers as their opening sentence.

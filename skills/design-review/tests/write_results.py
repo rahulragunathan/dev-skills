@@ -41,13 +41,27 @@ def join_row(cells: list[str]) -> str:
 
 def find_table(lines: list[str]) -> tuple[int, list[str]]:
     """Index of the header line under '## Results', and its column names."""
-    try:
-        start = next(i for i, l in enumerate(lines) if l.strip() == "## Results")
-    except StopIteration:
-        sys.exit("no '## Results' section")
-    for i in range(start, len(lines)):
-        if lines[i].lstrip().startswith("| Run |"):
-            return i, split_row(lines[i])
+    in_results = False
+    fence = None
+    for i, line in enumerate(lines):
+        stripped = line.rstrip('\r\n')
+        if fence:
+            if re.fullmatch(r' {0,3}' + re.escape(fence[0]) + '{' + str(fence[1]) + r',}[ \t]*', stripped):
+                fence = None
+            continue
+        marker = re.match(r'^ {0,3}(`{3,}|~{3,})', stripped)
+        if marker:
+            fence = (marker[1][0], len(marker[1]))
+            continue
+        heading = re.match(r'^ {0,3}(#{1,2})(?:[ \t]+(.*))?$', stripped)
+        if heading:
+            title = re.sub(r'[ \t]+#+[ \t]*$', '', heading[2] or '').strip()
+            if in_results:
+                break
+            in_results = heading[1] == '##' and title == 'Results'
+            continue
+        if in_results and line.lstrip().startswith('| Run |'):
+            return i, split_row(line)
     sys.exit("no results table under '## Results'")
 
 
@@ -55,6 +69,8 @@ def validate_table(lines):
     hdr_i, headers = find_table(lines)
     if len(set(headers)) != len(headers) or not all(headers):
         sys.exit("refusing: duplicate or empty headers")
+    if hdr_i + 1 >= len(lines):
+        sys.exit("refusing: missing separator")
     separator = split_row(lines[hdr_i + 1])
     if len(separator) != len(headers) or not all(re.fullmatch(r':?-{3,}:?', c) for c in separator):
         sys.exit("refusing: malformed separator")
@@ -104,9 +120,14 @@ def main() -> int:
         hdr_i, headers = find_table(lines)
         spec = json.loads(args.repair_layout.read_text())
         if spec.get("separator") is True:
+            if hdr_i + 1 >= len(lines) or not lines[hdr_i + 1].lstrip().startswith('|'):
+                sys.exit("refusing: separator repair requires an existing table row")
             lines[hdr_i + 1] = join_row(["---"] * len(headers))
+        end = hdr_i + 2
+        while end < len(lines) and lines[end].lstrip().startswith('|'):
+            end += 1
         for repair in spec.get("rows", []):
-            candidates = [i for i in range(hdr_i + 2, len(lines))
+            candidates = [i for i in range(hdr_i + 2, end)
                           if lines[i].startswith("|") and split_row(lines[i])[0] == repair["run"]]
             if len(candidates) != 1:
                 sys.exit("refusing: repair Run is ambiguous or missing")

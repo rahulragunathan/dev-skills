@@ -245,3 +245,54 @@ PY
   [ "$status" -ne 0 ]
   cmp "$SCEN" "$TEST_TMP/before"
 }
+
+@test "adversarial: missing Results table cannot select a later section" {
+  printf '## Results\n\nNo table.\n\n## Other\n\n| Run | Notes |\n| --- | --- |\n| test | KEEP |\n' > "$SCEN"
+  cp "$SCEN" "$SCEN.before"
+  run python3 "$W" "$SCEN" --run test --set Notes=CHANGED
+  [ "$status" -eq 1 ]
+  cmp "$SCEN" "$SCEN.before"
+}
+
+@test "adversarial: explicit repair cannot target a row outside Results" {
+  printf '\n## Other\n\n| Run | Notes |\n| --- | --- |\n| foreign | KEEP |\n' >> "$SCEN"
+  python3 - "$SCEN" "$TEST_TMP/repair.json" <<'PYCODE'
+import pathlib,hashlib,json,sys
+row=pathlib.Path(sys.argv[1]).read_text().splitlines(True)[-1]
+headers=['Run','Model ID','Date','Responsibility','Notes','Prompt revision','Condition revision','Skill git SHA · content','Evidence status']
+pathlib.Path(sys.argv[2]).write_text(json.dumps({'rows':[{'run':'foreign','sha256':hashlib.sha256(row.encode()).hexdigest(),'set':{h:('foreign' if h=='Run' else 'CHANGED') for h in headers}}]}))
+PYCODE
+  cp "$SCEN" "$SCEN.before"
+  run python3 "$W" "$SCEN" --repair-layout "$TEST_TMP/repair.json"
+  [ "$status" -eq 1 ]
+  cmp "$SCEN" "$SCEN.before"
+}
+
+@test "recheck: separator repair cannot overwrite the following section heading" {
+  printf '## Results\n\n| Run | Notes |\n## Other\n\nKEEP\n' > "$SCEN"
+  printf '{"separator":true}\n' > "$TEST_TMP/repair.json"
+  cp "$SCEN" "$SCEN.before"
+  run python3 "$W" "$SCEN" --repair-layout "$TEST_TMP/repair.json"
+  [ "$status" -eq 1 ]
+  cmp "$SCEN" "$SCEN.before"
+}
+
+@test "boundary recheck: an indented Markdown heading still ends Results" {
+  printf '## Results\n\nNo table.\n\n   ## Other\n\n| Run | Notes |\n| --- | --- |\n| test | KEEP |\n' > "$SCEN"
+  cp "$SCEN" "$SCEN.before"
+  run python3 "$W" "$SCEN" --run test --set Notes=CHANGED
+  [ "$status" -eq 1 ]
+  cmp "$SCEN" "$SCEN.before"
+}
+
+@test "boundary recheck: fenced examples are not the editable Results table" {
+  printf '## Results\n\n```markdown\n| Run | Notes |\n| --- | --- |\n| test | KEEP |\n```\n\n| Run | Notes |\n| --- | --- |\n| test | REAL |\n' > "$SCEN"
+  run python3 "$W" "$SCEN" --run test --set Notes=CHANGED
+  [ "$status" -eq 0 ]
+  python3 - "$SCEN" <<'PY'
+import pathlib,sys
+text=pathlib.Path(sys.argv[1]).read_text()
+assert '| test | KEEP |' in text.split('```')[1]
+assert '| test | CHANGED |' in text.split('```')[2]
+PY
+}
