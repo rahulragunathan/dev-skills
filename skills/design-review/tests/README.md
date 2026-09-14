@@ -89,6 +89,46 @@ agent to spot its mistake afterwards. Missing required artifacts fail the releva
 Run definitions are text-only; S06 supplies source diagrams without rendering, and S07 produces
 an unexecuted audit plan. S07 does not prove that an agent executed cleanup or mutation scripts.
 
+## Running a batch
+
+A batch is many runs of the procedure above, recorded into one evidence directory. Follow
+these steps in order. Each one exists because round 8 broke without it.
+
+1. **Work from the repository root.** The manifest stores repository-relative paths, so
+   `evidence.py check` run from any other directory reports every scenario `EXPIRED — skill
+   file is gone; scenario file is gone`.
+
+   ```bash
+   python3 skills/design-review/tests/evidence.py init <dir> --round <n> \
+     --model <model-id> --replicates <r>
+   ```
+
+2. **Dispatch each run as a fresh agent on the main model.** A without-skill run receives
+   `<scenario>-prompt.txt` verbatim. A with-skill run receives one short paragraph telling it
+   to read `loaded-<skill>.md` in full first, then the prompt verbatim. `record` checks that
+   the recorded prompt appears inside the first user message, so the paragraph is allowed.
+   Only a without-skill run is refused for using a tool.
+3. **Log every dispatch when it happens.** Append one tab-separated line per run:
+   `scenario`, `arm`, `replicate`, agent ID. Write the line as soon as the dispatch returns
+   the ID, not afterwards from memory.
+4. **Record from the log, and only from the log.** A run's transcript is
+   `subagents/agent-<id>.jsonl` under the dispatching session. Never find transcripts by
+   searching for prompt text. Earlier rounds dispatched the same prompts, and a content match
+   wrote 56 answers from rounds 5–7 into a new round-8 manifest. If that happens, delete the
+   evidence directory and start again from step 1. Do not try to repair the manifest.
+5. **Read each refusal before acting on it.** `is incomplete` or `carries no assistant
+   answer` means the run is still generating: record it again later. `baseline is
+   contaminated` means the run used a tool: dispatch a new run for the same slot and replace
+   that line's agent ID in the log. Never edit the recorded answer.
+6. **Dispatch in waves.** Concurrent agents are capped (20 during round 8). A dispatch over
+   the cap fails at once and leaves no transcript, so do not write a log line for it.
+7. **Finish with the completeness check** from the repository root. Grading starts only when
+   every scenario reports `current`:
+
+   ```bash
+   python3 skills/design-review/tests/evidence.py check <dir> --require-complete
+   ```
+
 ## Execute the grading checks
 
 `grade.py` reads an answer without editing it, executing production code, dispatching an agent,
