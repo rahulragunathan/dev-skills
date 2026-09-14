@@ -167,6 +167,258 @@ is, the task-by-task plan probably is not.
 
 ---
 
+<a id="enh-14"></a>
+
+## ENH-14 — Share recorded-answer validation between evidence and grading
+
+**Priority:** Medium · **Effort:** ~1 day
+**Where:** [evidence.py](../skills/design-review/tests/evidence.py) · **Regression net:** `skills/design-review/tests/evidence.bats`
+
+### What it is
+
+Extract one answer reader that checks containment, presence, nonempty text and the recorded hash, and use it from the evidence and grading tools. Grade selection already reuses evidence.slot_key; answer validation still has separate implementations.
+
+### Why it matters
+
+Different readers can accept different evidence for the same manifest record.
+
+### Notes for the work
+
+Preserve evidence.py and grade_batch.py commands, exit codes and manifest formats. This crosses tools outside the small QC edits; test missing, empty, changed and escaping paths at every caller. Source: QC Tier 5, grade.py reuse.
+
+---
+
+<a id="enh-15"></a>
+
+## ENH-15 — Probe independent reviewers concurrently
+
+**Priority:** Medium · **Effort:** ~1 day
+**Where:** [preflight.sh](../skills/external-review/preflight.sh) · **Regression net:** `skills/external-review/tests/preflight.bats`
+
+### What it is
+
+Run the Codex and Gemini availability ladders concurrently, with one deadline per reviewer and deterministic reporting after both finish.
+
+### Why it matters
+
+Sequential probes make a slow unavailable reviewer delay discovery of the other reviewer.
+
+### Notes for the work
+
+Keep per-reviewer readiness, quota and incomplete-turn semantics, high effort flags, exit status and partial coverage accounting. Timeout classification and duplicate final-rung output were fixed in the QC pass. Concurrent collection requires a separate change. Source: QC Tier 5, preflight reuse.
+
+---
+
+<a id="enh-16"></a>
+
+## ENH-16 — Emit shared answer evidence once in grading JSON
+
+**Priority:** Medium · **Effort:** ~1 day
+**Where:** [grade.py](../skills/design-review/tests/grade.py) · **Regression net:** `skills/design-review/tests/grade.bats`
+
+### What it is
+
+Store the full extracted answer evidence once per report and reference it from questions instead of serializing one copy per condition.
+
+### Why it matters
+
+Repeating a long answer enlarges reports and packets without adding evidence.
+
+### Notes for the work
+
+Audit all consumers and provide a migration for existing reports before changing the JSON layout. Keep tonight's batch interface intact. The separate --production coverage gap is now covered by a CLI regression. Source: QC Tier 5, grading output size.
+
+---
+
+<a id="enh-17"></a>
+
+## ENH-17 — Give roadmap rating scales one source
+
+**Priority:** Medium · **Effort:** ~1 day
+**Where:** [roadmap.py](../skills/phase-workflow/roadmap.py) · **Regression net:** `skills/phase-workflow/tests/roadmap.bats`
+
+### What it is
+
+Make the issue severity, likelihood and enhancement priority scales shared between the templates and the roadmap validator.
+
+### Why it matters
+
+Editing a template can leave a valid documented rating rejected by hardcoded Python ranks.
+
+### Notes for the work
+
+Choose structured shared data or a validated template reader. Test ordering and unknown ratings, preserving existing entry IDs, links and CLI refusals. Source: QC Tier 5, roadmap rating duplication.
+
+---
+
+<a id="enh-18"></a>
+
+## ENH-18 — Evaluate an isolated subprocess alternative to the fixture interpreter
+
+**Priority:** Medium · **Effort:** ~1 day
+**Where:** [grade_eval.py](../skills/design-review/tests/grade_eval.py) · **Regression net:** `skills/design-review/tests/grade.bats`
+
+### What it is
+
+Compare the bounded expression interpreter with an isolated subprocess using controlled import stubs, explicit resource limits and a defined fixture execution boundary.
+
+### Why it matters
+
+A growing interpreter and scenario-shaped allowlists increase maintenance and semantic gaps.
+
+### Notes for the work
+
+A subprocess alone is not isolation. Preserve the prohibition on arbitrary filesystem or network effects, retain unsupported-input diagnostics, and measure against the same hand-checked fixtures before choosing an approach. This is an architecture decision, not permission to execute untrusted answers. Source: QC Tier 5, interpreter altitude.
+
+---
+
+<a id="enh-19"></a>
+
+## ENH-19 — Declare scenario grading rules as scenario data
+
+**Priority:** Medium · **Effort:** ~1 day
+**Where:** [grade.py](../skills/design-review/tests/grade.py) · **Regression net:** `skills/design-review/tests/grade.bats`
+
+### What it is
+
+Move scenario-specific condition mappings and mechanical grading definitions into validated scenario data with a revision and hash policy.
+
+### Why it matters
+
+Python rules and scenario prose can diverge while a grader still appears bound to the right condition hash.
+
+### Notes for the work
+
+The S05 banned-word scan now reads its rule text; other mappings remain in Python. Design the data format and evidence expiry policy before migrating, preserve historical artifacts, and do not silently reinterpret existing hashes. Source: QC Tier 5, per-scenario rule altitude.
+
+---
+
+<a id="enh-20"></a>
+
+## ENH-20 — Run mutation audits in a disposable checkout
+
+**Priority:** Medium · **Effort:** ~1 day
+**Where:** [mutation-restore.sh](../skills/phase-workflow/mutation-restore.sh) · **Regression net:** `skills/phase-workflow/tests/phase-git.bats`
+
+### What it is
+
+Apply mutations and run both test commands in an isolated disposable checkout of the named task commit.
+
+### Why it matters
+
+Isolation avoids exposing the main checkout to mutations and generated test output, reducing reliance on restoration after damage.
+
+### Notes for the work
+
+Define dependency and ignored-file availability, command working directories, cleanup and assertion-red reporting. Preserve current SHA validation and do not certify fixture or collection failures. Source: QC Tier 5, mutation audit altitude.
+
+---
+
+<a id="enh-21"></a>
+
+## ENH-21 — Reconcile bundle and export scope exclusions
+
+**Priority:** Medium · **Effort:** ~1 day
+**Where:** [capture.sh](../skills/external-review/capture.sh) · **Regression net:** `skills/external-review/tests/capture.bats`
+
+### What it is
+
+Define one supported scope-exclusion contract for capture bundles and Codex exports, and check that both select the same in-scope paths.
+
+### Why it matters
+
+The same --exclude spelling currently drives Git pathspec filtering and literal path pruning, so a caller can assume agreement that is not checked.
+
+### Notes for the work
+
+Choose whether to restrict the shared vocabulary or implement matching semantics. Test directories, wildcard-looking names, case, symlinks, repeated exclusions and paths matching nothing; retain the distinction between scope control and read isolation. Source: QC Tier 5, exclusion altitude.
+
+---
+
+<a id="enh-22"></a>
+
+## ENH-22 — Validate verbatim judgement evidence in grade.py
+
+**Priority:** Medium · **Effort:** ~1 day
+**Where:** [grade.py](../skills/design-review/tests/grade.py) · **Regression net:** `skills/design-review/tests/grade_batch.bats`
+
+### What it is
+
+Move the rule requiring judgement evidence to quote the answer verbatim from grade_batch.py into grade.py judgement validation, so human and model reviewers meet the same rule.
+
+### Why it matters
+
+The current entry points impose different evidence requirements on otherwise equivalent judgements.
+
+### Notes for the work
+
+Deferred by the user after Claude's grading-tool review. Define allowed multi-excerpt notation, preserve hash binding and explicit disputes, and test both direct judgements and batch collection before migrating the validator.
+
+---
+
+<a id="enh-23"></a>
+
+## ENH-23 — Calibrate graders with blind hand-graded anchors
+
+**Priority:** Medium · **Effort:** ~1 day
+**Where:** [grade_batch.py](../skills/design-review/tests/grade_batch.py) · **Regression net:** `skills/design-review/tests/grade_batch.bats`
+
+### What it is
+
+Mix a few hand-graded answers into grading packets without marking them for graders, and report how often graders agree with the reference judgements.
+
+### Why it matters
+
+Agreement between model graders does not establish grader quality when both share a mistake.
+
+### Notes for the work
+
+Deferred by the user after Claude's grading-tool review. Retain reference provenance and rationale, control anchor exposure and revisions, and report condition-level denominators without using anchors as experimental answers.
+
+---
+
+<a id="enh-24"></a>
+
+## ENH-24 — Report agreement with condition base rates and a fixed repeat fraction
+
+**Priority:** Medium · **Effort:** ~1 day
+**Where:** [grade_batch.py](../skills/design-review/tests/grade_batch.py) · **Regression net:** `skills/design-review/tests/grade_batch.bats`
+
+### What it is
+
+Exclude conditions decided by the harness from grader agreement, report each condition's pass/fail base rate, and repeat a prespecified fraction of answers instead of one per scenario and arm.
+
+### Why it matters
+
+A high raw agreement rate can reflect mechanical decisions or an overwhelmingly common verdict rather than consistent judgement.
+
+### Notes for the work
+
+Deferred by the user after Claude's grading-tool review. Specify repeat sampling and denominators before dispatch, distinguish disputed mechanical decisions, preserve per-grader results, and avoid changing an in-flight grading.json format.
+
+---
+
+<a id="enh-25"></a>
+
+## ENH-25 — Measure how much answers reveal their experimental arm
+
+**Priority:** Medium · **Effort:** ~1 day
+**Where:** [grade_batch.py](../skills/design-review/tests/grade_batch.py) · **Regression net:** `skills/design-review/tests/grade_batch.bats`
+
+### What it is
+
+Measure arm leakage from answer content, for example by asking graders to guess the arm and reporting accuracy against the hidden assignment.
+
+### Why it matters
+
+Removing arm labels from a packet does not show that its wording conceals whether the skill was loaded.
+
+### Notes for the work
+
+Deferred by the user after Claude's grading-tool review. Decide when to elicit guesses so they do not prime grading, keep assignment keys separate, and report guesses with denominators and uncertainty rather than asserting that packets are blind.
+
+---
+
 <a id="enh-07"></a>
 
 ## ENH-07 — Honour `$CLAUDE_CONFIG_DIR` in the bundled scripts

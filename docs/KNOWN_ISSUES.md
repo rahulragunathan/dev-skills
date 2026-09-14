@@ -709,52 +709,6 @@ failure.
 
 ---
 
-<a id="ki-35"></a>
-
-## KI-35 — Results writer can edit an indented code example
-
-**Severity:** High
-**Likelihood:** Rare
-**Where:** [write_results.py](../skills/design-review/tests/write_results.py), `find_table`
-
-### What happens
-
-When `## Results` contains a four-space-indented table example before the real table,
-`find_table` treats the example as the editable table. Updating a matching Run edits the
-example, leaves the actual result unchanged, and exits 0. It also removes indentation from
-the rewritten example row.
-
-### Example scenario
-
-Use a scratch file containing:
-
-```markdown
-## Results
-
-    | Run | Notes |
-    | --- | --- |
-    | test | EXAMPLE |
-
-| Run | Notes |
-| --- | --- |
-| test | REAL |
-```
-
-Run `python3 skills/design-review/tests/write_results.py <scratch-file> --run test --set Notes=CHANGED`.
-The example becomes `CHANGED`; the real row still says `REAL`. This was reproduced with a
-synthetic file; no recorded pressure-test result was inspected or changed.
-
-### Notes for a fix
-
-Recognize indented code blocks as well as fenced blocks when selecting a Markdown table.
-Add a regression that requires the example to stay byte-identical and only the real row to
-change. This remains open after the third and final fix-and-recheck loop; do not extend that
-completed review's loop to repair it.
-
-**Source:** gpt-6-astra — adversarial review, 2026-09-10, final diff recheck of F08.
-
----
-
 <a id="ki-16"></a>
 
 ## KI-16 — `HF_HOME` is exported by an orphaned `~/.zshrc` block no skill installs

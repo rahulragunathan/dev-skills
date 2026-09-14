@@ -23,7 +23,7 @@ completion is deleted from both, with the record written into CHANGELOG `[Unrele
 item dropped rather than built moves to "Decisions taken and not taken". IDs are never
 reused. Nothing here looks backward — completed phases are CHANGELOG releases.
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-14
 
 ## Status
 
@@ -64,7 +64,6 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-03](KNOWN_ISSUES.md#ki-03) | A PID file is trusted without checking what the process is | Rare | High |
 | [KI-04](KNOWN_ISSUES.md#ki-04) | The stray-process sweep kills servers this plugin did not start | Rare | High |
 | [KI-06](KNOWN_ISSUES.md#ki-06) | A stale lock silently disables every later backup | Rare | High |
-| [KI-35](KNOWN_ISSUES.md#ki-35) | Results writer can edit an indented code example | Rare | High |
 | [KI-16](KNOWN_ISSUES.md#ki-16) | `HF_HOME` is exported by an orphaned `~/.zshrc` block no skill installs | Almost always | Medium |
 | [KI-17](KNOWN_ISSUES.md#ki-17) | The machine is documented as both 64 GB and 24 GB | Almost always | Medium |
 | [KI-21](KNOWN_ISSUES.md#ki-21) | Uninstall says the server is left alone, then stops it | Almost always | Medium |
@@ -90,6 +89,18 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 | [ENH-03](ENHANCEMENTS.md#enh-03) | Test the two destructive scripts that have no tests at all | High | ~1 day |
 | [ENH-04](ENHANCEMENTS.md#enh-04) | Make the fakes assert a contract rather than only a shape | Medium | ~half a day |
 | [ENH-05](ENHANCEMENTS.md#enh-05) | Fold the MLX plan and spec into the permanent docs | Medium | ~half a day |
+| [ENH-14](ENHANCEMENTS.md#enh-14) | Share recorded-answer validation between evidence and grading | Medium | ~1 day |
+| [ENH-15](ENHANCEMENTS.md#enh-15) | Probe independent reviewers concurrently | Medium | ~1 day |
+| [ENH-16](ENHANCEMENTS.md#enh-16) | Emit shared answer evidence once in grading JSON | Medium | ~1 day |
+| [ENH-17](ENHANCEMENTS.md#enh-17) | Give roadmap rating scales one source | Medium | ~1 day |
+| [ENH-18](ENHANCEMENTS.md#enh-18) | Evaluate an isolated subprocess alternative to the fixture interpreter | Medium | ~1 day |
+| [ENH-19](ENHANCEMENTS.md#enh-19) | Declare scenario grading rules as scenario data | Medium | ~1 day |
+| [ENH-20](ENHANCEMENTS.md#enh-20) | Run mutation audits in a disposable checkout | Medium | ~1 day |
+| [ENH-21](ENHANCEMENTS.md#enh-21) | Reconcile bundle and export scope exclusions | Medium | ~1 day |
+| [ENH-22](ENHANCEMENTS.md#enh-22) | Validate verbatim judgement evidence in grade.py | Medium | ~1 day |
+| [ENH-23](ENHANCEMENTS.md#enh-23) | Calibrate graders with blind hand-graded anchors | Medium | ~1 day |
+| [ENH-24](ENHANCEMENTS.md#enh-24) | Report agreement with condition base rates and a fixed repeat fraction | Medium | ~1 day |
+| [ENH-25](ENHANCEMENTS.md#enh-25) | Measure how much answers reveal their experimental arm | Medium | ~1 day |
 | [ENH-10](ENHANCEMENTS.md#enh-10) | Make the project-env name mapping unambiguous | Low | ~2 hours |
 | [ENH-11](ENHANCEMENTS.md#enh-11) | Reconcile an existing global markdownlint config | Low | ~1 hour |
 | [ENH-12](ENHANCEMENTS.md#enh-12) | Feed the Gemini prompt through stdin rather than argv | Low | ~1 hour |
