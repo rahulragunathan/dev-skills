@@ -360,6 +360,30 @@ PY
   [ "$status" -eq 0 ]
 }
 
+@test "F-07: the documented roadmap commands close one entry and detect drift" {
+  # Fails if the SOP has no executable close/check path, or if that path ignores failure.
+  python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/commands.sh" <<'PY'
+import pathlib, re, sys
+text = pathlib.Path(sys.argv[1]).read_text()
+blocks = [b for b in re.findall(r'```bash\n(.*?)```', text, re.S) if 'roadmap.py' in b]
+assert len(blocks) == 1, 'SOP must invoke the tested roadmap close and check commands'
+pathlib.Path(sys.argv[2]).write_text(blocks[0].replace('<entry-id>', 'KI-02'))
+PY
+  cd "$TEST_TMP"
+  CLAUDE_PLUGIN_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)" run bash "$TEST_TMP/commands.sh"
+  [ "$status" -eq 0 ]
+  ! grep -q 'DOOMED-BODY' "$DOCS/KNOWN_ISSUES.md"
+  grep -q 'SURVIVOR-ONE' "$DOCS/KNOWN_ISSUES.md"
+  grep -q 'SURVIVOR-THREE' "$DOCS/KNOWN_ISSUES.md"
+  sed -i.bak 's/ki-01/wrong-anchor/' "$DOCS/ROADMAP.md"
+  python3 - "$TEST_TMP/commands.sh" <<'PYCODE'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1]); p.write_text('\n'.join(l for l in p.read_text().splitlines() if ' check ' in l) + '\n')
+PYCODE
+  CLAUDE_PLUGIN_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)" run bash "$TEST_TMP/commands.sh"
+  [ "$status" -eq 1 ]
+}
+
 @test "QC T3-10: missing trailing pipe refuses with a diagnostic instead of IndexError" {
   python3 - "$DOCS/ROADMAP.md" <<'PY'
 import pathlib,sys

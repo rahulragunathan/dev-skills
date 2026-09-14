@@ -238,6 +238,15 @@ here — the plugin manifest's version is the only record of them.
 
 ### Fixed
 
+- **Adversarial review follow-up:** standards installation refuses failed source reads before
+  replacing personal content. Fixture grading treats incomplete call setup, mutable caches,
+  helper globals and skipped context/exception effects as evaluation gaps, and refuses string
+  formatting with unbounded allocation. Replacement dispatches supersede prior evidence and
+  grades at completeness and agreement checks; recollection still checks current evidence and
+  packet hashes. The phase SOP invokes the roadmap close/check helper, the diagnostic Codex
+  probe specifies high effort, and the Node layout names the dependency tree below its env
+  container. Command flags, result schemas and grading exit codes remain unchanged.
+
 - **QC fix pass (2026-09-14):** Results separator repair refuses data rows and
   skips indented examples (KI-35, now closed). Diagnostic `--show` exposes malformed
   rows; the README rollup is checked against recorded rows without changing them.

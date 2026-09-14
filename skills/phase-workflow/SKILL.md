@@ -445,3 +445,15 @@ Then stop. The next phase's branch is created at phase start (§2 step 1) — ne
 - The rating in a ROADMAP row mirrors the supporting file, which is authoritative. The drift check verifies they agree, that ordering is descending, and that every ID appears in both.
 - Completed items are deleted from both files, not annotated in place.
 - An entry filed from an external review carries a provenance line naming the model ids that found it — `Source: gpt-5.6-sol, gemini-3.1-pro-high — phase review, phase 4` — never the CLI name, so the attribution survives without a separate review store.
+
+Close completed entries with the bundled helper from the repository root. It removes the
+named detail entry and pointer together, preserving the surviving entries. After any roadmap
+edit, run its reconciliation check for IDs, destinations, ratings and ordering:
+
+```bash
+python3 "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/roadmap.py" close "<entry-id>" || exit 1
+python3 "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/roadmap.py" check || exit 1
+```
+
+A refusal leaves the close incomplete. Resolve the reported inconsistency before retrying;
+do not replace the helper with a hand-written slice.

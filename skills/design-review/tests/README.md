@@ -134,7 +134,8 @@ A batch is many runs of the procedure above, recorded into one evidence director
    again later, and it exits 2 until nothing is pending. `REFUSED` names the slot and the
    reason, and the command exits 1. A contaminated baseline, or a run the harness reported
    `failed` or `killed`, needs a new dispatch for the same slot: `log-dispatch ... --replace`
-   with the new agent ID, then `record-log`. Never edit a recorded answer.
+   with the new agent ID, then `record-log`. Never edit a recorded answer. A superseded answer
+   cannot satisfy the completeness check while its replacement remains unrecorded.
 6. **Finish with the completeness check.** Grading starts only when every scenario reports
    `current`.
 
@@ -166,6 +167,13 @@ evaluation gaps. A guard's dependencies must be supplied before it can support a
 Plain `print()` diagnostics are suppressed without invalidating fixture bindings. Method
 receivers are evaluated once, and sequence repetition and concatenation are limited to
 100,000 elements before allocation.
+
+Calls whose receiver, arguments or helper body cannot be evaluated leave mutable bindings
+unknown, including caches and module globals read by helpers. Context entry and exit effects
+are not executed; objects that could be changed by them remain unknown, while constants
+constructed inside the body can still be checked. Exception handlers and `try` tails are
+reported as evaluation gaps, and their effects invalidate subsequent bindings. String and
+bytes `%` formatting is unsupported because field widths can allocate unbounded output.
 
 S07's three production entry points and their imported aliases are recognized automatically.
 Other imports remain unavailable fixture dependencies; they do not end the scan. Add
@@ -258,7 +266,9 @@ grading directory. Nothing here writes a Results table; transfer approved grades
    conditions, a judgement whose `evidence` is not quoted from the answer as the grader prompt
    requires, and a packet edited after `prepare`. It refuses everything once `grader-prompt.md`
    differs from the prepared hash, or the evidence batch is no longer current. A refused packet
-   needs a new grader: `log-dispatch --replace`, then `collect` again.
+   needs a new grader: `log-dispatch --replace`, then `collect` again. Evidence and packet
+   currentness are checked even when all logged graders were already collected. A superseded
+   grader's report cannot satisfy `agree` or `summary` while its replacement is uncollected.
 4. **Measure agreement, then summarise.**
 
    ```bash

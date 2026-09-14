@@ -13,7 +13,7 @@ Drive and the project holds a symlink to it.
 | | Real tree | In the project |
 | --- | --- | --- |
 | Python | `~/Python-Envs/<name>` | `.venv` → symlink |
-| Node | `~/Node-Envs/<name>` | `node_modules` → symlink |
+| Node | `~/Node-Envs/<name>/node_modules` | `node_modules` → symlink |
 
 **One name for both.** The env name is the project path relative to the machine's code root,
 flattened with `_`: `Code/Skills/drawio` → `Skills_drawio`, `Clients/ClientX/Code/api` →

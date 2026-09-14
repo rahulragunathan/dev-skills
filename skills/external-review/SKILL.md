@@ -389,6 +389,7 @@ On empty output or non-zero exit, run a tiny probe before reporting:
 
 ```bash
 codex exec -C "$ROOT" --sandbox read-only --skip-git-repo-check -m <same model as the real run> \
+  -c model_reasoning_effort="high" \
   "Do not open .env, .env.*, *.pem, *.key, credentials*, .netrc, .npmrc, id_rsa*, id_ed25519*, or anything else shaped like a secret. List the three most obvious code-quality issues in this repository. Be brief."   # or the agy equivalent with inline text
 ```
 

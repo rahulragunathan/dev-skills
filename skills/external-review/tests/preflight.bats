@@ -250,6 +250,24 @@ printf "%s\\n" "$@" > "$TEST_TMP/agy-args"\
   grep -Fx high "$TEST_TMP/agy-args"
 }
 
+@test "F-09: the documented failure probe uses the same explicit high effort" {
+  # Execute the SOP fence; testing preflight.sh cannot cover this separate probe.
+  cat > "$BIN/codex" <<'SH'
+#!/bin/bash
+printf '%s\n' "$@" > "$TEST_TMP/failure-probe-args"
+SH
+  chmod +x "$BIN/codex"
+  python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/probe.sh" <<'PY'
+import pathlib, re, sys
+text = pathlib.Path(sys.argv[1]).read_text().split('## Failure handling', 1)[1]
+code = re.search(r'```bash\n(.*?)```', text, re.S)[1]
+pathlib.Path(sys.argv[2]).write_text(code.replace('<same model as the real run>', 'selected'))
+PY
+  ROOT="$TEST_TMP" run bash "$TEST_TMP/probe.sh"
+  [ "$status" -eq 0 ]
+  grep -Fx 'model_reasoning_effort=high' "$TEST_TMP/failure-probe-args"
+}
+
 @test "QC T5 preflight: exhausted availability ladder reports each rung once" {
   fake_agy_unavailable
   run bash "$PREFLIGHT" --gemini-model first --gemini-model last
