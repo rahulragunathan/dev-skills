@@ -126,6 +126,33 @@ report_statuses() {
   python3 -c "import json,sys;r=json.load(open(sys.argv[1]));print(' '.join(q['id']+'='+q['status'] for q in r['questions']))" "$GD/reports/$1.json"
 }
 
+@test "F-05: summary excludes an old first grade while its replacement is pending" {
+  # Fails if report existence substitutes for the current dispatch identity.
+  prepare
+  local n=0 pid first
+  for pid in $(pk "p['pass'] == 1"); do
+    n=$((n + 1)); grade_packet "$pid" "grader000$n" pass pass
+  done
+  python3 "$GB" collect "$GD" --session "$SESS" >/dev/null
+  first="$(pk "p['pass'] == 1" | cut -d' ' -f1)"
+  python3 "$GB" log-dispatch "$GD" --packet "$first" --agent-id newgrade01 --replace
+  run python3 "$GB" summary "$GD"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"1 packet(s) not yet collected"* ]]
+}
+
+@test "F-06: already collected packets are still checked for edits" {
+  # Fails if the cached report path bypasses the prepared packet hash.
+  prepare
+  local pid; pid="$(pk True | cut -d' ' -f1)"
+  grade_packet "$pid" grader0001 pass pass
+  python3 "$GB" collect "$GD" --session "$SESS" >/dev/null
+  echo CHANGED >> "$GD/dispatch/$pid.txt"
+  run python3 "$GB" collect "$GD" --session "$SESS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"edited after prepare"* ]]
+}
+
 @test "prepare: one blind packet per recorded answer, plus one repeat per scenario and arm" {
   # Red if a packet names its arm or replicate, which unblinds the grader, or if
   # no answer is graded twice, which leaves agreement unmeasured.
@@ -266,4 +293,39 @@ PY
   [ "$status" -eq 1 ]
   [[ "$output" == *"edited after prepare"* ]]
   [ ! -e "$GD/reports/$P.json" ]
+}
+
+@test "F-05: replacement evidence makes completeness pending" {
+  record_all
+  python3 "$EVPY" log-dispatch "$EV" --scenario S01 --arm baseline --replicate 1 --agent-id newrun01 --replace
+  run python3 "$EVPY" check "$EV" --require-complete
+  echo "observed check status=$status $output" >&3
+  [ "$status" -eq 1 ]
+}
+@test "F-05: replacement graders cannot inherit agreement" {
+  prepare
+  local n=0 pid first
+  for pid in $(pk True); do
+    n=$((n + 1))
+    grade_packet "$pid" "grader000$n" pass pass
+  done
+  python3 "$GB" collect "$GD" --session "$SESS"
+  first="$(pk "p['pass'] == 2" | cut -d' ' -f1)"
+  python3 "$GB" log-dispatch "$GD" --packet "$first" --agent-id newgrade01 --replace
+  run python3 "$GB" agree "$GD"
+  echo "observed agreement status=$status $output" >&3
+  [ "$status" -eq 1 ]
+}
+@test "F-06: recollection rejects expired evidence even with no pending graders" {
+  prepare
+  local n=0 pid
+  for pid in $(pk True); do
+    n=$((n + 1))
+    grade_packet "$pid" "grader000$n" pass pass
+  done
+  python3 "$GB" collect "$GD" --session "$SESS"
+  echo CHANGED >> "$EV/answers/S01-baseline-1.md"
+  run python3 "$GB" collect "$GD" --session "$SESS"
+  echo "observed recollect status=$status $output" >&3
+  [ "$status" -eq 1 ]
 }

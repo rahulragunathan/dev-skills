@@ -253,9 +253,14 @@ def cmd_collect(args) -> int:
              "cannot be compared. Prepare a new grading directory")
     if not (out / LOG_NAME).is_file():
         fail(f"no {LOG_NAME} under {out}; log each dispatch with log-dispatch")
+    ev = pathlib.Path(grading["evidence"])
+    require_current(ev)
     counts = collections.Counter()
     todo = []
     for pid, agent in read_dispatch_log(out / LOG_NAME, 2, packet_errors(grading)):
+        dispatched = (out / "dispatch" / f"{pid}.txt").read_text()
+        if h16(dispatched) != grading["packets"][pid]["dispatch_hash"]:
+            fail(f"refusing: packet {pid} was edited after prepare; prepare a new grading directory")
         jpath, rpath = out / "judgements" / f"{pid}.json", out / "reports" / f"{pid}.json"
         if rpath.is_file() and jpath.is_file() and \
                 json.loads(jpath.read_text()).get("agent_id") == agent:
@@ -263,11 +268,9 @@ def cmd_collect(args) -> int:
             counts["already"] += 1
         else:
             todo.append((pid, agent))
-    # Checking the batch and scanning the session are the costly part, and late
-    # in a batch there is usually nothing left to collect.
+    # The transcript need not be scanned again when all current dispatches are
+    # collected. Evidence and packet currentness still apply to cached grades.
     if todo:
-        ev = pathlib.Path(grading["evidence"])
-        require_current(ev)
         session = pathlib.Path(args.session)
         if not session.is_file():
             fail(f"refusing: session transcript {session} does not exist")
@@ -295,7 +298,12 @@ def cmd_collect(args) -> int:
 def graded(out: pathlib.Path, pid: str) -> dict | None:
     """A collected packet's condition statuses, or None if it is not collected."""
     path = out / "reports" / f"{pid}.json"
-    if not path.is_file():
+    jpath = out / "judgements" / f"{pid}.json"
+    if not path.is_file() or not jpath.is_file():
+        return None
+    grading = load_grading(out)
+    agents = dict(read_dispatch_log(out / LOG_NAME, 2, packet_errors(grading)))
+    if pid not in agents or json.loads(jpath.read_text()).get("agent_id") != agents[pid]:
         return None
     return {q["id"]: q["status"] for q in json.loads(path.read_text())["questions"]}
 

@@ -539,6 +539,8 @@ def cmd_record_log(args) -> int:
 def cmd_check(args) -> int:
     ev = pathlib.Path(args.dir)
     manifest = load_manifest(ev)
+    dispatched = {(sid, slot_key(arm, rep, manifest.get("replicates", 1))): agent
+                  for sid, arm, rep, agent in read_log(ev, manifest)}
     ok = True
     for sid, s in sorted(manifest["scenarios"].items()):
         reasons = []
@@ -560,6 +562,9 @@ def cmd_check(args) -> int:
         # manifest alone reported a batch current with every answer file
         # deleted, which is the one thing a completeness check exists to catch.
         for arm, rec in sorted(s.get("arms", {}).items()):
+            agent = dispatched.get((sid, arm))
+            if agent is not None and rec.get("agent_id") != agent:
+                reasons.append(f"{arm} replacement dispatch has not been recorded")
             ap = ev / rec.get("answer", "")
             if not ap.is_file():
                 reasons.append(f"{arm} answer file is missing")
