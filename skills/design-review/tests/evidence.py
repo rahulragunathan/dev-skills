@@ -314,8 +314,8 @@ def slot_key(arm: str, replicate: int, reps: int) -> str:
     return arm if reps == 1 else f"{arm}#{replicate}"
 
 
-def slot_errors(manifest: dict, sid: str, arm: str, replicate, agent_id: str | None = None) -> list[str]:
-    """Why a slot, and the agent logged for it, cannot belong to this batch."""
+def slot_errors(manifest: dict, sid: str, arm: str, replicate) -> list[str]:
+    """Why a slot cannot belong to this batch."""
     reps = manifest.get("replicates", 1)
     errors = []
     if sid not in manifest["scenarios"]:
@@ -324,8 +324,6 @@ def slot_errors(manifest: dict, sid: str, arm: str, replicate, agent_id: str | N
         errors.append(f"unknown arm {arm}")
     if not str(replicate).isdigit() or not 1 <= int(replicate) <= reps:
         errors.append(f"replicate {replicate} is outside the batch's declared count of {reps}")
-    if agent_id is not None and not AGENT_ID.fullmatch(agent_id):
-        errors.append(f"agent ID {agent_id!r} is not a harness agent ID")
     return errors
 
 
@@ -342,6 +340,32 @@ def session_for(transcript: pathlib.Path) -> pathlib.Path | None:
     return parent.parent / f"{parent.name}.jsonl"
 
 
+def finished_reply(statuses: dict[str, str], agent_id: str, transcript: pathlib.Path,
+                   dispatched: str, dispatched_name: str) -> tuple[str, int]:
+    """The final reply and tool count of a run the harness says finished. Raises Refusal.
+
+    Recording and grading both use this, so a lesson about what "finished" means
+    lands once. `dispatched` is text the run's first message must contain.
+    """
+    status = statuses.get(agent_id)
+    if status is None:
+        raise Refusal("pending", f"no completion notification for agent {agent_id}: it is "
+                                 f"still running, or this is not the session that dispatched it")
+    if status != "completed":
+        raise Refusal("failed", f"the harness reported agent {agent_id} {status}; dispatch it again")
+    if not transcript.is_file():
+        raise Refusal("invalid", f"{transcript} does not exist")
+    body, tools, ends_with_answer = read_transcript(transcript)
+    if not body.strip():
+        raise Refusal("invalid", f"{transcript.name} carries no assistant answer")
+    if not ends_with_answer:
+        raise Refusal("invalid", f"{transcript.name} is incomplete — its last assistant "
+                                 f"message is not an answer")
+    if dispatched.strip() and dispatched.strip() not in first_user_text(transcript):
+        raise Refusal("invalid", f"{transcript.name} was not dispatched with {dispatched_name}")
+    return body, tools
+
+
 def record_run(ev: pathlib.Path, manifest: dict, sid: str, arm: str, replicate: int,
                session: pathlib.Path, agent_id: str, transcript: pathlib.Path | None = None,
                statuses: dict[str, str] | None = None) -> str:
@@ -355,31 +379,13 @@ def record_run(ev: pathlib.Path, manifest: dict, sid: str, arm: str, replicate: 
     if errors:
         raise Refusal("invalid", "; ".join(errors))
     transcript = transcript or transcript_for(session, agent_id)
-    status = (statuses if statuses is not None else session_statuses(session)).get(agent_id)
-    if status is None:
-        raise Refusal("pending", f"no completion notification for agent {agent_id} in "
-                                 f"{session.name}: it is still running, or this is not "
-                                 f"the session that dispatched it")
-    if status != "completed":
-        raise Refusal("failed", f"the harness reported agent {agent_id} {status}; "
-                                f"dispatch a new run for this slot")
-    if not transcript.is_file():
-        raise Refusal("invalid", f"{transcript} does not exist")
-    body, tools, finished = read_transcript(transcript)
-    if not body.strip():
-        raise Refusal("invalid", f"{transcript.name} carries no assistant answer")
-    if not finished:
-        raise Refusal("invalid", f"{transcript.name} is incomplete — its last assistant "
-                                 f"message is not an answer")
     # The run must have been dispatched with the prompt this batch recorded. A
     # hand-assembled paste that drops a section leaves the answer looking valid
     # while it answers a different question — that is the S01 failure, and it
     # was caught last time only because a hash happened to be compared by hand.
-    want = (ev / f"{sid}-prompt.txt").read_text().strip()
-    if want and want not in first_user_text(transcript):
-        raise Refusal("invalid", f"{transcript.name} was not dispatched with "
-                                 f"{sid}-prompt.txt; the recorded prompt is not in the "
-                                 f"first user message")
+    body, tools = finished_reply(
+        statuses if statuses is not None else session_statuses(session), agent_id, transcript,
+        (ev / f"{sid}-prompt.txt").read_text(), f"{sid}-prompt.txt")
     # A baseline that reached for the skill under test is not a baseline. This
     # is the S02 contamination, which was previously caught only by eye.
     if arm == "baseline" and tools > 0:
@@ -424,57 +430,71 @@ def cmd_record(args) -> int:
     return 0
 
 
-def read_log(ev: pathlib.Path, manifest: dict) -> list[tuple[str, str, int, str]]:
-    """Every dispatch in the log, validated as a whole before any is used.
+def read_dispatch_log(path: pathlib.Path, ncols: int, row_errors) -> list[list[str]]:
+    """Every line of a dispatch log, validated as a whole before any is used.
 
-    A half-applied log leaves a batch looking further along than the log that
-    produced it, so one bad line refuses them all.
+    The last column is the agent ID and the others name what it was dispatched
+    for. A half-applied log leaves a batch looking further along than the log
+    that produced it, so one bad line refuses them all. A missing log is empty.
     """
-    log = ev / LOG_NAME
-    if not log.is_file():
+    if not path.is_file():
         return []
-    rows, errors, slots, agents = [], [], set(), set()
-    for n, line in enumerate(log.read_text().splitlines(), start=1):
+    rows, errors, keys, agents = [], [], set(), set()
+    for n, line in enumerate(path.read_text().splitlines(), start=1):
         if not line.strip():
             continue
         cols = line.split("\t")
-        if len(cols) != 4:
-            errors.append(f"line {n}: expected 4 tab-separated columns, found {len(cols)}")
+        if len(cols) != ncols:
+            errors.append(f"line {n}: expected {ncols} tab-separated columns, found {len(cols)}")
             continue
-        sid, arm, rep, agent = cols
-        errors += [f"line {n}: {e}" for e in slot_errors(manifest, sid, arm, rep, agent)]
-        if (sid, arm, rep) in slots:
-            errors.append(f"line {n}: {sid} {arm} {rep} is logged twice")
+        *key, agent = cols
+        errors += [f"line {n}: {e}" for e in row_errors(cols)]
+        if not AGENT_ID.fullmatch(agent):
+            errors.append(f"line {n}: agent ID {agent!r} is not a harness agent ID")
+        if tuple(key) in keys:
+            errors.append(f"line {n}: {' '.join(key)} is logged twice")
         if agent in agents:
-            errors.append(f"line {n}: agent {agent} is logged for two slots")
-        slots.add((sid, arm, rep))
+            errors.append(f"line {n}: agent {agent} is logged twice")
+        keys.add(tuple(key))
         agents.add(agent)
         rows.append(cols)
     if errors:
-        fail("refusing: the dispatch log is malformed; nothing was recorded\n  "
-             + "\n  ".join(errors))
+        fail("refusing: the dispatch log is malformed; nothing was used\n  " + "\n  ".join(errors))
+    return rows
+
+
+def log_dispatch(path: pathlib.Path, ncols: int, row_errors, key: list[str], agent_id: str,
+                 replace: bool) -> None:
+    """Add one dispatch to a log, or supersede the one already logged for `key`."""
+    if not AGENT_ID.fullmatch(agent_id):
+        fail(f"refusing: agent ID {agent_id!r} is not a harness agent ID")
+    rows = read_dispatch_log(path, ncols, row_errors)
+    if any(r[-1] == agent_id for r in rows):
+        fail(f"refusing: agent {agent_id} is already in the log")
+    prior = [i for i, r in enumerate(rows) if r[:-1] == key]
+    if prior and not replace:
+        fail(f"refusing: {' '.join(key)} was already dispatched as {rows[prior[0]][-1]}; "
+             f"pass --replace to supersede it")
+    if prior:
+        rows[prior[0]] = [*key, agent_id]
+    else:
+        rows.append([*key, agent_id])
+    path.write_text("".join("\t".join(r) + "\n" for r in rows))
+
+
+def read_log(ev: pathlib.Path, manifest: dict) -> list[tuple[str, str, int, str]]:
+    rows = read_dispatch_log(ev / LOG_NAME, 4, lambda c: slot_errors(manifest, *c[:3]))
     return [(sid, arm, int(rep), agent) for sid, arm, rep, agent in rows]
 
 
 def cmd_log_dispatch(args) -> int:
     ev = pathlib.Path(args.dir)
     manifest = load_manifest(ev)
-    errors = slot_errors(manifest, args.scenario, args.arm, args.replicate, args.agent_id)
+    errors = slot_errors(manifest, args.scenario, args.arm, args.replicate)
     if errors:
         fail("refusing: " + "; ".join(errors))
-    entries = read_log(ev, manifest)
-    if any(agent == args.agent_id for *_, agent in entries):
-        fail(f"refusing: agent {args.agent_id} is already in the log")
-    slot = (args.scenario, args.arm, args.replicate)
-    prior = [i for i, e in enumerate(entries) if e[:3] == slot]
-    if prior and not args.replace:
-        fail(f"refusing: {args.scenario} {args.arm} {args.replicate} was already dispatched "
-             f"as {entries[prior[0]][3]}; pass --replace to supersede it")
-    if prior:
-        entries[prior[0]] = (*slot, args.agent_id)
-    else:
-        entries.append((*slot, args.agent_id))
-    (ev / LOG_NAME).write_text("".join(f"{s}\t{a}\t{r}\t{g}\n" for s, a, r, g in entries))
+    log_dispatch(ev / LOG_NAME, 4, lambda c: slot_errors(manifest, *c[:3]),
+                 [args.scenario, args.arm, str(args.replicate)], args.agent_id, args.replace)
     print(f"logged {args.scenario} {args.arm} {args.replicate} -> {args.agent_id}")
     return 0
 

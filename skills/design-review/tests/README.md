@@ -91,8 +91,8 @@ an unexecuted audit plan. S07 does not prove that an agent executed cleanup or m
 
 ## Running a batch
 
-A batch is many runs of the procedure above, recorded into one evidence directory. Follow
-these steps in order. Each one exists because round 8 broke without it.
+A batch is many runs of the procedure above, recorded into one evidence directory.
+`evidence.py` enforces each step below. Each exists because round 8 broke without it.
 
 1. **Work from the repository root.** The manifest stores repository-relative paths, so
    `evidence.py check` run from any other directory reports every scenario `EXPIRED — skill
@@ -103,27 +103,40 @@ these steps in order. Each one exists because round 8 broke without it.
      --model <model-id> --replicates <r>
    ```
 
-2. **Dispatch each run as a fresh agent on the main model.** A without-skill run receives
-   `<scenario>-prompt.txt` verbatim. A with-skill run receives one short paragraph telling it
-   to read `loaded-<skill>.md` in full first, then the prompt verbatim. `record` checks that
-   the recorded prompt appears inside the first user message, so the paragraph is allowed.
-   Only a without-skill run is refused for using a tool.
-3. **Log every dispatch when it happens.** Append one tab-separated line per run:
-   `scenario`, `arm`, `replicate`, agent ID. Write the line as soon as the dispatch returns
-   the ID, not afterwards from memory.
-4. **Record from the log, and only from the log.** A run's transcript is
-   `subagents/agent-<id>.jsonl` under the dispatching session. Never find transcripts by
-   searching for prompt text. Earlier rounds dispatched the same prompts, and a content match
-   wrote 56 answers from rounds 5–7 into a new round-8 manifest. If that happens, delete the
-   evidence directory and start again from step 1. Do not try to repair the manifest.
-5. **Read each refusal before acting on it.** `is incomplete` or `carries no assistant
-   answer` means the run is still generating: record it again later. `baseline is
-   contaminated` means the run used a tool: dispatch a new run for the same slot and replace
-   that line's agent ID in the log. Never edit the recorded answer.
-6. **Dispatch in waves.** Concurrent agents are capped (20 during round 8). A dispatch over
-   the cap fails at once and leaves no transcript, so do not write a log line for it.
-7. **Finish with the completeness check** from the repository root. Grading starts only when
-   every scenario reports `current`:
+2. **Dispatch each run as a fresh agent on the main model**, through the Agent tool. A
+   without-skill run receives `<scenario>-prompt.txt` verbatim. A with-skill run receives one
+   short paragraph telling it to read `loaded-<skill>.md` in full first, then the prompt
+   verbatim. Recording checks that the recorded prompt appears inside the first user message,
+   so the paragraph is allowed. Only a without-skill run is refused for using a tool.
+3. **Log every dispatch as soon as it returns an agent ID.** A dispatch over the
+   concurrent-agent cap (20 during round 8) fails at once with no ID and gets no log line, so
+   dispatch in waves.
+
+   ```bash
+   python3 skills/design-review/tests/evidence.py log-dispatch <dir> \
+     --scenario S01 --arm baseline --replicate 1 --agent-id <id>
+   ```
+
+4. **Record from the log**, as often as runs finish. `--session` is the transcript of the
+   session that dispatched the runs.
+
+   ```bash
+   python3 skills/design-review/tests/evidence.py record-log <dir> \
+     --session ~/.claude/projects/<project>/<session-id>.jsonl
+   ```
+
+   A run is recorded only once the harness has written its completion notification into that
+   transcript. The run's own `stop_reason` cannot say: Claude Code writes each block before the
+   stream ends, so the field is blank on most finished answers. `record-log` reads only the
+   logged agents' transcripts. It never finds one by searching for prompt text; that search
+   pulled 56 answers from rounds 5–7 into a new round-8 manifest. Re-running it is safe.
+5. **Act on what it reports.** `pending` means the run is still generating: run `record-log`
+   again later, and it exits 2 until nothing is pending. `REFUSED` names the slot and the
+   reason, and the command exits 1. A contaminated baseline, or a run the harness reported
+   `failed` or `killed`, needs a new dispatch for the same slot: `log-dispatch ... --replace`
+   with the new agent ID, then `record-log`. Never edit a recorded answer.
+6. **Finish with the completeness check.** Grading starts only when every scenario reports
+   `current`.
 
    ```bash
    python3 skills/design-review/tests/evidence.py check <dir> --require-complete
@@ -193,6 +206,61 @@ grades separately with
 `write_results.py`, naming only the cells to change. The writer refuses malformed tables;
 `--repair-layout` accepts an explicit JSON mapping with a separator repair flag and hash-bound
 rows whose `set` object names every resulting column. It never infers displaced cells.
+
+## Grading a batch
+
+`grade.py` leaves every failure condition open for a reviewer. `grade_batch.py` fills those
+judgements with model graders, the same way for every answer. Each verdict goes back through
+`grade.py --judgements`, so it stays bound to the exact answer and condition text, and the
+reviewer field records the grading model and the grader prompt's hash. Grades stay in the
+grading directory. Nothing here writes a Results table; transfer approved grades with
+`write_results.py`.
+
+1. **Prepare packets** from a batch that passes the completeness check.
+
+   ```bash
+   python3 skills/design-review/tests/grade_batch.py prepare <evidence-dir> <grading-dir> \
+     --grader-model <model-id> [--seed N]
+   ```
+
+   Every recorded answer gets one packet, and one answer per scenario and arm is chosen at
+   random to be graded twice. A packet has a random ID and holds the versioned
+   [grader prompt](grader-prompt.md), the scenario's failure conditions, the executed checks and
+   the answer. It names no arm, replicate or scenario file. The key back to those lives in
+   `grading.json`, which graders never see. The blinding is partial: the answer itself can give
+   the arm away, and in round 8, 18 of 35 with-skill answers said they had read a skill file.
+2. **Dispatch each packet as a fresh agent with no tools**, sending `dispatch/<ID>.txt`
+   verbatim, and log it the same way as a run:
+
+   ```bash
+   python3 skills/design-review/tests/grade_batch.py log-dispatch <grading-dir> \
+     --packet <ID> --agent-id <agent-id>
+   ```
+
+3. **Collect** as graders finish, using the dispatching session's transcript.
+
+   ```bash
+   python3 skills/design-review/tests/grade_batch.py collect <grading-dir> \
+     --session <dispatching-session>.jsonl
+   ```
+
+   It uses the same completion notification as `record-log`, and the same exit codes. It
+   refuses a grader that used a tool, a reply that does not judge exactly the listed
+   conditions, a judgement whose `evidence` is not quoted from the answer as the grader prompt
+   requires, and a packet edited after `prepare`. It refuses everything once `grader-prompt.md`
+   differs from the prepared hash, or the evidence batch is no longer current. A refused packet
+   needs a new grader: `log-dispatch --replace`, then `collect` again.
+4. **Measure agreement, then summarise.**
+
+   ```bash
+   python3 skills/design-review/tests/grade_batch.py agree <grading-dir>
+   python3 skills/design-review/tests/grade_batch.py summary <grading-dir>
+   ```
+
+   `agree` compares the two grades of each repeated answer, per condition, and names every
+   disagreement. A condition the graders split on is ambiguous for that answer, so read its
+   counts with that in mind. `summary` counts first grades only, per scenario, condition and
+   arm, with an `all conditions` row. Both exit 1 while a packet they need is uncollected.
 
 ## Produce, don't spot
 
