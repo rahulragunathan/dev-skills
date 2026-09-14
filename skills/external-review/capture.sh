@@ -49,6 +49,8 @@ else
   REPO_PHYS="$(pwd -P)"
 fi
 ALLOWED_ROOTS=("$REPO_PHYS")
+POLICY_ROOT="$REPO_PHYS"
+READ_FAILED=0
 
 # True when physical directory $1 is at or below physical root $2.
 under_root() { case "$1/" in "$2"/*|"$2"/) return 0 ;; esac; return 1; }
@@ -88,7 +90,7 @@ artifact_failure() { echo "ARTIFACT FAILED — do not send this bundle"; exit 1;
 
 withhold() { printf '%s\t(%s)\0' "$1" "$2" >> "$WITHHELD" || artifact_failure; }
 
-# Apply the path policy to every component of the normalized physical path.
+# Apply the path policy within the repository, or to the full external plan path.
 # A credential-shaped directory excludes its descendants as Git pathspecs do.
 credential_shaped() {
   local path
@@ -145,7 +147,7 @@ classify() {
   [ "$rc" = 0 ] || return 1
   [ -e "$CAPTURE_PATH" ] || { withhold "$f" "tracked, absent from the tree"; return 1; }
   [ -f "$CAPTURE_PATH" ] || { withhold "$f" "not a regular file"; return 1; }
-  credential_shaped "$CAPTURE_PATH" && { withhold "$f" "credential-shaped name"; return 1; }
+  credential_shaped "${CAPTURE_PATH#"$POLICY_ROOT"/}" && { withhold "$f" "credential-shaped name"; return 1; }
   is_binary "$CAPTURE_PATH" && { withhold "$f" "binary"; return 1; }
   return 0
 }
@@ -154,7 +156,7 @@ capture() {
   local f="$1" label="${2:-}"
   classify "$f" || return 0
   printf '\n===== %s%s =====\n' "$label" "$f" >> "$BUNDLE" || artifact_failure
-  cat -- "$CAPTURE_PATH" >> "$BUNDLE" || { withhold "$f" "read failed"; return 0; }
+  cat -- "$CAPTURE_PATH" >> "$BUNDLE" || { withhold "$f" "read failed"; READ_FAILED=1; return 0; }
   printf '%s\0' "$f" >> "$OUT/captured.z" \
     || { echo "CANNOT RECORD A CAPTURED PATH — do not send this bundle"; exit 1; }
   return 0
@@ -239,6 +241,8 @@ case "$MODE" in
     # the working directory that named it rather than from the repository root.
     ARG="$pdir/$(basename -- "$ARG")"
     ALLOWED_ROOTS+=("$pdir")
+    # An external plan has no repository boundary; retain its full path policy.
+    POLICY_ROOT=""
     printf '%s\0' "$ARG" > "$OUT/all.z" || artifact_failure
     cat "$OUT/all.z" > "$OUT/manifest.z" || artifact_failure
     capture "$ARG" "PLAN: "
@@ -253,10 +257,8 @@ SELECTED="$(nul "$OUT/manifest.z")" || artifact_failure
 WITHHELD_N="$(nul "$WITHHELD")" || artifact_failure
 CAPTURED="$(nul "$OUT/captured.z")" || artifact_failure
 
-# A read failure means an incomplete bundle. Search the NUL records with a
-# NUL-aware reader: `grep` in some environments injects -I and ignores input it
-# considers binary, which NUL-delimited records are.
-if tr '\0' '\n' < "$WITHHELD" | grep -q '(read failed)'; then
+# Keep the read status at its source; scanning a pipeline can lose it to SIGPIPE.
+if [ "$READ_FAILED" = 1 ]; then
   echo "A FILE FAILED TO READ — do not send this bundle"; exit 1
 fi
 

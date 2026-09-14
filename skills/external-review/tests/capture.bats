@@ -424,3 +424,39 @@ SH
     refute_canary
   done
 }
+
+@test "QC T1-2: credential-shaped ancestors above the repository do not exclude its files" {
+  cd "$TEST_TMP"
+  mkdir credentials-service
+  mv "$REPO" credentials-service/repo
+  REPO="$TEST_TMP/credentials-service/repo"
+  cd "$REPO"
+  run bash "$CAPTURE" repo "$OUT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'bundle contains 1 of 1 files'* ]]
+  grep -q hello "$OUT/bundle.txt"
+}
+
+@test "QC T1-3: a read failure remains fatal beyond a pipe buffer of withheld records" {
+  python3 - <<'PY'
+from pathlib import Path
+for i in range(700):
+    Path(f'z{i:04d}' + 'x'*200).write_text('removed')
+PY
+  git add -A && git commit -qm large
+  python3 - <<'PY'
+from pathlib import Path
+for p in Path('.').glob('z*'): p.unlink()
+PY
+  mkdir "$TEST_TMP/bin"
+  cat > "$TEST_TMP/bin/cat" <<'SH'
+#!/bin/bash
+case "${*: -1}" in */kept.txt) exit 1;; esac
+exec /bin/cat "$@"
+SH
+  chmod +x "$TEST_TMP/bin/cat"
+  PATH="$TEST_TMP/bin:$PATH" run bash "$CAPTURE" repo "$OUT"
+  [ "$(wc -c < "$OUT/withheld.txt")" -gt 131072 ]
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"A FILE FAILED TO READ"* ]]
+}

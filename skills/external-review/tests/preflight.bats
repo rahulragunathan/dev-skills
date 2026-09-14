@@ -223,3 +223,36 @@ SH
   [[ "$output" == *"gemini"*"MISSING"* ]]
   [[ "$output" == *"PARTIAL COVERAGE"* ]]
 }
+
+@test "QC T2-3: healthy Codex configuration output cannot become a timeout" {
+  fake_codex_ready
+  sed -i.bak '/exit 0/i\
+echo stream_idle_timeout_ms=300000\
+echo stream_idle_timeout_ms=300000 >&2\
+' "$BIN/codex"
+  run bash "$PREFLIGHT" --codex-model selected
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"codex"*"READY"* ]]
+}
+
+@test "QC T2-4: both probes carry the real high reasoning effort" {
+  fake_codex_ready; fake_agy_ready
+  sed -i.bak '2i\
+printf "%s\\n" "$@" > "$TEST_TMP/codex-args"\
+' "$BIN/codex"
+  sed -i.bak '2i\
+printf "%s\\n" "$@" > "$TEST_TMP/agy-args"\
+' "$BIN/agy"
+  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
+  [ "$status" -eq 0 ]
+  grep -Fx 'model_reasoning_effort=high' "$TEST_TMP/codex-args"
+  grep -Fx -- '--effort' "$TEST_TMP/agy-args"
+  grep -Fx high "$TEST_TMP/agy-args"
+}
+
+@test "QC T5 preflight: exhausted availability ladder reports each rung once" {
+  fake_agy_unavailable
+  run bash "$PREFLIGHT" --gemini-model first --gemini-model last
+  [ "$status" -eq 1 ]
+  [ "$(printf '%s\n' "$output" | grep -c 'last .*UNAVAILABLE')" -eq 1 ]
+}

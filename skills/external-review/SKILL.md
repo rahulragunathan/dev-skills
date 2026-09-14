@@ -182,6 +182,10 @@ for m in $(gemini_ladder); do PROBE_MODELS+=(--gemini-model "$m"); done
 bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/preflight.sh" "${PROBE_MODELS[@]}" --timeout 120
 ```
 
+Both probes use the real pass's explicit high reasoning effort. Codex console output is
+kept separate from stderr; configuration names containing `timeout` do not indicate a timeout.
+A deadline or explicit incomplete-turn diagnostic still overrides a partial readiness token.
+
 Supply the discovered candidates in ladder order. It tries the next candidate on availability
 failure. Each subprocess has a deadline and process-group cleanup, so a hung Codex cannot
 prevent the Gemini probe. It asks each CLI one cheap question and reports `READY`, `QUOTA` with the reset
@@ -289,6 +293,11 @@ diff driver — for PDFs, notebooks, or an encrypted-file helper — otherwise r
 and the converted plaintext lands in the bundle for a file the exclusions were written to keep
 out.
 
+Repository file classification applies credential-name checks within the repository root;
+ancestors above it do not exclude the checkout. External plan files retain full physical-path
+classification because they have no repository boundary. Any file read failure makes capture
+fail, regardless of how many other paths were withheld.
+
 **Bundling sends your source to a third party.** Exclude credential-shaped files from **both** lists — a tracked `.env` reaches the reviewer through `git diff` just as easily as an untracked one. **Every pattern needs a leading `*` and `icase`**: without them a pathspec anchors at the repo root and is case-sensitive, so `config/credentials.json` and `Credentials.yaml` both pass.
 
 **Bundle filtering and export pruning are separate controls.** Pass the same scope exclusions
@@ -321,7 +330,8 @@ commit, so waiving it costs nothing that matters.
 The script copies regular-file blobs from the repository root at HEAD, ignoring archive
 attributes that could remove files or substitute their content. It omits symlinks and submodules,
 listing each omission on stderr; include those gaps in the coverage report. It then removes
-literal root-relative exclusion paths and verifies each deletion. Preserve the export log.
+literal root-relative exclusion paths and verifies each deletion. Its stdout contains only
+the successful export root; refusal diagnostics go to stderr. Preserve the export log.
 
 The export has no `.git` and no history. Inline the captured diff in phase prompts, including
 follow-up passes, so the reviewer can see deletions and the exact changes under review. Inline

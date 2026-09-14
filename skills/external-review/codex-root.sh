@@ -21,6 +21,9 @@
 
 set -uo pipefail
 
+# stdout is exclusively the successful root path, including in command substitution.
+exec 3>&1 1>&2
+
 DEST="${1:?usage: codex-root.sh <dir> [--exclude <path>]...}"
 shift
 
@@ -107,5 +110,5 @@ if [ "${#EXCL[@]}" -gt 0 ]; then
   done
 fi
 
-echo "$DEST"
+echo "$DEST" >&3
 exit 0

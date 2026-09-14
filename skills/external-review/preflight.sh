@@ -53,8 +53,13 @@ DOWN=()
 # Classify a failed probe from its error text. Quota and availability read alike
 # to a bare exit status and demand opposite responses, so they are separated
 # here rather than at each call site.
+timed_out() { grep -qiE 'probe timeout|print timeout|timed out|turn in progress' "$1"; }
+
 classify_error() {
   local err="$1"
+  if timed_out "$err"; then
+    printf 'TIMEOUT — inconclusive; raise the print timeout and retry'; return 0
+  fi
   if grep -qiE 'quota|rate limit|limits|upgrade your subscription' "$err"; then
     local window
     window="$(grep -oiE 'resets in [0-9hms ]+' "$err" | head -1)"
@@ -64,9 +69,6 @@ classify_error() {
   fi
   if grep -qiE 'not supported|unknown model|is not available|entitle' "$err"; then
     printf 'UNAVAILABLE'; return 0
-  fi
-  if grep -qiE 'timeout|timed out' "$err"; then
-    printf 'TIMEOUT — inconclusive; raise the print timeout and retry'; return 0
   fi
   printf 'FAILED — %s' "$(head -c 160 "$err" | tr '\n' ' ')"
 }
@@ -101,18 +103,20 @@ probe() {
   if [ "$#" -eq 0 ]; then
     report "$reviewer" "—" "UNAVAILABLE — no discovered candidates supplied"; return
   fi
+  local remaining="$#"
   for model in "$@"; do
+    remaining=$((remaining - 1))
     OUT="$TMP/$reviewer.txt"; ERR="$TMP/$reviewer.err"
     : > "$OUT"
     if [ "$reviewer" = codex ]; then
       python3 "$RUNNER" "$DEADLINE" codex exec --skip-git-repo-check --sandbox read-only \
-        -m "$model" -o "$OUT" "$PROBE" > "$ERR" 2>&1 < /dev/null
+        -m "$model" -c model_reasoning_effort="high" -o "$OUT" "$PROBE" > "$TMP/codex.stdout" 2> "$ERR" < /dev/null
     else
-      python3 "$RUNNER" "$DEADLINE" agy -p "$PROBE" --model "$model" \
+      python3 "$RUNNER" "$DEADLINE" agy -p "$PROBE" --model "$model" --effort high \
         --print-timeout "${DEADLINE}s" > "$OUT" 2> "$ERR" < /dev/null
     fi
     rc=$?
-    if grep -qiE 'timeout|timed out|turn in progress' "$ERR"; then
+    if [ "$rc" = 124 ] || timed_out "$ERR"; then
       result="TIMEOUT — inconclusive"
     elif [ "$rc" = 0 ] && [ "$(tr -d '\r\n' < "$OUT")" = ready ]; then
       result=READY
@@ -124,7 +128,7 @@ probe() {
       result="$(classify_error "$ERR")"
     fi
     case "$result" in
-      UNAVAILABLE*) printf '%-8s %-24s %s\n' "$reviewer" "$model" "$result" ;;
+      UNAVAILABLE*) [ "$remaining" -eq 0 ] || printf '%-8s %-24s %s\n' "$reviewer" "$model" "$result" ;;
       *) break ;;
     esac
   done

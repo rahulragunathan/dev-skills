@@ -8,18 +8,12 @@
 # reachable from the worktree, the exclusion is prose again and the reviewer
 # will report on code nobody is about to touch.
 
-setup() {
-  export TEST_TMP="$(mktemp -d)"
-  export REPO="$TEST_TMP/repo"
-  export ROOT="$TEST_TMP/root"
-  mkdir -p "$REPO"
-  local here; here="$(cd "$(dirname "$BATS_TEST_FILENAME")" && pwd)"
-  export CODEX_ROOT="$(dirname "$here")/codex-root.sh"
+load helpers/setup
 
-  cd "$REPO"
-  git init -q -b main .
-  git config user.email t@example.invalid
-  git config user.name  Test
+setup() {
+  setup_capture_env
+  export ROOT="$TEST_TMP/root"
+  export CODEX_ROOT="$BATS_TEST_DIRNAME/../codex-root.sh"
   mkdir -p skills/held skills/kept
   printf 'EXCLUDED-CONTENT\n' > skills/held/SKILL.md
   printf 'IN-SCOPE-CONTENT\n' > skills/kept/SKILL.md
@@ -27,12 +21,7 @@ setup() {
   git add -A && git commit -qm base
 }
 
-teardown() {
-  cd "$REPO" 2>/dev/null && git worktree remove --force "$ROOT" 2>/dev/null
-  cd /
-  [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/null
-  rm -rf "$TEST_TMP"
-}
+teardown() { teardown_capture_env; }
 
 @test "the pruned root holds the in-scope files" {
   run bash "$CODEX_ROOT" "$ROOT" --exclude skills/held
@@ -193,4 +182,10 @@ PY
   [ ! -L "$ROOT/alias" ]
   [ ! -e "$ROOT/skills/held" ]
   grep -q IN-SCOPE-CONTENT "$ROOT/skills/kept/SKILL.md"
+}
+
+@test "QC T2-6: command substitution leaves refusal visible on stderr and root empty" {
+  echo dirty >> README.md
+  run bash -c 'root=$(bash "$CODEX_ROOT" "$ROOT" 2> "$TEST_TMP/error"); rc=$?; [ "$rc" = 1 ] && [ -z "$root" ] && grep -q "TREE IS DIRTY" "$TEST_TMP/error"'
+  [ "$status" -eq 0 ]
 }
