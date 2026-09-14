@@ -11,6 +11,108 @@ import json,sys
 r=json.load(open(sys.argv[1]));assert eval(sys.argv[2],{'r':r}),r
 PY
 }
+
+@test "F-02: missing call attributes and arguments cannot leave stale mutable guards" {
+  # Fails if a call setup error escapes the opaque-call invalidation path.
+  for call in 'service.close(account)' 'close(account, missing)' 'close(account, **options)'; do
+    cat > "$T/answer.md" <<PY
+\`\`\`python
+from types import SimpleNamespace
+def close(account, missing=None):
+    return None
+service = SimpleNamespace()
+account = SimpleNamespace(status="open")
+options = {}
+result = $call
+assert account.status == "closed"
+assert 1 == 2
+\`\`\`
+PY
+    report || true
+    check_report "[c['status'] for c in r['checks']]==['could-not-evaluate','did-not-hold']"
+  done
+}
+
+@test "F-02: an opaque call invalidates cached helpers" {
+  # Fails when callable objects retain pre-call mutable state.
+  cat > "$T/answer.md" <<'PY'
+```python
+from functools import lru_cache
+@lru_cache
+def cached():
+    return 1
+result = cached()
+result = clear(cached)
+assert cached.cache_info().currsize == 0
+```
+PY
+  report || true
+  check_report "len(r['checks'])==1 and r['checks'][0]['status']=='could-not-evaluate'"
+}
+
+@test "F-02 recheck: helpers cannot recover stale mutable globals after an opaque call" {
+  # Fails if only the copied test scope is invalidated, leaving helper globals usable.
+  cat > "$T/answer.md" <<'PY'
+```python
+from types import SimpleNamespace
+account = SimpleNamespace(status="open")
+def current_account():
+    return account
+def constant():
+    return 2
+def test_close():
+    result = close_account(account)
+    assert current_account().status == "closed"
+    assert constant() == 3
+```
+PY
+  report || true
+  check_report "[c['status'] for c in r['checks']]==['could-not-evaluate','did-not-hold']"
+}
+
+@test "F-03: skipped context entry and exit effects do not leave stale fixture values" {
+  # Entry may mutate account; exit may mutate the object constructed in the body.
+  cat > "$T/answer.md" <<'PY'
+```python
+from types import SimpleNamespace
+account = SimpleNamespace(status="open")
+with close(account) as opened:
+    assert account.status == "closed"
+    assert opened.status == "closed"
+    created = SimpleNamespace(status="open")
+assert created.status == "closed"
+```
+PY
+  report || true
+  check_report "len(r['checks'])==3 and all(c['status']=='could-not-evaluate' for c in r['checks'])"
+}
+
+@test "F-03: try tails remain visible and cannot leave stale following guards" {
+  # Fails when finally effects and assertions vanish from the report.
+  cat > "$T/answer.md" <<'PY'
+```python
+from types import SimpleNamespace
+account = SimpleNamespace(status="open")
+try:
+    pass
+finally:
+    account.status = "closed"
+    assert account.status == "closed"
+assert account.status == "closed"
+```
+PY
+  report || true
+  check_report "len(r['checks'])==2 and all(c['status']=='could-not-evaluate' for c in r['checks'])"
+}
+
+@test "F-04: string and bytes formatting cannot allocate past the sequence limit" {
+  # Small witness for the same path that accepts arbitrarily large field widths.
+  for expression in "'%100001s' % 'x'" "b'%100001s' % b'x'"; do
+    printf '```python\ns = %s\nassert len(s) == 100001\n```\n' "$expression" > "$T/answer.md"
+    report || true
+    check_report "r['checks'][0]['status']=='could-not-evaluate'"
+  done
+}
 @test "real S07 baseline DST fixture guard executes and did not hold" {
   python3 - "$BATS_TEST_DIRNAME/fixtures/s07-real-dst.json" "$T/answer.md" <<'PY'
 import json,pathlib,sys

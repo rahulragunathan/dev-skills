@@ -104,6 +104,8 @@ class Evaluator:
                 return fn(self.expression(node.operand, env))
         if isinstance(node, ast.BinOp) and type(node.op) in BINOPS:
             a, b = self.expression(node.left, env), self.expression(node.right, env)
+            if isinstance(node.op, ast.Mod) and isinstance(a, (str, bytes)):
+                raise Gap('string formatting is unsupported: unbounded allocation')
             if isinstance(node.op, ast.Mult):
                 for sequence, factor in ((a, b), (b, a)):
                     if isinstance(sequence, (str, bytes, list, tuple)) and isinstance(factor, int):
@@ -135,12 +137,12 @@ class Evaluator:
         if isinstance(node, ast.Call):
             try:
                 fn = self.expression(node.func, env)
-            except Gap as exc:
+                args = [self.expression(a, env) for a in node.args]
+                kwargs = {k.arg: self.expression(k.value, env) for k in node.keywords}
+                if None in kwargs:
+                    raise Gap('keyword expansion unsupported')
+            except Exception as exc:
                 raise OpaqueCall(str(exc))
-            args = [self.expression(a, env) for a in node.args]
-            kwargs = {k.arg: self.expression(k.value, env) for k in node.keywords}
-            if None in kwargs:
-                raise Gap('keyword expansion unsupported')
             allowed = any(fn is f for f in SAFE_CALLS + self.allowed_helpers)
             if isinstance(node.func, ast.Attribute) and node.func.attr in METHODS:
                 owner = getattr(fn, '__self__', getattr(fn, '__objclass__', None))
@@ -153,7 +155,11 @@ class Evaluator:
                         raise Gap('host timezone is not established; use an aware datetime and explicit zone')
             if not allowed:
                 raise OpaqueCall('unsupported call: ' + ast.unparse(node.func))
-            return fn(*args, **kwargs)
+            try:
+                return fn(*args, **kwargs)
+            except Gap as exc:
+                # A supported helper may stop at an unsupported statement.
+                raise OpaqueCall(str(exc))
         raise Gap('unsupported expression: ' + type(node).__name__)
 
     def calls_production(self, node, seen=None):
@@ -198,10 +204,15 @@ class Evaluator:
 
     def forget_mutable(self, env, reason):
         # A call that never ran may have changed any mutable object, and every
-        # mutable binding might alias one it reached.
-        for name, value in list(env.items()):
-            if not isinstance(value, IMMUTABLE) and not callable(value):
-                env[name] = Unknown(reason)
+        # mutable binding might alias one it reached. Helpers read self.env,
+        # including when the call occurred in a copied test-function scope.
+        scopes = [env] if env is self.env else [env, self.env]
+        for bindings in scopes:
+            for name, value in list(bindings.items()):
+                immutable_callable = (any(value is f for f in SAFE_CALLS)
+                                      or isinstance(value, types.FunctionType))
+                if not isinstance(value, IMMUTABLE) and not immutable_callable:
+                    bindings[name] = Unknown(reason)
 
     def invalidate(self, env, reason):
         # Unknown writes may affect aliases as well as their syntactic target.
@@ -257,10 +268,26 @@ class Evaluator:
                 for item in node.items:
                     if self.calls_production(item.context_expr):
                         return True
+                    # Neither __enter__ nor __exit__ is executed. Keep constants
+                    # built inside the body checkable, but not pre-effect objects.
+                    self.forget_mutable(env, 'context entry effects are not evaluated')
+                    if item.optional_vars is not None:
+                        try:
+                            self.assign(item.optional_vars, Unknown('context value is not evaluated'), env)
+                        except Exception as exc:
+                            self.invalidate(env, str(exc))
                 if self.statements(node.body, env, scope):
                     return True
+                self.forget_mutable(env, 'context exit effects are not evaluated')
             elif isinstance(node, ast.Try):
                 if self.statements(node.body, env, scope):
+                    return True
+                tails = [*node.handlers, *node.orelse, *node.finalbody]
+                for tail in tails:
+                    self.unexecuted_guards(tail, env, scope, 'exception and try-tail flow is not evaluated')
+                if tails:
+                    self.invalidate(env, 'exception and try-tail effects are not evaluated')
+                if any(self.calls_production(tail) for tail in tails):
                     return True
             elif isinstance(node, (ast.Import, ast.ImportFrom)):
                 self.imports(node, env)
