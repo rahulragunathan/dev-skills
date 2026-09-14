@@ -129,10 +129,11 @@ of this file's marker-shaped lines is the real one.
 The script does the rest, and it is what the tests cover. It matches whole marker lines only,
 refuses a file with more than one managed block or with unbalanced markers, refuses a symlinked
 target including a dangling one, assembles a candidate and verifies *that* before it replaces
-anything, and preserves content outside the block. Unmarked files with headings shared by the
-canonical standards are refused for explicit reconciliation; stale sections must not remain
-beside an appended replacement. Each of those is a way this step has gone
-wrong or could: a re-run must bring a stale file up to date rather than append to it, and a bad
+anything, and preserves content outside the block. Existing unmarked files require explicit
+adoption: review their content, remove or mark stale standards, then run `install-standards.sh --adopt <canonical-block-file> [target]` to preserve
+the remaining personal content and append the canonical block. Headings do not establish ownership.
+Unmarked-file refusals leave both the target and any existing backup unchanged. Each of those
+is a way this step has gone wrong or could: a re-run must bring a stale file up to date rather than append to it, and a bad
 slice here corrupts the file that governs every session on every machine. Change its behavior in
 `install-standards.sh` and verify it with `tests/install-standards.bats`.
 
@@ -315,16 +316,22 @@ done < <(find "$HOME/Library/CloudStorage/"GoogleDrive-*/"My Drive" "$HOME/Googl
 echo "CODE_ROOT=$CODE_ROOT"   # set by hand if empty, e.g. CODE_ROOT="$HOME/.../My Drive/Code"
 ```
 
+The link commands use the checkout under `CODE_ROOT/Plugins/localclaude`, so they also run
+by hand before the plugin is installed. If that checkout lives elsewhere, substitute its
+absolute path for `$CODE_ROOT/Plugins/localclaude` in both commands.
+
 Then symlink the loose-skills folder (every subfolder with a top-level `SKILL.md` auto-loads, e.g. `drawio`):
 
 ```bash
 SRC="$CODE_ROOT/Skills"
 LINK="$HOME/.claude/skills"
-bash "$CLAUDE_PLUGIN_ROOT/skills/claude-setup/install-link.sh" "$SRC" "$LINK" || exit 1
+bash "$CODE_ROOT/Plugins/localclaude/skills/claude-setup/install-link.sh" "$SRC" "$LINK" || exit 1
 ```
 
-**The helper validates the source before moving anything and restores the old destination if
-link creation or verification fails.** The probe accepts
+**The helper builds and verifies the new link before moving anything.** A real destination
+is retained at `<link>.local.bak`; existing symlinks are replaced atomically, so a moved Drive
+root can be linked again without consuming another backup. A failed installation restores
+the real destination. The probe accepts
 a code root containing *either* `Skills/` or `Plugins/`. The helper refuses a missing source
 for either link, so an incomplete root cannot replace a working destination with a dangling link.
 
@@ -339,7 +346,7 @@ The bundled skills (`claude-setup`, `claude-toggle-backend`, `local-models`, `ph
 ```bash
 SRC="$CODE_ROOT/Plugins"
 LINK="$HOME/.claude/localclaude-plugins"
-bash "$CLAUDE_PLUGIN_ROOT/skills/claude-setup/install-link.sh" "$SRC" "$LINK" || exit 1
+bash "$CODE_ROOT/Plugins/localclaude/skills/claude-setup/install-link.sh" "$SRC" "$LINK" || exit 1
 ```
 
 Then in Claude Code, using the **literal absolute path** (no quotes, no spaces, and not `~` — the slash command won't expand it):

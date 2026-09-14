@@ -59,7 +59,7 @@ markers_balanced() {
 
 @test "no markers: appends without disturbing existing content" {
   printf 'USER-CONTENT only\n' > "$TARGET"
-  run bash "$SCRIPT" "$CANON" "$TARGET"
+  run bash "$SCRIPT" --adopt "$CANON" "$TARGET"
   [ "$status" -eq 0 ]
   canary_survives
   markers_balanced
@@ -221,13 +221,13 @@ EOF
   cmp "$TARGET" "$TEST_TMP/before"
 }
 
-@test "legacy detector failure refuses without appending standards" {
+@test "unreadable adopted input refuses without appending standards" {
   printf 'USER-CONTENT\n' > "$TARGET"
   cp "$TARGET" "$TEST_TMP/before"
   mkdir "$TEST_TMP/bin"
   printf '#!/bin/sh\nexit 127\n' > "$TEST_TMP/bin/python3"
   chmod +x "$TEST_TMP/bin/python3"
-  PATH="$TEST_TMP/bin:$PATH" run bash "$SCRIPT" "$CANON" "$TARGET"
+  PATH="$TEST_TMP/bin:$PATH" run bash "$SCRIPT" --adopt "$CANON" "$TARGET"
   [ "$status" -eq 1 ]
   cmp "$TARGET" "$TEST_TMP/before"
 }
@@ -243,7 +243,7 @@ EOF
   echo USER-CONTENT > "$TARGET"
   echo KEEP > "$TEST_TMP/canary"
   ln -s "$TEST_TMP/canary" "$TARGET.localclaude.bak"
-  run bash "$SCRIPT" "$CANON" "$TARGET"
+  run bash "$SCRIPT" --adopt "$CANON" "$TARGET"
   [ "$status" -eq 1 ]
   [ "$(cat "$TEST_TMP/canary")" = KEEP ]
   [ "$(cat "$TARGET")" = USER-CONTENT ]
@@ -253,8 +253,26 @@ EOF
   echo USER-CONTENT > "$TARGET"
   echo KEEP > "$TEST_TMP/canary"
   ln "$TEST_TMP/canary" "$TARGET.localclaude.bak"
-  run bash "$SCRIPT" "$CANON" "$TARGET"
+  run bash "$SCRIPT" --adopt "$CANON" "$TARGET"
   [ "$status" -eq 0 ]
   [ "$(cat "$TEST_TMP/canary")" = KEEP ]
   [ "$(cat "$TARGET.localclaude.bak")" = USER-CONTENT ]
+}
+
+@test "QC T2-2: unmarked reworded legacy content requires explicit adoption without backup" {
+  printf '# My rules\n\n## Command conventions\n\nStale instructions\n' > "$TARGET"
+  cp "$TARGET" "$TEST_TMP/before"
+  run bash "$SCRIPT" "$CANON" "$TARGET"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"--adopt"* ]]
+  cmp "$TARGET" "$TEST_TMP/before"
+  [ ! -e "$TARGET.localclaude.bak" ]
+}
+
+@test "QC T2-2: explicit adoption preserves personal headings shared with the canonical block" {
+  printf '## Shell commands\n\nUSER-CONTENT\n' > "$TARGET"
+  run bash "$SCRIPT" --adopt "$CANON" "$TARGET"
+  [ "$status" -eq 0 ]
+  canary_survives
+  markers_balanced
 }

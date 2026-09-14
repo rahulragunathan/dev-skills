@@ -50,3 +50,41 @@ PY
   [ -L "$T/home/.claude/localclaude-plugins" ]
   [ -f "$T/home/.claude/localclaude-plugins.local.bak/keep" ]
 }
+
+@test "QC T2-1: moved sources repoint repeatedly without consuming the directory backup" {
+  bash "$SCRIPT" "$T/source" "$T/link"
+  mkdir "$T/second" "$T/third"
+  for source in second third; do
+    run bash "$SCRIPT" "$T/$source" "$T/link"
+    [ "$status" -eq 0 ]
+    [ "$(readlink "$T/link")" = "$(cd "$T/$source" && pwd -P)" ]
+    [ "$(cat "$T/link.local.bak/keep")" = original ]
+  done
+}
+
+@test "QC T2-1: candidate link failure never moves the destination" {
+  mkdir "$T/bin"
+  printf '#!/bin/sh\nexit 1\n' > "$T/bin/ln"
+  printf '#!/bin/sh\necho moved >> "%s"\nexec /bin/mv "$@"\n' "$T/moves" > "$T/bin/mv"
+  chmod +x "$T/bin/ln" "$T/bin/mv"
+  PATH="$T/bin:$PATH" run bash "$SCRIPT" "$T/source" "$T/link"
+  [ "$status" -eq 1 ]
+  [ -f "$T/link/keep" ]
+  [ ! -e "$T/moves" ]
+}
+
+@test "QC T2-7: setup link examples run with no installed plugin root" {
+  local plugin; plugin="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
+  mkdir -p "$T/code/Plugins/localclaude/skills/claude-setup" "$T/code/Skills" "$T/home"
+  cp "$SCRIPT" "$T/code/Plugins/localclaude/skills/claude-setup/"
+  python3 - "$plugin/skills/claude-setup/SKILL.md" "$T/examples" <<'PY'
+import pathlib,re,sys
+blocks=re.findall(r'```bash\n(.*?)```',pathlib.Path(sys.argv[1]).read_text(),re.S)
+blocks=[b for b in blocks if 'install-link.sh' in b]
+assert len(blocks)==2
+pathlib.Path(sys.argv[2]).write_text('\n'.join(blocks).replace('$HOME', '$SETUP_TEST_HOME'))
+PY
+  env -u CLAUDE_PLUGIN_ROOT CODE_ROOT="$T/code" SETUP_TEST_HOME="$T/home" bash "$T/examples"
+  [ -L "$T/home/.claude/skills" ]
+  [ -L "$T/home/.claude/localclaude-plugins" ]
+}

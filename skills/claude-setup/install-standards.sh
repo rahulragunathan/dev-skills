@@ -7,7 +7,7 @@
 # it. Prose cannot be tested; this can.
 #
 # Usage:
-#   install-standards.sh <canonical-block-file> [target]
+#   install-standards.sh [--adopt] <canonical-block-file> [target]
 #     target defaults to $HOME/.claude/CLAUDE.md
 #
 # The canonical file must contain the whole block, opening marker line through
@@ -30,7 +30,10 @@ CLOSE='<!-- <<< localclaude standards'
 OPEN_RE='^<!-- >>> localclaude standards.*>>> -->$'
 CLOSE_RE='^<!-- <<< localclaude standards <<< -->$'
 
-CANON="${1:?usage: install-standards.sh <canonical-block-file> [target]}"
+ADOPT=0
+if [ "${1:-}" = --adopt ]; then ADOPT=1; shift; fi
+
+CANON="${1:?usage: install-standards.sh [--adopt] <canonical-block-file> [target]}"
 TARGET="${2:-$HOME/.claude/CLAUDE.md}"
 
 [ -f "$CANON" ] || { echo "CANONICAL BLOCK NOT FOUND: $CANON"; exit 1; }
@@ -80,34 +83,16 @@ else
     exit 1
   fi
 
-  [ ! -L "$TARGET.localclaude.bak" ] &&
-    { [ ! -e "$TARGET.localclaude.bak" ] || [ -f "$TARGET.localclaude.bak" ]; } \
-    || { echo "BACKUP IS NOT A REGULAR FILE — refusing"; exit 1; }
-  # Replace the backup inode instead of writing through a possible hard link.
-  BACKUP_TMP="$(mktemp "${TARGET}.backup.XXXXXX")" || { echo "MKTEMP FAILED"; exit 1; }
-  trap 'rm -f "$BACKUP_TMP"' EXIT
-  cp -p "$TARGET" "$BACKUP_TMP" && mv "$BACKUP_TMP" "$TARGET.localclaude.bak" \
-    || { echo "BACKUP FAILED"; exit 1; }
-  trap - EXIT
   TMP="$(mktemp "${TMPDIR:-/tmp}/claudemd.XXXXXX")" || { echo "MKTEMP FAILED"; exit 1; }
   trap 'rm -f "$TMP"' EXIT
 
   if [ "$n_open" = "0" ]; then
-    # A legacy section has no reliable end boundary. Refuse rather than
-    # silently keeping stale instructions alongside their replacement.
-    legacy_rc=0
-    python3 - "$CANON" "$TARGET" <<'PYCODE' || legacy_rc=$?
-import pathlib, re, sys
-headings = set(re.findall(r'^#{1,6} .+$', pathlib.Path(sys.argv[1]).read_text(), re.M))
-legacy = set(re.findall(r'^#{1,6} .+$', pathlib.Path(sys.argv[2]).read_text(), re.M))
-sys.exit(0 if headings & legacy else 1)
+    # Unmarked bytes carry no ownership information, whatever their headings.
+    [ "$ADOPT" = 1 ] || { echo "UNMARKED FILE (personal or LEGACY) — review and reconcile it, then use --adopt; target unchanged" >&2; exit 1; }
+    python3 - "$TARGET" <<'PYCODE' || { echo "UNREADABLE TARGET — target unchanged" >&2; exit 1; }
+import pathlib, sys
+pathlib.Path(sys.argv[1]).read_text()
 PYCODE
-    case "$legacy_rc" in
-      0) echo "LEGACY UNMARKED STANDARDS — reconcile overlapping sections explicitly; target unchanged"; exit 1 ;;
-      1) : ;;
-      *) echo "LEGACY DETECTOR FAILED — target unchanged"; exit 1 ;;
-    esac
-    # No recognizable standards: preserve unrelated content and append.
     { cat "$TARGET"; printf '\n'; cat "$CANON"; } > "$TMP" \
       || { echo "ASSEMBLE FAILED"; exit 1; }
   else
@@ -135,6 +120,16 @@ PYCODE
   diff -q <(awk -v o="$OPEN_RE" -v c="$CLOSE_RE" \
       '$0 ~ o{p=1} p{print} $0 ~ c&&p{exit}' "$TMP") "$CANON" >/dev/null \
     || { echo "CANDIDATE REJECTED — block differs from canonical; $TARGET untouched"; exit 1; }
+
+  [ ! -L "$TARGET.localclaude.bak" ] &&
+    { [ ! -e "$TARGET.localclaude.bak" ] || [ -f "$TARGET.localclaude.bak" ]; } \
+    || { echo "BACKUP IS NOT A REGULAR FILE — refusing"; exit 1; }
+  # Replace the backup inode instead of writing through a possible hard link.
+  BACKUP_TMP="$(mktemp "${TARGET}.backup.XXXXXX")" || { echo "MKTEMP FAILED"; exit 1; }
+  trap 'rm -f "$BACKUP_TMP" "$TMP"' EXIT
+  cp -p "$TARGET" "$BACKUP_TMP" && mv "$BACKUP_TMP" "$TARGET.localclaude.bak" \
+    || { echo "BACKUP FAILED"; exit 1; }
+  trap 'rm -f "$TMP"' EXIT
 
   mv "$TMP" "$TARGET" || { echo "REPLACE FAILED"; exit 1; }
   trap - EXIT
