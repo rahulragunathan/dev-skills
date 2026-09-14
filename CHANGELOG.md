@@ -42,20 +42,14 @@ here — the plugin manifest's version is the only record of them.
   open question from an external repo review.
 - `LICENSE` — the MIT text the plugin manifest and skill frontmatter already
   declared.
-- **Run evidence for the pressure tests, over four rounds.** Rounds 1 to 3 mixed
-  arms: seven baselines from 2026-09-07 carried forward while the with-skill arms
-  were re-gathered twice as review passes changed the loaded skills. **Round 4
-  (2026-09-09) is the current and only complete batch** — both arms of all seven
-  scenarios gathered the same day against the same skill text, with per-scenario
-  provenance so a single stale scenario can be named. Rounds 1 to 3 are retained
-  as history and marked superseded. **Seven of fifteen units need their rule and
-  the skill fixes two**: Direction and Lifetime. Five remain ineffective —
-  Responsibility, Only what fired, No filler verdicts, Mutation reasoning and
-  Fixture validity. The other eight record a strong model already doing the right
-  thing unaided. Transcripts, dispatched
-  prompts and hash-verified skill snapshots for both rounds are archived outside
-  the repo under
-  `Claude-Projects/Project Artifacts/Plugins/localclaude/design-review-evidence-<date>/`.
+- **Recorded pressure-test evidence through round 7.** Round 4 (2026-09-09) was
+  the complete paired batch across all seven scenarios; later S01/S02 fixtures
+  supersede its revisions, and round 7 is partial. Results retain each batch's
+  grades and provenance. The latest per-scenario observations and historical
+  corrections are in `skills/design-review/tests/README.md`; the earlier
+  round-4 aggregate is not a current assessment of the skill. Transcripts,
+  dispatched prompts and hash-verified snapshots remain in the external
+  `Claude-Projects/Project Artifacts/Plugins/localclaude/design-review-evidence-<date>/` archive.
   Two round-1 runs were voided before grading and re-run: an s02 baseline that
   invoked the installed `design-review` plugin skill, and an s01 with-skill run
   whose inline paste of the skill did not match the snapshot hash the others
@@ -243,6 +237,27 @@ here — the plugin manifest's version is the only record of them.
   163→49, `external-review` 187→59. They are resident in every session.
 
 ### Fixed
+
+- **QC fix pass (2026-09-14):** Results separator repair refuses data rows and
+  skips indented examples (KI-35, now closed). Diagnostic `--show` exposes malformed
+  rows; the README rollup is checked against recorded rows without changing them.
+- **Setup and review helpers:** explicit adoption replaces heading-based ownership
+  guesses; links are built before replacement and can be repointed repeatedly.
+  Setup link examples work before plugin registration. Repository capture ignores
+  credential-shaped ancestors above its root, retains read failures on large
+  lists, and export refusals stay visible on stderr. Reviewer probes carry high
+  effort, distinguish diagnostics from configuration output, and report each
+  availability rung once.
+- **Grading and workflow:** imported fixture helpers and print diagnostics no
+  longer hide independent guards; method receivers evaluate once; sequence growth
+  is bounded before allocation. Invalid grading inputs exit 3. Across scenarios,
+  pass judgements must dispute every linked executed failure. Mutation cleanup
+  covers generated output and both test runs. Interrupted roadmap closes restore
+  originals and remove temporary staging; malformed index rows are refused.
+- **Deferred work:** ENH-14 through ENH-21 retain the larger QC reuse and architecture
+  items. ENH-22 through ENH-25 track shared verbatim-evidence validation, blind
+  hand-graded anchors, agreement statistics and measured arm leakage. The plugin
+  version remains reserved for the phase-end release.
 
 - Standards installation rejects malformed canonical marker pairs before first creation and
   refuses symlinked backup destinations and replaces hard-linked backups without writing through them. Failed Git status queries stop exports and mutation

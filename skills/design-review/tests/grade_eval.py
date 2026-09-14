@@ -34,6 +34,14 @@ EXPORTS = {'datetime': {'datetime', 'date', 'time', 'timedelta', 'timezone', 'UT
 BUILTINS = {k: v for k, v in vars(__import__('builtins')).items()
             if k in {'len', 'str', 'int', 'float', 'bool', 'tuple', 'list', 'dict',
                      'set', 'abs', 'min', 'max', 'all', 'any', 'sorted'}}
+# Diagnostics are evaluated for dependencies but never emitted into the JSON stream.
+def fixture_print(*args, sep=' ', end='\n', file=None, flush=False):
+    if file is not None:
+        raise Gap('printing to a fixture stream is unsupported')
+
+
+BUILTINS['print'] = fixture_print
+MAX_SEQUENCE_SIZE = 100000
 SAFE_CALLS = list(BUILTINS.values()) + [datetime.datetime, datetime.date, datetime.time,
     datetime.timedelta, datetime.timezone, zoneinfo.ZoneInfo, types.SimpleNamespace]
 METHODS = {'astimezone', 'utcoffset', 'dst', 'date', 'time', 'replace', 'combine',
@@ -88,8 +96,16 @@ class Evaluator:
                 return fn(self.expression(node.operand, env))
         if isinstance(node, ast.BinOp) and type(node.op) in BINOPS:
             a, b = self.expression(node.left, env), self.expression(node.right, env)
-            if isinstance(node.op, ast.Mult) and any(isinstance(x, int) and abs(x)>10000 for x in (a,b)):
-                raise Gap('multiplication size limit')
+            if isinstance(node.op, ast.Mult):
+                for sequence, factor in ((a, b), (b, a)):
+                    if isinstance(sequence, (str, bytes, list, tuple)) and isinstance(factor, int):
+                        if len(sequence) * max(0, factor) > MAX_SEQUENCE_SIZE:
+                            raise Gap('sequence repetition size limit')
+                if any(isinstance(x, int) and abs(x) > 10000 for x in (a, b)):
+                    raise Gap('multiplication size limit')
+            if isinstance(node.op, ast.Add) and isinstance(a, (str, bytes, list, tuple)) and type(a) is type(b):
+                if len(a) + len(b) > MAX_SEQUENCE_SIZE:
+                    raise Gap('sequence concatenation size limit')
             return BINOPS[type(node.op)](a, b)
         if isinstance(node, ast.Compare):
             a = self.expression(node.left, env)
@@ -116,7 +132,7 @@ class Evaluator:
                 raise Gap('keyword expansion unsupported')
             allowed = any(fn is f for f in SAFE_CALLS + self.allowed_helpers)
             if isinstance(node.func, ast.Attribute) and node.func.attr in METHODS:
-                owner = self.expression(node.func.value, env)
+                owner = getattr(fn, '__self__', getattr(fn, '__objclass__', None))
                 allowed |= (isinstance(owner, (datetime.datetime, datetime.date, datetime.time,
                     datetime.timedelta, datetime.tzinfo, functools._lru_cache_wrapper))
                     or owner is datetime.datetime)
@@ -173,6 +189,11 @@ class Evaluator:
             if name not in BUILTINS and not isinstance(value, types.ModuleType) and not any(value is f for f in SAFE_CALLS):
                 env[name] = Unknown(reason)
 
+    def unexecuted_guards(self, node, env, scope, reason):
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.Assert):
+                self.assertion(inner, env, scope, reason)
+
     def statements(self, nodes, env, scope):
         for node in nodes:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
@@ -182,9 +203,7 @@ class Evaluator:
                 # it. Returning here silently made an answer whose false guard
                 # shares a loop with a production call indistinguishable from
                 # one carrying no guards at all.
-                for inner in ast.walk(node):
-                    if isinstance(inner, ast.Assert):
-                        self.assertion(inner, env, scope,
+                self.unexecuted_guards(node, env, scope,
                                        'guard shares a statement with a production call')
                 return True
             if isinstance(node, ast.Assert):
@@ -205,9 +224,7 @@ class Evaluator:
                 try:
                     branch = node.body if self.expression(node.test, env) else node.orelse
                 except Exception as exc:
-                    for n in ast.walk(node):
-                        if isinstance(n, ast.Assert):
-                            self.assertion(n, env, scope, 'branch cannot be selected: ' + str(exc))
+                    self.unexecuted_guards(node, env, scope, 'branch cannot be selected: ' + str(exc))
                     self.invalidate(env, 'unresolved branch effects')
                     if self.calls_production(node):
                         return True
@@ -233,9 +250,7 @@ class Evaluator:
             elif isinstance(node, ast.Return):
                 return True
             elif not isinstance(node, (ast.Expr, ast.Pass)):
-                for n in ast.walk(node):
-                    if isinstance(n, ast.Assert):
-                        self.assertion(n, env, scope, 'unsupported control flow: ' + type(node).__name__)
+                self.unexecuted_guards(node, env, scope, 'unsupported control flow: ' + type(node).__name__)
                 self.invalidate(env, 'unsupported control flow: ' + type(node).__name__)
 
     def imports(self, node, env):
@@ -247,7 +262,7 @@ class Evaluator:
                 env[alias.asname or alias.name] = (getattr(module, alias.name)
                     if module and alias.name in EXPORTS[node.module]
                     else Unknown('unsupported import: ' + str(node.module) + '.' + alias.name))
-                if not module and alias.name[:1].islower():
+                if not module and alias.name in self.production:
                     self.production.add(alias.asname or alias.name)
 
     def helper(self, node):

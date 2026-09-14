@@ -296,3 +296,33 @@ assert '| test | KEEP |' in text.split('```')[1]
 assert '| test | CHANGED |' in text.split('```')[2]
 PY
 }
+
+@test "QC T1-1: separator repair refuses to overwrite a data row" {
+  printf '## Results\n\n| Run | Notes |\n| A | KEEP |\n| B | KEEP TOO |\n' > "$SCEN"
+  printf '{"separator":true}\n' > "$TEST_TMP/repair.json"
+  cp "$SCEN" "$SCEN.before"
+  run python3 "$W" "$SCEN" --repair-layout "$TEST_TMP/repair.json"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"separator"* ]]
+  cmp "$SCEN" "$SCEN.before"
+}
+
+@test "QC KI-35: indented code examples cannot become the Results table" {
+  for indent in '    ' $'\t'; do
+    printf '## Results\n\n%s| Run | Notes |\n%s| --- | --- |\n%s| test | KEEP |\n\n| Run | Notes |\n| --- | --- |\n| test | REAL |\n' "$indent" "$indent" "$indent" > "$SCEN"
+    run python3 "$W" "$SCEN" --run test --set Notes=CHANGED
+    [ "$status" -eq 0 ]
+    grep -Fx "${indent}| test | KEEP |" "$SCEN"
+    grep -Fx '| test | CHANGED |' "$SCEN"
+  done
+}
+
+@test "QC T5 writer: show diagnoses malformed rows without modifying them" {
+  printf '## Results\n\n| Run | Notes |\n| --- |\n| A | left | extra |\n' > "$SCEN"
+  cp "$SCEN" "$SCEN.before"
+  run python3 "$W" "$SCEN" --show
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"extra"* ]]
+  [[ "$output" == *"malformed separator"* ]]
+  cmp "$SCEN" "$SCEN.before"
+}

@@ -3,6 +3,7 @@
 import argparse
 import pathlib
 import re
+import sys
 from write_results import split_row, validate_table, join_row
 
 UNITS = {'S01': [('D1', ['Responsibility']), ('D2', ['Direction'])],
@@ -36,7 +37,7 @@ def render(tests):
         h, headers = validate_table(lines)
         rows = []
         for line in lines[h+2:]:
-            if not line.startswith('|'):
+            if not line.lstrip().startswith('|'):
                 break
             row = dict(zip(headers, split_row(line)))
             row['_round'] = int(re.search(r'round (\d+)', row['Run'])[1])
@@ -65,7 +66,29 @@ def render(tests):
     return ''.join(table) + '\n' + ''.join(revisions)
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--tests', type=pathlib.Path, default=pathlib.Path(__file__).parent)
-    print(render(parser.parse_args().tests), end='')
+    parser.add_argument('--check', type=pathlib.Path, help='compare a README generated block without writing')
+    args = parser.parse_args()
+    try:
+        rendered = render(args.tests)
+        if args.check:
+            text = args.check.read_text()
+            begin, end = '<!-- BEGIN GENERATED ROLLUP -->', '<!-- END GENERATED ROLLUP -->'
+            if text.count(begin) != 1 or text.count(end) != 1:
+                raise ValueError('README must contain one generated rollup marker pair')
+            block = text.split(begin, 1)[1].split(end, 1)[0]
+            if block != '\n' + rendered:
+                raise ValueError('README generated rollup differs; regenerate with rollup.py')
+            print('README generated rollup matches')
+        else:
+            print(rendered, end='')
+    except (ValueError, OSError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

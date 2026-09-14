@@ -11,7 +11,7 @@ import pathlib
 import re
 import sys
 
-from evidence import h16, section, replicate_count
+from evidence import h16, section, replicate_count, slot_key
 from grade_eval import Evaluator
 
 
@@ -29,10 +29,16 @@ def tables(text):
     return result
 
 
-def mechanical_s05(answer):
+def mechanical_s05(answer, scenario_text):
     checks = []
+    rule = re.search(r'^4\. (.+)$', section(scenario_text, 'Rules under test'), re.M)
+    if not rule:
+        raise ValueError('S05 is missing its banned-verdict rule')
+    words = [a or b for a, b in re.findall(r'`([^`]+)`|"([^"]+)"', rule[1])]
+    if not words:
+        raise ValueError('S05 banned-verdict rule has no quoted words')
     patterns = {
-        'banned-words': r'\b(?:PASS|N/A|OK|no issue|nothing to flag|clean)\b',
+        'banned-words': r'\b(?:' + '|'.join(re.escape(w) for w in words) + r')\b',
         'silent-checks': r'\b(?:Variation|Direction|Lifetime|Surface)\b',
     }
     for name, pattern in patterns.items():
@@ -62,7 +68,7 @@ def load_answer(args, sid):
     reps = replicate_count(manifest.get('replicates', 1))
     if not args.arm or not 1 <= args.replicate <= reps:
         raise ValueError('evidence selection needs an arm and a valid replicate')
-    key = args.arm if reps == 1 else f'{args.arm}#{args.replicate}'
+    key = slot_key(args.arm, args.replicate, reps)
     scenario = manifest['scenarios'][sid]
     record = scenario['arms'][key]
     path = (args.evidence / record['answer']).resolve()
@@ -79,7 +85,8 @@ def load_answer(args, sid):
 
 def build_report(scenario, answer, provenance, production, judgements=None):
     sid = 'S' + scenario.name[1:3]
-    condition_text = section(scenario.read_text(), 'Failure conditions')
+    scenario_text = scenario.read_text()
+    condition_text = section(scenario_text, 'Failure conditions')
     if not condition_text:
         raise ValueError('scenario has no Failure conditions')
     conditions = list(re.finditer(r'^(\d+[a-z]?)\.\s+\*\*([^*]+)\*\*', condition_text, re.M))
@@ -88,7 +95,7 @@ def build_report(scenario, answer, provenance, production, judgements=None):
     defaults = ['previous_day_window', 'in_window', 'account_timezone'] if sid == 'S07' else []
     checks = Evaluator(defaults + production).run(fences(answer))
     if sid == 'S05':
-        checks.extend(mechanical_s05(answer))
+        checks.extend(mechanical_s05(answer, scenario_text))
     evidence = {'tables': tables(answer), 'python': fences(answer),
                 'diagrams': fences(answer, 'mermaid'), 'diffs': fences(answer, 'diff'),
                 'answer': answer}
@@ -98,15 +105,25 @@ def build_report(scenario, answer, provenance, production, judgements=None):
         questions.append({'id': condition[1], 'title': condition[2].strip(' —'),
             'question': condition_text[condition.start():end].strip(),
             'status': 'open', 'evidence': evidence})
-    if sid == 'S07' and any(c['kind'] == 'fixture-assertion' and c['status'] == 'did-not-hold' for c in checks):
-        next(q for q in questions if q['id'] == '3').update(status='fail',
-            basis='executed fixture assertion did not hold',
-            check_ids=[c['id'] for c in checks if c['status'] == 'did-not-hold'])
+    by_id = {q['id']: q for q in questions}
+    if sid == 'S07' and '3' not in by_id:
+        raise ValueError('S07 is missing fixture condition 3')
     if not answer.strip():
         checks.append({'id': 'artifact-present', 'kind': 'text-scan', 'status': 'did-not-hold',
                        'expression': 'answer contains a required artifact', 'detail': 'answer is empty'})
-        for q in questions:
-            q.update(status='fail', basis='executed empty-artifact check')
+    for check in checks:
+        # Lexical matches require context; they have not failed a condition.
+        if check['status'] != 'did-not-hold' or check['kind'] == 'lexical-scan':
+            continue
+        if check['kind'] == 'fixture-assertion' and sid == 'S07':
+            targets = [by_id['3']]
+        else:
+            # Without a scenario mapping, every proposed pass must account for
+            # the executed failure rather than silently ignoring it.
+            targets = questions
+        for q in targets:
+            q.update(status='fail', basis='executed check did not hold')
+            q.setdefault('check_ids', []).append(check['id'])
     result = {'scenario': sid, 'provenance': provenance, 'answer_hash': h16(answer),
         'condition_hash': h16(condition_text), 'checks': checks, 'questions': questions,
         'limitations': ['Pure fixture expressions only; production code and pytest fixtures are never run.',
@@ -114,7 +131,7 @@ def build_report(scenario, answer, provenance, production, judgements=None):
             'Lexical matches are facts for a grader; context, paraphrases and design placement need human judgement.',
             'A held fixture guard proves a prerequisite, not mutation discrimination or a scenario pass.']}
     if judgements is not None:
-        if not judgements.get('reviewer', '').strip() or any(judgements.get(k) != result[k]
+        if not isinstance(judgements.get('reviewer'), str) or not judgements['reviewer'].strip() or any(judgements.get(k) != result[k]
                 for k in ('answer_hash', 'condition_hash')):
             raise ValueError('judgements require reviewer and matching answer_hash and condition_hash')
         by_id = {q['id']: q for q in questions}
@@ -123,17 +140,14 @@ def build_report(scenario, answer, provenance, production, judgements=None):
                     or not judgement.get('reason', '').strip() or not judgement.get('evidence', '').strip():
                 raise ValueError('each judgement needs a known condition, pass/fail, reason and extracted evidence')
             q = by_id[key]
-            if q['status'] == 'fail' and judgement['verdict'] == 'pass':
-                # An executed failure is not waved away, but it can be disputed.
-                # S07 asks the answer to diagnose a supplied broken guard, so a
-                # correct answer quotes that guard, and the evaluator cannot tell
-                # quoted code from authored code. Dissent is allowed only when it
-                # names the checks it disputes, and they actually failed.
+            if q.get('check_ids') and judgement['verdict'] == 'pass':
                 failed = {c['id'] for c in checks if c['status'] == 'did-not-hold'}
+                required = set(q.get('check_ids', []))
                 disputed = judgement.get('disputes') or []
-                if not disputed or not set(disputed) <= failed:
+                if (not isinstance(disputed, list) or not all(isinstance(d, str) for d in disputed)
+                        or not required <= set(disputed) or not set(disputed) <= failed):
                     raise ValueError('overriding an executed failure requires "disputes" '
-                                     'naming the failing check ids it disputes')
+                                     'naming all failing check ids linked to the condition')
                 q['overrides'] = list(disputed)
             q.update(status=judgement['verdict'], human={'reviewer': judgements['reviewer'], **judgement})
     result['verdict'] = ('fail' if any(q['status']=='fail' for q in questions) else
@@ -160,7 +174,7 @@ def main():
             raise ValueError('recorded conditions differ; select the archived scenario revision')
         result = build_report(args.scenario, answer, provenance, args.production,
                               json.loads(args.judgements.read_text()) if args.judgements else None)
-    except (ValueError, KeyError, OSError) as exc:
+    except (Exception, SystemExit) as exc:
         print(str(exc), file=sys.stderr); return 3
     if args.json:
         print(json.dumps(result, indent=2))

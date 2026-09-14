@@ -22,3 +22,45 @@ teardown() { rm -rf "$T"; }
   [[ "$output" == *'ff76fc3a6dc19f2a'* ]]
   [[ "$output" == *'3d791568afe9334d'* ]]
 }
+
+@test "QC T3-9: checked README rollup matches and rejects drift without writing" {
+  cp "$BATS_TEST_DIRNAME/README.md" "$T/README.md"
+  run python3 "$R" --tests "$T" --check "$T/README.md"
+  [ "$status" -eq 0 ]
+  python3 - "$T/README.md" <<'PY'
+import pathlib,sys
+p=pathlib.Path(sys.argv[1]); s=p.read_text(); assert '| D1 |' in s
+before,block=s.split('<!-- BEGIN GENERATED ROLLUP -->',1)
+p.write_text(before+'<!-- BEGIN GENERATED ROLLUP -->'+block.replace('| D1 |','| DRIFT |',1))
+PY
+  cp "$T/README.md" "$T/before"
+  run python3 "$R" --tests "$T" --check "$T/README.md"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"differs"* ]]
+  cmp "$T/README.md" "$T/before"
+}
+
+@test "QC T5 rollup: accepted row indentation preserves every observation" {
+  python3 "$R" --tests "$T" > "$T/expected"
+  python3 - "$T" <<'PY'
+import pathlib,sys
+for p in pathlib.Path(sys.argv[1]).glob('s0*.md'):
+    p.write_text(''.join('  '+l if l.startswith('|') else l for l in p.read_text().splitlines(True)))
+PY
+  run python3 "$R" --tests "$T"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(cat "$T/expected")" ]
+}
+
+@test "QC T4-2 T4-3: evidence prose uses historical framing and reconciles the declared count" {
+  run python3 - "$BATS_TEST_DIRNAME" <<'PY'
+import pathlib,re,sys
+root=pathlib.Path(sys.argv[1]); readme=(root/'README.md').read_text(); changelog=(root.parents[2]/'CHANGELOG.md').read_text()
+assert 'is the current and only complete batch' not in changelog, 'round 4 presented as current'
+assert 'Seven of fifteen units need their rule' not in changelog, 'historical grade presented as current'
+count=int(re.search(r'partial batch: (\d+) of 42 declared answers',readme)[1])
+assert count==2*2+3*2+4*3+2+3, 'round 7 subtotal disagrees with enumerated arms'
+assert '*Corrections* below' not in readme, 'reference names a missing heading'
+PY
+  [ "$status" -eq 0 ]
+}

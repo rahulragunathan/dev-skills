@@ -60,7 +60,7 @@ def find_table(lines: list[str]) -> tuple[int, list[str]]:
                 break
             in_results = heading[1] == '##' and title == 'Results'
             continue
-        if in_results and line.lstrip().startswith('| Run |'):
+        if in_results and re.match(r'^ {0,3}\| Run \|', line):
             return i, split_row(line)
     sys.exit("no results table under '## Results'")
 
@@ -120,8 +120,10 @@ def main() -> int:
         hdr_i, headers = find_table(lines)
         spec = json.loads(args.repair_layout.read_text())
         if spec.get("separator") is True:
-            if hdr_i + 1 >= len(lines) or not lines[hdr_i + 1].lstrip().startswith('|'):
-                sys.exit("refusing: separator repair requires an existing table row")
+            if (hdr_i + 1 >= len(lines) or not lines[hdr_i + 1].lstrip().startswith('|')
+                    or not split_row(lines[hdr_i + 1])
+                    or not all(re.fullmatch(r':?-+:?', c) for c in split_row(lines[hdr_i + 1]))):
+                sys.exit("refusing: separator repair requires an existing separator-only row")
             lines[hdr_i + 1] = join_row(["---"] * len(headers))
         end = hdr_i + 2
         while end < len(lines) and lines[end].lstrip().startswith('|'):
@@ -140,18 +142,24 @@ def main() -> int:
         write_table(args.scenario, lines)
         print("repaired explicitly named layout")
         return 0
-    hdr_i, headers = validate_table(lines)
-    if args.run is not None:
-        args.run = validate_cell(args.run)
-
     if args.show:
-        for line in lines[hdr_i + 2:]:
+        hdr_i, headers = find_table(lines)
+        try:
+            validate_table(lines)
+        except SystemExit as exc:
+            print(f"Layout warning: {exc}")
+        for line in lines[hdr_i + 1:]:
             if not line.lstrip().startswith("|"):
                 break
+            print(line.rstrip())
             for name, val in zip(headers, split_row(line)):
                 print(f"{name}: {val}")
             print("---")
         return 0
+
+    hdr_i, headers = validate_table(lines)
+    if args.run is not None:
+        args.run = validate_cell(args.run)
 
     if args.add_column:
         name = args.add_column.strip()
@@ -201,13 +209,6 @@ def main() -> int:
         if col in updates:
             sys.exit(f"column named twice: {col!r}")
         updates[col] = validate_cell(val)
-    if "|" in "".join(updates.values()):
-        sys.exit("a cell value may not contain '|' — it would split the row")
-    # A newline ends the row early and leaves its remainder outside the table,
-    # which markdownlint will not flag because what is left is still well formed.
-    if any(("\n" in v) or ("\r" in v) for v in updates.values()):
-        sys.exit("a cell value may not contain a line break — it would end the row")
-
     # A duplicate Run value makes every later update ambiguous, and the writer
     # resolves the ambiguity by silently taking the first match.
     if "Run" in updates:
@@ -236,12 +237,7 @@ def main() -> int:
         new_line = join_row(cells)
         if len(split_row(new_line)) != len(headers):
             sys.exit("refusing: the new row would not match the table's shape")
-        before_rows = lines[hdr_i + 2:end]
         lines.insert(end, new_line)
-        # The rows already there are the record; adding to it must not touch them.
-        after_rows = [l for l in lines[hdr_i + 2:end]]
-        if after_rows != before_rows:
-            sys.exit("refusing: adding the row would change an existing one")
         write_table(args.scenario, lines)
         print(f"added row {args.run!r} with {len(updates)} column(s) set")
         return 0

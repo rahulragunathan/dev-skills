@@ -6,7 +6,7 @@ when their prompt, conditions or loaded skill changes.
 
 The scenario tables retain rounds 1–7 on `claude-opus-5`. Round 4 is the latest complete
 paired batch recorded across all seven scenarios, but its S01/S02 fixtures are superseded.
-Round 7 is a **partial batch: 23 of 42 declared answers**. It contains two answers per arm for
+Round 7 is a **partial batch: 27 of 42 declared answers**. It contains two answers per arm for
 S01, three per arm for S02, three baselines each for S03–S06, and two baselines plus three
 with-skill answers for S07. S03–S06 have no round-7 with-skill answers or round-7 Results rows.
 The rollup below uses the latest Results rows, and labels their batch and revision separately.
@@ -17,7 +17,7 @@ has gone stale. A repository-wide SHA could only mark everything stale or nothin
 S07's evidence outlived two changes to `phase-workflow`.
 
 Several grades have been corrected across rounds, always in the same direction — see
-*Corrections* below.
+*Historical corrections* below.
 
 ## What a unit's result means
 
@@ -163,16 +163,20 @@ arithmetic, explicit ZoneInfo conversions and `lru_cache` decorators use Python'
 library. It never substitutes a guessed Account object or a guessed pytest fixture. Unsupported
 imports, mutation of fixture objects, control flow and host timezone assumptions remain visible
 evaluation gaps. A guard's dependencies must be supplied before it can support a result.
+Plain `print()` diagnostics are suppressed without invalidating fixture bindings. Method
+receivers are evaluated once, and sequence repetition and concatenation are limited to
+100,000 elements before allocation.
 
-S07's three production entry points are recognized automatically. Nonstandard imported function
-calls also delimit production; add `--production qualified.name` for another boundary. Assertions
+S07's three production entry points and their imported aliases are recognized automatically.
+Other imports remain unavailable fixture dependencies; they do not end the scan. Add
+`--production qualified.name` for another explicit boundary. Assertions
 after the first production call are excluded. Multiple guards are diagnostic evaluations; a
 prior false guard already prevents the real test from reaching production. This harness does
 not run pytest or certify mutation predictions. Its Bats suite includes a verbatim fenced Python
 excerpt from the real round-7 S07 baseline whose 23-hour guard fails.
 
-S05 scans banned verdict words, silent-check names, and literal cues for its three required
-decisions. A match includes its line and surrounding text. Literal cues cannot prove a concrete
+S05 reads banned verdict words from its scenario's rule 4, then scans those words,
+silent-check names, and literal cues for its three required decisions. A match includes its line and surrounding text. Literal cues cannot prove a concrete
 resolution, distinguish a legitimate operation name from a silent verdict, or recognize all
 paraphrases. Those judgements remain open, alongside the extracted module/dependency tables,
 code, diagrams, diff and complete answer. All other scenario failure conditions likewise appear
@@ -197,15 +201,20 @@ To record a human judgement for the report, pass `--judgements /path/to/judgemen
 
 Use the condition IDs printed by the harness, including `2b` for S07 Mutation choice. Omitted
 conditions stay open. Every human judgement requires a reviewer, reason, evidence and matching
-hashes. Passing a condition the harness failed on an executed fixture assertion additionally
-requires a `disputes` list naming the failing check IDs, and those IDs must be checks that
-actually did not hold. The dissent is recorded on the condition as `overrides`. This exists
-because S07 asks the answer to diagnose a supplied broken guard, so a correct answer quotes
+hashes. Across every scenario, passing a condition linked to an executed failure requires a
+`disputes` list naming **all** failing IDs in its `check_ids`; every disputed ID must actually
+have failed. S07 fixture failures link to condition 3. Fixture failures without a scenario
+mapping conservatively block every condition until explicitly disputed. S05 lexical matches
+remain contextual evidence: they do not themselves fail a condition or require a dispute.
+The dissent is recorded on the condition as `overrides`. This exists because S07 asks the answer to diagnose a supplied broken guard, so a correct answer quotes
 that guard and the evaluator cannot tell quoted code from authored code. Transfer approved
 grades separately with
 `write_results.py`, naming only the cells to change. The writer refuses malformed tables;
 `--repair-layout` accepts an explicit JSON mapping with a separator repair flag and hash-bound
-rows whose `set` object names every resulting column. It never infers displaced cells.
+rows whose `set` object names every resulting column. Separator repair only replaces an
+existing separator made of dashes and optional alignment colons; it refuses data rows.
+Indented and fenced code examples are excluded from table selection. `--show` prints raw rows
+and layout warnings even when the table is malformed. It never infers displaced cells.
 
 ## Grading a batch
 
@@ -331,7 +340,10 @@ subcheck tallies do not establish a joint per-replicate pass rate when failures 
 
 ```bash
 python3 skills/design-review/tests/rollup.py
+python3 skills/design-review/tests/rollup.py --check skills/design-review/tests/README.md
 ```
+
+`rollup.bats` checks the generated block against the scenario rows and fails on drift.
 
 <!-- BEGIN GENERATED ROLLUP -->
 | Unit | Scenario / batch | Without skill: observed passes | With skill: observed passes |
@@ -379,7 +391,7 @@ S07 Mutation choice must be grouped by the loaded skill: round 4's
 with-skill pass; round 7 uses that same hash and has three with-skill passes. Round 5 belongs
 with the latter snapshot, not in a “before” bucket. The corresponding baseline choice tallies
 in rounds 4, 5 and 7 are 0/1, 1/1 and 1/2. These are table records from different batches,
-not contemporaneous randomized controls. No causal or reliability claim follows from them.
+not contemporaneous randomized controls.
 
 ### Historical corrections
 

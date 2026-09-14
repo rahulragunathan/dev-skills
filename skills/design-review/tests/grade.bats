@@ -382,3 +382,144 @@ PY
   run python3 "$G" --scenario "$S" --answer "$T/answer.md" --judgements "$T/bogus.json"
   [ "$status" -eq 3 ]
 }
+
+@test "QC T3-1: imported fixture helpers preserve independent guards and expose dependent gaps" {
+  cat > "$T/answer.md" <<'PY'
+```python
+from tests.factories import make_account
+def test_guard():
+    account = make_account()
+    assert 1 == 2
+    assert account.timezone == 'UTC'
+```
+PY
+  report || true
+  check_report "[c['status'] for c in r['checks']]==['did-not-hold','could-not-evaluate']"
+}
+
+@test "QC T3-2: print diagnostics neither poison fixture bindings nor corrupt JSON" {
+  printf '```python\ndef test_guard():\n    x = 1\n    print("debug", x)\n    assert x == 2\n```\n' > "$T/answer.md"
+  report || true
+  check_report "r['checks'][0]['status']=='did-not-hold'"
+}
+
+@test "QC T3-3: invalid unpacking exits invalid-input rather than supported-failure" {
+  printf '```python\na, b = 5\n```\n' > "$T/answer.md"
+  run python3 "$G" --scenario "$S" --answer "$T/answer.md" --json
+  [ "$status" -eq 3 ]
+  [[ "$output" != *"Traceback"* ]]
+}
+
+@test "QC T3-3: invalid replicate metadata cannot inherit evidence exit one" {
+  mkdir "$T/evidence"
+  printf '{"replicates":0}\n' > "$T/evidence/manifest.json"
+  run python3 "$G" --scenario "$S" --evidence "$T/evidence" --arm baseline --json
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"replicates"* ]]
+}
+
+@test "QC T3-3: null reviewer is invalid input with no traceback" {
+  echo artifact > "$T/answer.md"
+  report || true
+  python3 - "$T/report.json" "$T/j.json" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1])); json.dump({**{k:r[k] for k in ['answer_hash','condition_hash']},'reviewer':None},open(sys.argv[2],'w'))
+PY
+  run python3 "$G" --scenario "$S" --answer "$T/answer.md" --judgements "$T/j.json" --json
+  [ "$status" -eq 3 ]
+  [[ "$output" != *"Traceback"* ]]
+}
+
+@test "QC T3-3: renumbered S07 refuses a missing fixture condition without traceback" {
+  sed 's/^3\. \*\*/9. **/' "$S" > "$T/s07.md"
+  printf '```python\nassert False\n```\n' > "$T/answer.md"
+  run python3 "$G" --scenario "$T/s07.md" --answer "$T/answer.md" --json
+  [ "$status" -eq 3 ]
+  [[ "$output" != *"Traceback"* ]]
+}
+
+@test "QC T3-4: every scenario protects executed failures unless all linked checks are disputed" {
+  for S in "$BATS_TEST_DIRNAME"/s0*.md; do
+    printf '```python\nassert 1 == 2\nassert 2 == 3\n```\n' > "$T/answer.md"
+    report || true
+    python3 - "$T/report.json" "$T" <<'PY'
+import json,pathlib,sys
+r=json.load(open(sys.argv[1])); checks=[c['id'] for c in r['checks'] if c['status']=='did-not-hold']
+for name,disputes in [('none',[]),('partial',checks[:1]),('all',checks)]:
+    j={k:r[k] for k in ['answer_hash','condition_hash']}
+    j.update(reviewer='Test',judgements={q['id']:{'verdict':'pass','reason':'quoted counterexample','evidence':'assert 1 == 2','disputes':disputes} for q in r['questions']})
+    pathlib.Path(sys.argv[2],name+'.json').write_text(json.dumps(j))
+PY
+    for invalid in none partial; do
+      run python3 "$G" --scenario "$S" --answer "$T/answer.md" --judgements "$T/$invalid.json" --json
+      [ "$status" -eq 3 ]
+      [[ "$output" == *"disputes"* ]]
+    done
+    run python3 "$G" --scenario "$S" --answer "$T/answer.md" --judgements "$T/all.json" --json
+    [ "$status" -eq 0 ]
+  done
+}
+
+@test "QC T3-6: ten method receivers evaluate within the step budget" {
+  python3 - "$T/answer.md" <<'PY'
+import pathlib,sys
+chain='datetime(2026, 1, 1, 0, 0, 0)' + '.replace(hour=1)'*10
+pathlib.Path(sys.argv[1]).write_text('```python\nfrom datetime import datetime\nassert '+chain+'.hour == 2\n```\n')
+PY
+  report || true
+  check_report "r['checks'][0]['status']=='did-not-hold'"
+}
+
+@test "QC T3-7: repetition is bounded by result size before allocating" {
+  for expression in "'a' * 10000 * 10000" "10000 * (10000 * [0])" "(0,) * 10000 * 10000"; do
+    printf '```python\nx = %s\nassert len(x) > 0\n```\n' "$expression" > "$T/answer.md"
+    report || true
+    check_report "r['checks'][0]['status']=='could-not-evaluate' and 'size limit' in r['checks'][0]['detail']"
+  done
+}
+
+@test "QC T5 S05: banned words come from the scenario rule instead of a second list" {
+  S="$T/s05.md"
+  sed 's/"clean"/"spotless"/' "$BATS_TEST_DIRNAME/s05-report-form.md" > "$S"
+  printf 'spotless\n' > "$T/answer.md"
+  report || true
+  check_report "next(c for c in r['checks'] if c['id']=='S05.banned-words')['status']=='did-not-hold'"
+  printf 'clean\n' > "$T/answer.md"
+  report || true
+  check_report "next(c for c in r['checks'] if c['id']=='S05.banned-words')['status']=='held'"
+}
+
+@test "QC T5 production: explicit CLI boundaries retain preceding guards and exclude subsequent ones" {
+  printf '```python\nassert 1 == 1\ncustom_operation()\nassert False\n```\n' > "$T/answer.md"
+  run python3 "$G" --scenario "$S" --answer "$T/answer.md" --production custom_operation --json
+  [ "$status" -eq 2 ]
+  printf '%s' "$output" > "$T/report.json"
+  check_report "len(r['checks'])==1 and r['checks'][0]['status']=='held'"
+}
+
+@test "QC T3-7: concatenation cannot bypass the sequence allocation bound" {
+  printf '```python\nx = "a" * 10000\nx = x + x\nx = x + x\nx = x + x\nx = x + x\nassert len(x) > 0\n```\n' > "$T/answer.md"
+  report || true
+  check_report "r['checks'][0]['status']=='could-not-evaluate' and 'size limit' in r['checks'][0]['detail']"
+}
+
+@test "QC T3-6: receiver reuse preserves supported unbound datetime methods" {
+  printf '```python\nfrom datetime import datetime\nx = datetime(2026, 1, 1)\nassert datetime.replace(x, hour=2).hour == 3\n```\n' > "$T/answer.md"
+  report || true
+  check_report "r['checks'][0]['status']=='did-not-hold'"
+}
+
+@test "QC T3-4: contextual lexical matches remain open rather than undisclosed failed conditions" {
+  S="$BATS_TEST_DIRNAME/s05-report-form.md"
+  printf 'Calls the clean operation to normalize receipt text.\n' > "$T/answer.md"
+  report || true
+  check_report "all(q['status']=='open' for q in r['questions'])"
+  python3 - "$T/report.json" "$T/j.json" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1])); j={k:r[k] for k in ['answer_hash','condition_hash']}
+j.update(reviewer='Test',judgements={q['id']:{'verdict':'pass','reason':'synthetic context decision for interface regression','evidence':'Calls the clean operation'} for q in r['questions']})
+json.dump(j,open(sys.argv[2],'w'))
+PY
+  run python3 "$G" --scenario "$S" --answer "$T/answer.md" --judgements "$T/j.json" --json
+  [ "$status" -eq 0 ]
+}
