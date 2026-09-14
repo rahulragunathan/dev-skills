@@ -38,7 +38,7 @@ TARGET="${2:-$HOME/.claude/CLAUDE.md}"
 
 [ -f "$CANON" ] || { echo "CANONICAL BLOCK NOT FOUND: $CANON"; exit 1; }
 
-block="$(cat "$CANON")"
+block="$(cat "$CANON")" || { echo "CANNOT READ CANONICAL BLOCK"; exit 1; }
 case "$block" in
   "$OPEN"*) : ;;
   *) echo "CANONICAL BLOCK DOES NOT START WITH THE OPENING MARKER"; exit 1 ;;
@@ -93,7 +93,7 @@ else
 import pathlib, sys
 pathlib.Path(sys.argv[1]).read_text()
 PYCODE
-    { cat "$TARGET"; printf '\n'; cat "$CANON"; } > "$TMP" \
+    { cat "$TARGET" && printf '\n' && cat "$CANON"; } > "$TMP" \
       || { echo "ASSEMBLE FAILED"; exit 1; }
   else
     # Replace from the LAST opening marker to the first closing marker after it.
@@ -104,9 +104,11 @@ PYCODE
       'NR >= s && $0 ~ c { print NR; exit }' "$TARGET")"
     [ -n "$close_line" ] \
       || { echo "NO CLOSING MARKER AFTER THE LAST OPENING MARKER — refusing"; exit 1; }
-    { [ "$last_open" -gt 1 ] && head -n "$((last_open - 1))" "$TARGET"
-      cat "$CANON"
-      tail -n +"$((close_line + 1))" "$TARGET"; } > "$TMP" \
+    # Every read must succeed; a successful tail cannot excuse a failed prefix.
+    { if [ "$last_open" -gt 1 ]; then
+        head -n "$((last_open - 1))" "$TARGET" || exit 1
+      fi
+      cat "$CANON" && tail -n +"$((close_line + 1))" "$TARGET"; } > "$TMP" \
       || { echo "ASSEMBLE FAILED"; exit 1; }
   fi
 

@@ -276,3 +276,19 @@ EOF
   canary_survives
   markers_balanced
 }
+
+@test "F-01: failed prefix read refuses without losing personal content" {
+  { echo USER-CONTENT; cat "$CANON"; echo SUFFIX; } > "$TARGET"
+  cp "$TARGET" "$TEST_TMP/before"
+  mkdir "$TEST_TMP/bin"
+  cat > "$TEST_TMP/bin/head" <<'SH'
+#!/bin/bash
+if [ "$#" -eq 3 ]; then exit 1; fi
+exec /usr/bin/head "$@"
+SH
+  chmod +x "$TEST_TMP/bin/head"
+  run env PATH="$TEST_TMP/bin:$PATH" bash "$SCRIPT" "$CANON" "$TARGET"
+  echo "observed install status=$status $output" >&3
+  [ "$status" -eq 1 ]
+  cmp "$TARGET" "$TEST_TMP/before"
+}
