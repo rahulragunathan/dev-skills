@@ -21,6 +21,10 @@ class Gap(Exception):
     pass
 
 
+class OpaqueCall(Gap):
+    """A call that was not run, so it may have changed any mutable object."""
+
+
 class Unknown:
     def __init__(self, reason):
         self.reason = reason
@@ -52,6 +56,10 @@ CMPS = {ast.Eq: operator.eq, ast.NotEq: operator.ne, ast.Is: operator.is_,
         ast.IsNot: operator.is_not, ast.Lt: operator.lt, ast.LtE: operator.le,
         ast.Gt: operator.gt, ast.GtE: operator.ge, ast.In: lambda a,b:a in b,
         ast.NotIn: lambda a,b:a not in b}
+# Values a call that never ran cannot have changed. Tuples are left out rather
+# than walked: they may hold mutable items, and walking them has no step budget.
+IMMUTABLE = (int, float, complex, str, bytes, type(None), Unknown, types.ModuleType,
+             datetime.date, datetime.time, datetime.timedelta, datetime.tzinfo)
 
 
 class Evaluator:
@@ -125,7 +133,10 @@ class Evaluator:
         if isinstance(node, ast.IfExp):
             return self.expression(node.body if self.expression(node.test, env) else node.orelse, env)
         if isinstance(node, ast.Call):
-            fn = self.expression(node.func, env)
+            try:
+                fn = self.expression(node.func, env)
+            except Gap as exc:
+                raise OpaqueCall(str(exc))
             args = [self.expression(a, env) for a in node.args]
             kwargs = {k.arg: self.expression(k.value, env) for k in node.keywords}
             if None in kwargs:
@@ -141,7 +152,7 @@ class Evaluator:
                     if zone is None or not isinstance(owner, datetime.datetime) or owner.utcoffset() is None:
                         raise Gap('host timezone is not established; use an aware datetime and explicit zone')
             if not allowed:
-                raise Gap('unsupported call: ' + ast.unparse(node.func))
+                raise OpaqueCall('unsupported call: ' + ast.unparse(node.func))
             return fn(*args, **kwargs)
         raise Gap('unsupported expression: ' + type(node).__name__)
 
@@ -166,6 +177,8 @@ class Evaluator:
             check.update(status='held' if held else 'did-not-hold', detail=f'evaluated to {held}')
         except Exception as exc:
             check.update(status='could-not-evaluate', detail=f'{type(exc).__name__}: {exc}')
+            if isinstance(exc, OpaqueCall):
+                self.forget_mutable(env, 'unevaluated call: ' + str(exc))
         self.checks.append(check)
 
     def assign(self, target, value, env):
@@ -182,6 +195,13 @@ class Evaluator:
                     self.assign(t, v, env)
         else:
             raise Gap('assignment target unsupported')
+
+    def forget_mutable(self, env, reason):
+        # A call that never ran may have changed any mutable object, and every
+        # mutable binding might alias one it reached.
+        for name, value in list(env.items()):
+            if not isinstance(value, IMMUTABLE) and not callable(value):
+                env[name] = Unknown(reason)
 
     def invalidate(self, env, reason):
         # Unknown writes may affect aliases as well as their syntactic target.
@@ -213,10 +233,12 @@ class Evaluator:
                     value = self.expression(node.value, env)
                 except Exception as exc:
                     value = Unknown(str(exc))
+                    if isinstance(exc, OpaqueCall):
+                        self.forget_mutable(env, 'unevaluated call: ' + str(exc))
                 for target in node.targets if isinstance(node, ast.Assign) else [node.target]:
                     try:
                         self.assign(target, value, env)
-                    except Gap as exc:
+                    except Exception as exc:
                         self.invalidate(env, str(exc))
             elif isinstance(node, ast.If):
                 if self.calls_production(node.test):

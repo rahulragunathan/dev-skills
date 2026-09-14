@@ -397,17 +397,75 @@ PY
   check_report "[c['status'] for c in r['checks']]==['did-not-hold','could-not-evaluate']"
 }
 
+@test "an unevaluable call's arguments are not graded on their pre-call values" {
+  # Fails if the call only makes its assignment target unknown: the object it was
+  # handed keeps its fixture value and a correct post-call guard grades as failed.
+  cat > "$T/answer.md" <<'PY'
+```python
+from types import SimpleNamespace
+from billing.jobs import close_account
+
+def test_close():
+    account = SimpleNamespace(status="open")
+    result = close_account(account)
+    assert account.status == "closed"
+```
+PY
+  report || true
+  check_report "[c['status'] for c in r['checks']]==['could-not-evaluate'] and r['verdict']=='open'"
+}
+
+@test "an unevaluable call forgets mutable bindings and leaves immutable guards checkable" {
+  # Fails if an opaque call discards the whole scope: nothing it is handed can
+  # change the datetime, so its false guard must still grade did-not-hold.
+  cat > "$T/answer.md" <<'PY'
+```python
+from datetime import datetime, timezone
+
+def test_window():
+    now = datetime(2026, 3, 14, 16, 0, tzinfo=timezone.utc)
+    events = []
+    account = Account(id=1, events=events)
+    assert now.hour == 17
+    assert events == []
+```
+PY
+  report || true
+  check_report "[c['status'] for c in r['checks']]==['did-not-hold','could-not-evaluate']"
+}
+
+@test "an unevaluable call inside an assert is not followed by stale guards" {
+  # Fails if only assignments forget mutable state: the assert form of the same
+  # call leaves account on its pre-call value.
+  cat > "$T/answer.md" <<'PY'
+```python
+from types import SimpleNamespace
+from billing.jobs import close_account
+
+def test_close():
+    account = SimpleNamespace(status="open")
+    assert close_account(account)
+    assert account.status == "closed"
+```
+PY
+  report || true
+  check_report "[c['status'] for c in r['checks']]==['could-not-evaluate','could-not-evaluate']"
+}
+
 @test "QC T3-2: print diagnostics neither poison fixture bindings nor corrupt JSON" {
   printf '```python\ndef test_guard():\n    x = 1\n    print("debug", x)\n    assert x == 2\n```\n' > "$T/answer.md"
   report || true
   check_report "r['checks'][0]['status']=='did-not-hold'"
 }
 
-@test "QC T3-3: invalid unpacking exits invalid-input rather than supported-failure" {
-  printf '```python\na, b = 5\n```\n' > "$T/answer.md"
-  run python3 "$G" --scenario "$S" --answer "$T/answer.md" --json
-  [ "$status" -eq 3 ]
+@test "QC T3-3: invalid unpacking in an answer is an evaluation gap, not refused input" {
+  # Fails if the TypeError escapes the evaluator: exit 3 makes grade_batch
+  # prepare refuse the whole batch over one answer's Python.
+  printf '```python\na, b = 5\nassert a == 5\n```\n' > "$T/answer.md"
+  run report
+  [ "$status" -eq 2 ]
   [[ "$output" != *"Traceback"* ]]
+  check_report "[c['status'] for c in r['checks']]==['could-not-evaluate']"
 }
 
 @test "QC T3-3: invalid replicate metadata cannot inherit evidence exit one" {

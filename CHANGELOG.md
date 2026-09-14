@@ -250,7 +250,10 @@ here — the plugin manifest's version is the only record of them.
   availability rung once.
 - **Grading and workflow:** imported fixture helpers and print diagnostics no
   longer hide independent guards; method receivers evaluate once; sequence growth
-  is bounded before allocation. Invalid grading inputs exit 3. Across scenarios,
+  is bounded before allocation. A call the evaluator cannot run makes every
+  mutable binding unknown, so a guard after it is never graded on pre-call
+  values. Malformed unpacking in an answer is an evaluation
+  gap rather than a refused input. Invalid grading inputs exit 3. Across scenarios,
   pass judgements must dispute every linked executed failure. Mutation cleanup
   covers generated output and both test runs. Interrupted roadmap closes restore
   originals and remove temporary staging; malformed index rows are refused.
