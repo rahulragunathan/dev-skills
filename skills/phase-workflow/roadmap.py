@@ -26,6 +26,7 @@ import shutil
 import pathlib
 import re
 import sys
+import signal
 
 FILES = {
     "KI": "KNOWN_ISSUES.md",
@@ -93,6 +94,8 @@ def index_rows(roadmap: str, prefix: str) -> dict[str, dict]:
             headers = cells
         m = re.match(rf'^\|\s*\[?({prefix}-\d+)\b', line)
         if m:
+            if not line.rstrip().endswith("|") or not headers or len(cells) != len(headers):
+                fail("refusing: malformed index row: " + line.strip())
             eid = m.group(1)
             if eid in rows:
                 fail(f"refusing: {eid} has two index rows")
@@ -221,26 +224,52 @@ def cmd_close(docs: pathlib.Path, eid: str) -> int:
 
 
 def install_documents(docs: pathlib.Path, proposed: dict[str, str]) -> None:
-    # Prepare candidates and durable originals on the destination filesystem.
-    recovery = pathlib.Path(tempfile.mkdtemp(prefix=".roadmap-", dir=docs))
+    # Keep recovery copies outside the tree. Each replacement is staged beside
+    # its destination so os.replace stays atomic even across filesystem devices.
+    recovery = pathlib.Path(tempfile.mkdtemp(prefix="localclaude-roadmap-"))
     installed = []
+    retain_recovery = False
+
+    def replace_from(source, destination):
+        fd, name = tempfile.mkstemp(prefix=".roadmap-", dir=destination.parent)
+        os.close(fd)
+        candidate = pathlib.Path(name)
+        try:
+            shutil.copy2(source, candidate)
+            os.replace(candidate, destination)
+        finally:
+            candidate.unlink(missing_ok=True)
+
+    def interrupted(signum, frame):
+        raise KeyboardInterrupt(f"signal {signum}")
+
+    previous = {sig: signal.signal(sig, interrupted) for sig in (signal.SIGINT, signal.SIGTERM)}
     try:
         for name, body in proposed.items():
             shutil.copy2(docs / name, recovery / (name + ".original"))
             (recovery / name).write_text(body)
             shutil.copymode(docs / name, recovery / name)
         for name in proposed:
-            os.replace(recovery / name, docs / name)
             installed.append(name)
-    except OSError as exc:
+            replace_from(recovery / name, docs / name)
+    except BaseException as exc:
+        # A second signal must not interrupt rollback of the first one.
+        for sig in previous:
+            signal.signal(sig, signal.SIG_IGN)
         try:
             for name in reversed(installed):
-                os.replace(recovery / (name + ".original"), docs / name)
-        except OSError:
+                original = recovery / (name + ".original")
+                if (docs / name).read_bytes() != original.read_bytes():
+                    replace_from(original, docs / name)
+        except BaseException:
+            retain_recovery = True
             fail(f"rollback failed; originals retained at {recovery}")
-        shutil.rmtree(recovery)
         fail(f"installation failed; originals restored: {exc}")
-    shutil.rmtree(recovery)
+    finally:
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
+        if not retain_recovery:
+            shutil.rmtree(recovery)
 
 
 def main() -> int:

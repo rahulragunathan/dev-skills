@@ -343,3 +343,17 @@ PY
   [ "$status" -eq 0 ]
   [ "$(git --git-dir="$FORK" rev-parse "$TAG^{commit}")" = "$MERGE_SHA" ]
 }
+
+@test "QC T2-5: untracked test output is cleaned after both runs and permits the next audit" {
+  for attempt in 1 2; do
+    run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a - b/' bash -c 'echo generated > coverage.xml; grep -q "a + b" calc.py'
+    [ "$status" -eq 0 ]
+    [ -z "$(git status --porcelain -uall)" ]
+  done
+}
+
+@test "QC T2-5: interruption during the restored run retains cleanup traps" {
+  run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a - b/' bash -c 'if grep -q "a + b" calc.py; then echo generated > coverage.xml; echo broken >> calc.py; kill -TERM "$PPID"; exit 143; else exit 1; fi'
+  [ "$status" -ne 0 ]
+  [ -z "$(git status --porcelain -uall)" ]
+}

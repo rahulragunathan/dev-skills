@@ -145,6 +145,10 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    the target across index and worktree on every exit path including INT and TERM; it verifies
    the file matches the SHA afterwards rather than trusting the restore's exit status; and it
    requires exit 1 specifically, because a fixture or collection error also returns non-zero.
+   The test command runs twice: first with the mutation, then after restoration, when it must
+   pass. Cleanup traps remain active through both runs. Non-ignored untracked output created
+   by the audit is removed after each run; ignored files are left alone. Unexpected tracked
+   changes outside the target are retained for inspection and make the audit fail.
    Change its behavior in `mutation-restore.sh` and verify it with `tests/phase-git.bats`.
 
    **Why the SHA must be HEAD:** the mutation is applied to the current checkout, so restoring

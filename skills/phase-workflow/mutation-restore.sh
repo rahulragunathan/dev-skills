@@ -61,6 +61,12 @@ restore() {
     RESTORE_FAILED=1
     return 1
   fi
+  # Entry required no untracked files. Remove only non-ignored output created
+  # by this audit; ignored files may predate it and remain outside our ownership.
+  git clean -fd -- ':(top)' >/dev/null || { RESTORE_FAILED=1; return 1; }
+  local remaining
+  remaining="$(git ls-files --others --exclude-standard)" || { RESTORE_FAILED=1; return 1; }
+  [ -z "$remaining" ] || { echo "UNTRACKED CLEANUP FAILED — inspect generated output"; RESTORE_FAILED=1; return 1; }
   return 0
 }
 
@@ -74,7 +80,8 @@ on_exit() {
   [ "$RESTORE_FAILED" = 1 ] && exit 1
   exit "$rc"
 }
-trap 'restore; exit 130' INT TERM
+trap 'exit 130' INT
+trap 'exit 143' TERM
 trap on_exit EXIT
 
 sed -i.mutbak "$EXPR" "$FILE" || { echo "MUTATION FAILED TO APPLY"; exit 1; }
@@ -97,8 +104,7 @@ if [ "$rc" -ne 1 ]; then
   exit 1
 fi
 restore || exit 1
-# The mutation has been removed. Preserve any later unexpected change for inspection.
-trap - EXIT INT TERM
+# Keep the traps active through the restored test run as well.
 "$@"
 normal_rc=$?
 if ! git diff --quiet "$SHA" -- ":(top)" || ! git diff --cached --quiet "$SHA" -- ":(top)"; then

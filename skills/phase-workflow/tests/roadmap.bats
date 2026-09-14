@@ -335,3 +335,38 @@ PY
   [ "$status" -eq 1 ]
   [[ "$output" == *"order"* ]]
 }
+
+@test "QC T3-10: interrupted close restores originals and removes staging outside docs" {
+  run python3 - "$RM" "$DOCS" <<'PY'
+import importlib.util, pathlib, sys, os, tempfile
+spec=importlib.util.spec_from_file_location('roadmap',sys.argv[1]); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+d=pathlib.Path(sys.argv[2]); before={p:p.read_bytes() for p in d.iterdir()}
+replace, mkdtemp=os.replace, tempfile.mkdtemp
+stages=[]
+def stage(*a,**kw):
+    p=pathlib.Path(mkdtemp(*a,**kw)); stages.append(p); return str(p)
+def interrupt(src,dst):
+    if pathlib.Path(dst).name=='ROADMAP.md': raise KeyboardInterrupt('injected interruption')
+    return replace(src,dst)
+tempfile.mkdtemp=stage; os.replace=interrupt
+try: m.cmd_close(d,'KI-02')
+except (KeyboardInterrupt,SystemExit): pass
+else: raise AssertionError('interruption never fired')
+assert all(p.read_bytes()==b for p,b in before.items()), 'interruption left a partial close'
+assert stages and all(not p.is_relative_to(d) for p in stages), 'staging was inside docs'
+assert all(not p.exists() for p in stages), 'staging leaked'
+assert set(d.iterdir())==set(before), 'temporary file leaked'
+PY
+  [ "$status" -eq 0 ]
+}
+
+@test "QC T3-10: missing trailing pipe refuses with a diagnostic instead of IndexError" {
+  python3 - "$DOCS/ROADMAP.md" <<'PY'
+import pathlib,sys
+p=pathlib.Path(sys.argv[1]); p.write_text(p.read_text().replace('| [KI-01](KNOWN_ISSUES.md#ki-01) | first issue | Rare | High |','| [KI-01](KNOWN_ISSUES.md#ki-01)'))
+PY
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"refusing:"* ]]
+  [[ "$output" != *"Traceback"* ]]
+}
