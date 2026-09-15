@@ -10,6 +10,8 @@ here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-09-15 — Design-review skill and process remediation
+
 ### Added
 
 - **Four test suites over the shell that used to live only in prose** (`ENH-13`,
@@ -630,5 +632,6 @@ here — the plugin manifest's version is the only record of them.
 
 ## Reference
 
-[Unreleased]: https://github.com/rahulragunathan/localclaude/compare/v1.8.0...HEAD
+[Unreleased]: https://github.com/rahulragunathan/localclaude/compare/v1.10.0...HEAD
+[1.10.0]: https://github.com/rahulragunathan/localclaude/compare/v1.8.0...v1.10.0
 [1.8.0]: https://github.com/rahulragunathan/localclaude/releases/tag/v1.8.0

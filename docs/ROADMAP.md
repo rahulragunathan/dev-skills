@@ -27,8 +27,8 @@ reused. Nothing here looks backward — completed phases are CHANGELOG releases.
 
 ## Status
 
-**Phase 1 — `design-review` skill and process remediation** — in progress. The current work
-covers review capture, process instructions, setup instructions and evidence grading.
+**Phase 1 — `design-review` skill and process remediation** — awaiting merge as v1.10.0. The
+work covers review capture, process instructions, setup instructions and evidence grading.
 
 **Phase 2 — the backup cluster.** Build the `backup-projects.sh` harness in the active half of
 ENH-03, then address the active `drive-backup` issues listed in
