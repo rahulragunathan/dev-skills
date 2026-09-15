@@ -10,10 +10,568 @@ here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-09-15 — Design-review skill and process remediation
+
 ### Added
 
+- **Four test suites over the shell that used to live only in prose** (`ENH-13`,
+  now closed). Each was built by extracting the procedure into a script and then
+  testing it: `capture.sh` (the bundle that leaves the machine),
+  `install-standards.sh` (the block inside `~/.claude/CLAUDE.md`),
+  `mutation-restore.sh` and `publish-release.sh` (the destructive git
+  operations), and `write_results.py` (the results-table writer). Forty-five
+  tests at extraction; the two capture regressions are fixed below.
+  Each suite carries a canary — a planted secret outside the repo, user content
+  outside the managed block, uncommitted work, the columns not named — so a
+  regression fails loudly instead of quietly, which is how all four of these
+  procedures failed before.
+
+- **`design-review` skill** — the structural design pass, at plan time and phase
+  end. Produces the module table, the expected-change and shared-state lines, and
+  verdicts on six named checks. Wired into `phase-workflow` at §1 (drafting), §2
+  (landing diagram generators) and §3 step 2, where it runs before `/simplify`.
+- **Pressure tests for it**, in `skills/design-review/tests/` — seven scenarios
+  covering fifteen coverage units, each with its prompt, failure conditions and
+  recorded results for a run with and without the skill. Two rules were written
+  *by* the tests rather than confirmed by them: the produce-versus-edit
+  distinction, and never marking a diagram box "new" because the marker is a diff
+  that goes stale the moment the phase lands. Every unit's status is recorded
+  honestly, including the nine a strong model already
+  follows unaided — this skill's own rules and process rules from
+  `phase-workflow`.
+- **Four roadmap files** under `docs/` — ROADMAP, KNOWN_ISSUES, ENHANCEMENTS and
+  OPEN_QUESTIONS, seeded from the templates with 27 issues, 6 enhancements and 1
+  open question from an external repo review.
 - `LICENSE` — the MIT text the plugin manifest and skill frontmatter already
   declared.
+- **Recorded pressure-test evidence through round 9.** Round 9 (2026-09-14) is
+  the complete paired batch across all seven scenarios, with five replicates per
+  arm and grades from blind model graders. Round 4 was the earlier complete
+  batch, rounds 5 and 7 are partial, and round 8 is not in the Results tables.
+  Results retain each batch's grades and provenance. The latest per-scenario
+  observations and historical corrections are in
+  `skills/design-review/tests/README.md`. Transcripts,
+  dispatched prompts and hash-verified snapshots remain in the external
+  `Claude-Projects/Project Artifacts/Plugins/localclaude/design-review-evidence-<date>/` archive.
+  Two round-1 runs were voided before grading and re-run: an s02 baseline that
+  invoked the installed `design-review` plugin skill, and an s01 with-skill run
+  whose inline paste of the skill did not match the snapshot hash the others
+  loaded. Three conditions were reworded (D1, D2, P3) because a careful reader
+  could reach the opposite verdict on each; every existing output was judgeable
+  against the new wording, so no baseline expired. The grading corrections
+  themselves are recorded under *Fixed*.
+- **`drive-backup` skill** (`ENH-08`), holding the Drive backup `claude-setup`
+  step 6 used to carry inline: `backup-projects.sh`, the destination-resolution
+  order, the `Stop` hook JSON, the rsync flag choices, and the Full Disk Access /
+  Automator / Shortcuts path for backing up when Claude Code is not running. One
+  concern, one owner — backing conversations up to Drive is a separate product
+  that happened to be installed by the same run, with its own script, its own
+  bug cluster (KI-06, KI-07, KI-08, KI-14) and its own upcoming phase.
+  **The `Stop` hook path changed** to
+  `skills/drive-backup/backup-projects.sh`; a hook left on the old path backs
+  nothing up and stops growing the log rather than reporting an error.
+- **`project-env` skill** (`ENH-01`), holding the Python and Node environment
+  procedures the global standards block used to carry inline: the
+  `~/Python-Envs` / `~/Node-Envs` layout, the `standardize-*-envs.sh` scripts,
+  the dependency-file split, and which invocations are allow-listed. The split
+  follows one test — **a prohibition stays resident, a procedure moves to a
+  skill.** The block keeps "no virtualenv ever lives inside Drive" and the
+  script names; it no longer carries argument orders.
+- **`CLAUDE.md` and `docs/ARCHITECTURE.md`** (`ENH-06`). This repo requires both
+  of every project and had neither. ARCHITECTURE carries the module table, the
+  expected-change and shared-state lines, and a generated module map
+  (`docs/build_architecture.py` → `docs/architecture.{drawio,png}`, validating
+  clean). The project `CLAUDE.md` carries the conventions specific to a repo
+  whose modules are prose, plus "Decisions taken and not taken" — the rejected
+  unpushed gate, the dropped review-pass ceiling, the always-emitted findings
+  table, the unsupported `$CLAUDE_CONFIG_DIR`, the triage-subagent exception,
+  and the accepted limit on what the bundle exclusions can do about Codex.
+
+### Changed
+
+- **The findings table separates likelihood from consequence.** A new
+  **Likelihood** column — `Rare` / `Likely` / `Almost always` — records how often
+  a user following the documented workflow hits the harm, and **Severity** now
+  means only what happens if it does. One rating could not carry both, so it
+  defaulted to whichever the reviewer weighted: a rare defect that exfiltrates
+  source and friction on every run both read as "High". Judged by harm rather
+  than by code path, a bad count computed every run is `Rare` when it only
+  misleads after something else failed, and a setup step the docs instruct is
+  `Almost always` for everyone who follows it. Keyed notes now open with *When it
+  fires* and *What happens*, the same pair that makes a `KNOWN_ISSUES` entry
+  assessable, and both travel with a row that gets filed. A third line, *Reviewer's
+  fix*, carries the remediation the reviewer proposed in its own words. Rubric item
+  7 asks for one with every finding, but nothing in the presentation format held it,
+  so it reached the triage and stopped there.
+
+- **Two rules added to the global standards**, both from failures in this phase's
+  own doc work. A bulk edit to a structured file is now verified against that
+  structure rather than against the match count: a regex written for one table
+  column matched every column of the same shape and silently overwrote the
+  provenance column in seven files, and a block move that stripped whitespace
+  turned a `**Source:**` line into a setext heading. And the drift check now asks
+  whether a claim is restated elsewhere in different words, not only whether the
+  identifiers it names still exist — across three review passes, one fact
+  asserted in five files and corrected in one was the single largest source of
+  findings.
+
+- **`claude-setup` gave up two concerns and 20% of its length** — 6,785 words to
+  5,395. The Drive backup went to the new `drive-backup` skill (`ENH-08`) and the
+  llama.cpp shell aliases and login auto-start went to `claude-toggle-backend`
+  (`ENH-09`), which is the skill those aliases control. Step 6 is now a pointer,
+  and steps 7 and 8 are gone; the two that followed renumbered to 7 and 8. The
+  second move matters beyond the word count: **`claude-setup` now writes nothing
+  outside `~/.claude` and the detected Drive root**, because that block was its
+  only write to `~/.zshrc`. The hardened marker handling — require both markers,
+  back up first, write through `mktemp` — travelled with the block, so
+  `~/.zshrc` still has exactly one hardened writer.
+- **The merge cycle no longer calls a shell alias.** `phase-workflow` §4 step 6
+  ran the user's hand-written `git-clean-local-branches` function, which no skill
+  installs and which a fresh machine, a subagent or a non-interactive shell may
+  not have loaded. The eight lines are inlined instead. `git branch -d` — never
+  `-D` — is what enforces the step's existing retain rule, because it refuses a
+  branch holding unmerged work.
+- **Test-validity audit now mutates rather than reverts** (`phase-workflow` §3
+  step 3). Breaking the named behaviour in place replaces stashing the fix, which
+  left newly added files in the tree and falsely certified the test. Restoration
+  is by `git restore --source="$TASK_SHA" --staged --worktree`, which returns both
+  index and worktree to the recorded task commit; the snippet refuses to run on a
+  dirty tree or a symlinked target. Every failure path stops rather than
+  continuing. A fixture must carry the property under test.
+- **Skip and partial coverage are now distinct** in both `phase-workflow` and
+  `external-review`. A reviewer that fails on quota, auth, timeout or sandbox
+  ran and returned nothing; only an uninstalled CLI is a skip.
+- **Findings tables carry a `Files` column** — where each finding lives, verified against the
+  repo during triage, so a filed `KI-nn` stays actionable from cold.
+- **The documentation pass covers docs outside the repo** — a container folder's own README and
+  CLAUDE.md drift the same way and never appear in `git status`, so they are named explicitly in
+  the hand-off.
+- **`review-checkpoint` renamed to `external-review`**, matching `design-review`
+  and saying what the skill does rather than where it is called from. The two
+  mentions in the `[1.8.0]` section keep the old name: that section is released
+  and records what the skill was called then. Invoke as
+  `/localclaude:external-review`.
+- **`external-review` is canonical for the review loop**; `phase-workflow`
+  delegates instead of restating it. The two copies had already drifted into
+  contradiction.
+- **Bundles exclude credential-shaped, binary and symlinked files** before
+  anything is sent to an external reviewer, on tracked and untracked lists alike,
+  via `git` pathspecs plus an explicit symlink test — `git ls-files` matches a
+  link by its own name, so an innocuous filename pointing at a key passes every
+  pathspec. The bundling loop is shown in full rather than described, and the
+  withheld files are named in the coverage line.
+- **The default branch is detected, never hardcoded.** Every phase lands by pull
+  request regardless of branch protection, so no protection probe is needed and
+  none is run.
+- **Global standards:** subagents have three named uses and are never used to
+  verify correctness; work runs as a phase when brainstorming classifies it
+  architectural; anything that lands cuts a release with semver deciding the
+  number; "deterministically testable" and post-gate edits are defined; the
+  allowlist is described as a prompt-reducer rather than a security boundary.
+- **The duplication threshold closes its third option.** A new small module for
+  two callers is conjuring an abstraction even when the nearest existing module
+  is a poor fit — two copies of a four-line function cost less than a module, an
+  import in every caller, and a name everyone learns. Found by a pressure-test
+  run that built the module and reasoned well doing it.
+- **Skills carry only live evidence.** `design-review`'s results table moved to
+  `tests/README.md` where the tests are, and each scenario keeps one baseline row
+  and one with-skill row. Superseded rows are project memory, not repo content.
+  Three baselines are flagged stale: their failure conditions changed and the
+  rows predate the change.
+- **The commit trailer names the model that wrote the commit**, not the
+  session's — they differ once a subagent commits its own task under model
+  tiering. The name comes from what the harness states: `settings.json` holds a
+  versionless alias, and a model asked to identify itself unprompted answers
+  from training data, a generation behind and with no signal that it is wrong.
+- **Reviewer model ladders are discovered at run time**, not hard-coded. Codex is
+  ranked from its own `models_cache.json` `priority` field; Gemini is ranked by
+  family, then effort, then version, and filtered to `gemini-*` only — `agy`
+  also offers `claude-*` and `gpt-oss-*`, and a Claude model is not a second
+  opinion on Claude's work. Each ladder is three rungs, and **if all three fail
+  the reviewer produces nothing rather than dropping to the weakest tier**: a
+  review from the bottom rung carries the same authority as a real one and the
+  coverage line cannot convey the difference.
+- **Pinned model versions removed** from the backend docs. `opus[1m]` is an
+  alias that already tracks the current Opus; only the comments beside it were
+  pinned to a version.
+- **The phase gate is per-task commits on a draft PR** (`UNK-01`, resolved). The
+  gate was "present uncommitted work and stop", which held a phase's whole
+  output in the one state `git reflog` cannot recover while the retrospective
+  pointed `git checkout`, worktree and stash operations at it. Work now commits
+  per task onto a draft PR opened at phase start; the PR goes ready for review at
+  the gate and sign-off authorizes the merge.
+- **Subagents may commit their own task**, one task per commit, on the phase
+  branch. They still never push, merge, tag, or touch the default branch.
+  `superpowers:subagent-driven-development` works as built under this rule, since
+  its review packages, ledger and crash recovery are all commit-range based —
+  which the uncommitted gate had ruled out.
+- **Branch-protection detection removed.** Every phase lands by PR, so the
+  question no longer arises. The probe could not be made correct anyway:
+  `GET /branches/{b}/protection` covers classic protection only, so a repo using
+  rulesets to require PRs returns 404 and reads as unprotected.
+- **Neither Claude nor the external reviewers open credential-shaped files** by
+  default. For the reviewers this is a prompt instruction rather than
+  enforcement, because `--sandbox read-only` gates writes and not reads.
+- **The phase gate cites the reviewer output files**, per pass, with byte counts.
+  The gate's other half asks git a question; this half used to ask the agent's own
+  hand-off whether it contained a findings table, which an agent that skipped the
+  review satisfies by writing one. It also takes a **coverage line for every pass,
+  always** — a pass where both reviewers ran and returned nothing has no findings
+  to tabulate, no missing CLI, and no error to quote, and the older wording called
+  that a review that never happened.
+- **The Codex model ladder tops out at `gpt-6-astra`**, and both ladders now set
+  reasoning effort explicitly. Every listed model supports low through max and
+  `gpt-6-astra` defaults to **low**, so naming only the slug got the weakest
+  setting of the strongest model while the run read as stronger than it was. The
+  effort is recorded beside the slug.
+- **`Direction` orders the module table by stability, not by call order.** Ordering
+  rows by their own dependency column made the check circular — any acyclic graph
+  can be ordered so every arrow points the same way — so it detected nothing that
+  cycle detection did not. Rows now go slowest-changing first, and the check fires
+  on a unit depending on something with more reasons to change than itself.
+- **The diagram rule is distinctness, not a count.** Each diagram earns its place
+  by showing something no other diagram shows; the recurring cost is that every
+  phase end regenerates and drift-checks it. Three diagrams that each carry
+  something distinct is not a violation.
+- **KI-01 and KI-22 re-rated Critical.** Both silently truncate a user's file —
+  `settings.json` and `.zshrc` — which is the top line of the severity scale those
+  entries are graded against.
+- Skill descriptions shortened — `claude-setup` 136→60 words, `phase-workflow`
+  163→49, `external-review` 187→59. They are resident in every session.
+
+### Fixed
+
+- **Adversarial review follow-up:** standards installation refuses failed source reads before
+  replacing personal content. Fixture grading treats incomplete call setup, mutable caches,
+  helper globals and skipped context/exception effects as evaluation gaps, and refuses string
+  formatting with unbounded allocation. Replacement dispatches supersede prior evidence and
+  grades at completeness and agreement checks; recollection still checks current evidence and
+  packet hashes. The phase SOP invokes the roadmap close/check helper, the diagnostic Codex
+  probe specifies high effort, and the Node layout names the dependency tree below its env
+  container. Command flags, result schemas and grading exit codes remain unchanged.
+
+- **QC fix pass (2026-09-14):** Results separator repair refuses data rows and
+  skips indented examples (KI-35, now closed). Diagnostic `--show` exposes malformed
+  rows; the README rollup is checked against recorded rows without changing them.
+- **Setup and review helpers:** explicit adoption replaces heading-based ownership
+  guesses; links are built before replacement and can be repointed repeatedly.
+  Setup link examples work before plugin registration. Repository capture ignores
+  credential-shaped ancestors above its root, retains read failures on large
+  lists, and export refusals stay visible on stderr. Reviewer probes carry high
+  effort, distinguish diagnostics from configuration output, and report each
+  availability rung once.
+- **Grading and workflow:** imported fixture helpers and `print` calls with plain
+  arguments no longer hide independent guards; method receivers evaluate once; sequence growth
+  is bounded before allocation. A call the evaluator cannot run makes every
+  mutable binding unknown, so a guard after it is never graded on pre-call
+  values. Malformed unpacking in an answer is an evaluation
+  gap rather than a refused input. Invalid grading inputs exit 3. Across scenarios,
+  pass judgements must dispute every linked executed failure. Mutation cleanup
+  covers generated output and both test runs. Interrupted roadmap closes restore
+  originals and remove temporary staging; malformed index rows are refused.
+- **Deferred work:** ENH-14 through ENH-21 retain the larger QC reuse and architecture
+  items. ENH-22 through ENH-25 track shared verbatim-evidence validation, blind
+  hand-graded anchors, agreement statistics and measured arm leakage. The plugin
+  version remains reserved for the phase-end release.
+
+- Standards installation rejects malformed canonical marker pairs before first creation and
+  refuses symlinked backup destinations and replaces hard-linked backups without writing through them. Failed Git status queries stop exports and mutation
+  audits before they can discard or omit uncommitted work.
+- Codex review exports preserve committed regular-file bytes regardless of working directory
+  or archive attributes, omit links and submodules with a coverage notice, and use one prepared
+  root for review and diagnostic invocations. The docs distinguish pruning from read isolation.
+- Fixture evaluation reports unsupported writes, invalid helper calls and host-dependent
+  timezone conversion as evaluation gaps. Transcript parsing retains every final text block
+  and rejects an unanswered later turn. Results-table selection and explicit repairs stay
+  inside the Results section. These tooling changes do not alter recorded grades or results.
+- Release tests execute the documented publication and cleanup commands. Cleanup reports Git
+  failures instead of returning success. Repo documentation reflects the executable helpers,
+  routes README installation through the tested link installer, and states the supported
+  permission syntax and the manual environment-ownership check accurately.
+
+- **Fourteen defects found by `gpt-6-astra` in external review pass 9**, each verified
+  before acceptance and five of them Critical or High. The mutation helper accepted any
+  commit containing the file and restored from it, discarding work committed since; its
+  cleanup ran in a bare EXIT trap, which cannot change an exit status, so a failed restore
+  reported success. The standards installer matched markers as prefixes while its comment
+  claimed whole lines, and its symlink refusal sat behind an existence test a dangling link
+  satisfies. Plan capture never applied the credential exclusions — the one mode whose input
+  a human types. Binary detection treated a missing `perl` as text. Capture exited 0 after
+  unchecked artifact writes. `evidence.py` reported a batch current with every answer file
+  deleted. `roadmap.py` dropped header prose between the last rule and the first anchor,
+  wrote both files before reconciling, and compared displayed IDs without their link targets.
+  The results writer accepted line breaks and duplicate `Run` values. Setup linked without
+  checking the source existed or that the link resolved.
+
+- **The skills now invoke the scripts their tests cover.** `claude-setup` step 3 and
+  `phase-workflow` §3 step 3 each described a procedure in prose while a tested
+  implementation of it sat unused beside them, so 35 tests proved things about code the
+  documented workflow never ran.
+
+- **The mutation audit says how to choose a mutation.** It must have the same predicted
+  outcome on every host, and so must every property a test asserts about its own fixture. An
+  environment-dependent red certifies the runner, not the test — which is how the same
+  fixture defect was graded a pass twice.
+
+- **Reviewer availability is probed before a pass is committed.** `preflight.sh` asks
+  each CLI one cheap question and separates the outcomes that demand different
+  responses: `QUOTA` with its reset window (account-wide, so a downshift cannot help),
+  `UNAVAILABLE` (per model, so the next rung may answer), `TIMEOUT` (inconclusive,
+  retry longer), `NO ANSWER` (exit 0 with nothing produced — the trap both CLIs
+  share), and `MISSING`. Pass 9 skipped this and spent about 100 minutes learning one
+  chunk at a time that the Gemini account had been out of quota from the first call,
+  with 110 hours still to run; all eleven attempted chunks returned zero bytes.
+  Eleven tests, with both CLIs faked at the process boundary.
+
+- **Evidence provenance is tracked per scenario, not per repository.** `evidence.py`
+  records, for each scenario, the skill it loads, that file's git SHA and content hash,
+  its prompt hash and its grading-condition hash; `check` recomputes all four and names
+  exactly the scenarios that must be re-run. A single repository SHA could only mark
+  everything stale or nothing, which is why S07's evidence outlived two changes to the
+  skill it tests. The scenario files now declare `**Loads:**` rather than having the
+  skill inferred from their prose. Eleven tests, including the baseline-contamination
+  refusal that previously depended on someone reading a tool-use count by eye.
+- **The round-3 results rows carried notes in the `Condition revision` column.** The
+  provenance value was overwritten in all seven scenarios. Recomputed from the grading
+  conditions and restored; the displaced prose is retained in `Notes` rather than dropped.
+- **A scope exclusion now binds Codex, which reads the repository rather than the bundle.**
+  `codex-root.sh` builds a detached worktree at HEAD, deletes the excluded paths inside it, and
+  verifies each deletion before returning the path to root the reviewer at. The real working
+  tree is untouched. It refuses a dirty tree, since the worktree carries HEAD, and refuses an
+  exclusion matching nothing tracked, since a typo leaves the area in place while the caller
+  believes it pruned. Seven tests.
+- **A review scope exclusion now removes files from the bundle, not only from the prompt.**
+  `capture.sh` takes `--exclude <pathspec>`, repeatable, and the excluded paths leave the
+  manifest and appear in the excluded count. Naming an out-of-scope skill in the preamble did
+  not hold: pass 8 named `drive-backup` and the reviewer reported on it anyway, because its
+  files were in front of it. Refused in `plan` mode, which captures one named file.
+- **Deletions reach the reviewer again.** Phase capture ran the worktree checks on every path
+  in the raw diff, so a file the diff deleted was withheld as absent from the tree and its
+  removal never appeared in the patch. Classification is now split: containment — allowed roots
+  and symlinks — applies to every path, and the worktree checks apply only where capture reads
+  the worktree copy. A deletion is covered by containment plus the checks on its committed
+  blobs, which is where its content actually comes from.
+- **Capture is anchored to the repository root, not the working directory.** Pathspecs carry
+  `:(top)` and paths resolve from the root, so a bundle built from a subdirectory covers the
+  whole repository and the credential exclusions still match at the root.
+- **An output directory inside the repository is refused.** The untracked sweep listed the
+  bundle, appended it to itself, and reported counts that could not reconcile.
+- **The phase preflight records the push URL the guard compares.** It used
+  `git remote get-url --push --all` while `publish-release.sh` compares `--push`.
+
+- **Review capture now classifies tracked paths before building the patch.** Symlinks,
+  binaries and paths outside the allowed roots are withheld, including binaries forced to
+  text by a diff attribute. Absolute plan paths retain their root. Tracked capture counts
+  include the paths sent, and phase enumeration failures stop capture. Four added capture
+  regressions cover both patch sides, symlinks, parent escapes and literal path exclusions.
+  Four added phase-git tests cover the check-only remote guard.
+- **Remote checks use the destinations recorded at phase start.** The workflow calls
+  `publish-release.sh --check-origin`, a check-only entry point to the existing guard, at the
+  gate and before publication or deletion. It rejects changed or multiple push destinations.
+- **Coverage is classified for every required reviewer/chunk pair.** Failed invocations cannot
+  count as successful coverage, and a later chunk failure cannot leave a pass marked full.
+  `external-review` owns the classification and Gemini timeout; callers point to it. Removed
+  duplicated capture commands, tool tutorials and superseded wording from the skills.
+- **Both setup symlink sequences bind their paths and guard the actual move and link.** A failed
+  move stops installation, existing backups are retained, and the result is checked. The
+  reference calls the exploration allowlist a prompt-reduction list and names `find`'s writes.
+- **Roadmap ownership and ordering match the supporting records.** Backup work belongs to
+  `drive-backup`, KI-34 appears in the active list, issues follow severity and likelihood, and
+  verification questions precede risks. Architecture records setup's backup dependency.
+- **S07 round-3 P2 is `Rule ineffective`.** Its substitute mutation does not keep the original
+  test green on every host; pinning `TZ` in the replacement cannot establish that property.
+  The summary now records five of six discriminating units fixed. Evidence notes also record
+  the false H1 window finding and the timezone teardown defect, without changing other grades.
+
+- **External review pass 7 — 19 findings, five of them in pass 6's own fixes.**
+  The bundle counts read a `manifest.z` that was never created; the invocation
+  loops still used the naming the prose had just forbidden, so a chunk could
+  overwrite another's findings and a failed retry inherit the previous answer;
+  the coverage rewrite left later text still calling a zero-output pass
+  "partial"; and the `capture()` function rejected `~/.claude/plans/`, the normal
+  location for the file `plan` mode reviews. Tracked changes also bypassed the
+  filter entirely, since only untracked files pass through `capture()` — a
+  `.gitattributes` `diff` attribute can still force a binary blob into a patch.
+- **`phase-workflow` validated the wrong remote URL.** Git keeps a separate push
+  URL, so a remote can fetch from the approved repository and push to a fork —
+  which would pass every SHA check and then receive the tag and the branch
+  deletion. Both URLs are now captured at §2 and compared before publication.
+- **New rule: re-gather derived evidence before external review, not after.**
+  Evidence produced by *running* something — subagent scenario runs, evals,
+  benchmarks — is valid only for what it was gathered against, so a fix expires
+  it. Mark it expired at the fix, make every fix that touches the measured thing
+  first, then re-gather once as the last action before the review. This repo let
+  that evidence go stale three times before the rule was written.
+- Smaller corrections: `ln -sfn` links *inside* an existing real directory rather
+  than replacing it; markdownlint discovery is bounded by the invocation
+  directory, not a walk to `$HOME`, and the CLI verification cannot establish
+  editor parity; the canonical findings-table example filed a Confirmed bug as an
+  open question; README described the reviewed plan as approved and conflated
+  release preparation with post-merge tagging; and roadmap ordering, summaries
+  and provenance were reconciled with the entries they describe.
+
+- **External review pass 6 — 29 findings from a single reviewer, and three of the
+  worst were introduced by pass 5's own fixes.** `external-review`'s capture
+  blocks ended on `grep -q … && exit 1`, which returns grep's status, so a clean
+  bundle exited **1** on its success path; the file-level `-L` test missed a
+  **symlinked parent directory**, through which `cat` reads straight out of the
+  repository (reproduced against a scratch repo, and the guard now blocks it); and
+  a tracked file absent from the tree was dropped silently despite the fail-closed
+  promise. Coverage classification counted installed CLIs rather than reviewers
+  that produced output, so one CLI missing plus one out of quota reported as
+  "partial" with nothing reviewed. Bundle counts mixed a newline-delimited total
+  with a NUL-delimited selection. Both capture paths are now one checked
+  procedure.
+- **`design-review`'s Direction rule did not contain the exemption its own test
+  grades against.** The composition-root exemption and the reachability scope were
+  added to the s01 condition and not to the skill, so D2's "Rule works" certified
+  compliance with the test rather than with the rule. Both are now in the skill.
+- **The VS Code parity consequence was backwards.** `MD013` is disabled in the
+  pinned CLI config too, so line length is not the difference; declining the key
+  costs editor squiggles from `MD033`, `MD024` and `MD029` on roadmap anchors,
+  CHANGELOG headings and continuing ordered lists.
+- **Recorded condition hashes identified superseded text.** S01 and S07 were
+  reworded after their runs but kept their pre-reword hashes. Each row now records
+  the hash the grade was judged against alongside the one it was dispatched under.
+- **The gate demanded of reviewers what only the agent can produce** — a formatted
+  table rather than a findings list — and deferred plan findings were restricted
+  to `ENH-nn`/`UNK-nn`, which files a real bug as an open question. The merge
+  cycle also republished through whatever `origin` names now rather than the
+  remote validated at the gate.
+- Smaller corrections: the audit now accepts a **predicted production exception**
+  as the named red rather than forcing a second mutation to manufacture an
+  `AssertionError`; `claude-setup` lists eight bundled skills and no longer calls
+  its allowlist read-only; `project-env` gives runnable `ruff check .` /
+  `black .` invocations and states honestly that its env-collision workaround has
+  no backlink to read; the code root is defined as the directory holding the
+  siblings rather than the literal name `Code`; and two obscured diagram labels
+  were moved and the render re-inspected.
+
+- **`external-review` had three wrong or missing facts about reviewer failure,
+  found by running it.** Quota is account-wide, not per-model as the skill
+  claimed: Gemini returned the same error with the same countdown on both its
+  top and flash rungs, so a downshift can never rescue a quota failure and only
+  spends the window on identical refusals. `codex exec` **exits 0** on a quota
+  failure and writes no `-o` file, so exit status alone cannot distinguish a
+  finished review from an exhausted account — the loop's non-empty-output check
+  is what catches it, and now says so. And the coverage vocabulary had only two
+  outcomes where there are three: *skipped* (both CLIs missing), *partial* (one
+  reviewer empty), and **no coverage** (both installed, both run, neither
+  produced output), which cannot reach a phase gate.
+
+- **External review pass 5 — 46 findings, and two of them were mine.** Both
+  reviewers independently reproduced a grading error in the pressure-test
+  evidence: the S07 baseline's replacement fixture puts Auckland and UTC on the
+  same calendar date, so its own property assertion is False and the test can
+  never run. P3 becomes **Rule needed / Rule works**. Codex went further and
+  showed the P2 correction I had proposed was wrong too — `now.astimezone()` is
+  not equivalent to `local = now`, because it keeps the original test green only
+  on a UTC host. The seven with-skill arms were then re-run at `a850251` against
+  the corrected skills, and the round-2 S07 run uses the literal mutation with a
+  fixture whose asserted properties hold, so P2 and P3 both land at **Rule
+  needed / Rule works**. Six of fifteen units now discriminate, up from three,
+  and the skill fixes all six. Three conditions were reworded because a careful
+  reader could reach the opposite verdict; every existing output was judgeable
+  against the new wording, so no baseline expired.
+- **`claude-setup` no longer writes editor configuration**, and its advertised
+  write footprint is stated accurately rather than as the earlier "nothing outside
+  `~/.claude`". Step 3b now detects the markdownlint extension by its
+  directory — `code --list-extensions` reports "not installed" whenever the CLI
+  is off `PATH`, which is common — and hands the user the one-key change to make
+  themselves, with the consequence of declining stated. (Corrected in the next
+  pass: `MD013` is disabled in the pinned CLI config too, so the difference is
+  `MD033`, `MD024` and `MD029`, not line length.)
+- **`external-review` had five defects in the machinery that gates a phase.**
+  The availability check grepped combined stdout and stderr, so a review whose
+  findings contained "not supported" was discarded and overwritten by the next
+  rung; `repo` mode reconciled with `git status`, which returns zero on the clean
+  tree it is meant to run against; `repo` capture was not fail-closed while phase
+  capture was; `codex exec` hung forever without `< /dev/null`; and the ~400k
+  chunk ceiling was wrong — the binding limit is wall-clock, measured at ~120k
+  per call.
+- **Cross-file contradictions the restructuring left behind:** the typo exception
+  in the standards against phase-workflow invalidating approval on every edit,
+  a reviewer output contract no compliant reviewer could satisfy, KI-22 pointing
+  at a deleted step 7, ROADMAP still counting seven skills, README still
+  promising a three-pass ceiling, the diagram legend promising `gh` never blocks,
+  and ARCHITECTURE claiming every `settings.json` writer patches in place when
+  `toggle.sh` does not.
+
+- **ENH-07 was scoped to two files and applies to six.** It named
+  `backup-projects.sh` and `claude-setup`, missing all four
+  `claude-toggle-backend` scripts. The omission mattered: `toggle.sh` resolves
+  `settings.json` the same hardcoded way and *patches* it, so on a machine with
+  `$CLAUDE_CONFIG_DIR` set the backend would appear to switch and would not, in
+  silence — worse than the backup writing to the wrong folder. Now partly held,
+  with counts taken from the files rather than restated (ten occurrences over
+  eight distinct paths in `backup-projects.sh`, six over three in
+  `claude-setup`, four in `toggle.sh`).
+- **The `~/.zshrc` shared-state line overstated the fix.** ENH-09 left one
+  *managed* writer, which `ARCHITECTURE.md` recorded as one writer full stop.
+  The file also carries two surfaces the repo depends on and does not own. The
+  line now says which, and gives the test: ask whether code generates a block,
+  not whether it looks managed.
+- **KI-16 rewritten: the `HF_HOME` claim had an orphan behind it.** It was filed
+  as doc drift — `local-models` says the managed `~/.zshrc` block exports
+  `HF_HOME`, and it does not. The machine tells a different story: a second block
+  branded `# >>> localclaude HF_HOME >>>` does export it, and
+  `git log -S` finds no commit that ever installed one. Hand-written, branded as
+  managed. That is why the claim survived review — verifying it on this machine
+  confirms it, while a machine built from the skills as written gets nothing. The
+  entry now carries both halves and is marked partly held: the docs wait for the
+  `local-models` rebuild, the missing installer does not.
+
+- The CHANGELOG move is instructed once, at §3 step 4, not again at §4 step 1.
+- CHANGELOG.md is exempt from the current-state rule, which had forbidden it from
+  describing removed features.
+- `external-review`'s Model column no longer says `Both` in one place and
+  forbids it in another; severity disagreements between reviewers are recorded.
+- The bundle file count no longer collapses untracked directories to one line.
+  (Superseded twice since: `git status` counts changed files, which is zero on the
+  clean tree a phase review runs against, and the count now derives from one
+  NUL-delimited manifest.)
+- `claude-setup` listed three bundled skills; there are six. README omitted
+  `llama-autostart.sh` from the backend scripts.
+- **`claude-setup` step 3 corrupted the file it manages** (installed on this
+  machine). Its prose quoted a truncated opening marker, so a marker search
+  matched the prose before the real delimiter and the installed
+  `~/.claude/CLAUDE.md` was written with eight lines of the skill's own
+  instructions at the top, a stray code fence, and no closing marker. The step
+  now takes canonical text from the fenced block, matches whole marker lines
+  only, and verifies the result before finishing.
+- **The global standards block is 2,480 words, down from 3,386** — 27% off a
+  file resident in every request. `ENH-01` took the first 644: the environment
+  procedures to `project-env`, and the roadmap taxonomy from 374 words to 232,
+  keeping the tense split and the ID rules while handing the rating scales,
+  entry format and anchors to `phase-workflow` and the bundled templates, which
+  already defined them. After `ENH-01`, four more bullets that
+  restated a procedure with an existing owner were compressed to the rule plus
+  a pointer: the mutation check and the branch-creation mechanics to
+  `phase-workflow` §3 step 3 and §2, the `/simplify` reject-list to §3 step 2,
+  and the markdown-lint invocation detail to `claude-setup` step 3b. Each
+  pointer was checked to resolve and each dropped passage confirmed present at
+  its destination. No new skill: what is left is prohibitions, which only work
+  while resident.
+- **`claude-setup/REFERENCE.md` drift.** Its allowlist rationale listed only the
+  read-only commands, omitting the deliberate write-capable exceptions
+  (`pytest`, `ruff`, `black`, `markdownlint-cli2`, the venv forms, `uv`, `npm
+  test`). It also presented `backup-projects.sh` always exiting 0 as purely a
+  safety feature; exiting 0 is deliberate, but logging `ok` regardless is KI-14,
+  and the file now separates them.
+- **The `.zshrc` shell-block installer no longer truncates the file**
+  (`KI-22`, `claude-setup` half). Step 7 stripped its managed block with an
+  `awk` that keyed only on the markers it found, so a file whose closing marker
+  had been deleted by hand lost everything from the opening marker down —
+  `PATH` edits, exports, other tools' managed blocks. Reproduced at 10 lines to
+  3. It now refuses on a marker-count mismatch, copies the file to
+  `.zshrc.localclaude.bak` first, and writes through `mktemp` instead of a
+  fixed `.tmp` path a concurrent shell could be using. `llama-autostart.sh`
+  carries the same pattern and is held for the rebuild.
+- **`$CLAUDE_CONFIG_DIR` claim removed** (`KI-15`). Step 1 promised the variable
+  was honoured while every bundled script resolved `$HOME/.claude` directly. It
+  now states plainly that the variable is unsupported and must not be set on a
+  managed machine. Supporting it is filed as `ENH-07`, to be done inside the
+  backup test harness rather than as a blind substitution.
 
 ## [1.8.0] - 2026-09-05 — Review loop and test validity
 
@@ -74,5 +632,6 @@ here — the plugin manifest's version is the only record of them.
 
 ## Reference
 
-[Unreleased]: https://github.com/rahulragunathan/localclaude/compare/v1.8.0...HEAD
+[Unreleased]: https://github.com/rahulragunathan/localclaude/compare/v1.10.0...HEAD
+[1.10.0]: https://github.com/rahulragunathan/localclaude/compare/v1.8.0...v1.10.0
 [1.8.0]: https://github.com/rahulragunathan/localclaude/releases/tag/v1.8.0
