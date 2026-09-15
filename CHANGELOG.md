@@ -42,12 +42,13 @@ here — the plugin manifest's version is the only record of them.
   open question from an external repo review.
 - `LICENSE` — the MIT text the plugin manifest and skill frontmatter already
   declared.
-- **Recorded pressure-test evidence through round 7.** Round 4 (2026-09-09) was
-  the complete paired batch across all seven scenarios; later S01/S02 fixtures
-  supersede its revisions, and round 7 is partial. Results retain each batch's
-  grades and provenance. The latest per-scenario observations and historical
-  corrections are in `skills/design-review/tests/README.md`; the earlier
-  round-4 aggregate is not a current assessment of the skill. Transcripts,
+- **Recorded pressure-test evidence through round 9.** Round 9 (2026-09-14) is
+  the complete paired batch across all seven scenarios, with five replicates per
+  arm and grades from blind model graders. Round 4 was the earlier complete
+  batch, rounds 5 and 7 are partial, and round 8 is not in the Results tables.
+  Results retain each batch's grades and provenance. The latest per-scenario
+  observations and historical corrections are in
+  `skills/design-review/tests/README.md`. Transcripts,
   dispatched prompts and hash-verified snapshots remain in the external
   `Claude-Projects/Project Artifacts/Plugins/localclaude/design-review-evidence-<date>/` archive.
   Two round-1 runs were voided before grading and re-run: an s02 baseline that
@@ -257,8 +258,8 @@ here — the plugin manifest's version is the only record of them.
   lists, and export refusals stay visible on stderr. Reviewer probes carry high
   effort, distinguish diagnostics from configuration output, and report each
   availability rung once.
-- **Grading and workflow:** imported fixture helpers and print diagnostics no
-  longer hide independent guards; method receivers evaluate once; sequence growth
+- **Grading and workflow:** imported fixture helpers and `print` calls with plain
+  arguments no longer hide independent guards; method receivers evaluate once; sequence growth
   is bounded before allocation. A call the evaluator cannot run makes every
   mutable binding unknown, so a guard after it is never graded on pre-call
   values. Malformed unpacking in an answer is an evaluation

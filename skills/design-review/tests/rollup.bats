@@ -9,18 +9,23 @@ teardown() { rm -rf "$T"; }
 @test "rollup reads corrected cells and keeps Mutation choice inside P2" {
   run python3 "$R" --tests "$T"
   [ "$status" -eq 0 ]
-  [[ "$output" == *'Fixture: 1/2'*'Fixture: 2/3'* ]]
-  [[ "$output" == *'Lifetime: 2/3'* ]]
+  printf '%s\n' "$output" | grep -q 'Fixture: 4/5.*Fixture: 5/5'
+  printf '%s\n' "$output" | grep -q 'Lifetime: 4/5'
   [ "$(printf '%s\n' "$output" | awk '/^\| [DRGP][0-9] / {n++} END {print n}')" = 15 ]
-  [[ "$output" == *'Mutation choice: 1/2'*'Mutation choice: 3/3'* ]]
+  printf '%s\n' "$output" | grep -q 'Mutation choice: 2/5.*Mutation choice: 5/5'
 }
 @test "rollup changes when named Results cells change and never pools revisions" {
-  python3 "$W" "$T/s02-lifetime-surface.md" --run 'With skill (round 7, n=3)' --set 'Lifetime=**Unstable** (1/3)'
+  python3 "$W" "$T/s02-lifetime-surface.md" --run 'With skill (round 9, n=5)' --set 'Lifetime=**Unstable** (1/5)'
   run python3 "$R" --tests "$T"
   [ "$status" -eq 0 ]
-  [[ "$output" == *'Lifetime: 1/3'* ]]
-  [[ "$output" == *'ff76fc3a6dc19f2a'* ]]
-  [[ "$output" == *'3d791568afe9334d'* ]]
+  printf '%s\n' "$output" | grep -q 'Lifetime: 1/5'
+  printf '%s\n' "$output" | grep -q 'ff76fc3a6dc19f2a'
+  printf '%s\n' "$output" | grep -q '3d791568afe9334d'
+  # A superseded batch must not reach the rollup: only the latest round renders.
+  run python3 "$W" "$T/s02-lifetime-surface.md" --run 'With skill (round 7, n=3)' --set 'Lifetime=**Unstable** (1/3)'
+  [ "$status" -eq 0 ]
+  run python3 "$R" --tests "$T"
+  [ "$(printf '%s\n' "$output" | grep -c 'Lifetime: 1/3')" = 0 ]
 }
 
 @test "QC T3-9: checked README rollup matches and rejects drift without writing" {

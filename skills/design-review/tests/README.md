@@ -246,6 +246,7 @@ grading directory. Nothing here writes a Results table; transfer approved grades
    the answer. It names no arm, replicate or scenario file. The key back to those lives in
    `grading.json`, which graders never see. The blinding is partial: the answer itself can give
    the arm away, and in round 8, 18 of 35 with-skill answers said they had read a skill file.
+   In round 9, a rougher text scan found 8 of 35.
 2. **Dispatch each packet as a fresh agent with no tools**, sending `dispatch/<ID>.txt`
    verbatim, and log it the same way as a run:
 
@@ -358,49 +359,53 @@ python3 skills/design-review/tests/rollup.py --check skills/design-review/tests/
 <!-- BEGIN GENERATED ROLLUP -->
 | Unit | Scenario / batch | Without skill: observed passes | With skill: observed passes |
 | --- | --- | --- | --- |
-| D1 | [S01](s01-responsibility-direction.md#results) / round 7 | Responsibility: 2/2 | Responsibility: 2/2 |
-| D2 | [S01](s01-responsibility-direction.md#results) / round 7 | Direction: 2/2 | Direction: 2/2 |
-| D3 | [S02](s02-lifetime-surface.md#results) / round 7 | Lifetime: 2/3 | Lifetime: 2/3 |
-| D4 | [S02](s02-lifetime-surface.md#results) / round 7 | Surface: 3/3 | Surface: 3/3 |
-| D5 | [S03](s03-duplication.md#results) / round 4 | Under side: 1/1; Over side: 1/1 | Under side: 1/1; Over side: 1/1 |
-| D6 | [S04](s04-variation.md#results) / round 4 | Outcome: 1/1 | Outcome: 1/1 |
-| R1 | [S05](s05-report-form.md#results) / round 4 | Rule 1: 0/1 | Rule 1: 0/1 |
-| R2 | [S05](s05-report-form.md#results) / round 4 | Rule 2: 1/1 | Rule 2: 1/1 |
-| R3 | [S05](s05-report-form.md#results) / round 4 | Rule 3: 1/1 | Rule 3: 1/1 |
-| R4 | [S05](s05-report-form.md#results) / round 4 | Rule 4: 0/1 | Rule 4: 0/1 |
-| G1 | [S06](s06-diagram-cap.md#results) / round 4 | Diagrams: 1/1 | Diagrams: 1/1 |
-| G2 | [S06](s06-diagram-cap.md#results) / round 4 | Outcome: 1/1 | Outcome: 1/1 |
-| P1 | [S07](s07-process-rules.md#results) / round 7 | Skip/partial: 2/2 | Skip/partial: 3/3 |
-| P2 | [S07](s07-process-rules.md#results) / round 7 | Mutation: 2/2; Mutation choice: 1/2 | Mutation: 3/3; Mutation choice: 3/3 |
-| P3 | [S07](s07-process-rules.md#results) / round 7 | Fixture: 1/2 | Fixture: 2/3 |
+| D1 | [S01](s01-responsibility-direction.md#results) / round 9 | Responsibility: 5/5 | Responsibility: 5/5 |
+| D2 | [S01](s01-responsibility-direction.md#results) / round 9 | Direction: 0/5 | Direction: 5/5 |
+| D3 | [S02](s02-lifetime-surface.md#results) / round 9 | Lifetime: 5/5 | Lifetime: 4/5 |
+| D4 | [S02](s02-lifetime-surface.md#results) / round 9 | Surface: 5/5 | Surface: 5/5 |
+| D5 | [S03](s03-duplication.md#results) / round 9 | Under side: 5/5; Over side: 5/5 | Under side: 5/5; Over side: 5/5 |
+| D6 | [S04](s04-variation.md#results) / round 9 | Outcome: 5/5 | Outcome: 5/5 |
+| R1 | [S05](s05-report-form.md#results) / round 9 | Rule 1: 0/5 | Rule 1: 4/5 |
+| R2 | [S05](s05-report-form.md#results) / round 9 | Rule 2: 3/5 | Rule 2: 5/5 |
+| R3 | [S05](s05-report-form.md#results) / round 9 | Rule 3: 5/5 | Rule 3: 5/5 |
+| R4 | [S05](s05-report-form.md#results) / round 9 | Rule 4: 2/5 | Rule 4: 5/5 |
+| G1 | [S06](s06-diagram-cap.md#results) / round 9 | Diagrams: 5/5 | Diagrams: 5/5 |
+| G2 | [S06](s06-diagram-cap.md#results) / round 9 | Outcome: 5/5 | Outcome: 5/5 |
+| P1 | [S07](s07-process-rules.md#results) / round 9 | Skip/partial: 5/5 | Skip/partial: 5/5 |
+| P2 | [S07](s07-process-rules.md#results) / round 9 | Mutation: 5/5; Mutation choice: 2/5 | Mutation: 5/5; Mutation choice: 5/5 |
+| P3 | [S07](s07-process-rules.md#results) / round 9 | Fixture: 4/5 | Fixture: 5/5 |
 
 | Scenario | Prompt hash | Condition hash | Loaded skill hash | Record applicability |
 | --- | --- | --- | --- | --- |
-| S01 | `3d791568afe9334d` | `db4da67c54d1d7db` | `fcda7a2da8058dd8` | Current; Current |
-| S02 | `ff76fc3a6dc19f2a` | `f2d9d679e9b917fb` | `fcda7a2da8058dd8` | Current; Current |
-| S03 | `7e1ef621d32bdd1d` | `a6b60af770d5d478` | `fcda7a2da8058dd8` | Current; Current |
-| S04 | `a287991c188d2a36` | `0619345ddc2e9548` | `fcda7a2da8058dd8` | Current; Current |
-| S05 | `a0032527302c3acf` | `1c72d3ab44485175` | `fcda7a2da8058dd8` | Current; Current |
-| S06 | `790832afba8ba5fa` | `aa21e532b4457c8b` | `fcda7a2da8058dd8` | Current; Current |
-| S07 | `562115beedc26965` | `1c6a4c0f44c0d4bc` | `a38d6bbae3b7d55f` | Current; Current |
+| S01 | `3d791568afe9334d` | `db4da67c54d1d7db` | `47196f444f840946` | Current; Current |
+| S02 | `ff76fc3a6dc19f2a` | `f2d9d679e9b917fb` | `47196f444f840946` | Current; Current |
+| S03 | `7e1ef621d32bdd1d` | `a6b60af770d5d478` | `47196f444f840946` | Current; Current |
+| S04 | `a287991c188d2a36` | `0619345ddc2e9548` | `47196f444f840946` | Current; Current |
+| S05 | `a0032527302c3acf` | `1c72d3ab44485175` | `47196f444f840946` | Current; Current |
+| S06 | `790832afba8ba5fa` | `aa21e532b4457c8b` | `47196f444f840946` | Current; Current |
+| S07 | `562115beedc26965` | `1c6a4c0f44c0d4bc` | `eece8525b5b13e01` | Current; Current |
 <!-- END GENERATED ROLLUP -->
 
 The revision table quotes the scenario records' applicability labels. “Current” is scoped to
 those prompt, condition and loaded-skill hashes; it does not mean all fifteen units share one
 batch. Older S01/S02 fixture rows are Expired with their historical grades retained.
 
-For S01's revised fixture, round 5 plus round 7 records Direction at baseline 2/3 and with-skill
-3/3. Round 4 used a different prompt and condition and is excluded from that tally. The latest
-round alone has 2/2 in each arm. For S02 round 7, Lifetime is 2/3 in each arm after correcting
-with-skill replicate 3. For S07 round 7, Fixture is baseline 1/2 and with-skill 2/3; the required
-awareness assertions are missing in with-skill replicate 3, and baseline replicate 1's 23-hour
-fixture assertion is false. Archived answers remain unchanged.
+Round 9 (2026-09-14) is the first batch with five replicates per arm in every scenario. Its
+grades are the first blind `claude-opus-5` grade of each answer from `grade_batch.py`; the 14
+answers graded twice agreed on 40 of 40 verdicts. Round-9 with-skill runs loaded new skill
+revisions, so earlier with-skill rows are Superseded, and earlier baseline rows at the same
+revisions stay Current. S03, S04 and S06 pass in all ten runs and do not discriminate at this
+sample size. S02 with-skill replicate 3 fails Lifetime for the reason round-7 replicate 3 did,
+while baseline replicate 2 passes on a similar argument;
+[UNK-04](../../../docs/OPEN_QUESTIONS.md#unk-04) records that decision. The round-7
+corrections stay in the scenario Notes, and archived answers remain unchanged.
 
 S07 Mutation choice must be grouped by the loaded skill: round 4's
 `4ba576f25dab8154` has one with-skill failure; round 5's `a38d6bbae3b7d55f` has one
 with-skill pass; round 7 uses that same hash and has three with-skill passes. Round 5 belongs
 with the latter snapshot, not in a “before” bucket. The corresponding baseline choice tallies
-in rounds 4, 5 and 7 are 0/1, 1/1 and 1/2. These are table records from different batches,
+in rounds 4, 5 and 7 are 0/1, 1/1 and 1/2. Round 9 loaded `eece8525b5b13e01` and records five
+with-skill passes against a baseline of 2/5. These are table records from different batches,
 not contemporaneous randomized controls.
 
 ### Historical corrections
