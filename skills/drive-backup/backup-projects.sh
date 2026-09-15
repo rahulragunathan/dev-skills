@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # backup-projects.sh — snapshot Claude Code + Cowork project transcripts to Google Drive.
 #
-# Invoked by a Claude Code `Stop` hook (fires at the end of every turn) and/or a launchd
-# timer. Backs up:
+# Invoked by a Claude Code `Stop` hook (fires at the end of every turn), and optionally by an
+# Automator app on a Shortcuts schedule. Not launchd: a LaunchAgent cannot be granted the Full
+# Disk Access the Google Drive FileProvider path needs, and fails `Operation not permitted`.
+# Backs up:
 #   ~/.claude/projects  ->  <Claude-Projects>/Code       (Claude Code transcripts + per-project memory/)
 #   ~/.claude/plans     ->  <Claude-Projects>/Plans      (approved plan-mode plan files)
 #   ~/Claude/Projects   ->  <Claude-Projects>/Cowork     (Cowork project files)

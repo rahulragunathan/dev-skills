@@ -37,11 +37,11 @@ releases, not rows here. -->
 
 ## Known Issues
 
-Most severe first. Severity definitions and full detail in [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
+Most severe first, and within a severity the most likely first. Both scales and full detail in [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
 
-| ID | Issue | Severity |
-| ---- | ------- | ---------- |
-| [KI-01](KNOWN_ISSUES.md#ki-01) | `<title>` | High |
+| ID | Issue | Likelihood | Severity |
+| ---- | ------- | ---------- | ---------- |
+| [KI-01](KNOWN_ISSUES.md#ki-01) | `<title>` | `<likelihood>` | High |
 
 ## Enhancements
 

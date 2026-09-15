@@ -1,3 +1,5 @@
+*.code-workspace
+*.pyc
 .DS_Store
 RCLONE_TEST
-*.code-workspace
+__pycache__/

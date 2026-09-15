@@ -4,11 +4,13 @@ Why each rule in `SKILL.md` exists, and how to debug "I allow-listed it but stil
 
 ## The permission model in one paragraph
 
-`~/.claude/settings.json` (`permissions.allow` / `deny`) is the declarative, cross-project allowlist — it applies to every project. A Bash command is auto-approved only when **every** segment of the command (split on `&&`, `||`, `|`, `;`) matches an allow rule, the command has no risky construct, **and** every file path it touches is inside a trusted root. Anything not allow-listed prompts (that's the safety net for file-modifying commands). A `deny` rule is un-appealable — it blocks even at an approval prompt and in accept-edits/bypass modes — so reserve it for catastrophes.
+`~/.claude/settings.json` (`permissions.allow` / `deny`) is the declarative, cross-project allowlist — it applies to every project. A Bash command is auto-approved only when **every** segment of the command (split on `&&`, `||`, `|`, `;`) matches an allow rule, the command has no risky construct, **and** every file path it touches is inside a trusted root. Built-in read-only commands and the selected permission mode also affect approval; this allowlist alone does not determine every prompt. A `deny` rule is un-appealable — it blocks even at an approval prompt and in accept-edits/bypass modes — so reserve it for catastrophes.
 
 ## Gotchas that cause "still prompting" despite an allowlist
 
-1. **Wrong Bash rule syntax.** Use `Bash(cmd:*)` (colon). `Bash(cmd*)` (no colon) silently never matches. Most common mistake.
+1. **Overbroad Bash rule syntax.** `Bash(cmd:*)` and `Bash(cmd *)` preserve a command boundary.
+   `Bash(cmd*)` matches longer command names too. The
+   [permission reference](https://code.claude.com/docs/en/permissions) documents both forms.
 
 2. **Edits don't apply until a full restart.** Config is read at process start. The VS Code extension runs one long-lived `claude` process per chat tab, several launched with `--resume`. "Developer: Reload Window" *resumes* those same processes with stale in-memory config. Only **`Cmd+Q` + reopen** (or a brand-new session) re-reads the file. A "new chat" in the same window is often not enough. Check with `ps -ax | grep "[c]laude"`.
 
@@ -29,23 +31,21 @@ Why each rule in `SKILL.md` exists, and how to debug "I allow-listed it but stil
 
 ## Why these specific commands
 
-- **Allowed (read-only):** `cd ls find grep head tail cat diff echo ps wc sort uniq cut tr nl column jq` + the `Grep`/`Glob`/`Read` tools. None modify files without an explicit `> file` redirect (itself gated as a write).
+- **Allowed for routine exploration:** `cd ls find grep head tail cat diff echo ps wc sort uniq cut tr nl column jq` + the `Grep`/`Glob`/`Read` tools. This is a prompt-reduction list, not a security boundary. Test runners and formatters in the allowlist can execute code and write files.
+- **Allowed despite writing — the everyday dev loop.** `pytest`, `black`, `ruff` and `markdownlint-cli2` run project code or rewrite files, and are allow-listed anyway because they are invoked constantly and are project-scoped. `ruff check --fix` and `markdownlint-cli2 --fix` are covered by deliberately broad shared prefixes; that is accepted, not overlooked. The venv forms (`.venv/bin/python -m pytest`, `.venv/bin/ruff`, …) are listed separately because a bare `pytest` rule never matches them. `uv` is allowed for env creation, interpreter installation and inspection; it can download Python. `uv pip install` and the external environment scripts are not allow-listed. `npm test` and `npx vitest` are allowed; `npm run` and `npm install` are not.
 - **Denied (catastrophic):** root/home recursive force-deletes, `--no-preserve-root`, `mkfs`, `dd`, `shutdown`, `reboot`. Prefix matching is literal — `rm --recursive --force /` or flag reordering won't match, so the real protection is still the default prompt on everything non-allow-listed.
-- **Deliberately NOT allowed (so they still prompt):** `sed` (`-i` writes), `awk`, `tee`, `xargs` (`find | xargs rm` would bypass the "ask before file changes" intent), and any `> realfile` redirect. **`rm` is never allow-listed** — deletes always prompt; to delete use `rm -r` (no `-f`), `rmdir`, or Finder (`rm -rf` on home/abs paths is denied outright).
+- **Deliberately NOT allowed (so they still prompt):** `sed` (`-i` writes), `awk`, `tee`, `xargs` (`find | xargs rm` would bypass the "ask before file changes" intent), and any `> realfile` redirect. **`rm` is never allow-listed**; to delete use `rm -r` (no `-f`), `rmdir`, or Finder (`rm -rf` on home/abs paths is denied outright).
 
-## Transcript & memory backup (`backup-projects.sh`)
+## What this skill no longer owns
 
-- **What/where.** A `Stop` hook runs `backup-projects.sh` at the end of every turn, rsyncing `~/.claude/projects` → `Claude-Projects/Code`, `~/Claude/Projects` → `Claude-Projects/Cowork`, and `~/Claude/Scheduled` → `Claude-Projects/Scheduled` (Cowork scheduled-task definitions). Claude Code's per-project `memory/` lives *inside* `~/.claude/projects`, so it's captured in the same pass.
-- **Why a Stop hook, not a live symlink.** `~/.claude/projects` is written continuously during a session (the active `.jsonl` is appended many times per turn). Symlinking that dir into Google Drive would make Drive's watcher upload half-written files → "conflicted copy" duplicates, wasted CPU, and a small corruption risk on the live file. rsync instead writes each file atomically (temp + rename), so Drive only ever uploads a *complete* file. (Same reason loose skills — read-mostly — are fine to symlink, but transcripts are not.)
-- **Append-only.** No `--delete`: a transcript pruned locally stays in the backup, so the Drive copy is a growing archive for later analysis.
-- **rsync flags.** `-rt` only (not `-a`): recurse + preserve mtimes, but skip perms/owner/group — Google Drive mounts reject chmod/chown and would spam errors. Exit code 24 ("file changed as we read it," i.e. a live `.jsonl` grew mid-copy) is treated as success.
-- **Concurrency & safety.** A `mkdir` lock (macOS ships no `flock`) makes overlapping runs from rapid turns no-ops. The script **always exits 0** so a backup failure can never break a turn; the hook backgrounds it with `nohup … &` so the turn never waits on rsync.
-- **Destination resolution (first match wins).** `$CLAUDE_PROJECTS_BACKUP_DEST` → `~/.claude/projects-backup.dest` (one line, written per machine in step 6) → glob of common `…/Code/Claude-Projects` layouts → bounded `find`. The `.dest` file is what makes machines with a different Drive layout (`…/My Drive/Code` vs `…/My Drive/AnswerRocket/Code`) Just Work without touching the hook or script.
-- **Log.** `~/.claude/projects-backup.log`, auto-trimmed to the last 300 lines once it exceeds 1000. Safe to delete anytime.
-- **Cowork coverage & the TCC gotcha.** The Stop hook only fires while you're in Claude Code (it runs *inside* the app's logged-in session, which has Drive access), so Cowork-only sessions back up on your next Claude Code turn. Independent scheduling hits a TCC wall on the `~/Library/CloudStorage/…` (Google Drive FileProvider) path, and the mechanisms differ by **how contained** the required Full Disk Access grant is:
-  - **launchd — ✗ won't work.** A background LaunchAgent fails `Operation not permitted` on the Drive path and can't be granted FDA cleanly.
-  - **cron — works, but broad.** Requires FDA on `/usr/sbin/cron`, a *shared system binary*, so every scheduled job on the machine inherits full-disk access.
-  - **Automator app + Shortcuts — recommended (least privilege).** Wrap the script in an Automator **Application**, grant FDA to *just that app*, and trigger it from a Shortcuts **Time of Day** automation via an **Open App** action (so Shortcuts itself needs no disk access). Downside: Shortcuts schedules daily/weekly, not every-30-min — fine for a safety net. This is the GUI, one-time-per-machine path in step 6.
+Two concerns moved out, so troubleshooting for them lives with their skill rather than here:
+
+- **The Drive backup** — `/localclaude:drive-backup`. The Stop hook, `backup-projects.sh`, the
+  destination resolution order, the rsync flag choices, and the Full Disk Access / Automator /
+  Shortcuts path are all documented there.
+- **The llama.cpp shell aliases and login auto-start** — `/localclaude:claude-toggle-backend`,
+  which owns the managed `~/.zshrc` block. `claude-setup` no longer writes `~/.zshrc` at all,
+  and it advises on the VS Code markdownlint key rather than writing it.
 
 ## Other useful facts
 
@@ -57,5 +57,5 @@ Why each rule in `SKILL.md` exists, and how to debug "I allow-listed it but stil
 
 1. Detect `CODE_ROOT` — the synced `Code` folder holding `Skills/`, `Plugins/`, `Claude-Projects/`. Its parent can differ per machine (`…/My Drive/Code` vs `…/My Drive/AnswerRocket/Code`) (step 4).
 2. Symlink `~/.claude/skills` → `$CODE_ROOT/Skills` (step 4) and `~/.claude/localclaude-plugins` → `$CODE_ROOT/Plugins`, then `/plugin marketplace add /Users/<you>/.claude/localclaude-plugins` + `/plugin install localclaude@localclaude-marketplace` (step 5).
-3. Backup: `mkdir -p "$CODE_ROOT/Claude-Projects"/{Code,Cowork,Scheduled}`, write that path to `~/.claude/projects-backup.dest`, seed once, and merge the `Stop` hook into `settings.json` (step 6).
+3. Backup: run `/localclaude:drive-backup` — it creates the destination folders, writes `~/.claude/projects-backup.dest`, seeds once, and merges the `Stop` hook into `settings.json` (step 6).
 4. Cmd+Q + reopen.
