@@ -23,7 +23,7 @@ completion is deleted from both, with the record written into CHANGELOG `[Unrele
 item dropped rather than built moves to "Decisions taken and not taken". IDs are never
 reused. Nothing here looks backward — completed phases are CHANGELOG releases.
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-15
 
 ## Status
 
@@ -47,6 +47,7 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | ---- | ------- | ---------- | ---------- |
 | [KI-01](KNOWN_ISSUES.md#ki-01) | `settings.json` is truncated before it is rewritten | Rare | Critical |
 | [KI-22](KNOWN_ISSUES.md#ki-22) | The marker strip can truncate `.zshrc` | Rare | Critical |
+| [KI-45](KNOWN_ISSUES.md#ki-45) | A failing `[[ ]]` assertion in mid-test does not fail its bats test | Almost always | High |
 | [KI-07](KNOWN_ISSUES.md#ki-07) | Credentials are copied to Drive with no scan or warning | Almost always | High |
 | [KI-09](KNOWN_ISSUES.md#ki-09) | `toggle.bats` "clears env" never asserts that the env was cleared | Almost always | High |
 | [KI-10](KNOWN_ISSUES.md#ki-10) | The MLX switch test does not pin the auth token | Almost always | High |
@@ -64,6 +65,8 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-03](KNOWN_ISSUES.md#ki-03) | A PID file is trusted without checking what the process is | Rare | High |
 | [KI-04](KNOWN_ISSUES.md#ki-04) | The stray-process sweep kills servers this plugin did not start | Rare | High |
 | [KI-06](KNOWN_ISSUES.md#ki-06) | A stale lock silently disables every later backup | Rare | High |
+| [KI-37](KNOWN_ISSUES.md#ki-37) | A replaced evidence slot keeps its old grade | Rare | High |
+| [KI-38](KNOWN_ISSUES.md#ki-38) | An assertion the test expects to fail still grades as did-not-hold | Rare | High |
 | [KI-16](KNOWN_ISSUES.md#ki-16) | `HF_HOME` is exported by an orphaned `~/.zshrc` block no skill installs | Almost always | Medium |
 | [KI-17](KNOWN_ISSUES.md#ki-17) | The machine is documented as both 64 GB and 24 GB | Almost always | Medium |
 | [KI-21](KNOWN_ISSUES.md#ki-21) | Uninstall says the server is left alone, then stops it | Almost always | Medium |
@@ -73,11 +76,18 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-26](KNOWN_ISSUES.md#ki-26) | The foreground test asserts only the model file | Almost always | Medium |
 | [KI-31](KNOWN_ISSUES.md#ki-31) | The lock drops the last backup of a session | Likely | Medium |
 | [KI-18](KNOWN_ISSUES.md#ki-18) | `toggle.sh` needs `python3` and never checks for it | Likely | Medium |
+| [KI-36](KNOWN_ISSUES.md#ki-36) | A grader quote of a table cell that holds a pipe is refused | Likely | Medium |
+| [KI-39](KNOWN_ISSUES.md#ki-39) | `print` with an f-string argument still hides later guards | Likely | Medium |
+| [KI-40](KNOWN_ISSUES.md#ki-40) | The roadmap check fails on freshly seeded roadmap files | Likely | Medium |
 | [KI-32](KNOWN_ISSUES.md#ki-32) | Repository approval state is not in the file the backup collects | Rare | Medium |
 | [KI-34](KNOWN_ISSUES.md#ki-34) | A destination inside a source tree nests backups recursively | Rare | Medium |
 | [KI-19](KNOWN_ISSUES.md#ki-19) | Port selection releases the socket before the server binds | Rare | Medium |
 | [KI-20](KNOWN_ISSUES.md#ki-20) | LaunchAgent plist values are not XML-escaped | Rare | Medium |
+| [KI-41](KNOWN_ISSUES.md#ki-41) | Converting a large sequence to text has no size bound | Rare | Medium |
+| [KI-42](KNOWN_ISSUES.md#ki-42) | One edited dispatch file stops `collect` for every packet | Rare | Medium |
+| [KI-43](KNOWN_ISSUES.md#ki-43) | A ready reviewer probe reads as TIMEOUT when stderr mentions a timeout | Rare | Medium |
 | [KI-27](KNOWN_ISSUES.md#ki-27) | Status tests depend on the host's real processes | Likely | Low |
+| [KI-44](KNOWN_ISSUES.md#ki-44) | A stale dispatch log gives a misleading replacement message | Rare | Low |
 
 ## Enhancements
 
@@ -101,6 +111,7 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 | [ENH-23](ENHANCEMENTS.md#enh-23) | Calibrate graders with blind hand-graded anchors | Medium | ~1 day |
 | [ENH-24](ENHANCEMENTS.md#enh-24) | Report agreement with condition base rates and a fixed repeat fraction | Medium | ~1 day |
 | [ENH-25](ENHANCEMENTS.md#enh-25) | Measure how much answers reveal their experimental arm | Medium | ~1 day |
+| [ENH-26](ENHANCEMENTS.md#enh-26) | Test the conversion of a helper's evaluation gap into an opaque call | Medium | ~1 hour |
 | [ENH-10](ENHANCEMENTS.md#enh-10) | Make the project-env name mapping unambiguous | Low | ~2 hours |
 | [ENH-11](ENHANCEMENTS.md#enh-11) | Reconcile an existing global markdownlint config | Low | ~1 hour |
 | [ENH-12](ENHANCEMENTS.md#enh-12) | Feed the Gemini prompt through stdin rather than argv | Low | ~1 hour |
@@ -113,5 +124,6 @@ reasoning behind each in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
 | ID | Question | Kind |
 | ---- | ---------- | ------ |
+| [UNK-04](OPEN_QUESTIONS.md#unk-04) | Does an undefined input-format check bound a shared cache's keys? | Decision |
 | [UNK-03](OPEN_QUESTIONS.md#unk-03) | Verify installed Claude Code permission behavior | Verification |
 | [UNK-02](OPEN_QUESTIONS.md#unk-02) | No test in this repo can be shown to discriminate from git history alone | Risk |

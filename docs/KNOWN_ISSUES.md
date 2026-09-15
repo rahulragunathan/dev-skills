@@ -126,6 +126,43 @@ and is verified against a hand-deleted closing marker.
 
 ---
 
+<a id="ki-45"></a>
+
+## KI-45 — a failing `[[ ]]` assertion in mid-test does not fail its bats test
+
+**Severity:** High
+**Likelihood:** Almost always
+**Where:** every `*.bats` suite under `skills/`, for example
+[evidence.bats](../skills/design-review/tests/evidence.bats),
+[preflight.bats](../skills/external-review/tests/preflight.bats)
+
+### What happens
+
+Under Bats 1.14.0 a `[[ ... ]]` conditional that evaluates false does not stop the test unless
+it is the test's last command. A false `[ ... ]` test or a failing ordinary command does stop
+it. So every `[[ ... ]]` assertion written before the final line of a test is checked by the
+reader only, never by the suite.
+
+Across `skills/*/tests/*.bats` there are 325 tests and 145 `[[ ... ]]` assertions, and 78 of
+them are not the final command of their test.
+
+### Example scenario
+
+`rollup.bats` asserted three tallies and a row count. After round 9 changed every tally, the
+suite still reported the test as passing, because only the last assertion was evaluated. The
+stale expectations surfaced only when the last line happened to fail.
+
+### Notes for a fix
+
+Write assertions so they fail the test wherever they sit: `[ ... ]`, or a pipeline such as
+`printf '%s\n' "$output" | grep -q PATTERN`, or the `bats-assert` helpers. Convert the 78
+mid-test conditionals, then confirm the conversion by making each one false once and watching
+its test fail. Until then, treat a green suite as weaker evidence than its count suggests.
+
+**Source:** claude-opus-5 — found while updating the Results tables after round 9, 2026-09-15.
+
+---
+
 <a id="ki-07"></a>
 
 ## KI-07 — credentials are copied to Drive with no scan or warning
@@ -709,6 +746,67 @@ failure.
 
 ---
 
+<a id="ki-37"></a>
+
+## KI-37 — a replaced evidence slot keeps its old grade
+
+**Severity:** High
+**Likelihood:** Rare
+**Where:** [grade_batch.py:264-266](../skills/design-review/tests/grade_batch.py#L264-L266)
+
+### What happens
+
+`collect` treats a packet as already collected when its judgement and report exist for the
+logged grader. It does not compare the packet's answer hash with the answer the evidence batch
+now records. If a run is replaced after `prepare`, its old grade stays, and `agree` and
+`summary` count it for an answer that is no longer in the batch.
+
+### Example scenario
+
+A with-skill run is found contaminated after grading starts and is re-run with
+`evidence.py log-dispatch --replace`. The evidence check passes again, `collect` reports every
+packet as already collected, and the summary reports the voided answer's grade.
+
+### Notes for a fix
+
+Before accepting a cached grade, compare the packet's `answer_hash` with the manifest entry for
+its slot, and refuse with a message to prepare a new grading directory. Astra's F-06 fixed the
+currentness check for uncached packets only. Until this is fixed, complete the evidence batch
+before `prepare` and never replace a slot afterwards.
+
+**Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.
+
+---
+
+<a id="ki-38"></a>
+
+## KI-38 — an assertion the test expects to fail still grades as did-not-hold
+
+**Severity:** High
+**Likelihood:** Rare
+**Where:** [grade_eval.py:270-290](../skills/design-review/tests/grade_eval.py#L270-L290)
+
+### What happens
+
+An `assert` inside `with pytest.raises(AssertionError):`, or inside a `try` whose handler
+catches `AssertionError`, is evaluated as an ordinary guard. When it evaluates False, the
+executed check reports did-not-hold, although that failure is what the test expects.
+
+### Example scenario
+
+A replacement test checks that a helper rejects bad input by asserting inside
+`pytest.raises(AssertionError)`. The executed check reports the assertion as did-not-hold, and a
+grader reads it as a broken fixture.
+
+### Notes for a fix
+
+Treat a guard whose failure is expected by the enclosing context manager or handler as
+could-not-evaluate. The behaviour predates the overnight QC passes.
+
+**Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.
+
+---
+
 <a id="ki-16"></a>
 
 ## KI-16 — `HF_HOME` is exported by an orphaned `~/.zshrc` block no skill installs
@@ -1023,6 +1121,96 @@ which is about a lock left behind by a killed process.
 
 ---
 
+<a id="ki-36"></a>
+
+## KI-36 — a grader quote of a table cell that holds a pipe is refused
+
+**Severity:** Medium
+**Likelihood:** Likely
+**Where:** [grade_batch.py:188-194](../skills/design-review/tests/grade_batch.py#L188-L194)
+
+### What happens
+
+Answers are Markdown. In a table cell a pipe must be written `\|`, including inside a code
+span, and renderers display it as `|`. `unquoted()` compares the grader's quote with the raw
+answer text, so a quote of the rendered cell (`str | None`) does not match `str \| None`, and
+`collect` refuses the judgement.
+
+### Example scenario
+
+In round 9 the repeat grader for S02 baseline replicate 2 quoted
+`normalise_prefix(sku: str) -> str | None` from a module table. The grade was refused and
+replaced, so its verdict, a Lifetime fail, is missing from the 40/40 agreement count.
+
+### Notes for a fix
+
+Replace `\|` with `|` in both the quote and the answer before matching; doing it on both sides
+keeps raw quotes matching. `&#124;` is no alternative for authors, because entities are not
+decoded inside code spans.
+
+**Source:** claude-opus-5 — round-9 grading, 2026-09-14.
+
+---
+
+<a id="ki-39"></a>
+
+## KI-39 — `print` with an f-string argument still hides later guards
+
+**Severity:** Medium
+**Likelihood:** Likely
+**Where:** [grade_eval.py:42-47](../skills/design-review/tests/grade_eval.py#L42-L47)
+
+### What happens
+
+The fixture interpreter supports `print` with plain arguments but cannot evaluate an f-string
+(`ast.JoinedStr`). A `print(f"x={x}")` diagnostic leaves the rest of the test body unknown, so
+later independent guards report could-not-evaluate. QC test T3-2 covers only
+`print("debug", x)`.
+
+### Example scenario
+
+A replacement test prints `f"window={start}"` before its property assertions. The executed
+checks lose every assertion after the print, and the grader gets no executed evidence for
+fixture validity.
+
+### Notes for a fix
+
+Evaluate `JoinedStr` and `FormattedValue` under the same size bound as string concatenation,
+or skip a bare `print` statement without evaluating its arguments. Add an f-string case to
+T3-2.
+
+**Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.
+
+---
+
+<a id="ki-40"></a>
+
+## KI-40 — the roadmap check fails on freshly seeded roadmap files
+
+**Severity:** Medium
+**Likelihood:** Likely
+**Where:** [phase-workflow/SKILL.md:454-455](../skills/phase-workflow/SKILL.md#L454-L455)
+
+### What happens
+
+The procedure runs `roadmap.py check || exit 1` after every roadmap edit. Roadmap files seeded
+from the bundled templates still hold placeholder rows, which the check rejects, so the first
+roadmap edit in a new repository stops the procedure.
+
+### Example scenario
+
+A new project seeds its roadmap files and the first phase files one known issue. The check
+fails on the template placeholders, not on the new entry.
+
+### Notes for a fix
+
+Seed templates that pass the check, or let the check accept untouched placeholder rows. Add a
+bats case that seeds the templates and runs the check.
+
+**Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.
+
+---
+
 <a id="ki-19"></a>
 
 ## KI-19 — port selection releases the socket before the server binds
@@ -1146,6 +1334,90 @@ either contains the other, including overlap reached through a directory symlink
 
 ---
 
+<a id="ki-41"></a>
+
+## KI-41 — converting a large sequence to text has no size bound
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [grade_eval.py:49](../skills/design-review/tests/grade_eval.py#L49) (`SAFE_CALLS`)
+
+### What happens
+
+Repetition and concatenation are bounded before allocation, but `str()` of a large list is not,
+and a grade run has no timeout. A fixture that builds a list of long strings within the
+sequence bound and converts it to text can allocate from tens of megabytes to many gigabytes.
+
+### Example scenario
+
+An answer's test builds a long list of long strings and formats it into a message. `prepare`
+stalls on that answer or exhausts memory, and the whole batch waits.
+
+### Notes for a fix
+
+Bound the rendered size of `str`, `repr` and formatting, and run each grade with a timeout.
+
+**Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.
+
+---
+
+<a id="ki-42"></a>
+
+## KI-42 — one edited dispatch file stops `collect` for every packet
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [grade_batch.py:261-263](../skills/design-review/tests/grade_batch.py#L261-L263)
+
+### What happens
+
+`collect` checks every logged packet's dispatch hash before it collects any, and exits on the
+first mismatch. One edited `dispatch/<ID>.txt` blocks every other finished grade. The README's
+advice, to prepare a new grading directory, also discards every grade already collected.
+
+### Example scenario
+
+An editor normalises line endings when a packet file is opened and saved. The next `collect`
+refuses the batch, although 83 of 84 packets are intact.
+
+### Notes for a fix
+
+Report the edited packet as refused and continue with the others, so only that packet needs
+attention.
+
+**Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.
+
+---
+
+<a id="ki-43"></a>
+
+## KI-43 — a ready reviewer probe reads as TIMEOUT when stderr mentions a timeout
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [preflight.sh:119](../skills/external-review/preflight.sh#L119)
+
+### What happens
+
+The probe checks `timed_out "$ERR"` before it checks exit 0 and the answer `ready`. A probe
+that succeeds but writes a warning containing "timed out" to stderr is reported as
+`TIMEOUT — inconclusive`.
+
+### Example scenario
+
+A CLI logs a retried network call ("request timed out, retrying") and then answers `ready`.
+Preflight reports the reviewer as inconclusive, and the review runs with less coverage than it
+could have.
+
+### Notes for a fix
+
+Classify exit 0 with the answer `ready` first, then timeouts. Found by reading the
+classification order; not reproduced with a real CLI.
+
+**Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.
+
+---
+
 <a id="ki-27"></a>
 
 ## KI-27 — status tests depend on the host's real processes
@@ -1170,3 +1442,31 @@ Put a fake `pgrep` on `PATH` in the test helper, as the suite already does for `
 `vllm-mlx`. Related: KI-13, which is the other place these tests reach outside their sandbox.
 
 **Source:** gpt-5.6-sol — repo review, 2026-09-05.
+
+---
+
+<a id="ki-44"></a>
+
+## KI-44 — a stale dispatch log gives a misleading replacement message
+
+**Severity:** Low
+**Likelihood:** Rare
+**Where:** [evidence.py:565-566](../skills/design-review/tests/evidence.py#L565-L566)
+
+### What happens
+
+When a run is replaced through `record` while the dispatch log still names the old agent, the
+check reports "replacement dispatch has not been recorded". The replacement was recorded; the
+dispatch log is what is out of date.
+
+### Example scenario
+
+An operator re-runs `record` several times after the message. The fix was to log the new agent
+with `log-dispatch --replace`.
+
+### Notes for a fix
+
+Name both agent IDs in the message and say which command brings the log and the manifest back
+in line.
+
+**Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.

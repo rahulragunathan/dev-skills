@@ -419,6 +419,27 @@ Deferred by the user after Claude's grading-tool review. Decide when to elicit g
 
 ---
 
+<a id="enh-26"></a>
+
+## ENH-26 — Test the conversion of a helper's evaluation gap into an opaque call
+
+**Priority:** Medium · **Effort:** ~1 hour
+**Where:** [grade_eval.py:158-162](../skills/design-review/tests/grade_eval.py#L158-L162) · **Regression net:** `skills/design-review/tests/grade.bats`
+
+### What it is
+
+Add a `grade.bats` case where an imported helper stops at an unsupported statement, and assert that bindings the call could change become unknown afterwards.
+
+### Why it matters
+
+Astra's F-02 added this conversion, but reverting the hunk leaves the suite green, so nothing protects it.
+
+### Notes for the work
+
+Found in Claude's adversarial review of the overnight passes, 2026-09-14. Write the test against HEAD, then confirm it fails for its named reason with the hunk reverted.
+
+---
+
 <a id="enh-07"></a>
 
 ## ENH-07 — Honour `$CLAUDE_CONFIG_DIR` in the bundled scripts
