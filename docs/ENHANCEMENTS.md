@@ -440,6 +440,53 @@ Found in Claude's adversarial review of the overnight passes, 2026-09-14. Write 
 
 ---
 
+<a id="enh-27"></a>
+
+## ENH-27 — Lint the markdown templates that live inside fences
+
+**Priority:** Medium · **Effort:** ~1 hour
+**Where:** [claude-setup/SKILL.md](../skills/claude-setup/SKILL.md) (the ```` ```markdown ```` fence) · **Regression net:** `skills/claude-setup/tests/install-standards.bats`
+
+### What it is
+
+markdownlint does not lint fenced content, so the `~/.claude/CLAUDE.md` block quoted in
+`claude-setup/SKILL.md` is invisible to the lint gate. That block is not an illustration: it is
+the text the skill deploys, and `~/.claude/CLAUDE.md` is a real markdown file held to the house
+style. Nothing checks the template against that style, and nothing checks it still matches the
+file it documents.
+
+### Why it matters
+
+v1.10.1 fixed an `MD022/blanks-around-headings` violation in that template. A repo-wide
+`markdownlint-cli2` run over all 33 tracked files reported 0 issues both before and after the
+fix — the gate was green the whole time the deployed block was not. The violation only surfaced
+by extracting the fence and linting it as a file.
+
+MD022 is cosmetic; the blind spot is not. The same gap hides any drift between the template and
+the installed file, and that file is the standards every project in this setup loads.
+
+### Notes for the work
+
+**Byte-equality against the installed file is the stronger check and the cheaper one.** Only
+`claude-setup`'s fence is deployed, so a single assertion — extract the fence, compare with
+`~/.claude/CLAUDE.md` — catches drift in both directions and has no false positives. Prefer it
+to a general fence-linting pass, and reach for the lint only if the comparison cannot be made
+hermetic. The existing `install-standards.bats` already builds a sandboxed `$HOME`, so the
+comparison has a home.
+
+**A general pass over all five fences needs false positives handled first.** `MD041`
+(`first-line-h1`) cannot apply to an excerpt, and `design-review`'s fence is a deliberate
+`|---|---|` table skeleton that trips `MD060`. Linting every fence without suppressing those
+two reports four findings that are artifacts of linting a fragment out of context, which is how
+a check gets muted.
+
+Bundles with [ENH-11](#enh-11) — same skill, same step, both about markdownlint configuration
+in `claude-setup`.
+
+**Source:** found while fixing the MD022 defect that became v1.10.1, 2026-09-15.
+
+---
+
 <a id="enh-07"></a>
 
 ## ENH-07 — Honour `$CLAUDE_CONFIG_DIR` in the bundled scripts
