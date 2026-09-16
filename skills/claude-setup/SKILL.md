@@ -200,6 +200,7 @@ marker handling here, change it there too.
 - **Pressure-test a skill on the model that will read it.** `design-review` is invoked in the main session, so its tests run on the main model, not on a cheaper one picked for cost.
 - **Subagents may commit their own task. They never push, merge, tag, or touch the default branch.** One task, one commit, on the phase branch. Everything that reaches origin goes through the main agent at my approved checkpoints, which keeps a single point of contact with the remote and one place that tracks overall status. `superpowers:subagent-driven-development` works as built under this rule — its review packages, ledger and crash recovery are all commit-range based.
 - **Serialize subagents that share a branch.** Two agents committing to one branch at once will race. Run them one at a time, or give each its own worktree via `superpowers:dispatching-parallel-agents`.
+
 ### Secrets
 
 - **Don't read files that are likely to hold secrets** — `.env` and `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `credentials*`, `.netrc`, `.npmrc`, `id_rsa*`, `id_ed25519*` — unless I ask for it. If a task looks like it needs one, name the file and say why instead of opening it. Reading a secret into the transcript has already sent it.
