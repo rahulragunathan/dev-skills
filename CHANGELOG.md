@@ -10,6 +10,19 @@ here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
 
+## [1.10.1] - 2026-09-15
+
+### Fixed
+
+- **The `~/.claude/CLAUDE.md` template quoted in `claude-setup/SKILL.md` was
+  missing the blank line above `### Secrets`**, so the quoted block failed
+  `MD022/blanks-around-headings` and no longer matched the file it documents.
+  The installed file already had the blank line, so this was drift in the
+  documentation rather than in what `install-standards.sh` writes; the template
+  and `~/.claude/CLAUDE.md` are now byte-identical again. Markdown inside a
+  fence is not linted, which is why the repo-wide sweep stayed green while the
+  block it deploys did not.
+
 ## [1.10.0] - 2026-09-15 — Design-review skill and process remediation
 
 ### Added
@@ -632,6 +645,7 @@ here — the plugin manifest's version is the only record of them.
 
 ## Reference
 
-[Unreleased]: https://github.com/rahulragunathan/localclaude/compare/v1.10.0...HEAD
+[Unreleased]: https://github.com/rahulragunathan/localclaude/compare/v1.10.1...HEAD
+[1.10.1]: https://github.com/rahulragunathan/localclaude/compare/v1.10.0...v1.10.1
 [1.10.0]: https://github.com/rahulragunathan/localclaude/compare/v1.8.0...v1.10.0
 [1.8.0]: https://github.com/rahulragunathan/localclaude/releases/tag/v1.8.0
