@@ -71,6 +71,7 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-24](KNOWN_ISSUES.md#ki-24) | "status runs clean" asserts neither server's status line | Almost always | Medium |
 | [KI-25](KNOWN_ISSUES.md#ki-25) | "auto-picks a numeric free port" accepts any number | Almost always | Medium |
 | [KI-26](KNOWN_ISSUES.md#ki-26) | The foreground test asserts only the model file | Almost always | Medium |
+| [KI-46](KNOWN_ISSUES.md#ki-46) | The phase cleanup cannot delete a squash-merged branch | Almost always | Medium |
 | [KI-31](KNOWN_ISSUES.md#ki-31) | The lock drops the last backup of a session | Likely | Medium |
 | [KI-18](KNOWN_ISSUES.md#ki-18) | `toggle.sh` needs `python3` and never checks for it | Likely | Medium |
 | [KI-36](KNOWN_ISSUES.md#ki-36) | A grader quote of a table cell that holds a pipe is refused | Likely | Medium |

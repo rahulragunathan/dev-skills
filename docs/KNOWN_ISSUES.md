@@ -1063,6 +1063,69 @@ same argv-recording fake). Bundle these two into one pass.
 
 ---
 
+<a id="ki-46"></a>
+
+## KI-46 — the phase cleanup cannot delete a squash-merged branch
+
+**Severity:** Medium
+**Likelihood:** Almost always
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) §4 step 7 (local prune),
+[publish-release.sh](../skills/phase-workflow/publish-release.sh) (branch deletion)
+
+### What happens
+
+§2 step 3 records the first allowed merge method, trying `squash` before `rebase` and `merge`.
+§4 merges with that method, then prunes local branches whose upstream is gone using
+`git branch -d`.
+
+A squash merge writes a new commit with no ancestry to the branch it came from, so `-d` refuses
+that branch however completely its work landed. The step reports `RETAINED — branch deletion
+failed; inspect it by hand` and exits 1.
+
+The comment above the line states the premise it rests on:
+
+> `-d` refuses a branch holding unmerged work, which is exactly the retain rule.
+
+That holds for a merge commit and for a rebase. It does not hold for a squash — the method the
+preflight selects first. `publish-release.sh` carries the same call under the message
+`BRANCH HOLDS UNMERGED WORK — retaining it`, which is likewise false in this case.
+
+### Example scenario
+
+PRs #2 and #3, squash-merged as v1.10.1 and the ENH-27 entry. `git branch -d` refused both
+while `git diff <branch> main` was empty for both, so no work was outstanding in either.
+Reproduced from scratch: `git merge --squash` a branch, confirm the diff against the default
+branch is empty, and `git branch -d` still exits 1.
+
+### Why it matters past the false alarm
+
+It fails safe — the branch is retained and nothing is lost, which is why this is Medium and not
+High. The cost is that the guard fires on every squash-merged phase, and the block bolds
+**Never -D here** while leaving no other way past it. A guard that is wrong every time is the
+kind an operator learns to force past, and `-D` is the one command in that block that really can
+discard commits that were never pushed.
+
+### Notes for a fix
+
+**The block already has the answer before it deletes anything.** It has confirmed
+`MERGED_HEAD = APPROVED_SHA` and `REMOTE_HEAD = APPROVED_SHA`. A local branch still pointing at
+`APPROVED_SHA` therefore holds nothing absent from the remote, and is safe to delete outright.
+
+Where a general test is wanted, `git cherry <default> <branch>` discriminates correctly: it marks
+a commit `-` when an equivalent change is already upstream and `+` when it is not. Verified both
+ways — a squash-merged branch shows only `-`, and a branch carrying one genuinely unmerged commit
+shows `+`. `[ -z "$(git diff <branch> <default>)" ]` also discriminates, comparing trees rather
+than commits.
+
+Keep the retain rule; replace only the test it rests on, and give the refusal message the reason
+it retained. The fix touches `phase-git.bats`, which executes the SKILL.md fences directly, so it
+needs a red test per arm first: one squash-merged branch that must be deleted, one branch with an
+unpushed commit that must be retained.
+
+**Source:** claude-opus-5 — found while cleaning up after the v1.10.1 merge, 2026-09-16.
+
+---
+
 <a id="ki-18"></a>
 
 ## KI-18 — `toggle.sh` needs `python3` and never checks for it
