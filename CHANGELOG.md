@@ -10,6 +10,30 @@ here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
 
+## [1.10.2] - 2026-09-16
+
+### Added
+
+- **`ENH-27` — lint the markdown templates that live inside fences.** markdownlint does not
+  lint fenced content, so the `~/.claude/CLAUDE.md` block quoted in `claude-setup/SKILL.md` is
+  invisible to the lint gate even though it is deployed verbatim. The v1.10.1 defect below was
+  green on a repo-wide sweep both before and after its fix. The entry records byte-equality
+  against the installed file as the stronger check, and what a general pass over all five
+  fences would have to suppress first.
+- **`KI-46` — the phase cleanup cannot delete a squash-merged branch.** §2 step 3 prefers
+  `squash` among the allowed merge methods, and §4 prunes with `git branch -d`, which refuses a
+  squash-merged branch however completely its work landed. Every squash-merged phase ends on
+  `RETAINED — branch deletion failed; inspect it by hand`. It fails safe, but the block bolds
+  **Never -D here** while leaving no other way past it. The entry records that the step already
+  knows the branch is at the approved SHA before it deletes, and that `git cherry` discriminates
+  where `-d` does not.
+
+### Changed
+
+- **The ROADMAP status section no longer looks backward.** It still announced phase 1 as
+  "awaiting merge as v1.10.0" after v1.10.0 and v1.10.1 had both shipped, against the rule
+  stated three lines above it.
+
 ## [1.10.1] - 2026-09-15
 
 ### Fixed
@@ -645,7 +669,8 @@ here — the plugin manifest's version is the only record of them.
 
 ## Reference
 
-[Unreleased]: https://github.com/rahulragunathan/localclaude/compare/v1.10.1...HEAD
+[Unreleased]: https://github.com/rahulragunathan/localclaude/compare/v1.10.2...HEAD
+[1.10.2]: https://github.com/rahulragunathan/localclaude/compare/v1.10.1...v1.10.2
 [1.10.1]: https://github.com/rahulragunathan/localclaude/compare/v1.10.0...v1.10.1
 [1.10.0]: https://github.com/rahulragunathan/localclaude/compare/v1.8.0...v1.10.0
 [1.8.0]: https://github.com/rahulragunathan/localclaude/releases/tag/v1.8.0
