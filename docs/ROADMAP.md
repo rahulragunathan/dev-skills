@@ -27,9 +27,6 @@ reused. Nothing here looks backward — completed phases are CHANGELOG releases.
 
 ## Status
 
-**Phase 1 — `design-review` skill and process remediation** — awaiting merge as v1.10.0. The
-work covers review capture, process instructions, setup instructions and evidence grading.
-
 **Phase 2 — the backup cluster.** Build the `backup-projects.sh` harness in the active half of
 ENH-03, then address the active `drive-backup` issues listed in
 [KNOWN_ISSUES.md](KNOWN_ISSUES.md#held--local-models-and-claude-toggle-backend-rebuild).
@@ -112,6 +109,7 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 | [ENH-24](ENHANCEMENTS.md#enh-24) | Report agreement with condition base rates and a fixed repeat fraction | Medium | ~1 day |
 | [ENH-25](ENHANCEMENTS.md#enh-25) | Measure how much answers reveal their experimental arm | Medium | ~1 day |
 | [ENH-26](ENHANCEMENTS.md#enh-26) | Test the conversion of a helper's evaluation gap into an opaque call | Medium | ~1 hour |
+| [ENH-27](ENHANCEMENTS.md#enh-27) | Lint the markdown templates that live inside fences | Medium | ~1 hour |
 | [ENH-10](ENHANCEMENTS.md#enh-10) | Make the project-env name mapping unambiguous | Low | ~2 hours |
 | [ENH-11](ENHANCEMENTS.md#enh-11) | Reconcile an existing global markdownlint config | Low | ~1 hour |
 | [ENH-12](ENHANCEMENTS.md#enh-12) | Feed the Gemini prompt through stdin rather than argv | Low | ~1 hour |
