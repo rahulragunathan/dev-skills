@@ -33,8 +33,34 @@ phase adds leave it factually correct. §2 step 4 is skipped.
 
 ## Model and effort, per task
 
-Recorded in each commit trailer. Tranche assignment for Tasks 4 and 5 is fixed by the rule in the
-plan before Task 3's results are seen, and written here when Task 3 completes.
+Recorded in each commit trailer.
+
+### Tranche assignment — fixed 2026-09-20, before any conversion
+
+Rule from the plan, applied to the committed inventory: sort suites by mid-test count descending,
+ties alphabetical by path, assign alternately starting with Tranche A.
+
+| # | Suite | Mid | Tranche |
+| --- | --- | ---: | --- |
+| 1 | `design-review/tests/evidence.bats` | 17 | A |
+| 2 | `external-review/tests/preflight.bats` | 14 | B |
+| 3 | `phase-workflow/tests/phase-git.bats` | 10 | A |
+| 4 | `design-review/tests/grade_batch.bats` | 8 | B |
+| 5 | `claude-setup/tests/install-standards.bats` | 5 | A |
+| 6 | `design-review/tests/write_results.bats` | 5 | B |
+| 7 | `claude-setup/tests/install-link.bats` | 2 | A |
+| 8 | `design-review/tests/grade.bats` | 2 | B |
+| 9 | `external-review/tests/codex-root.bats` | 2 | A |
+| 10 | `design-review/tests/rollup.bats` | 1 | B |
+| 11 | `external-review/tests/capture.bats` | 1 | A |
+| 12 | `phase-workflow/tests/roadmap.bats` | 1 | B |
+
+**Tranche A — `gpt-6-astra` at `medium`:** 6 suites, 37 assertions.
+**Tranche B — `gpt-6-astra` at `max`:** 6 suites, 31 assertions.
+
+The arms are not equal: alternating over a descending list with these counts gives A six more
+assertions than B. That is the rule as written, applied without adjustment after seeing the
+numbers. It is one more reason the comparison is descriptive only.
 
 ## Deviations from the documented workflow, recorded rather than silent
 
