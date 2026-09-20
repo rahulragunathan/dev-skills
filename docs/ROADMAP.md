@@ -10,6 +10,7 @@ not describe what shipped or how the code works today.
 | Detail on an open bug | [KNOWN_ISSUES.md](KNOWN_ISSUES.md) |
 | Detail on a candidate enhancement | [ENHANCEMENTS.md](ENHANCEMENTS.md) |
 | Detail on an open question | [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) |
+| The phase in flight, and how it will merge | [PHASE_RECORD.md](PHASE_RECORD.md) |
 | What already shipped | [CHANGELOG.md](../CHANGELOG.md) |
 | What each skill does | [README.md](../README.md) |
 | How the pieces fit together | [ARCHITECTURE.md](ARCHITECTURE.md) |
