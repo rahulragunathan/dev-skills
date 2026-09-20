@@ -375,16 +375,12 @@ python3 skills/phase-workflow/bats_assertions.py \
 The new `tests/fixtures/*.bats` files are deliberately **not** globbed: they are fixture data, not
 suites, and inventorying them would convert this phase's own negative controls (F-09).
 
-- [ ] **Step 2: Record the held baseline accurately**
+- [ ] **Step 2: (deleted — out of scope)**
 
-Only `claude-toggle-backend` has bats files. `local-models` and `drive-backup` have none, so the
-spec's phrasing is wrong and is corrected in Task 9 (F-17):
-
-```bash
-ls skills/local-models/tests/*.bats skills/drive-backup/tests/*.bats 2>&1 | head -2   # expect: no matches
-python3 skills/phase-workflow/bats_assertions.py skills/claude-toggle-backend/tests/*.bats \
-  | awk -F'\t' '$4=="mid"' | wc -l
-```
+`claude-toggle-backend` is held and being rebuilt, so its tests are replaced rather than
+repaired and a baseline count of them has no consumer. KI-45 records that exclusion in words
+instead of a number. The two enumerator defects this step originally surfaced were repaired on
+their own merits and are listed under Task 1.
 
 - [ ] **Step 3: Correct the KI-45 entry**
 

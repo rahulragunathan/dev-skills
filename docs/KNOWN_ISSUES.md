@@ -143,8 +143,15 @@ it is the test's last command. A false `[ ... ]` test or a failing ordinary comm
 it. So every `[[ ... ]]` assertion written before the final line of a test is checked by the
 reader only, never by the suite.
 
-Across `skills/*/tests/*.bats` there are 325 tests and 145 `[[ ... ]]` assertions, and 78 of
-them are not the final command of their test.
+Measured by [bats_assertions.py](../skills/phase-workflow/bats_assertions.py), which reports each
+assertion and whether another command follows it in its test. Across the four skills in scope —
+`claude-setup`, `design-review`, `external-review`, `phase-workflow` — there are 309 tests and
+**123 `[[ ... ]]` assertions, 68 of them mid-test**.
+
+The counts first recorded here (325 tests, 145 assertions, 78 mid-test) were produced by reading
+rather than by a tool, and are superseded. `claude-toggle-backend` is held and being rebuilt, so
+its assertions are neither counted nor converted: its tests are replaced by the rebuild rather
+than repaired.
 
 ### Example scenario
 
@@ -155,7 +162,7 @@ stale expectations surfaced only when the last line happened to fail.
 ### Notes for a fix
 
 Write assertions so they fail the test wherever they sit: `[ ... ]`, or a pipeline such as
-`printf '%s\n' "$output" | grep -q PATTERN`, or the `bats-assert` helpers. Convert the 78
+`printf '%s\n' "$output" | grep -q PATTERN`, or the `bats-assert` helpers. Convert the 68
 mid-test conditionals, then confirm the conversion by making each one false once and watching
 its test fail. Until then, treat a green suite as weaker evidence than its count suggests.
 

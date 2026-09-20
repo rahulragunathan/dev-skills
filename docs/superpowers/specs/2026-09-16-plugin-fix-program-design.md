@@ -232,11 +232,12 @@ requirements for stronger evidence, not grounds to discard the artifacts already
 Three decisions taken while the user was away, recorded here to be overturned rather than
 discovered:
 
-1. **KI-45 scope is the four in-scope suites.** 123 of the repo's 145 `[[` lines sit in
-   `claude-setup`, `design-review`, `external-review` and `phase-workflow`. The remaining 22 are
-   in the held `claude-toggle-backend`, `local-models` and `drive-backup` suites, which the
-   ROADMAP places outside current work. Those 22 stay recorded in KI-45 and the entry stays open
-   at reduced scope.
+1. **KI-45 scope is the four in-scope suites.** Measured: 123 assertions, 68 of them mid-test,
+   across `claude-setup`, `design-review`, `external-review` and `phase-workflow`. Only
+   `claude-toggle-backend` holds any others — `local-models` and `drive-backup` have no bats
+   files at all, so the earlier "22 remaining" figure was wrong twice over. Those are neither
+   counted nor converted: the skill is held and its tests are replaced by the rebuild, not
+   repaired.
 
 2. **The 78 mutation checks get a harness, not 78 manual runs.** KI-45 asks that each conversion
    be confirmed by making it false once and watching its test fail. At §3 step 3 rigour that is

@@ -18,7 +18,7 @@ import sys
 
 TEST_START = re.compile(
     r'''^[ \t]*@test[ \t]+(?:"(?P<double>(?:\\.|[^"\\])*)"|'''
-    r"'(?P<single>[^']*)')[ \t]+\{[ \t]*(?:#.*)?$"
+    r"'(?P<single>[^']*)')[ \t]+\{(?P<body>.*)$"
 )
 TEST_LINE = re.compile(r"^[ \t]*@test(?:[ \t]|$)")
 FUNCTION_START = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*[ \t]*\([ \t]*\)[ \t]*\{")
@@ -40,11 +40,6 @@ SHELL_PART = re.compile(
     """,
     re.X,
 )
-
-
-def fail(msg: str) -> None:
-    print(msg, file=sys.stderr)
-    raise SystemExit(1)
 
 
 def split_commands(line: str) -> tuple[list[str], list[tuple[str, bool]]]:
@@ -70,11 +65,11 @@ def split_commands(line: str) -> tuple[list[str], list[tuple[str, bool]]]:
 
 
 def test_rows(name: str, body: list[tuple[int, str]]) -> list[tuple[int, str, str]]:
-    """Classify assertions after removing the test's trailing closing line."""
-    if body and body[-1][1].strip() == "}":
-        body = body[:-1]
+    """Classify assertions after removing the test's trailing closing brace."""
     commands = [(number, command) for number, line in body
                 for command in split_commands(line)[0]]
+    if commands and commands[-1][1] == "}":
+        commands = commands[:-1]
     return [(number, name, "final" if index == len(commands) - 1 else "mid")
             for index, (number, command) in enumerate(commands)
             if any(pattern.match(command) for pattern in ASSERTION_PATTERNS.values())]
@@ -105,7 +100,7 @@ def parse(text: str) -> list[tuple[int, str, str]]:
                 rows.extend(test_rows(name, body))
             name = (test.group("double") if test.group("double") is not None
                     else test.group("single")) if test else None
-            body = []
+            body = [(number, test.group("body"))] if test else []
         elif name is not None and commands:
             body.append((number, line))
 
@@ -121,19 +116,21 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("files", nargs="+", metavar="file.bats")
     args = parser.parse_args()
-    # Collect before printing: a later file that fails to parse must not leave
-    # a partial inventory on stdout for a caller to act on.
+    # Keep successful files in argument order and report every failure.
     output = []
+    failed = False
     for filename in args.files:
         try:
             rows = parse(pathlib.Path(filename).read_text(encoding="utf-8"))
         except (OSError, UnicodeError, ValueError) as exc:
-            fail(f"{filename}: {exc}")
+            print(f"{filename}: {exc}", file=sys.stderr)
+            failed = True
+            continue
         output.extend(f"{filename}\t{line}\t{name}\t{position}"
                       for line, name, position in rows)
     for row in output:
         print(row)
-    return 0
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
