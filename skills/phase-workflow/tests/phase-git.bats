@@ -47,14 +47,14 @@ teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/nul
   printf 'UNCOMMITTED\n' >> README.md
   run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a - b/' bash -c 'exit 1'
   [ "$status" -eq 1 ]
-  [[ "$output" == *"TREE IS DIRTY"* ]]
+  [[ "$output" == *"TREE IS DIRTY"* ]] || false
   grep -q 'UNCOMMITTED' README.md
 }
 
 @test "restore: a test that passes under mutation is reported, not certified" {
   run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a - b/' bash -c 'exit 0'
   [ "$status" -eq 1 ]
-  [[ "$output" == *"does not discriminate"* ]]
+  [[ "$output" == *"does not discriminate"* ]] || false
   [ -z "$(git status --porcelain)" ]
 }
 
@@ -63,7 +63,7 @@ teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/nul
   # the audit is looking for.
   run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a - b/' bash -c 'exit 2'
   [ "$status" -eq 1 ]
-  [[ "$output" == *"NOT AN ASSERTION RED"* ]]
+  [[ "$output" == *"NOT AN ASSERTION RED"* ]] || false
   [ -z "$(git status --porcelain)" ]
 }
 
@@ -114,7 +114,7 @@ teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/nul
 
   run bash "$PUBLISH" "$sha" v1.0.0 feature "$FETCH_URL" "$PUSH_URL"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"PUSH URL CHANGED"* ]]
+  [[ "$output" == *"PUSH URL CHANGED"* ]] || false
   ! git rev-parse --verify --quiet refs/tags/v1.0.0
   git rev-parse --verify --quiet refs/heads/feature
 }
@@ -152,7 +152,7 @@ teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/nul
 
   run bash "$PUBLISH" "$sha" v1.0.0 feature "$FETCH_URL" "$PUSH_URL"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"ADVANCED"* ]]
+  [[ "$output" == *"ADVANCED"* ]] || false
   git rev-parse --verify --quiet refs/heads/feature
 }
 
@@ -218,7 +218,7 @@ teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/nul
   git add -A && git commit -qm "later work"
   run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a * b/' bash -c 'exit 1'
   [ "$status" -eq 1 ]
-  [[ "$output" == *"NOT HEAD"* ]]
+  [[ "$output" == *"NOT HEAD"* ]] || false
   grep -q 'def sub' calc.py
 }
 
@@ -251,14 +251,14 @@ EOF
 @test "restore: a test still red on normal code refuses certification" {
   run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a - b/' bash -c 'exit 1'
   [ "$status" -eq 1 ]
-  [[ "$output" == *"RESTORED TEST FAILED"* ]]
+  [[ "$output" == *"RESTORED TEST FAILED"* ]] || false
   [ -z "$(git status --porcelain)" ]
 }
 
 @test "restore: unrelated tracked index and worktree drift is retained and refused" {
   run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a - b/' bash -c 'echo DRIFT >> README.md; git add README.md; grep -q "a + b" calc.py'
   [ "$status" -eq 1 ]
-  [[ "$output" == *"TRACKED TREE CHANGED"* ]]
+  [[ "$output" == *"TRACKED TREE CHANGED"* ]] || false
   grep -q DRIFT README.md
   ! git diff --cached --quiet
 }
@@ -325,7 +325,7 @@ PY
   git tag -d "$TAG"
   PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/release.sh"
   [ "$status" -eq 1 ]
-  [[ "$output" == *'REMOTE TAG CONFLICT'* ]]
+  [[ "$output" == *'REMOTE TAG CONFLICT'* ]] || false
   [ "$(git --git-dir="$FORK" rev-parse "$TAG^{commit}")" = "$TASK_SHA" ]
 }
 
@@ -336,7 +336,7 @@ PY
   chmod +x "$TEST_TMP/bin/git"
   PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/release.sh"
   [ "$status" -eq 1 ]
-  [[ "$output" == *'TAG PUSH FAILED'* ]]
+  [[ "$output" == *'TAG PUSH FAILED'* ]] || false
   [ "$(git rev-parse "$TAG^{commit}")" = "$MERGE_SHA" ]
   rm "$TEST_TMP/bin/git"
   PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/release.sh"

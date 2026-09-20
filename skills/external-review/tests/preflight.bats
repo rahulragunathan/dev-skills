@@ -63,7 +63,7 @@ EOF
   fake_codex_ready; fake_agy_ready
   run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
   [ "$status" -eq 0 ]
-  [[ "$output" == *"codex"*"READY"* ]]
+  [[ "$output" == *"codex"*"READY"* ]] || false
   [[ "$output" == *"gemini"*"READY"* ]]
 }
 
@@ -72,7 +72,7 @@ EOF
   # two demand different responses: downshift for one, wait for the other.
   fake_codex_ready; fake_agy_quota
   run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
-  [[ "$output" == *"gemini"*"QUOTA"* ]]
+  [[ "$output" == *"gemini"*"QUOTA"* ]] || false
   [[ "$output" != *"gemini"*"UNAVAILABLE"* ]]
 }
 
@@ -87,7 +87,7 @@ EOF
 @test "an availability error is UNAVAILABLE, so the caller downshifts instead of waiting" {
   fake_codex_ready; fake_agy_unavailable
   run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
-  [[ "$output" == *"gemini"*"UNAVAILABLE"* ]]
+  [[ "$output" == *"gemini"*"UNAVAILABLE"* ]] || false
   [[ "$output" != *"gemini"*"QUOTA"* ]]
 }
 
@@ -108,14 +108,14 @@ EOF
 @test "a missing CLI is MISSING, and is not confused with a failing one" {
   fake_agy_ready
   run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
-  [[ "$output" == *"codex"*"MISSING"* ]]
+  [[ "$output" == *"codex"*"MISSING"* ]] || false
   [ "$status" -eq 0 ]
 }
 
 @test "both CLIs missing is exit 1 and says so" {
   run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
   [ "$status" -eq 1 ]
-  [[ "$output" == *"codex"*"MISSING"* ]]
+  [[ "$output" == *"codex"*"MISSING"* ]] || false
   [[ "$output" == *"gemini"*"MISSING"* ]]
 }
 
@@ -124,7 +124,9 @@ EOF
   # alone cannot tell a finished review from an exhausted account.
   fake_codex_silent_zero; fake_agy_ready
   run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
-  [[ "$output" != *"codex"*"READY"* ]]
+  # Scoped to the codex line: a bare glob spans newlines, so *"codex"*"READY"*
+  # also matches codex on one line and gemini's READY on the next.
+  [[ "$(printf '%s\n' "$output" | grep '^codex')" != *"READY"* ]] || false
   [[ "$output" == *"codex"*"NO ANSWER"* ]]
 }
 
@@ -140,8 +142,8 @@ exit 0
 EOF
   chmod +x "$BIN/agy"
   run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
-  [[ "$output" == *"gemini"*"TIMEOUT"* ]]
-  [[ "$output" != *"gemini"*"QUOTA"* ]]
+  [[ "$output" == *"gemini"*"TIMEOUT"* ]] || false
+  [[ "$output" != *"gemini"*"QUOTA"* ]] || false
   [[ "$output" != *"gemini"*"READY"* ]]
 }
 
@@ -156,7 +158,7 @@ exit 0
 EOF
   chmod +x "$BIN/agy"
   run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
-  [[ "$output" == *"gemini"*"QUOTA"* ]]
+  [[ "$output" == *"gemini"*"QUOTA"* ]] || false
   [[ "$output" == *"110h19m32s"* ]]
 }
 
@@ -172,7 +174,7 @@ EOF
   printf '#!/bin/sh\necho ready\necho "print timeout: turn in progress" >&2\n' > "$BIN/agy"
   chmod +x "$BIN/agy"
   run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
-  [[ "$output" == *"gemini"*"TIMEOUT"* ]]
+  [[ "$output" == *"gemini"*"TIMEOUT"* ]] || false
   [[ "$output" != *"gemini"*"READY"* ]]
 }
 
@@ -192,8 +194,8 @@ EOF
   PREFLIGHT_TIMEOUT=1 run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
   [ "$status" -eq 0 ]
   [ "$((SECONDS - started))" -lt 8 ]
-  [[ "$output" == *"codex"*"TIMEOUT"* ]]
-  [[ "$output" == *"gemini"*"READY"* ]]
+  [[ "$output" == *"codex"*"TIMEOUT"* ]] || false
+  [[ "$output" == *"gemini"*"READY"* ]] || false
   ! kill -0 "$(cat "$TEST_TMP/child")" 2>/dev/null
 }
 
@@ -212,7 +214,7 @@ echo ready > "$out"
 SH
   chmod +x "$BIN/codex"
   run bash "$PREFLIGHT" --codex-model unavailable --codex-model discovered --gemini-model selected
-  [[ "$output" == *"codex"*"discovered"*"READY"* ]]
+  [[ "$output" == *"codex"*"discovered"*"READY"* ]] || false
   [ "$(cat "$TEST_TMP/models")" = $'unavailable\ndiscovered' ]
 }
 
@@ -220,7 +222,7 @@ SH
   fake_codex_ready
   run bash "$PREFLIGHT" --codex-model selected
   [ "$status" -eq 0 ]
-  [[ "$output" == *"gemini"*"MISSING"* ]]
+  [[ "$output" == *"gemini"*"MISSING"* ]] || false
   [[ "$output" == *"PARTIAL COVERAGE"* ]]
 }
 

@@ -73,7 +73,7 @@ teardown() { teardown_capture_env; }
   printf 'UNCOMMITTED\n' >> README.md
   run bash "$CODEX_ROOT" "$ROOT" --exclude skills/held
   [ "$status" -eq 1 ]
-  [[ "$output" == *"DIRTY"* ]]
+  [[ "$output" == *"DIRTY"* ]] || false
   grep -q 'UNCOMMITTED' "$REPO/README.md"
 }
 
@@ -106,7 +106,7 @@ teardown() { teardown_capture_env; }
 @test "export inside the source repository is refused before exposing parent history" {
   run bash "$CODEX_ROOT" "$REPO/export" --exclude skills/held
   [ "$status" -eq 1 ]
-  [[ "$output" == *"ENCLOSING REPOSITORY"* ]]
+  [[ "$output" == *"ENCLOSING REPOSITORY"* ]] || false
   [ ! -e "$REPO/export/README.md" ]
 }
 

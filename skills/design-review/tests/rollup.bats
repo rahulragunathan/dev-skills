@@ -41,7 +41,7 @@ PY
   cp "$T/README.md" "$T/before"
   run python3 "$R" --tests "$T" --check "$T/README.md"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"differs"* ]]
+  [[ "$output" == *"differs"* ]] || false
   cmp "$T/README.md" "$T/before"
 }
 

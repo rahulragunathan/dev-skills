@@ -75,7 +75,7 @@ markers_balanced() {
 
   run bash "$SCRIPT" "$CANON" "$TARGET"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"MARKER MISMATCH"* ]]
+  [[ "$output" == *"MARKER MISMATCH"* ]] || false
   [ "$(cat "$TARGET")" = "$before" ]
   canary_survives
 }
@@ -156,7 +156,7 @@ markers_balanced() {
 
   run bash "$SCRIPT" "$CANON" "$TARGET"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"TWO MANAGED BLOCKS"* ]]
+  [[ "$output" == *"TWO MANAGED BLOCKS"* ]] || false
   [ "$(cat "$TARGET")" = "$before" ]
 }
 
@@ -191,7 +191,7 @@ EOF
   ln -s "$TEST_TMP/absent.md" "$TARGET"
   run bash "$SCRIPT" "$CANON" "$TARGET"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"SYMLINK"* ]]
+  [[ "$output" == *"SYMLINK"* ]] || false
   [ ! -e "$TEST_TMP/absent.md" ]
   grep -q 'USER-CONTENT outside the config dir' "$outside"
 }
@@ -217,7 +217,7 @@ EOF
   cp "$TARGET" "$TEST_TMP/before"
   run bash "$SCRIPT" "$CANON" "$TARGET"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"LEGACY"* ]]
+  [[ "$output" == *"LEGACY"* ]] || false
   cmp "$TARGET" "$TEST_TMP/before"
 }
 
@@ -264,7 +264,7 @@ EOF
   cp "$TARGET" "$TEST_TMP/before"
   run bash "$SCRIPT" "$CANON" "$TARGET"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"--adopt"* ]]
+  [[ "$output" == *"--adopt"* ]] || false
   cmp "$TARGET" "$TEST_TMP/before"
   [ ! -e "$TARGET.localclaude.bak" ]
 }

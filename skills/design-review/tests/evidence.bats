@@ -144,7 +144,7 @@ jqv() { python3 -c "import json,sys;d=json.load(open(sys.argv[1]));print(eval(sy
   printf 'PHASE WORKFLOW SKILL BODY — CHANGED\n' > skills/phase-workflow/SKILL.md
   run python3 "$EVPY" check "$EV"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"S07"*"EXPIRED"* ]]
+  [[ "$output" == *"S07"*"EXPIRED"* ]] || false
   [[ "$output" == *"S01"*"current"* ]]
 }
 
@@ -180,7 +180,7 @@ PY
   write_answer "$T" "$P" "ANSWER BODY" Skill
   run python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --transcript "$T"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"contaminated"* || "$output" == *"tool"* ]]
+  [[ "$output" == *"contaminated"* || "$output" == *"tool"* ]] || false
   [ ! -e "$EV/answers/S01-baseline.md" ]
 }
 
@@ -226,7 +226,7 @@ PY
   write_answer "$T" "Do a completely different thing." "ANSWER BODY"
   run python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --transcript "$T"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"not dispatched with"* ]]
+  [[ "$output" == *"not dispatched with"* ]] || false
   [ ! -e "$EV/answers/S01-baseline.md" ]
 }
 
@@ -256,7 +256,7 @@ open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in rows) + "\n")
 PY
   run python3 "$EVPY" record "$EV" --scenario S01 --arm with-skill --transcript "$T"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"incomplete"* ]]
+  [[ "$output" == *"incomplete"* ]] || false
   [ ! -e "$EV/answers/S01-with-skill.md" ]
 }
 
@@ -272,7 +272,7 @@ PY
   rm -f "$EV/answers/S01-baseline.md"
   run python3 "$EVPY" check "$EV"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"S01"*"EXPIRED"* ]]
+  [[ "$output" == *"S01"*"EXPIRED"* ]] || false
   [[ "$output" == *"answer"* ]]
 }
 
@@ -339,9 +339,9 @@ p.write_text(json.dumps(m))
 MKJSON
   run python3 "$EVPY" check "$EV" --require-complete
   [ "$status" -eq 1 ]
-  [[ "$output" == *"missing baseline#3, with-skill#3"* ]]
-  [[ "$output" != *"missing baseline,"* ]]
-  [[ "$output" != *"baseline#1"* ]]
+  [[ "$output" == *"missing baseline#3, with-skill#3"* ]] || false
+  [[ "$output" != *"missing baseline,"* ]] || false
+  [[ "$output" != *"baseline#1"* ]] || false
   python3 - "$EV/manifest.json" <<'MKJSON'
 import json,pathlib,sys
 p=pathlib.Path(sys.argv[1]);m=json.loads(p.read_text())
@@ -395,7 +395,7 @@ p=pathlib.Path(sys.argv[1]);m=json.loads(p.read_text());m['replicates']=int(sys.
 PY
     run python3 "$EVPY" check "$EV" --require-complete
     [ "$status" -eq 1 ]
-    [[ "$output" == *"positive"* ]]
+    [[ "$output" == *"positive"* ]] || false
   done
 }
 
@@ -453,7 +453,7 @@ PY
   write_answer "$T" "$(cat "$EV/S01-prompt.txt")" "ANSWER BODY"
   run python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --transcript "$T"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"no completion notification"* ]]
+  [[ "$output" == *"no completion notification"* ]] || false
   [ ! -e "$EV/answers/S01-baseline.md" ]
 }
 
@@ -465,7 +465,7 @@ PY
     write_answer "$T" "$(cat "$EV/S01-prompt.txt")" "ANSWER BODY"
     run python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --transcript "$T"
     [ "$status" -eq 1 ]
-    [[ "$output" == *"$st"* ]]
+    [[ "$output" == *"$st"* ]] || false
   done
   [ ! -e "$EV/answers/S01-baseline.md" ]
 }
@@ -507,7 +507,7 @@ PY
   write_answer "$T" "$(cat "$EV/S01-prompt.txt")" "ANSWER BODY"
   run python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --transcript "$T"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"--session"* ]]
+  [[ "$output" == *"--session"* ]] || false
   run python3 "$EVPY" record "$EV" --scenario S01 --arm baseline --transcript "$T" \
       --session "$TEST_TMP/proj/sess.jsonl"
   [ "$status" -eq 0 ]
@@ -539,7 +539,7 @@ PY
   python3 "$EVPY" log-dispatch "$EV" --scenario S07 --arm baseline --replicate 1 --agent-id a0000002
   run python3 "$EVPY" log-dispatch "$EV" --scenario S01 --arm baseline --replicate 1 --agent-id a0000003
   [ "$status" -eq 1 ]
-  [[ "$output" == *"--replace"* ]]
+  [[ "$output" == *"--replace"* ]] || false
   run python3 "$EVPY" log-dispatch "$EV" --scenario S01 --arm baseline --replicate 1 --agent-id a0000003 --replace
   [ "$status" -eq 0 ]
   [ "$(grep -c . "$EV/dispatch-log.tsv")" -eq 2 ]
@@ -572,7 +572,7 @@ PY
   python3 "$EVPY" log-dispatch "$EV" --scenario S01 --arm baseline --replicate 2 --agent-id busy0001
   run python3 "$EVPY" record-log "$EV" --session "$TEST_TMP/proj/sess.jsonl"
   [ "$status" -eq 2 ]
-  [[ "$output" == *"pending"*"S01 baseline#2"* || "$output" == *"S01 baseline#2"*"pending"* ]]
+  [[ "$output" == *"pending"*"S01 baseline#2"* || "$output" == *"S01 baseline#2"*"pending"* ]] || false
   [ -e "$EV/answers/S01-baseline-1.md" ]
   [ ! -e "$EV/answers/S01-baseline-2.md" ]
 }
@@ -586,7 +586,7 @@ PY
   python3 "$EVPY" log-dispatch "$EV" --scenario S01 --arm baseline --replicate 2 --agent-id good0001
   run python3 "$EVPY" record-log "$EV" --session "$TEST_TMP/proj/sess.jsonl"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"S01 baseline#1"*"contaminated"* ]]
+  [[ "$output" == *"S01 baseline#1"*"contaminated"* ]] || false
   [ ! -e "$EV/answers/S01-baseline-1.md" ]
   grep -q CLEAN "$EV/answers/S01-baseline-2.md"
 }
@@ -599,7 +599,7 @@ PY
   before="$(cat "$EV/manifest.json")"
   run python3 "$EVPY" record-log "$EV" --session "$TEST_TMP/proj/sess.jsonl"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"already recorded"* ]]
+  [[ "$output" == *"already recorded"* ]] || false
   [ "$(cat "$EV/manifest.json")" = "$before" ]
 }
 
@@ -625,6 +625,6 @@ PY
   printf 'S01\tbaseline\t1\tgood0002\nS01\tbaseline\tnot-a-number\tgood0003\n' > "$EV/dispatch-log.tsv"
   run python3 "$EVPY" record-log "$EV" --session "$TEST_TMP/proj/sess.jsonl"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"line 2"* ]]
+  [[ "$output" == *"line 2"* ]] || false
   [ ! -e "$EV/answers/S01-baseline-1.md" ]
 }
