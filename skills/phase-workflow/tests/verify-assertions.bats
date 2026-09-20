@@ -84,3 +84,17 @@ teardown() { cd /; rm -rf "$TEST_TMP"; }
   [ "$status" -eq 0 ]
   printf '%s\n' "$output" | grep -q '^RED'
 }
+
+# Fails if a disjunction that cannot be falsified by negating one operator is
+# reported GREEN. In `A || B` with both true, flipping A's operator leaves B
+# true and the test still passes -- which says nothing about whether the
+# assertion is load-bearing. GREEN asserts it is not; the honest answer is that
+# this mutation cannot tell. Two real assertions in evidence.bats hit this.
+@test "a compound || condition is REFUSED, not GREEN" {
+  run bats t/compound.bats
+  [ "$status" -eq 0 ]
+  run bash "$VERIFY" "$SHA" t/compound.bats 3 compound
+  [ "$status" -eq 1 ]
+  printf '%s\n' "$output" | grep -q '^REFUSED'
+  printf '%s\n' "$output" | grep -qv '^GREEN'
+}

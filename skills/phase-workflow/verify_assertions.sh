@@ -11,6 +11,15 @@ sha=$1 file=$2 line=$3 name=$4
 script_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd) \
   || refuse 'cannot locate mutation-restore.sh'
 
+# Inspect only the condition: the trailing `|| false` is outside the brackets.
+assertion=$(sed -n "${line}p" "$file") || refuse 'cannot read target line'
+if [[ "$assertion" == *'[['*']]'* ]]; then
+  condition=${assertion#*'[['}
+  condition=${condition%%']]'*}
+  [[ "$condition" != *'||'* ]] \
+    || refuse 'compound condition cannot be falsified by negating one operator; check it by hand'
+fi
+
 # Branch after the first substitution so inverse pairs cannot undo each other.
 # The address restricts every substitution to the requested assertion line.
 expr="$line{"
