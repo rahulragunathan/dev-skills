@@ -399,10 +399,10 @@ PY
 # ENH-30 — a roadmap reference carries a greppable fragment, and check verifies
 # it still appears in the file cited beside it.
 #
-# Five of the sixteen tests below are CONTROLS: they assert status 0 and so pass
+# Five of the seventeen tests below are CONTROLS: they assert status 0 and so pass
 # before the feature exists. They are here because the other half of getting
 # this right is not flagging correct references, and a checker that refuses
-# everything would satisfy the other eleven without them.
+# everything would satisfy the other twelve without them.
 # ---------------------------------------------------------------------------
 
 # Put reference text into KI-01's body. Multi-line input is supported, because
@@ -502,15 +502,37 @@ before:  [x.sh:2](../skills/x.sh#L2)
   [ "$status" -eq 0 ]
 }
 
+# Fails if a reference on the field's second line goes unchecked.
+#
+# The control above asserts a wrapped field stays clean, which cannot detect
+# the field being truncated: dropping a valid reference produces no finding
+# either way. Measured -- truncating the field left that control green. This
+# puts a fragment that is absent from the cited file on line 2, so the second
+# line must actually be read for the check to fail.
+@test "refs: a bad reference on the field's second line is still checked" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `timed_out "$ERR"`,
+[y.sh](../skills/y.sh) — `no_such_symbol`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"fragment absent"* ]] || false
+  [[ "$output" == *"y.sh"* ]] || false
+}
+
 # Fails if fence tracking toggles on the inner three-backtick line: `inside`
 # stays true past the real close and every later reference disappears, which is
 # a false green rather than a false alarm.
+#
+# EXACTLY ONE inner three-backtick line, and that is load-bearing. With two,
+# the toggles land evenly and the Where line ends up unfenced either way -- the
+# first version of this test passed under mutation and proved nothing. With
+# one, breaking the length rule leaves the fence open across the Where line and
+# the anchor goes unseen.
 @test "refs: a four-backtick fence does not swallow the rest of the entry" {
   seed_source
   put_ref '````markdown
 ```
 inner fence
-```
 ````
 
 **Where:** [x.sh:2](../skills/x.sh#L2) — `timed_out "$ERR"`'
