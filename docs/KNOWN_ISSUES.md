@@ -1335,7 +1335,7 @@ T3-2.
 
 **Severity:** Medium
 **Likelihood:** Likely
-**Where:** [phase-workflow/SKILL.md:454-455](../skills/phase-workflow/SKILL.md#L454-L455)
+**Where:** [phase-workflow/SKILL.md:520-521](../skills/phase-workflow/SKILL.md#L520-L521)
 
 ### What happens
 
@@ -1541,7 +1541,7 @@ attention.
 
 **Severity:** Medium
 **Likelihood:** Rare
-**Where:** [preflight.sh:119](../skills/external-review/preflight.sh#L119)
+**Where:** [preflight.sh:136](../skills/external-review/preflight.sh#L136)
 
 ### What happens
 

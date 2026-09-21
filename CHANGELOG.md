@@ -125,6 +125,19 @@ corrections are recorded here.
 - **v1.10.0 said "every listed model supports low through max".** `gpt-5.6-luna` has no `ultra`
   and `gpt-5.5` has neither `max` nor `ultra`.
 
+### Evidence
+
+- **S07's with-skill evidence is expired by this phase.** S07 loads `phase-workflow`, whose
+  `SKILL.md` moved from `eece8525b5b13e01` to `db9d0e7280194046`, and a changed loaded skill
+  expires its with-skill run. The round-9 row is marked **Expired** with the reason and its grade
+  retained; the rollup is regenerated. S07's baselines stay current — its prompt and condition
+  hashes are unchanged, and a baseline does not expire because a skill changed.
+- **S01 to S06 are unaffected.** They load `design-review/SKILL.md`, which this phase did not
+  touch: it still hashes to `47196f444f840946`, exactly as round 9 recorded.
+- **Re-gathering S07 is blocked on KI-48**, not merely pending. That arm was shown the two
+  expressions its Mutation choice condition grades, so re-running it before the scenario is fixed
+  would buy a fresh hash over the same invalid comparison.
+
 ### Filed
 
 - **`ENH-28`** — `--confirmed-on-remote` is an operator assertion, not a verification. The script
