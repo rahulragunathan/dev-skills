@@ -310,6 +310,33 @@ what remains expired.
    - **End the hand-off with the actual state:** "Committed and pushed on `<branch>`, PR `<n>` ready at `<gate SHA>`, awaiting your sign-off to merge."
    - **Any edit while waiting for sign-off invalidates approval**, including a typo or release metadata edit. Commit and push it, name it in a follow-up, repeat the gate and obtain sign-off on the new SHA.
 
+### Writing bats assertions — three things that cost a phase
+
+**A false `[[ ]]` does not fail its test unless it is the test's last command.** Measured on bash
+3.2.57 with bats 1.14.0; a false `[ ]` does stop it. Sixty-eight assertions in this repo were
+therefore read by their author and never by the suite. `bats_assertions.py` finds them.
+
+**Convert by appending `|| false`, not by rewriting.** `[[ ... ]] || false` is load-bearing and
+leaves the expression untouched, so the assertion cannot quietly come to mean something else.
+Rewriting into `printf | grep -q` is the tempting alternative and it narrows every pattern that
+spans lines — see below. `verify_assertions.sh` proves an assertion is load-bearing; only reading
+the diff proves the conversion preserved its meaning.
+
+**`$output` is multiline, and line-oriented tools reason about it wrongly.** Three separate
+defects in one phase came from this:
+
+| Form | What goes wrong |
+| ------ | ---------------- |
+| `[[ "$output" == *"A"*"B"* ]]` | globs span newlines, so it matches `A` on one line and `B` on another |
+| `grep -q 'A.*B'` | line-based, so it does **not** match across lines — the reverse mistake |
+| `grep -qv 'A'` | succeeds when *any* line lacks `A`; it cannot show `A` is absent |
+
+To assert a substring is absent from the whole output, use `[[ "$output" != *"A"* ]] || false`.
+To scope a match to one line, select it first: `[[ "$(printf '%s\n' "$output" | grep '^codex')" != *"READY"* ]] || false`.
+
+**Also: a second `run` overwrites `$output`.** Save the text you mean to assert on before the
+next `run`, or the assertion checks the wrong thing and passes.
+
 ## 4. Post-sign-off merge cycle
 
 Sign-off — as defined at the top of this file — is the only trigger. Once it comes, run the whole cycle without re-asking.

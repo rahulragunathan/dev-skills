@@ -397,90 +397,30 @@ markdownlint-cli2 --config ~/.markdownlint.jsonc docs/KNOWN_ISSUES.md
 
 ---
 
-## Tasks 4 and 5: Convert the assertions, in two tranches
+## Tasks 4 and 5: Convert the assertions — calibration dropped
 
-**Tranche assignment is fixed here, before any result is seen.** Sort the suites from Task 3 by
-mid-test count, descending. Assign alternately, largest first to Tranche A. Ties break
-alphabetically by path.
+**What was planned:** two tranches, `medium` and `max`, to compare Astra's defect rate.
 
-- **Tranche A -> `gpt-6-astra` at `medium`** (Task 4)
-- **Tranche B -> `gpt-6-astra` at `max`** (Task 5)
+**What happened, and why it changed.** The conversion turned out to be a single-line append —
+`[[ ... ]] || false` — chosen because it leaves the expression untouched and so cannot change an
+assertion's meaning. Rewriting each into `grep -q` was the alternative and would have narrowed
+every pattern spanning newlines. Two consequences followed:
 
-**What this comparison can and cannot support.** It is a descriptive tally of conversion defects
-across these particular suites, for one mechanical substitution. It **cannot** set the rung rule
-for phases 2 to 6: converting bats syntax has no bearing on interpreter semantics or scenario
-design (F-16). It cannot isolate an effort effect either — alternation does not equalise assertion
-complexity or fixture style, and running Task 5 after Task 4 allows learning from the first
-tranche (F-29). The spec's claim that this "sets the rung rule for phases 2 to 6 on evidence" is
-withdrawn in Task 9.
+1. A `medium`-versus-`max` comparison on a per-line append would measure nothing. F-16 had
+   already reduced the calibration to descriptive-only; this removed what was left.
+2. Tasks 4 and 5 edit test files exclusively, and the authorship split makes tests Claude's.
+   Having Astra write them contradicted it.
 
-Each tranche runs the same loop, per suite:
+The user dropped the calibration. Claude converted all 68 in one pass, per suite, and verified
+each one.
 
-- [ ] **Step 1: Convert every `mid` assertion in the suite**
+**Result.** 68 of 68 load-bearing: 66 proven by `verify_assertions.sh`, 2 by hand after
+falsifying every branch of a disjunction the single-operator mutation could not falsify — which
+exposed the tool reporting `GREEN` for a verdict it had not earned, fixed under Task 2.
 
-`[ ... ]` where the comparison is a simple string or numeric test. A `grep -q` pipeline where the
-match is a pattern. Never leave a `[[ ]]` in place. Do not touch assertions already marked
-`final`; they work, and changing them enlarges the diff without adding evidence.
-
-- [ ] **Step 2: Run the suite and confirm it still passes**
-
-```bash
-bats skills/<skill>/tests/<suite>.bats
-```
-
-A conversion that turns a suite red has found a real stale expectation. Stop and report it as a
-finding rather than adjusting the expectation to match — KI-45's own example is `rollup.bats`,
-where three tallies had been wrong since round 9 behind a vacuous assertion. **Record these
-separately from conversion defects**; they are pre-existing bugs the conversion exposed, not
-mistakes Astra made (F-28).
-
-- [ ] **Step 3: Commit, then re-enumerate before verifying**
-
-The commit must precede verification: `mutation-restore.sh` refuses a dirty tree and restores from
-HEAD. **Re-run the enumerator after committing** — Task 3's line numbers are pre-conversion, and a
-one-line `[[ ]]` replaced by a two-line pipeline shifts every line below it, so a stale line number
-mutates the wrong command (F-11).
-
-```bash
-git add skills/<skill>/tests/<suite>.bats
-git commit -m "test(<skill>): convert mid-test [[ ]] assertions in <suite> (KI-45)
-
-Implemented by gpt-6-astra at effort=<medium|max>.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
-
-SHA="$(git rev-parse HEAD)"
-SUITE="skills/<skill>/tests/<suite>.bats"
-python3 skills/phase-workflow/bats_assertions.py "$SUITE" > "$TMPDIR/post.tsv"
-FAILED=0
-while IFS=$'\t' read -r _ line name _; do
-  [ -z "$(git status --porcelain=v1 --untracked-files=all)" ] \
-    || { echo "TREE DIRTY before $line — stopping"; FAILED=1; break; }
-  bash skills/phase-workflow/verify_assertions.sh "$SHA" "$SUITE" "$line" "$name" \
-    || { echo "NOT RED: $line $name"; FAILED=1; break; }
-done < <(awk -F'\t' '$4=="mid"' "$TMPDIR/post.tsv")
-[ "$FAILED" -eq 0 ] || { echo "VERIFICATION INCOMPLETE for $SUITE"; exit 1; }
-```
-
-**The loop must fail the step.** A bare `break` leaves the pipeline at exit 0, so a failed
-verification would skip the remaining assertions and still report success (F-12). The clean-tree
-check between iterations is what the File Structure section's Lifetime line promises (F-27).
-
-Every converted assertion should now be `mid` no longer — a converted `[ ... ]` that still reports
-`mid` means the conversion did not take.
-
-- [ ] **Step 4: Record the tranche's result**
-
-Per suite: assertions converted, how many verified `RED` **on first attempt**, and every `GREEN` or
-`REFUSED` with its line. A first-attempt `GREEN` is recorded before it is repaired, then repaired
-and re-verified — the metric is first-attempt outcome, and overwriting it with the post-repair
-result would make every tranche look clean (F-28).
-
-- [ ] **Step 5: Report the calibration comparison**
-
-Defect count per tranche with denominators: assertions converted, first-attempt `GREEN`, suites
-turned red by conversion (separated from pre-existing stale expectations). State the limits from
-the head of this section rather than restating them as caveats.
+One suite went red once its assertions were evaluated. `preflight.bats:127` could never have
+passed: its glob matched `codex` on one line and `gemini ... READY` on the next. `preflight.sh`
+was correct.
 
 ---
 

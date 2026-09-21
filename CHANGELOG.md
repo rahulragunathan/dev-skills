@@ -10,6 +10,89 @@ here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-09-21 — Phase 1, gate integrity
+
+Two of the checks that judge every later phase were not checking. This phase repaired them, and
+the repairs found more of the same class in their own code.
+
+### Added
+
+- **`bats_assertions.py`** reports every `[[ ]]` assertion in a bats file and whether another
+  command follows it in its test. Extent comes from `@test` and top-level function boundaries,
+  never brace depth, which breaks on `${...}` and embedded python; heredoc bodies are skipped so
+  fixture text is never inventoried as code. Measured inventory for the four in-scope skills: 309
+  tests, 123 assertions, **68 mid-test**. The figures previously recorded in KI-45 — 325, 145, 78
+  — were read rather than measured.
+- **`verify_assertions.sh`** confirms one converted assertion is load-bearing by negating it and
+  requiring its own test to fail at that line. It drives `mutation-restore.sh` rather than adding
+  mutation logic. `mutation-restore.sh` exits 0 whenever the test returned exactly 1, and bats
+  returns 1 for a fixture error too, so exit status alone cannot certify discrimination.
+- **`--authored-by <codex|gemini>`** in `preflight.sh` disqualifies a reviewer from coverage when
+  it wrote the diff under review. It is reported as the author with its probe result, not as
+  unable to answer: it answered and is barred, and an operator has to be able to tell a broken
+  CLI from a disqualified one.
+- **`docs/PHASE_RECORD.md`** is the phase record, linked from ROADMAP. It holds the phase in
+  flight only and is overwritten at each phase start; when none is in flight its body is one
+  line. `phase-workflow` referenced "the phase record" in three places and defined it nowhere.
+- **`KI-47` to `KI-52`** filed from `gpt-6-astra`'s review of the round-9 evidence and grading.
+  The two that change a conclusion: no grading packet carries S05's banned-word list its Rule 4
+  grades against, and S07's with-skill arm is shown the two expressions its mutation-choice
+  condition grades. Both verified independently.
+
+### Changed
+
+- **The Codex ladder emits `slug:effort` rungs.** Effort identifies a rung: every model in the
+  cache defaults to `low`, so naming a slug alone got the weakest setting of the strongest model
+  while the log read as if the strongest had run. A `priority` tie also resolved by position in
+  the JSON — `gpt-5.6-sol` and `gpt-6-astra` both sit at 1 — and now breaks on higher version.
+  `ultra` is excluded: it delegates tasks automatically, so the diff may not come from the model
+  recorded against it.
+- **Reviewer independence is a property of the diff's author**, not of Claude. The rule ran one
+  way only and named Claude; when a non-Claude reviewer writes the diff, it cannot clear its own
+  work either.
+
+### Fixed
+
+- **`KI-45` — 68 mid-test `[[ ]]` assertions across twelve suites were checked by the reader and
+  never by the suite.** Appending `|| false` is the whole change: the expression is untouched, so
+  no assertion can quietly mean something different afterwards. Each of the 68 was then verified
+  load-bearing — 66 by `verify_assertions.sh`, 2 by hand after falsifying every branch of a
+  disjunction.
+- **A broken assertion that had never been evaluated.** `preflight.bats:127` asserted
+  `[[ "$output" != *"codex"*"READY"* ]]`. Globs span newlines, so it matched `codex` on one line
+  and `gemini ... READY` on the next, and could never have passed once evaluated. `preflight.sh`
+  was correct; the assertion is now scoped to the codex line.
+- **`KI-46` — the phase cleanup could not delete a squash-merged branch.** `-D` is now reached
+  only at a tip already confirmed present on the remote, and the retain message gives its reason.
+  `publish-release.sh` carried the same call under a message that was false for a squash merge.
+- **`KI-53` — zsh mangled the phase-start refspec.** `$DEFAULT_BRANCH:refs/...` read as a `:r`
+  history modifier, building `+refs/heads/mainefs/remotes/origin/main`. The block is labelled
+  bash, but zsh is the default macOS shell and the step tells the operator to run it.
+- **`KI-54` — the phase record had three consumers and no path.** §2 step 3 wrote it, §2 and §4
+  read it back for `MERGE_METHOD`, and nothing said where it lived.
+
+### Corrected
+
+Three claims in released sections were wrong. Released sections are never edited, so the
+corrections are recorded here.
+
+- **v1.10.2 said KI-46's entry records that "`git cherry` discriminates where `-d` does not".**
+  It does not. Measured: a two-commit branch squash-merged reports `+` for every commit while the
+  tree is identical, so it is retained forever; and a branch whose unique work is a merge commit
+  reports *nothing*, because `git cherry` skips merge commits, so it is **deleted although it
+  holds work nothing else has**. The earlier verification used a one-commit branch. Comparing
+  trees discriminates; comparing per-commit patches does not.
+- **v1.10.0 said "the Codex model ladder tops out at `gpt-6-astra`".** Nothing in the cache ranks
+  it above `gpt-5.6-sol`; both sit at `priority: 1`, so the claim held only by file order.
+- **v1.10.0 said "every listed model supports low through max".** `gpt-5.6-luna` has no `ultra`
+  and `gpt-5.5` has neither `max` nor `ultra`.
+
+### Closed
+
+- **`UNK-02`** — no test here can be shown to discriminate from git history alone. Answered "do
+  nothing" and recorded in CLAUDE.md: the mutation check replaces historical evidence. This phase
+  also measured that substitute's limits.
+
 ## [1.10.2] - 2026-09-16
 
 ### Added
@@ -669,7 +752,8 @@ here — the plugin manifest's version is the only record of them.
 
 ## Reference
 
-[Unreleased]: https://github.com/rahulragunathan/localclaude/compare/v1.10.2...HEAD
+[Unreleased]: https://github.com/rahulragunathan/localclaude/compare/v1.11.0...HEAD
+[1.11.0]: https://github.com/rahulragunathan/localclaude/compare/v1.10.2...v1.11.0
 [1.10.2]: https://github.com/rahulragunathan/localclaude/compare/v1.10.1...v1.10.2
 [1.10.1]: https://github.com/rahulragunathan/localclaude/compare/v1.10.0...v1.10.1
 [1.10.0]: https://github.com/rahulragunathan/localclaude/compare/v1.8.0...v1.10.0

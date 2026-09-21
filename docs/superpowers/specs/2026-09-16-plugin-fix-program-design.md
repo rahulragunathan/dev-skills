@@ -126,14 +126,27 @@ model or another rung, that record misleads a later reader.
 If Astra becomes usage-constrained mid-phase, drop to Sol and record the switch. A rung change
 that is not in the record is the same failure as the effort default.
 
-## Phase 1 calibration
+## Phase 1 calibration — dropped
 
-Phase 1 converts 78 near-identical assertions. Run one tranche at `medium` and one at `max`, and
-the mutation check yields a per-tranche defect count on near-identical work. That sets the rung
-rule for phases 2 to 6 on evidence rather than on a guess about which tasks are hard. It costs
-nothing extra, because the conversions have to happen either way.
+The plan proposed splitting the 68 conversions into `medium` and `max` tranches to compare defect
+rates. Dropped once the conversion proved to be a per-line append of `|| false`: an effort
+comparison on that task would measure nothing, and Tasks 4 and 5 edit test files, which the
+authorship split makes Claude's work.
 
-Fix the tranche split and the assignment before the first conversion, not after seeing results.
+**The split's stated rationale did not survive the phase.** It was argued from ENH-26 and KI-37 —
+Astra's weakness being fixes that work but are not pinned. Across eight tasks, Astra's logic was
+sound every time; its two defects were an undeclared environment dependency and a diagnostic that
+blamed the wrong cause, both "right at the site shown, wrong at the edge". Claude's ten defects
+were all test-side: fixtures that never reached the code, assertions satisfied by the wrong text,
+multiline reasoning, `$output` clobbered by a second `run`, and twice a review finding already
+accepted into the plan and then reintroduced in code.
+
+Two things follow for later phases. The split is still worth keeping, because one author checking
+the other caught defects in both directions — Astra disputed two Claude tests and was right both
+times. But it should be described as mutual review rather than as compensating for a known
+weakness in one party. And the arbiter is the mutation check plus reading *which line* a red came
+from, not either author's care: two mutations in this phase were false reds, and one test passed
+on HEAD because the production code's own error message contained the string it grepped for.
 
 ## Decisions carried in
 

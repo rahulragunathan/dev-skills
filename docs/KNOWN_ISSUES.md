@@ -126,47 +126,66 @@ and is verified against a hand-deleted closing marker.
 
 ---
 
-<a id="ki-45"></a>
+<a id="ki-47"></a>
 
-## KI-45 — a failing `[[ ]]` assertion in mid-test does not fail its bats test
+## KI-47 — grading packets omit information their conditions require
 
 **Severity:** High
 **Likelihood:** Almost always
-**Where:** every `*.bats` suite under `skills/`, for example
-[evidence.bats](../skills/design-review/tests/evidence.bats),
-[preflight.bats](../skills/external-review/tests/preflight.bats)
+**Where:** [grade_batch.py](../skills/design-review/tests/grade_batch.py) (packet assembly),
+[s05-report-form.md](../skills/design-review/tests/s05-report-form.md)
 
 ### What happens
 
-Under Bats 1.14.0 a `[[ ... ]]` conditional that evaluates false does not stop the test unless
-it is the test's last command. A false `[ ... ]` test or a failing ordinary command does stop
-it. So every `[[ ... ]]` assertion written before the final line of a test is checked by the
-reader only, never by the suite.
-
-Measured by [bats_assertions.py](../skills/phase-workflow/bats_assertions.py), which reports each
-assertion and whether another command follows it in its test. Across the four skills in scope —
-`claude-setup`, `design-review`, `external-review`, `phase-workflow` — there are 309 tests and
-**123 `[[ ... ]]` assertions, 68 of them mid-test**.
-
-The counts first recorded here (325 tests, 145 assertions, 78 mid-test) were produced by reading
-rather than by a tool, and are superseded. `claude-toggle-backend` is held and being rebuilt, so
-its assertions are neither counted nor converted: its tests are replaced by the rebuild rather
-than repaired.
+The grader prompt states "everything you need is in the packet below this prompt." No packet
+carries the scenario prompt, and none carries S05's banned-word list, which its Rule 4 grades
+against. Graders reconstruct the fixture from the answer or judge the rule without its terms.
 
 ### Example scenario
 
-`rollup.bats` asserted three tallies and a row count. After round 9 changed every tally, the
-suite still reported the test as passing, because only the last assertion was evaluated. The
-stale expectations surfaced only when the last line happened to fail.
+Verified over round 9: 0 of 84 packets contain the banned list while
+`s05-report-form.md` does. Two graders said so in their own judgements — one wrote "The packet
+does not list the banned words" — and returned a verdict anyway. The omitted list also sits
+outside the failure-condition section whose hash is reproduced, so the check cannot see it.
 
 ### Notes for a fix
 
-Write assertions so they fail the test wherever they sit: `[ ... ]`, or a pipeline such as
-`printf '%s\n' "$output" | grep -q PATTERN`, or the `bats-assert` helpers. Convert the 68
-mid-test conditionals, then confirm the conversion by making each one false once and watching
-its test fail. Until then, treat a green suite as weaker evidence than its count suggests.
+Include the scenario prompt and every rule's terms in the packet, and hash what is sent rather
+than a section of it. Until then a Rule 4 verdict rests on the grader's memory of the rule.
 
-**Source:** claude-opus-5 — found while updating the Results tables after round 9, 2026-09-15.
+**Source:** gpt-6-astra — review of round-9 evidence and grading, 2026-09-16; packet count
+verified by claude-opus-5.
+
+---
+
+<a id="ki-48"></a>
+
+## KI-48 — S07's with-skill arm is handed the answer to the condition it is graded on
+
+**Severity:** High
+**Likelihood:** Almost always
+**Where:** [s07-process-rules.md](../skills/design-review/tests/s07-process-rules.md) condition 2b,
+`loaded-phase-workflow.md` in each round's evidence directory
+
+### What happens
+
+S07 loads `phase-workflow`. Its condition 2b fails a mutation "whose predicted outcome depends on
+the host", and names `local = now` and `local = now.astimezone(timezone.utc)` as the acceptable
+choices. The loaded skill text supplies those same two expressions as its worked example.
+
+### Example scenario
+
+Round 9 recorded S07 Mutation choice at 5/5 with-skill against 2/5 baseline. Verified: the
+with-skill arm was shown the two expressions its condition grades, minutes before answering.
+The result measures recall of a supplied example, not mutation reasoning.
+
+### Notes for a fix
+
+Freeze the skill, then construct held-out scenarios whose answers are absent from its text. A
+scenario that grades an example the skill contains cannot distinguish transfer from recall.
+
+**Source:** gpt-6-astra — review of round-9 evidence and grading, 2026-09-16; both locations
+verified by claude-opus-5.
 
 ---
 
@@ -814,6 +833,33 @@ could-not-evaluate. The behaviour predates the overnight QC passes.
 
 ---
 
+<a id="ki-49"></a>
+
+## KI-49 — the headline tally mixes two skills
+
+**Severity:** Medium
+**Likelihood:** Almost always
+**Where:** [tests/README.md](../skills/design-review/tests/README.md) rollup,
+[s07-process-rules.md](../skills/design-review/tests/s07-process-rules.md)
+
+### What happens
+
+S07 states `**Loads:** phase-workflow`. S01 to S06 load `design-review`. A combined tally over all
+seven scenarios therefore reports two skills as one result.
+
+### Example scenario
+
+Round 9's corrected figures are 33/35 with-skill against 21/35 baseline. The design-review-only
+subtotal is 28/30 against 19/30; the remaining 5/5 against 2/5 belongs to `phase-workflow`.
+
+### Notes for a fix
+
+Report per-skill subtotals, and never a combined figure without naming which skills it spans.
+
+**Source:** gpt-6-astra — review of round-9 evidence and grading, 2026-09-16.
+
+---
+
 <a id="ki-16"></a>
 
 ## KI-16 — `HF_HOME` is exported by an orphaned `~/.zshrc` block no skill installs
@@ -1070,72 +1116,96 @@ same argv-recording fake). Bundle these two into one pass.
 
 ---
 
-<a id="ki-46"></a>
+<a id="ki-50"></a>
 
-## KI-46 — the phase cleanup cannot delete a squash-merged branch
+## KI-50 — S05's fixture contradicts itself
 
 **Severity:** Medium
-**Likelihood:** Almost always
-**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) §4 step 7 (local prune),
-[publish-release.sh](../skills/phase-workflow/publish-release.sh) (branch deletion)
+**Likelihood:** Likely
+**Where:** [s05-report-form.md](../skills/design-review/tests/s05-report-form.md), Final decisions
 
 ### What happens
 
-§2 step 3 records the first allowed merge method, trying `squash` before `rebase` and `merge`.
-§4 merges with that method, then prunes local branches whose upstream is gone using
-`git branch -d`.
-
-A squash merge writes a new commit with no ancestry to the branch it came from, so `-d` refuses
-that branch however completely its work landed. The step reports `RETAINED — branch deletion
-failed; inspect it by hand` and exits 1.
-
-The comment above the line states the premise it rests on:
-
-> `-d` refuses a branch holding unmerged work, which is exactly the retain rule.
-
-That holds for a merge commit and for a rebase. It does not hold for a squash — the method the
-preflight selects first. `publish-release.sh` carries the same call under the message
-`BRANCH HOLDS UNMERGED WORK — retaining it`, which is likewise false in this case.
+The final decisions say two modules "each copy the exact `taxes.round_line_tax` implementation"
+and then that they "will call `taxes.round_line_tax` at that same per-line stage". Both cannot
+describe the same final state.
 
 ### Example scenario
 
-PRs #2 and #3, squash-merged as v1.10.1 and the ENH-27 entry. `git branch -d` refused both
-while `git diff <branch> main` was empty for both, so no work was outstanding in either.
-Reproduced from scratch: `git merge --squash` a branch, confirm the diff against the default
-branch is empty, and `git branch -d` still exits 1.
-
-### Why it matters past the false alarm
-
-It fails safe — the branch is retained and nothing is lost, which is why this is Medium and not
-High. The cost is that the guard fires on every squash-merged phase, and the block bolds
-**Never -D here** while leaving no other way past it. A guard that is wrong every time is the
-kind an operator learns to force past, and `-D` is the one command in that block that really can
-discard commits that were never pushed.
+An answer must repair the contradiction while reporting decisions as final. One baseline replicate
+challenged the delivery split instead, and its Rule 2 failure cannot be separated from a
+reasonable objection to the fixture's account of the existing design.
 
 ### Notes for a fix
 
-**The block already has the answer before it deletes anything.** It has confirmed
-`MERGED_HEAD = APPROVED_SHA` and `REMOTE_HEAD = APPROVED_SHA`. A local branch still pointing at
-`APPROVED_SHA` therefore holds nothing absent from the remote, and is safe to delete outright.
+Give the scenario an unambiguous before-state and final-state. Until then S05's substantive result
+mixes reporting quality with fixture repair.
 
-**`git cherry` is not the answer, and the claim that it is was wrong.** It was recorded here as
-"verified both ways", but that verification used a one-commit branch. Measured on 2026-09-20:
+**Source:** gpt-6-astra — review of round-9 evidence and grading, 2026-09-16.
 
-- A **two-commit** branch squash-merged reports `+` for *every* commit while `git diff` against the
-  default branch is empty. The branch would be retained forever.
-- A branch whose unique work is a **merge commit** with both parents upstream reports *nothing*,
-  because `git cherry` skips merge commits — while `git diff` plainly differs. The branch would be
-  **deleted although it holds work nothing else has**, which is the worse direction.
+---
 
-`[ -z "$(git diff <branch> <default>)" ]` does discriminate, comparing trees rather than commits,
-and got both cases right.
+<a id="ki-51"></a>
 
-Keep the retain rule; replace only the test it rests on, and give the refusal message the reason
-it retained. The fix touches `phase-git.bats`, which executes the SKILL.md fences directly, so it
-needs a red test per arm first: one squash-merged branch that must be deleted, one branch with an
-unpushed commit that must be retained.
+## KI-51 — rejected grading attempts are not retained
 
-**Source:** claude-opus-5 — found while cleaning up after the v1.10.1 merge, 2026-09-16.
+**Severity:** Medium
+**Likelihood:** Likely
+**Where:** [grade_batch.py](../skills/design-review/tests/grade_batch.py) (`collect`, replacement path)
+
+### What happens
+
+Agreement is computed over retained, accepted attempts. A rejected return is replaced and its body
+is not kept, so the agreement figure cannot be recomputed over everything that was actually
+returned.
+
+### Example scenario
+
+For one S02 condition the documented history holds three votes, implying 1 of 3 agreeing pairs,
+while the retained pair contributes 1 of 1. The rejected verdict is also the one matching the
+settled UNK-04 reading, so discarding it removed the disagreement.
+
+### Notes for a fix
+
+Archive every return, accepted or not, with its rejection reason, and report agreement over
+attempts as well as over retained pairs. Adjacent to ENH-24 but distinct: that entry is about
+denominators, this one is about discarded evidence.
+
+**Source:** gpt-6-astra — review of round-9 evidence and grading, 2026-09-16.
+
+---
+
+<a id="ki-52"></a>
+
+## KI-52 — mid-test `[[ ]]` vacuity may depend on the bash version
+
+**Severity:** Medium
+**Likelihood:** Likely
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) §3 step 3,
+every `*.bats` suite
+
+### What happens
+
+Measured on this machine — bash 3.2.57, bats 1.14.0 — a false mid-test `[[ ]]` passes and a false
+mid-test `[ ]` fails, which is the behaviour the 68 conversions rest on. `gpt-6-astra` asserts that
+modern bash stops the test. If that holds, the vacuity is host-dependent, and so is any
+verification predicting a red for it.
+
+### Example scenario
+
+§3 step 3 forbids a mutation "whose predicted outcome depends on the machine the suite runs on",
+because such a red certifies the runner rather than the test. The `|| false` conversion is safe
+either way — it makes the assertion load-bearing under any bash — but the *evidence* gathered for
+it was collected under one interpreter and has not been reproduced under another.
+
+### Notes for a fix
+
+Measure the behaviour under bash 5 and record both results. Then decide whether the suites pin an
+interpreter or the workflow accepts the variance in writing. `claude-toggle-backend`'s five
+single-line mid-test assertions are also unconverted, and are held with that skill's rebuild.
+
+**Source:** claude-opus-5 — measured while converting the assertions, 2026-09-20; the bash 5
+claim is `gpt-6-astra`'s and is unverified here.
 
 ---
 

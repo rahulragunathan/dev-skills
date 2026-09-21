@@ -24,18 +24,17 @@ completion is deleted from both, with the record written into CHANGELOG `[Unrele
 item dropped rather than built moves to "Decisions taken and not taken". IDs are never
 reused. Nothing here looks backward — completed phases are CHANGELOG releases.
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-21
 
 ## Status
 
-**Phase 2 — the backup cluster.** Build the `backup-projects.sh` harness in the active half of
-ENH-03, then address the active `drive-backup` issues listed in
-[KNOWN_ISSUES.md](KNOWN_ISSUES.md#held--local-models-and-claude-toggle-backend-rebuild).
-KI-14 leads so the harness can observe failures in the other backup fixes.
+The phase in flight, and how it will merge, is in [PHASE_RECORD.md](PHASE_RECORD.md). It is not
+restated here.
 
-The `local-models` and `claude-toggle-backend` rebuild work remains held. The supporting files'
-Held sections define the boundaries; work outside them remains active, including ENH-10
-through ENH-12. Backup fixes belong to phase 2 and are outside the current process work.
+The `local-models` and `claude-toggle-backend` rebuild work remains held; the supporting files'
+Held sections define the boundaries. Work outside them remains active, including ENH-10 through
+ENH-12. The backup cluster — the active half of ENH-03 and the `drive-backup` issues — is queued
+behind the current process work.
 
 ## Known Issues
 
@@ -45,7 +44,6 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | ---- | ------- | ---------- | ---------- |
 | [KI-01](KNOWN_ISSUES.md#ki-01) | `settings.json` is truncated before it is rewritten | Rare | Critical |
 | [KI-22](KNOWN_ISSUES.md#ki-22) | The marker strip can truncate `.zshrc` | Rare | Critical |
-| [KI-45](KNOWN_ISSUES.md#ki-45) | A failing `[[ ]]` assertion in mid-test does not fail its bats test | Almost always | High |
 | [KI-07](KNOWN_ISSUES.md#ki-07) | Credentials are copied to Drive with no scan or warning | Almost always | High |
 | [KI-09](KNOWN_ISSUES.md#ki-09) | `toggle.bats` "clears env" never asserts that the env was cleared | Almost always | High |
 | [KI-10](KNOWN_ISSUES.md#ki-10) | The MLX switch test does not pin the auth token | Almost always | High |
@@ -55,6 +53,8 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-28](KNOWN_ISSUES.md#ki-28) | `drive-backup` uses `$CODE_ROOT` without defining it | Almost always | High |
 | [KI-29](KNOWN_ISSUES.md#ki-29) | The "already set up" shortcut accepts a hook on the old path | Almost always | High |
 | [KI-30](KNOWN_ISSUES.md#ki-30) | Two machines overwrite each other's config snapshot | Almost always | High |
+| [KI-47](KNOWN_ISSUES.md#ki-47) | Grading packets omit information their conditions require | Almost always | High |
+| [KI-48](KNOWN_ISSUES.md#ki-48) | S07's with-skill arm is handed the answer it is graded on | Almost always | High |
 | [KI-02](KNOWN_ISSUES.md#ki-02) | A failed switch leaves the config pointing at a stopped server | Likely | High |
 | [KI-05](KNOWN_ISSUES.md#ki-05) | The "one model resident" guarantee does not hold for direct starts | Likely | High |
 | [KI-08](KNOWN_ISSUES.md#ki-08) | Backup destination discovery picks the first Drive account it finds | Likely | High |
@@ -72,12 +72,15 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-24](KNOWN_ISSUES.md#ki-24) | "status runs clean" asserts neither server's status line | Almost always | Medium |
 | [KI-25](KNOWN_ISSUES.md#ki-25) | "auto-picks a numeric free port" accepts any number | Almost always | Medium |
 | [KI-26](KNOWN_ISSUES.md#ki-26) | The foreground test asserts only the model file | Almost always | Medium |
-| [KI-46](KNOWN_ISSUES.md#ki-46) | The phase cleanup cannot delete a squash-merged branch | Almost always | Medium |
+| [KI-49](KNOWN_ISSUES.md#ki-49) | The headline tally mixes two skills | Almost always | Medium |
 | [KI-31](KNOWN_ISSUES.md#ki-31) | The lock drops the last backup of a session | Likely | Medium |
 | [KI-18](KNOWN_ISSUES.md#ki-18) | `toggle.sh` needs `python3` and never checks for it | Likely | Medium |
 | [KI-36](KNOWN_ISSUES.md#ki-36) | A grader quote of a table cell that holds a pipe is refused | Likely | Medium |
 | [KI-39](KNOWN_ISSUES.md#ki-39) | `print` with an f-string argument still hides later guards | Likely | Medium |
 | [KI-40](KNOWN_ISSUES.md#ki-40) | The roadmap check fails on freshly seeded roadmap files | Likely | Medium |
+| [KI-50](KNOWN_ISSUES.md#ki-50) | S05's fixture contradicts itself | Likely | Medium |
+| [KI-51](KNOWN_ISSUES.md#ki-51) | Rejected grading attempts are not retained | Likely | Medium |
+| [KI-52](KNOWN_ISSUES.md#ki-52) | Mid-test `[[ ]]` vacuity may depend on the bash version | Likely | Medium |
 | [KI-32](KNOWN_ISSUES.md#ki-32) | Repository approval state is not in the file the backup collects | Rare | Medium |
 | [KI-34](KNOWN_ISSUES.md#ki-34) | A destination inside a source tree nests backups recursively | Rare | Medium |
 | [KI-19](KNOWN_ISSUES.md#ki-19) | Port selection releases the socket before the server binds | Rare | Medium |
@@ -126,4 +129,3 @@ reasoning behind each in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 | ---- | ---------- | ------ |
 | [UNK-04](OPEN_QUESTIONS.md#unk-04) | Does an undefined input-format check bound a shared cache's keys? | Decision |
 | [UNK-03](OPEN_QUESTIONS.md#unk-03) | Verify installed Claude Code permission behavior | Verification |
-| [UNK-02](OPEN_QUESTIONS.md#unk-02) | No test in this repo can be shown to discriminate from git history alone | Risk |
