@@ -246,3 +246,29 @@ JSON
   [ "$status" -eq 0 ]
   [ "$output" = "gpt-6-astra:max" ]
 }
+
+# Fails if the documented invocation loop passes a slug:effort rung straight to
+# `-m`. The loop above this one stubs the ladder with a bare `fixture-model`,
+# so the pair-splitting branch never runs there and the rung format added for
+# the ladder had no test reaching it.
+@test "adversarial: the documented Codex loop splits a slug:effort rung" {
+  python3 - "$CODEX_ROOT" "$TEST_TMP/invoke.sh" "$TEST_TMP" <<'PY'
+import pathlib,re,sys
+text=pathlib.Path(sys.argv[1]).with_name('SKILL.md').read_text()
+block=next(b for b in re.findall(r'```bash\n(.*?)```',text,re.S) if 'for m in $(codex_ladder)' in b and 'codex exec' in b)
+prelude='codex_ladder() { echo fixture-model:medium; }\ncodex() { printf "%s\\n" "$@" > "$ARGS"; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2"; }\n'
+pathlib.Path(sys.argv[2]).write_text(prelude+block.replace('<scratchpad>',sys.argv[3]).replace('<repo-root>','SOURCE-REPO'))
+PY
+  ARGS="$TEST_TMP/args2" run bash "$TEST_TMP/invoke.sh"
+  [ "$status" -eq 0 ]
+  python3 - "$TEST_TMP/args2" <<'PY'
+import pathlib,sys
+args=pathlib.Path(sys.argv[1]).read_text().splitlines()
+# -m carries the slug alone; the pair is not a model id
+assert args[args.index('-m')+1] == 'fixture-model', args
+assert 'fixture-model:medium' not in args, args
+# and the rung's effort reaches the invocation, not a hardcoded high
+assert 'model_reasoning_effort=medium' in args, args
+assert 'model_reasoning_effort=high' not in args, args
+PY
+}
