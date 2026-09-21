@@ -30,6 +30,17 @@ setup() {
   export PUSH_URL="$(git remote get-url --push origin)"
 }
 
+# Extract one executable fence from SKILL.md by a substring it contains.
+# Three tests needed this and the copies were drifting apart.
+extract_fence() {   # $1 = selector, $2 = destination, $3 = SKILL.md path
+  python3 - "$3" "$2" "$1" <<'FENCE_PY'
+import pathlib,re,sys
+blocks=re.findall(r'```bash\n(.*?)```',pathlib.Path(sys.argv[1]).read_text(),re.S)
+pathlib.Path(sys.argv[2]).write_text(next(b for b in blocks if sys.argv[3] in b))
+FENCE_PY
+}
+
+
 teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/null; rm -rf "$TEST_TMP"; }
 
 # --- mutation restore ------------------------------------------------------
@@ -276,11 +287,7 @@ EOF
 }
 
 @test "adversarial: documented cleanup returns failure when fetch fails" {
-  python3 - "$(dirname "$PUBLISH")/SKILL.md" "$TEST_TMP/cleanup.sh" <<'PYCODE'
-import pathlib,re,sys
-blocks=re.findall(r'```bash\n(.*?)```',pathlib.Path(sys.argv[1]).read_text(),re.S)
-pathlib.Path(sys.argv[2]).write_text(next(b for b in blocks if 'GONE=' in b))
-PYCODE
+  extract_fence 'GONE=' "$TEST_TMP/cleanup.sh" "$(dirname "$PUBLISH")/SKILL.md"
   mkdir "$TEST_TMP/bin"
   printf '#!/bin/sh\nexit 128\n' > "$TEST_TMP/bin/git"
   chmod +x "$TEST_TMP/bin/git"
@@ -302,11 +309,7 @@ prepare_documented_release() {
 case "$*" in *mergeCommit*) echo "$MERGE_SHA" ;; *) echo "$APPROVED_SHA" ;; esac
 SH
   chmod +x "$TEST_TMP/bin/gh"
-  python3 - "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/SKILL.md" "$TEST_TMP/release.sh" <<'PY'
-import pathlib,re,sys
-blocks=re.findall(r'```bash\n(.*?)```',pathlib.Path(sys.argv[1]).read_text(),re.S)
-pathlib.Path(sys.argv[2]).write_text(next(b for b in blocks if 'REMOTE_TAG=' in b))
-PY
+  extract_fence 'REMOTE_TAG=' "$TEST_TMP/release.sh" "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/SKILL.md"
 }
 
 @test "documented release: publishes the merge commit rather than the approved PR head" {
@@ -368,13 +371,7 @@ PY
 # whose parents are upstream reports nothing though it carries unique work.
 # ---------------------------------------------------------------------------
 
-ki46_extract_cleanup() {
-  python3 - "$(dirname "$PUBLISH")/SKILL.md" "$TEST_TMP/cleanup.sh" <<'PYCODE'
-import pathlib,re,sys
-blocks=re.findall(r'```bash\n(.*?)```',pathlib.Path(sys.argv[1]).read_text(),re.S)
-pathlib.Path(sys.argv[2]).write_text(next(b for b in blocks if 'GONE=' in b))
-PYCODE
-}
+ki46_extract_cleanup() { extract_fence 'GONE=' "$TEST_TMP/cleanup.sh" "$(dirname "$PUBLISH")/SKILL.md"; }
 
 # Publish a branch, land it on main by $2, then orphan its upstream so the
 # prune fence considers it at all.

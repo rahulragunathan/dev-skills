@@ -21,6 +21,22 @@ setup() {
   git add -A && git commit -qm base
 }
 
+# Build a runnable copy of the documented Codex invocation loop, with the
+# ladder stubbed to emit $1. Both invocation tests need this; the copies
+# differed only in the stub's output.
+write_invoke_script() {   # $1 = ladder output, $2 = destination
+  python3 - "$CODEX_ROOT" "$2" "$TEST_TMP" "$1" <<'INVOKE_PY'
+import pathlib,re,sys
+text=pathlib.Path(sys.argv[1]).with_name('SKILL.md').read_text()
+block=next(b for b in re.findall(r'```bash\n(.*?)```',text,re.S)
+           if 'for m in $(codex_ladder)' in b and 'codex exec' in b)
+prelude=('codex_ladder() { echo ' + sys.argv[4] + '; }\n'
+         'codex() { printf "%s\\n" "$@" > "$ARGS"; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2"; }\n')
+pathlib.Path(sys.argv[2]).write_text(prelude+block.replace('<scratchpad>',sys.argv[3]).replace('<repo-root>','SOURCE-REPO'))
+INVOKE_PY
+}
+
+
 teardown() { teardown_capture_env; }
 
 @test "the pruned root holds the in-scope files" {
@@ -157,13 +173,7 @@ teardown() { teardown_capture_env; }
 }
 
 @test "adversarial: documented Codex loop uses the prepared root and export flag" {
-  python3 - "$CODEX_ROOT" "$TEST_TMP/invoke.sh" "$TEST_TMP" <<'PY'
-import pathlib,re,sys
-text=pathlib.Path(sys.argv[1]).with_name('SKILL.md').read_text()
-block=next(b for b in re.findall(r'```bash\n(.*?)```',text,re.S) if 'for m in $(codex_ladder)' in b and 'codex exec' in b)
-prelude='codex_ladder() { echo fixture-model; }\ncodex() { printf "%s\\n" "$@" > "$ARGS"; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2"; }\n'
-pathlib.Path(sys.argv[2]).write_text(prelude+block.replace('<scratchpad>',sys.argv[3]).replace('<repo-root>','SOURCE-REPO'))
-PY
+  write_invoke_script 'fixture-model' "$TEST_TMP/invoke.sh"
   ARGS="$TEST_TMP/args" run bash "$TEST_TMP/invoke.sh"
   [ "$status" -eq 0 ]
   python3 - "$TEST_TMP/args" "$ROOT" <<'PY'
@@ -252,13 +262,7 @@ JSON
 # so the pair-splitting branch never runs there and the rung format added for
 # the ladder had no test reaching it.
 @test "adversarial: the documented Codex loop splits a slug:effort rung" {
-  python3 - "$CODEX_ROOT" "$TEST_TMP/invoke.sh" "$TEST_TMP" <<'PY'
-import pathlib,re,sys
-text=pathlib.Path(sys.argv[1]).with_name('SKILL.md').read_text()
-block=next(b for b in re.findall(r'```bash\n(.*?)```',text,re.S) if 'for m in $(codex_ladder)' in b and 'codex exec' in b)
-prelude='codex_ladder() { echo fixture-model:medium; }\ncodex() { printf "%s\\n" "$@" > "$ARGS"; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2"; }\n'
-pathlib.Path(sys.argv[2]).write_text(prelude+block.replace('<scratchpad>',sys.argv[3]).replace('<repo-root>','SOURCE-REPO'))
-PY
+  write_invoke_script 'fixture-model:medium' "$TEST_TMP/invoke.sh"
   ARGS="$TEST_TMP/args2" run bash "$TEST_TMP/invoke.sh"
   [ "$status" -eq 0 ]
   python3 - "$TEST_TMP/args2" <<'PY'
