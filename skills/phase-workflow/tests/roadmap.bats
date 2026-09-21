@@ -399,10 +399,10 @@ PY
 # ENH-30 — a roadmap reference carries a greppable fragment, and check verifies
 # it still appears in the file cited beside it.
 #
-# Five of the fifteen tests below are CONTROLS: they assert status 0 and so pass
+# Five of the sixteen tests below are CONTROLS: they assert status 0 and so pass
 # before the feature exists. They are here because the other half of getting
 # this right is not flagging correct references, and a checker that refuses
-# everything would satisfy the other ten without them.
+# everything would satisfy the other eleven without them.
 # ---------------------------------------------------------------------------
 
 # Put reference text into KI-01's body. Multi-line input is supported, because
@@ -591,4 +591,23 @@ The behaviour is set by [x.sh:2](../skills/x.sh#L2) and nothing else.'
   put_ref '**Where:** [p.md](superpowers/plans/p.md)'
   run python3 "$RM" check --docs "$DOCS"
   [ "$status" -eq 0 ]
+}
+
+# Fails if a link shape the parser cannot read is treated as absence of a
+# reference rather than as a finding.
+#
+# A target containing a space matches no accepted form, so LINK does not match
+# it while the `](` is still there. That is the one case where "I did not
+# understand this" must not become "there was nothing here" — every other
+# check in this pass is downstream of a link the parser recognised.
+#
+# Written after the code, so its discrimination is established by mutation
+# rather than by having watched it go red first: removing the raise leaves the
+# entry reported clean.
+@test "refs: an unparseable link shape is a finding, not an absence" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/my file.sh) — `timed_out "$ERR"`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"not in the accepted reference form"* ]] || false
 }
