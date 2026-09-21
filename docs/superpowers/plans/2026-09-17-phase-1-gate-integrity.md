@@ -357,7 +357,9 @@ assertion.
 **Files:**
 
 - Modify: `docs/KNOWN_ISSUES.md` (the KI-45 entry's three counts)
-- Create: `docs/superpowers/plans/phase-1-assertion-inventory.tsv`
+- Create: `docs/superpowers/plans/phase-1-assertion-inventory.tsv` — a **pre-conversion**
+  snapshot. After the conversion the same command reports 0 `mid` rows, which is the standing
+  regression check; the file is kept as the record of what was measured, not as current state.
 
 **Interfaces:**
 

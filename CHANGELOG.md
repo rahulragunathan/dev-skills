@@ -71,6 +71,32 @@ the repairs found more of the same class in their own code.
 - **`KI-54` — the phase record had three consumers and no path.** §2 step 3 wrote it, §2 and §4
   read it back for `MERGE_METHOD`, and nothing said where it lived.
 
+### Fixed at the gate
+
+`/code-review high` found five defects in this phase's own code. Four were real and are fixed
+here; the fifth misread a local utility as part of the merge cycle.
+
+- **`verify_assertions.sh` reported `GREEN` for a disjunction split across continued lines.** It
+  read only the requested line and required `]]` on it, so `[[ A \` / `|| B ]] || false` slipped
+  past the compound guard and earned the one verdict the guard exists to prevent — and §3 step 3
+  has an assertion failing the audit fixed or deleted, so a working assertion would have been
+  deleted on the strength of it.
+- **`bats_assertions.py` read `$(( 1 << 2 ))` as opening a heredoc**, took `2` as the delimiter,
+  swallowed the rest of the file and refused it outright. Latent, and total for any file using
+  arithmetic shift.
+- **A converted assertion was still reported `mid`.** Classification was positional only, so
+  `[[ ... ]] || false` looked identical to an unguarded assertion and the inventory could not
+  detect a regression. An explicit trailing `|| false` now classifies as `final`, which makes the
+  count of `mid` rows across the in-scope skills **0** and turns the inventory into a standing
+  check. Continued lines are joined first, so a wrapped assertion is judged by its logical form.
+- **`publish-release.sh` gated `-D` on an `APPROVED_SHA` that no fence exports**, so it could
+  never fire and the retain message blamed the branch. It is now an explicit
+  `--confirmed-on-remote` flag — the right contract for a local utility whose caller is a human.
+
+The fifth read `publish-release.sh` as part of the documented merge cycle. It is not: §4 prunes
+with its own fence, and the script's header records it as a local-only utility. A test asserting
+that coupling was wrong and was removed along with the mode it forced.
+
 ### Corrected
 
 Three claims in released sections were wrong. Released sections are never edited, so the

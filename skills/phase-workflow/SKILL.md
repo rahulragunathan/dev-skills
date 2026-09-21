@@ -315,6 +315,16 @@ what remains expired.
 **A false `[[ ]]` does not fail its test unless it is the test's last command.** Measured on bash
 3.2.57 with bats 1.14.0; a false `[ ]` does stop it. Sixty-eight assertions in this repo were
 therefore read by their author and never by the suite. `bats_assertions.py` finds them.
+
+**It is also the standing regression check.** An assertion ending in `|| false` is load-bearing
+wherever it sits, so the tool reports it `final`. Across the four in-scope skills the count of
+`mid` rows is therefore **0**, and any number above zero is an assertion that went in unguarded:
+
+```bash
+python3 skills/phase-workflow/bats_assertions.py skills/*/tests/*.bats | awk -F'\t' '$4=="mid"'
+```
+
+`claude-toggle-backend` is the exception — its five are held with that skill's rebuild, per KI-52.
 Its fourth column is `mid` for an unguarded assertion followed by more commands and
 `final` for either the last command or an assertion already ending in `|| false`.
 
