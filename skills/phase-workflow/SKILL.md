@@ -218,6 +218,12 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    - **docs/ARCHITECTURE.md** — **records and explains every diagram the project has**, one short section each saying what it depicts and when to regenerate it, not a bare embed. Regenerate each one with the `drawio` skill and compare against the generator committed at §2 (commit the `.drawio` source, generator script, and rendered PNG). **Drift-check the generator, not the PNG** — its box and edge labels are string literals naming modules and files, so they drop into the identifier check below, while a PNG is opaque to it. Catch a stale render mechanically: regenerate, then `git status`; if the PNG changes it was already out of date with its own source.
    - **CHANGELOG.md** — this phase's user-visible changes, appended to `[Unreleased]` under Added/Changed/Fixed/Removed. Never edit a released section. Every entry here is *moved* out of ROADMAP and its supporting file, not copied. Decide the version now (minor for additive work, patch for fixes and docs, major for a break). Prepare the release before external review: rename the populated `[Unreleased]` heading to `## [<version>] - <date> — <phase name>`, add a fresh empty `[Unreleased]` above it, and add the compare link under `## Reference`. Commit and push these edits before step 5. Record the version in the hand-off. Tag only after the approved PR merges.
    - **KNOWN_ISSUES.md / ENHANCEMENTS.md / OPEN_QUESTIONS.md** — every finding triaged out of steps 1–3 gets a full entry in the right one and a pointer row in ROADMAP, not a one-liner in ROADMAP alone. Getting these current *before* step 5 is what lets the external reviewers be told what is already tracked, so they stop re-deriving the backlog. Rate it when you write it; an unrated item is an untriaged item. Re-check the ordering, and re-check the filing: a question that has become a defined bug moves to KNOWN_ISSUES.
+   - **docs/PHASE_RECORD.md** — bring it current. It is written at §2 step 3 and then goes stale by
+     default: the phase's later tasks, the deviations taken, the findings triaged and the version
+     cut all happen after it was last touched. Record what the phase actually did, not what it
+     planned to do. **§4 reads `MERGE_METHOD` from this file**, so a stale record is not a tidiness
+     problem — it is the merge cycle reading the wrong value. Overwrite, never append: one record
+     per phase accumulating is the phase ledger the roadmap rules forbid.
    - **Location** — root keeps README.md, CLAUDE.md, CHANGELOG.md, LICENSE; every other doc lives in `docs/`. If a doc is at root that shouldn't be, `git mv` it so the rename is tracked, then fix every inbound link.
    - **Current-state rule:** every doc except CLAUDE.md, **CHANGELOG.md** and the roadmap files (`ROADMAP.md`, `KNOWN_ISSUES.md`, `ENHANCEMENTS.md`, `OPEN_QUESTIONS.md`) documents only what the code *is*. CHANGELOG is exempt because describing removed features is most of a changelog's job; no "what we didn't build", no rejected alternatives, no removed features. Decisions-not-taken that future developers/agents must know go in the **project CLAUDE.md** only.
    - **Project CLAUDE.md** — updated to match the code as it actually is, plus those awareness notes.
@@ -257,6 +263,17 @@ what remains expired.
 6. **Post-fix drift re-check — narrow, not another holistic pass.** If step 5's fixes moved a module, the diagrams are back in scope: regenerate and compare. Step 5 changed code after step 4 declared the docs true. Re-check only what those fixes touched: the docs and code comments the changed files invalidate, and the CHANGELOG entries whose claims moved. Then confirm every filing from every pass has both its full entry and its ROADMAP pointer row, with ratings that agree. Report what you found, not only what you fixed.
 7. **Present to the user and stop** — the phase gate.
    - **Include a findings table per review pass** from step 5, in `external-review`'s canonical format, with the phase-mode disposition vocabulary. Chat-only — never written to a per-phase review file. It exists so the user can see every finding and pull any deferred one back into this phase before signing off.
+   - **Record the PR number and the release version in `docs/PHASE_RECORD.md` before presenting.**
+     §4 loads `MERGE_METHOD` from that file and needs `APPROVED_SHA` too, and a hand-off in chat
+     does not survive a session boundary — which is what "preserve that record across sessions" at
+     §2 step 3 requires. §2 could not record either value: neither is known until the gate.
+
+     **Do not write the SHA into the file.** A commit cannot contain its own hash: the write
+     changes the commit it describes, and amending to correct it regresses without end. Record the
+     `PR` instead and resolve the SHA from it — the gate has already verified that the PR head,
+     `origin/<branch>` and local `HEAD` are the same commit, so this is exact rather than a
+     convenience. Sign-off binds to that head; an edit afterwards moves it and means re-requesting
+     review on the new one.
    - **Do not merge.** The merge is the post-sign-off action; it happens in §4 and nowhere else. Committing and pushing are not — those happened per task, throughout the phase.
    - **The gate has two checkable states.** First, **the work is committed, pushed, and on a PR marked ready for review** — every one of those is a fact git or `gh` will answer, none is self-attested:
 

@@ -22,6 +22,9 @@ phase is in flight the body is the single line `No phase in flight.`
 | `MERGE_METHOD` | `squash` |
 | Branched from | `origin/main` at `356afac` |
 | Started | 2026-09-20 |
+| `PR` | [#5](https://github.com/rahulragunathan/localclaude/pull/5) |
+| Release | v1.11.0 |
+| `APPROVED_SHA` | the PR head at sign-off — see **Gate** below |
 
 All three merge methods are enabled on the repository; `squash` is selected because the preflight
 takes the first allowed method in the order squash, rebase, merge.
@@ -112,3 +115,76 @@ The running count of test-side defects is four, against none in Astra's producti
 split was argued on Astra's weakness being unpinned code; the evidence so far is that the
 reviewer's weakness is fixtures, and the arbiter is the mutation check rather than either
 author's care.
+
+## Gate
+
+| | |
+| --- | --- |
+| Presented | 2026-09-21 |
+| `APPROVED_SHA` | the head of PR #5 at sign-off, read with `gh pr view 5 --json headRefOid` |
+| Tests | 326 passing, 0 failing, across the four in-scope skills |
+| Gates | `roadmap.py check` clean · markdownlint clean · 0 `mid` assertions |
+| External review | **Partial coverage** — Codex disqualified as the diff's author under this phase's own new rule; `gemini-3.8-flash-high` the only independent reviewer |
+
+§4 loads `MERGE_METHOD` from this table and resolves `APPROVED_SHA` from the recorded `PR`.
+
+**The record cannot hold its own commit's SHA.** Writing a value here changes the commit it
+describes, and amending regresses without end. What survives a session is the PR number, and the
+gate has already verified that the PR head, `origin/<branch>` and local `HEAD` are the same commit
+— so resolving the SHA from the PR is exact, not a convenience. Sign-off binds to that head; an
+edit afterwards moves it and means re-requesting review.
+
+## What the phase did
+
+All nine planned tasks, plus four defects found while executing the workflow.
+
+| Closed | KI-45, KI-46, KI-53, KI-54, UNK-02 |
+| --- | --- |
+| Filed | KI-47 to KI-52, ENH-28, ENH-29 |
+
+KI-53 and KI-54 were found by running the workflow rather than reading it: zsh read
+`$DEFAULT_BRANCH:refs/...` as a `:r` history modifier and broke the phase-start fetch, and "the
+phase record" had three consumers and no defined path. This file is the answer to the second.
+
+## Review outcomes
+
+Six findings fixed in phase, two filed, four rejected with reasons, one partly rejected. The two
+that would have shipped:
+
+- **`git cherry` is wrong in both directions** — found by the flash-tier reviewer at plan time.
+  KI-46's own notes recommended it and claimed it "verified both ways"; that verification used a
+  one-commit branch.
+- **`verify_assertions.sh` reported `GREEN` for an operator inside a quoted literal** — found by
+  the same reviewer at the gate. `GREEN` licenses deleting an assertion.
+
+**Two process failures of mine, recorded because they are repeatable.** I truncated an
+alphabetically-ordered diff for external review, so the reviewer saw only `docs/` and produced
+twelve findings about code it never read — every checkable one wrong, including a Critical
+claiming the KI-46 fix could never fire. And a test of mine forced a worse design: asserting that
+`SKILL.md` mentions a flag pushed a local-only utility into the merge cycle, giving §4 two
+deletion mechanisms until it was reverted.
+
+## What the authorship split actually showed
+
+Astra wrote the production diffs; Claude wrote the tests. The split was argued from ENH-26 and
+KI-37 — Astra's weakness being fixes that work but are not pinned. That is not what happened.
+
+Astra's logic was sound in every task. Its two defects were an undeclared environment dependency
+and a diagnostic that named the wrong cause, both "right at the site shown, wrong at the edge".
+Claude's defects were all test-side and numbered around ten: fixtures that never reached the code,
+assertions satisfied by the wrong text, multiline reasoning three separate times, `$output`
+clobbered by a later `run`, two review findings already accepted into the plan and then
+reintroduced in code, and one test that forced a bad design.
+
+**Astra disputed a Claude test three times and was right every time.** That is the half of the
+split that paid, and it is mutual review rather than compensation for one party's weakness — the
+spec has been corrected to say so.
+
+**The arbiter was neither author.** It was the mutation check plus reading *which line* a red came
+from. Two mutations this phase were false reds. One test passed on HEAD because the production
+code's own error message contained the string it grepped for, which no mutation can detect.
+
+`verify_assertions.sh` gave three false verdicts in total — exit status alone meant `RED`, a
+disjunction meant `GREEN`, an ambiguous line meant `GREEN`. All three were fixed the same way:
+refuse rather than guess. A tool whose job is judging tests kept judging on insufficient evidence,
+and its `REFUSED` path turned out to be where the correctness lives.
