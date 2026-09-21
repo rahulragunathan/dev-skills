@@ -2,7 +2,8 @@
 # preflight.sh — ask each reviewer one cheap question before committing a pass.
 #
 # Usage:
-#   preflight.sh [--codex-model M] [--gemini-model M]
+#   preflight.sh [--codex-model SLUG[:EFFORT]] [--gemini-model M]
+# Codex pairs probe at the supplied effort; a bare slug defaults to high.
 #
 # Pass 9 spent about 100 minutes learning, one chunk at a time, that the Gemini
 # account had been out of quota from the start and would stay out for another
@@ -95,7 +96,7 @@ report() {
 
 # Each reviewer gets its own deadline; availability follows the supplied ladder.
 probe() {
-  local reviewer="$1" cli="$2" model rc result
+  local reviewer="$1" cli="$2" model slug effort rc result
   shift 2
   if ! command -v "$cli" >/dev/null 2>&1; then
     report "$reviewer" "—" MISSING; return
@@ -109,8 +110,11 @@ probe() {
     OUT="$TMP/$reviewer.txt"; ERR="$TMP/$reviewer.err"
     : > "$OUT"
     if [ "$reviewer" = codex ]; then
+      slug="${model%%:*}"
+      case "$model" in *:*) effort="${model#*:}";; *) effort=high;; esac
+      model="$slug:$effort"
       python3 "$RUNNER" "$DEADLINE" codex exec --skip-git-repo-check --sandbox read-only \
-        -m "$model" -c model_reasoning_effort="high" -o "$OUT" "$PROBE" > "$TMP/codex.stdout" 2> "$ERR" < /dev/null
+        -m "$slug" -c model_reasoning_effort="$effort" -o "$OUT" "$PROBE" > "$TMP/codex.stdout" 2> "$ERR" < /dev/null
     else
       python3 "$RUNNER" "$DEADLINE" agy -p "$PROBE" --model "$model" --effort high \
         --print-timeout "${DEADLINE}s" > "$OUT" 2> "$ERR" < /dev/null

@@ -276,3 +276,24 @@ PY
   [ "$status" -eq 1 ]
   [ "$(printf '%s\n' "$output" | grep -c 'last .*UNAVAILABLE')" -eq 1 ]
 }
+
+# Fails if a rung's effort is ignored and the probe runs at the hardcoded high.
+# preflight.sh receives the ladder's candidates via --codex-model and then runs
+# `-c model_reasoning_effort="high"` regardless, so a probe could clear a rung
+# at an effort the real review never uses. "QC T2-4" above pins high as the
+# default when a bare slug is given; this pins the pair overriding it.
+@test "a slug:effort rung probes at that effort, and -m gets the slug alone" {
+  fake_codex_ready; fake_agy_ready
+  sed -i.bak '2i\
+printf "%s\\n" "$@" > "$TEST_TMP/codex-args"\
+' "$BIN/codex"
+  run bash "$PREFLIGHT" --codex-model selected:medium --gemini-model selected
+  [ "$status" -eq 0 ]
+  grep -Fx 'model_reasoning_effort=medium' "$TEST_TMP/codex-args"
+  run grep -Fx 'model_reasoning_effort=high' "$TEST_TMP/codex-args"
+  [ "$status" -ne 0 ]
+  # -m must carry the slug only; "selected:medium" is not a model id
+  grep -Fx 'selected' "$TEST_TMP/codex-args"
+  run grep -Fx 'selected:medium' "$TEST_TMP/codex-args"
+  [ "$status" -ne 0 ]
+}
