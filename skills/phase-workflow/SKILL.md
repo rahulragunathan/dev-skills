@@ -39,7 +39,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 
 1. **Preflight before any phase-start mutation.** Use Bash for these blocks. Replace angle-bracket placeholders before running them. Run from the repo root. Stop on any failed command.
 
-   **Initial discovery.** Run this block once at phase start. Later sections load the recorded values; they do not re-run discovery. `gh` must be installed and able to read the repository and its merge settings. Resolve the repository from `origin`, not an upstream setting.
+   **Initial discovery.** Run this block once at phase start. Later sections load the recorded values from `docs/PHASE_RECORD.md`; they do not re-run discovery. `gh` must be installed and able to read the repository and its merge settings. Resolve the repository from `origin`, not an upstream setting.
 
    ```bash
    set -euo pipefail
@@ -54,7 +54,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    git check-ref-format "refs/heads/$DEFAULT_BRANCH"
    MERGE_METHOD="$(gh api "repos/$REPO" --jq 'if .allow_squash_merge then "squash" elif .allow_rebase_merge then "rebase" elif .allow_merge_commit then "merge" else empty end')"
    case "$MERGE_METHOD" in squash|rebase|merge) ;; *) echo "NO ALLOWED MERGE METHOD — stop"; exit 1 ;; esac
-   git fetch origin "+refs/heads/$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
+   git fetch origin "+refs/heads/${DEFAULT_BRANCH}:refs/remotes/origin/${DEFAULT_BRANCH}"
    git rev-parse --verify "refs/remotes/origin/$DEFAULT_BRANCH^{commit}"
    ```
 
@@ -79,7 +79,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 
    Body ends with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
 
-3. **Record exactly one allowed merge method at phase start.** The preflight selects `squash`, then `rebase`, then `merge`, taking the first allowed method. Persist `ORIGIN_URL`, `ORIGIN_PUSH_URL`, `REPO`, `DEFAULT_BRANCH`, `PHASE_BRANCH` and that selection in the phase record before publishing the branch. Preserve that record across sessions. If the user specifies another method, verify it is allowed before selecting it. Later checks do not replace this record. At the gate and merge, load the recorded method into `MERGE_METHOD`. A disabled method ends the merge attempt; do not silently substitute one. Repo rules and required reviews still apply.
+3. **Record exactly one allowed merge method at phase start.** The preflight selects `squash`, then `rebase`, then `merge`, taking the first allowed method. Persist `ORIGIN_URL`, `ORIGIN_PUSH_URL`, `REPO`, `DEFAULT_BRANCH`, `PHASE_BRANCH` and that selection in **`docs/PHASE_RECORD.md`** before publishing the branch — that file is the phase record, it is linked from `ROADMAP.md`, and it holds the phase in flight only. Overwrite it at each phase start rather than appending: one record per phase accumulating is the phase ledger the roadmap rules forbid. When no phase is in flight its body is the single line `No phase in flight.`, so the pointer never dangles and §4 always has somewhere to read. Preserve that record across sessions. If the user specifies another method, verify it is allowed before selecting it. Later checks do not replace this record. At the gate and merge, load the recorded method into `MERGE_METHOD`. A disabled method ends the merge attempt; do not silently substitute one. Repo rules and required reviews still apply.
 
 4. **Land the plan's diagram generators.** `design-review` builds them into the scratchpad at §1, because §1 runs before this branch exists, and the plan's front matter records their filenames. Copy **every** generator the plan recorded into `docs/` as this phase's first task **and commit it**. That commit is the baseline `design-review phase` compares against at §3 step 2. Skip this step entirely when the plan recorded none, which is the no-`drawio` path.
 5. Seed/refresh `ROADMAP.md`, `KNOWN_ISSUES.md`, `ENHANCEMENTS.md`, and `OPEN_QUESTIONS.md` under `docs/` from the templates next to this file, if the project doesn't have them.
@@ -329,7 +329,7 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
 1. **Confirm release preparation.** The approved commit already contains the release heading and compare link from §3 step 4. Do not repeat those edits. If anything is missing, return to §3 and obtain approval for the new SHA.
 2. **Confirm publication.** The gate recorded matching local, origin and PR SHAs. Do not add a release commit after sign-off. On resume, inspect the PR state first: `MERGED` proceeds to step 5, an open PR proceeds to step 3, and a closed unmerged PR stops. Require its `headRefOid` to equal `APPROVED_SHA` in every case.
 3. **Wait for checks** on an open PR: `gh pr checks "$PR" -R "$REPO" --watch`. A failing check, an unknown check state or a blocking required review ends this attempt. Report it and stop. If no checks exist, verify that against the repo's requirements before proceeding. Do not bypass branch rules or push fixes through an approved gate.
-4. **Merge the approved head with the recorded method.** Do not request branch deletion during merge. Queue-based repositories choose their queue's merge strategy. Leave queued work pending until GitHub confirms completion; do not tag an open PR or treat it as merged.
+4. **Merge the approved head with the method recorded in `docs/PHASE_RECORD.md`.** Do not request branch deletion during merge. Queue-based repositories choose their queue's merge strategy. Leave queued work pending until GitHub confirms completion; do not tag an open PR or treat it as merged.
 
    ```bash
    set -euo pipefail
@@ -422,9 +422,17 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
    CURRENT="$(git symbolic-ref --quiet --short HEAD || true)"
    GONE="$(printf '%s\n' "$BRANCHES" | awk -v current="$CURRENT" '$2 == "[gone]" && $1 != current {print $1}')"
    if [ -n "$GONE" ]; then
-     # -d refuses a branch holding unmerged work, which is exactly the retain rule.
-     # Never -D here: a force-delete discards commits that were never pushed.
-     echo "$GONE" | xargs git branch -d || { echo "RETAINED — branch deletion failed; inspect it by hand"; exit 1; }
+     # Never -D except at the approved tip already confirmed present on the remote.
+     # That tip contains no unpushed commits; use -d for every other branch.
+     while IFS= read -r b; do
+       if [ "$(git rev-parse "$b")" = "${APPROVED_SHA:-}" ]; then
+         git branch -D "$b"
+       elif git branch -d "$b"; then
+         :
+       else
+         echo "RETAINED — $b holds commits absent from ${DEFAULT_BRANCH:-the default branch}"; exit 1
+       fi
+     done <<< "$GONE"
    else
      echo "Nothing to clean up."
    fi

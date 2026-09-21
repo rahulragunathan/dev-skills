@@ -1118,11 +1118,17 @@ discard commits that were never pushed.
 `MERGED_HEAD = APPROVED_SHA` and `REMOTE_HEAD = APPROVED_SHA`. A local branch still pointing at
 `APPROVED_SHA` therefore holds nothing absent from the remote, and is safe to delete outright.
 
-Where a general test is wanted, `git cherry <default> <branch>` discriminates correctly: it marks
-a commit `-` when an equivalent change is already upstream and `+` when it is not. Verified both
-ways — a squash-merged branch shows only `-`, and a branch carrying one genuinely unmerged commit
-shows `+`. `[ -z "$(git diff <branch> <default>)" ]` also discriminates, comparing trees rather
-than commits.
+**`git cherry` is not the answer, and the claim that it is was wrong.** It was recorded here as
+"verified both ways", but that verification used a one-commit branch. Measured on 2026-09-20:
+
+- A **two-commit** branch squash-merged reports `+` for *every* commit while `git diff` against the
+  default branch is empty. The branch would be retained forever.
+- A branch whose unique work is a **merge commit** with both parents upstream reports *nothing*,
+  because `git cherry` skips merge commits — while `git diff` plainly differs. The branch would be
+  **deleted although it holds work nothing else has**, which is the worse direction.
+
+`[ -z "$(git diff <branch> <default>)" ]` does discriminate, comparing trees rather than commits,
+and got both cases right.
 
 Keep the retain rule; replace only the test it rests on, and give the refusal message the reason
 it retained. The fix touches `phase-git.bats`, which executes the SKILL.md fences directly, so it

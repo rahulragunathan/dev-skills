@@ -72,8 +72,19 @@ head_now="$(git rev-parse --verify --quiet "refs/heads/$BRANCH" || true)"
 if [ -n "$head_now" ]; then
   [ "$head_now" = "$(git rev-parse "$APPROVED^{commit}")" ] \
     || { echo "BRANCH ADVANCED SINCE APPROVAL — retaining it"; exit 1; }
-  git branch -d "$BRANCH" >/dev/null 2>&1 \
-    || { echo "BRANCH HOLDS UNMERGED WORK — retaining it"; exit 1; }
+  # Never -D except at APPROVED_SHA, whose presence on the remote the SOP confirmed.
+  # That tip contains no unpushed commits; the positional APPROVED alone is not proof.
+  if [ "$head_now" = "${APPROVED_SHA:-}" ]; then
+    git branch -D "$BRANCH" >/dev/null 2>&1 \
+      || { echo "RETAINED — branch deletion failed; inspect it by hand"; exit 1; }
+  elif git branch -d "$BRANCH" >/dev/null 2>&1; then
+    :
+  else
+    # A -d refusal can also mean a squash merge; it does not prove missing work.
+    echo "RETAINED — approval was not confirmed for $BRANCH at tip $head_now; -d refused, so -D was not attempted."
+    echo "Export APPROVED_SHA with this tip only after confirming its approval and presence on the remote."
+    exit 1
+  fi
 fi
 
 echo "published $TAG at $APPROVED; branch $BRANCH removed"
