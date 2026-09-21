@@ -140,11 +140,26 @@ All nine planned tasks, plus four defects found while executing the workflow.
 
 | Closed | KI-45, KI-46, KI-53, KI-54, UNK-02 |
 | --- | --- |
-| Filed | KI-47 to KI-52, ENH-28, ENH-29 |
+| Filed | KI-47 to KI-52, ENH-28, ENH-29, ENH-30 |
 
 KI-53 and KI-54 were found by running the workflow rather than reading it: zsh read
 `$DEFAULT_BRANCH:refs/...` as a `:r` history modifier and broke the phase-start fetch, and "the
 phase record" had three consumers and no defined path. This file is the answer to the second.
+
+## Evidence state
+
+**S07's with-skill evidence is expired by this phase.** S07 loads `phase-workflow`, whose
+`SKILL.md` moved from `eece8525b5b13e01` to `db9d0e7280194046`. The round-9 row is marked
+**Expired** with that reason, its grade retained, and the generated rollup regenerated —
+`rollup.py --check` and `rollup.bats` both agree.
+
+S01 to S06 are unaffected: `design-review/SKILL.md` was not touched and still hashes to
+`47196f444f840946`. S07's baselines stay current, since its prompt and condition hashes are
+unchanged and a baseline does not expire because a skill changed.
+
+**Re-gathering S07 is blocked on KI-48**, not pending. That arm was shown the two expressions its
+Mutation choice condition grades, so a fresh run would buy a new hash over the same invalid
+comparison. The README already records having missed this expiry twice before.
 
 ## Review outcomes
 
@@ -188,3 +203,24 @@ code's own error message contained the string it grepped for, which no mutation 
 disjunction meant `GREEN`, an ambiguous line meant `GREEN`. All three were fixed the same way:
 refuse rather than guess. A tool whose job is judging tests kept judging on insufficient evidence,
 and its `REFUSED` path turned out to be where the correctness lives.
+
+## Reference drift this phase caused
+
+Its own edits pushed two roadmap references out of place: KI-40 cited `SKILL.md:454-455` for a
+`roadmap.py` line then at 520-521, and KI-43 cited `preflight.sh:119` for a check at 136. Both
+were **in range** and both were wrong, so only reading caught them. Fixed, and every line-anchored
+reference in the roadmap set swept — no others out of range.
+
+Filed as **ENH-30**: the drift check verifies "every identifier, file path, command, flag, and
+config key a doc names", and a line number is none of those, so it is the one reference type the
+check structurally cannot cover.
+
+## This record went stale twice
+
+Written at §2 step 3, it was still describing task 4 when the phase reached the gate. Brought
+current, it went stale again within two commits, because §3 step 4's sweep runs *before* external
+review and the gate, and work continued after it.
+
+Both times the cause was the same as the defects this phase fixed: a fact nothing was responsible
+for checking. §3 step 4 now names this file in the sweep, and §3 step 7 makes the staleness
+detectable rather than remembered — the gate compares the record's last commit against `HEAD`.

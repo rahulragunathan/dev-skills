@@ -263,6 +263,20 @@ what remains expired.
 6. **Post-fix drift re-check — narrow, not another holistic pass.** If step 5's fixes moved a module, the diagrams are back in scope: regenerate and compare. Step 5 changed code after step 4 declared the docs true. Re-check only what those fixes touched: the docs and code comments the changed files invalidate, and the CHANGELOG entries whose claims moved. Then confirm every filing from every pass has both its full entry and its ROADMAP pointer row, with ratings that agree. Report what you found, not only what you fixed.
 7. **Present to the user and stop** — the phase gate.
    - **Include a findings table per review pass** from step 5, in `external-review`'s canonical format, with the phase-mode disposition vocabulary. Chat-only — never written to a per-phase review file. It exists so the user can see every finding and pull any deferred one back into this phase before signing off.
+   - **Confirm `docs/PHASE_RECORD.md` is current, and do not take that on trust.** Step 4 brought
+     it current, but steps 5 to 7 and every re-gate come after step 4, so it goes stale again by
+     default. Compare its last commit against `HEAD`:
+
+     ```bash
+     LAST_RECORD="$(git log -1 --format=%H -- docs/PHASE_RECORD.md)"
+     BEHIND="$(git rev-list --count "$LAST_RECORD"..HEAD)"
+     [ "$BEHIND" -eq 0 ] || { echo "PHASE RECORD PREDATES $BEHIND LATER COMMITS — re-read it"; exit 1; }
+     ```
+
+     Updating it makes it the newest commit again, which is why this is the last edit before
+     presenting. **A phase whose record still describes an earlier task has not reached the
+     gate**, whatever the tests say — §4 reads `MERGE_METHOD` from that file.
+
    - **Record the PR number and the release version in `docs/PHASE_RECORD.md` before presenting.**
      §4 loads `MERGE_METHOD` from that file and needs `APPROVED_SHA` too, and a hand-off in chat
      does not survive a session boundary — which is what "preserve that record across sessions" at
