@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""List Bats assertions and whether another command follows in their test.
+"""List Bats assertions as load-bearing (final) or unguarded before more commands (mid).
 
 Usage:
     python3 bats_assertions.py <file.bats>...
 
 Test declarations and top-level functions delimit bodies; braces do not.
 Heredoc content is skipped before looking for either boundaries or assertions.
+An explicit trailing ``|| false`` makes an assertion final wherever it sits.
 Exit 0 on success, 1 when an input cannot be read or parsed.
 """
 from __future__ import annotations
@@ -27,12 +28,14 @@ FUNCTION_START = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*[ \t]*\([ \t]*\)[ \t]*\{")
 ASSERTION_PATTERNS = {
     "[[ ]]": re.compile(r"^\[\[(?:\s|$)"),
 }
+EXPLICIT_FAILURE = re.compile(r"\]\]\s*\|\|\s*false$")
 
 # Consume quoted strings and escapes before interpreting shell punctuation.
 # This keeps quoted semicolons and heredoc-looking text inside their command.
 SHELL_PART = re.compile(
     r"""'[^']*' | "(?:\\.|[^"\\])*" | \\.
     | (?P<comment>(?<![^\s;|&])\#.*)
+    | (?P<arithmetic>\$?\(\() | (?P<paren>[()])
     | (?P<heredoc>(?<!<)<<(?!<)(?P<tabs>-?)[ \t]*
         (?:'(?P<single>[^']+)' | "(?P<double>[^"]+)"
         | (?P<bare>[^\s'";|&<>()]+)))
@@ -46,7 +49,18 @@ def split_commands(line: str) -> tuple[list[str], list[tuple[str, bool]]]:
     """Split command separators outside quotes and collect heredoc delimiters."""
     commands, heredocs = [], []
     start = 0
+    arithmetic_depth = 0
     for match in SHELL_PART.finditer(line):
+        if match.group("arithmetic") is not None:
+            arithmetic_depth += 2
+            continue
+        if arithmetic_depth:
+            # In arithmetic, << shifts a value; it does not open a heredoc.
+            if match.group("paren") == "(":
+                arithmetic_depth += 1
+            elif match.group("paren") == ")":
+                arithmetic_depth -= 1
+            continue
         if match.group("comment") is not None:
             line = line[:match.start()]
             break
@@ -66,11 +80,20 @@ def split_commands(line: str) -> tuple[list[str], list[tuple[str, bool]]]:
 
 def test_rows(name: str, body: list[tuple[int, str]]) -> list[tuple[int, str, str]]:
     """Classify assertions after removing the test's trailing closing brace."""
-    commands = [(number, command) for number, line in body
+    logical_body = []
+    continued = False
+    for number, line in body:
+        if continued:
+            number, previous = logical_body.pop()
+            line = previous + line
+        continued = line.endswith("\\")
+        logical_body.append((number, line[:-1] if continued else line))
+    commands = [(number, command) for number, line in logical_body
                 for command in split_commands(line)[0]]
     if commands and commands[-1][1] == "}":
         commands = commands[:-1]
-    return [(number, name, "final" if index == len(commands) - 1 else "mid")
+    return [(number, name, "final" if index == len(commands) - 1
+             or EXPLICIT_FAILURE.search(command) else "mid")
             for index, (number, command) in enumerate(commands)
             if any(pattern.match(command) for pattern in ASSERTION_PATTERNS.values())]
 

@@ -315,12 +315,16 @@ what remains expired.
 **A false `[[ ]]` does not fail its test unless it is the test's last command.** Measured on bash
 3.2.57 with bats 1.14.0; a false `[ ]` does stop it. Sixty-eight assertions in this repo were
 therefore read by their author and never by the suite. `bats_assertions.py` finds them.
+Its fourth column is `mid` for an unguarded assertion followed by more commands and
+`final` for either the last command or an assertion already ending in `|| false`.
 
 **Convert by appending `|| false`, not by rewriting.** `[[ ... ]] || false` is load-bearing and
 leaves the expression untouched, so the assertion cannot quietly come to mean something else.
 Rewriting into `printf | grep -q` is the tempting alternative and it narrows every pattern that
 spans lines — see below. `verify_assertions.sh` proves an assertion is load-bearing; only reading
 the diff proves the conversion preserved its meaning.
+Run `verify_assertions.sh` from the repo root with a repo-relative file path;
+absolute paths are refused.
 
 **`$output` is multiline, and line-oriented tools reason about it wrongly.** Three separate
 defects in one phase came from this:

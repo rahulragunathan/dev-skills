@@ -98,3 +98,17 @@ teardown() { cd /; rm -rf "$TEST_TMP"; }
   printf '%s\n' "$output" | grep -q '^REFUSED'
   printf '%s\n' "$output" | grep -qv '^GREEN'
 }
+
+# Fails if a disjunction spread over continued lines is reported GREEN. The
+# compound guard reads only the requested line and requires `]]` on it, so a
+# `[[ A \` / `|| B ]]` assertion slips past it and earns the wrong verdict --
+# and §3 step 3 says an assertion failing the audit is fixed or deleted, so a
+# working assertion gets deleted on the strength of it.
+@test "a disjunction split across continued lines is REFUSED, not GREEN" {
+  run bats t/wrapped.bats
+  [ "$status" -eq 0 ]
+  run bash "$VERIFY" "$SHA" t/wrapped.bats 3 wrapped
+  [ "$status" -eq 1 ]
+  printf '%s\n' "$output" | grep -q '^REFUSED'
+  printf '%s\n' "$output" | grep -qv '^GREEN'
+}

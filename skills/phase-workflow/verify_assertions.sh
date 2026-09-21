@@ -4,15 +4,21 @@ set -uo pipefail
 
 refuse() { printf 'REFUSED %s\n' "$1"; exit 1; }
 
-[ "$#" -eq 4 ] || refuse 'usage: verify_assertions.sh <task-sha> <file> <line> <test-name>'
+[ "$#" -eq 4 ] || refuse 'usage: verify_assertions.sh <task-sha> <repo-relative-file> <line> <test-name> (run from the repo root)'
 sha=$1 file=$2 line=$3 name=$4
+[[ "$file" != /* ]] || refuse 'absolute paths are not supported; file must be repo-relative (run from the repo root)'
 [[ "$line" =~ ^[1-9][0-9]*$ ]] || refuse 'line must be a positive integer'
 [ -n "$name" ] || refuse 'test name is empty'
 script_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd) \
   || refuse 'cannot locate mutation-restore.sh'
 
-# Inspect only the condition: the trailing `|| false` is outside the brackets.
-assertion=$(sed -n "${line}p" "$file") || refuse 'cannot read target line'
+# Join continued lines before inspecting the condition; the trailing `|| false`
+# is outside the brackets. Keep mutation and failure locations on the source line.
+assertion=$(awk -v target="$line" '
+  NR < target { next }
+  /\\$/ { sub(/\\$/, ""); printf "%s", $0; next }
+  { print; exit }
+' "$file") || refuse 'cannot read target line'
 if [[ "$assertion" == *'[['*']]'* ]]; then
   condition=${assertion#*'[['}
   condition=${condition%%']]'*}

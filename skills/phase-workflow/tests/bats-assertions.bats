@@ -62,3 +62,37 @@ setup() {
   printf '%s\n' "$output" | awk -F'\t' '$3=="brace in a string" && $4=="mid"' | grep -q .
   printf '%s\n' "$output" | awk -F'\t' '$3=="assertion is last" && $4=="final"' | grep -q .
 }
+
+# Fails if `<<` inside an arithmetic expansion registers a heredoc. `$(( 1 << 2 ))`
+# made the parser swallow the rest of the file and refuse it outright.
+@test "a left-shift is not a heredoc" {
+  grep -q '1 << 2' "$FIX/shift.bats"
+  run python3 "$SCRIPT" "$FIX/shift.bats"
+  # The condition is that the file PARSES -- it was refused outright as an
+  # unterminated heredoc. Its classification is the other test's business, and
+  # this fixture carries `|| false`, so asserting `mid` here contradicts it.
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | awk -F'\t' '$2=="3" && $3=="shift"' | grep -q .
+}
+
+# Fails if an assertion already carrying `|| false` is reported `mid`. The
+# inventory's job is finding assertions that are NOT load-bearing; if a
+# converted one looks identical to an unconverted one it cannot detect a
+# regression, which is the role CHANGELOG and SKILL.md give it.
+@test "an assertion already made load-bearing is not reported mid" {
+  grep -q '|| false' "$FIX/converted.bats"
+  run python3 "$SCRIPT" "$FIX/converted.bats"
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | awk -F'\t' '$4=="mid"' | grep -c .)" -eq 0 ]
+}
+
+# Fails if an assertion spread over continued lines is classified by its first
+# line alone. `[[ A \` / `|| B ]] || false` is load-bearing, but only its
+# continuation carries the `|| false`; judged line-by-line it reads as `mid`
+# and someone converts an assertion that was already converted.
+@test "a continued-line assertion is classified by its logical form" {
+  grep -q '\*"alpha"\* \\$' "$FIX/verify/wrapped.bats"
+  run python3 "$SCRIPT" "$FIX/verify/wrapped.bats"
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | awk -F'\t' '$4=="mid"' | grep -c .)" -eq 0 ]
+}

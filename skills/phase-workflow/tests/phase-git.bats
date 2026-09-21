@@ -495,7 +495,7 @@ ki46_squash_branch() {          # leaves feature squash-merged, tip in $1
   local tip; tip="$(ki46_squash_branch)"
   [ -n "$(git rev-list main..feature)" ] || false      # commits absent from main
   [ -z "$(git diff feature main)" ] || false           # yet the work landed
-  APPROVED_SHA="$tip" run bash "$PUBLISH" "$tip" v3.0.0 feature "$FETCH_URL" "$PUSH_URL"
+  run bash "$PUBLISH" "$tip" v3.0.0 feature "$FETCH_URL" "$PUSH_URL" --confirmed-on-remote
   [ "$status" -eq 0 ]
   run git rev-parse --verify feature
   [ "$status" -ne 0 ]
@@ -503,7 +503,7 @@ ki46_squash_branch() {          # leaves feature squash-merged, tip in $1
 
 @test "KI-46: publish-release says approval was unconfirmed rather than blaming the branch" {
   local tip; tip="$(ki46_squash_branch)"
-  run env -u APPROVED_SHA bash "$PUBLISH" "$tip" v3.0.1 feature "$FETCH_URL" "$PUSH_URL"
+  run bash "$PUBLISH" "$tip" v3.0.1 feature "$FETCH_URL" "$PUSH_URL"
   [ "$status" -ne 0 ]
   # Save the diagnostic before any later `run` overwrites $output (F-20).
   local msg="$output"
