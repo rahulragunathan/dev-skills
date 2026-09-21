@@ -1,11 +1,18 @@
 ---
 name: external-review
-description: External review from non-Claude models (OpenAI Codex, Google Gemini) at the phase workflow's checkpoints — `plan` on a drafted plan, `phase` on a branch before hand-off, `repo` on current state. Reviewers never apply fixes; every finding is verified and given a disposition in one table. Use when an outside opinion on a plan, diff or codebase is wanted.
+description: Independent external review from OpenAI Codex and Google Gemini at the phase workflow's checkpoints — `plan` on a drafted plan, `phase` on a branch before hand-off, `repo` on current state. Reviewers never apply fixes; every finding is verified and given a disposition in one table. Use when an outside opinion on a plan, diff or codebase is wanted.
 ---
 
 # external-review
 
-Independent reviews from non-Claude models at three junctures: **plan** (before implementation), **phase** (branch diff before hand-off), **repo** (current state, no in-flight branch). Both reviewers run each time; findings are verified, then presented in the standard findings table with a disposition for every row.
+Independent reviews from Codex and Gemini at three junctures: **plan** (before implementation), **phase** (branch diff before hand-off), **repo** (current state, no in-flight branch). Both eligible reviewers run each time; findings are verified, then presented in the standard findings table with a disposition for every row.
+
+**Independence follows the diff's author.** A reviewer that authored the material under review
+is disqualified from clearing its own work, regardless of whether it answers successfully.
+For a Codex-authored diff, Codex is disqualified and Gemini supplies the independent review;
+for a Gemini-authored diff, the reverse applies. The rule holds for any author, including
+Claude: a second opinion from the author is not a second opinion. Changing the author's model
+rung or reasoning effort does not remove the disqualification.
 
 ## Preflight — check the CLIs first
 
@@ -15,26 +22,31 @@ command -v codex; command -v agy
 
 Neither CLI is a hard requirement of this plugin. Check both **before** composing any prompt, so a missing tool surfaces as one clear line instead of a confusing failure halfway through:
 
-- **Both present** → normal run.
-- **One missing** → say which reviewer is unavailable and its install hint (`codex` → the OpenAI Codex CLI, then `codex login`; `agy` → the Antigravity CLI), then review with the other.
-- **Both missing** → **skip the review entirely.** Report: *"External review skipped — neither `codex` nor `agy` is installed"*, with both install hints. Do not fall back to a Claude-run review: a second opinion from the same model is not a second opinion, and presenting one as this checkpoint's output would be misleading. This is a skip, not a failure — never block the user's workflow on it.
+- **Both present** → review with the independent reviewers.
+- **One missing** → say which reviewer is unavailable and its install hint (`codex` → the OpenAI Codex CLI, then `codex login`; `agy` → the Antigravity CLI), then review with the other if it is independent. If the remaining reviewer is the author, report no coverage.
+- **Both missing** → **skip the review entirely.** Report: *"External review skipped — neither `codex` nor `agy` is installed"*, with both install hints. Do not fall back to the material's author for an independent review. This is a skip, not a failure — never block the user's workflow on it.
 
 ### Coverage classification
 
 Record an outcome for every required reviewer/chunk pair in each pass. An invocation succeeds
 only when it exits zero and returns a non-empty findings list or `No findings.`. An empty or
 absent output, or a failed invocation, leaves that pair uncovered. Preserve its error verbatim
-and identify missing CLIs. Retries replace the outcome only for the same pair.
+and identify missing CLIs. An authoring reviewer leaves its pairs uncovered even with successful
+output: record **Disqualified (author)** and the authorship reason, separately from **Failed**
+or **Missing**. Do not describe it as unable to answer. Retries replace the outcome only for
+the same pair and cannot remove an authorship disqualification.
 
-| Required reviewer/chunk pairs with successful output | Outcome |
+| Required reviewer/chunk outcomes | Coverage |
 | --- | --- |
-| All pairs | **Full coverage** |
-| Some pairs, but not all | **Partial coverage** |
-| No pairs | **No coverage** |
+| All pairs return successful independent output | **Full coverage** |
+| Some pairs succeed independently; others are **Failed** or **Missing** | **Partial coverage** — name each gap and reason |
+| Some pairs succeed independently; an authoring reviewer is **Disqualified (author)** | **Partial coverage** — name the author and disqualification reason |
+| No pairs return successful independent output, whether failed, missing, or disqualified | **No coverage** |
 
-**Skipped** applies only when both CLIs are missing and the step never ran. A failed reviewer
-permits partial coverage only when another invocation succeeded. If both reviewers answer
-chunk 1 and fail chunk 2, the pass has partial coverage and chunk 2 has no coverage. Report
+**Skipped** applies only when both CLIs are missing and the step never ran. A failed, missing,
+or disqualified reviewer permits partial coverage only when another independent invocation
+succeeded. If both independent reviewers answer chunk 1 and fail chunk 2, the pass has partial
+coverage and chunk 2 has no coverage. Report
 both the pass outcome and each chunk's gaps. Never record incomplete coverage as a clean pass.
 A phase with no coverage needs a successful re-run or the user's recorded decision to land
 without external review.
@@ -84,8 +96,8 @@ print(" ".join(sorted(ms,key=rank)[:3]))'
 ```
 
 **Only Gemini models through `agy`.** The `^gemini-` filter is not cosmetic: `agy` also offers
-`claude-*` and `gpt-oss-*`. A Claude model is not a second opinion on Claude's work, and the
-filter keeps the run inside the Gemini subscription.
+`claude-*` and `gpt-oss-*`. The filter keeps the run inside the Gemini subscription;
+independence still depends on who authored the material, so Gemini is disqualified on its own work.
 
 **At most three rungs, and the floor is a refusal.** The invocation loops below walk them — selecting only
 the first rung would document a downshift that can never run. Downshift only when a model fails
@@ -119,11 +131,14 @@ so the work may not come from the recorded model. Models without a recognized su
 other than `ultra` contribute no rung. Split the pair and pass `-m "$slug"` with
 `-c model_reasoning_effort="$effort"`; the cache's default effort does not select the rung.
 Bare slugs retain the explicit `high` fallback. Record the effort beside the slug — a `low`
-run and a `max` run from one slug are different reviewers.
+run and a `max` run from one slug are different review configurations.
 
 **Record which model and effort actually ran**, using `slug:effort` for Codex in the coverage
 line and the findings table's Model column.
 Note a downshift plainly there: a lighter model changes how much weight a finding deserves.
+The authoring reviewer's rung and effort still get recorded in the coverage line as diff
+provenance, even when disqualified: who wrote the diff matters. If the probe or review uses
+a different rung or effort from the authoring run, record those separately.
 
 - **Top-tier availability is a PLAN issue, not an auth-method one.** The strongest Codex tiers need a paid ChatGPT subscription; the **free** tier does not include them. The CLI's error is misleading — it says *"not supported when using Codex with a ChatGPT account"* when the real cause is the account's plan. Diagnose with `codex login status`, which reports the plan without opening the token store. **Do not read `~/.codex/auth.json`** — it holds credentials, and the do-not-read rule in the rubric applies to us as much as to the reviewers. If it reads `free`, say so, and that `codex logout && codex login` switches accounts; Codex auth is global per machine.
 - If every rung is rejected, the cached list is likely stale. `agy models` is live and `codex` refreshes `models_cache.json` itself, so re-run discovery before concluding.
@@ -208,18 +223,25 @@ The Codex probe splits each `slug:effort` rung and uses the real pass's effort; 
 kept separate from stderr; configuration names containing `timeout` do not indicate a timeout.
 A deadline or explicit incomplete-turn diagnostic still overrides a partial readiness token.
 
+When Codex or Gemini authored the diff, append `--authored-by codex` or `--authored-by gemini`
+to the preflight command. Only those two values are accepted. The author is still probed and
+its rung and probe result are reported as **AUTHOR — disqualified**, but it contributes no
+readiness or coverage and is excluded from the `cannot answer` list. Both probes answering
+therefore means **partial coverage** when one is the author; if no independent reviewer can
+answer, preflight reports `NO REVIEWER CAN ANSWER` and exits non-zero.
+
 Supply the discovered candidates in ladder order. It tries the next candidate on availability
 failure. Each subprocess has a deadline and process-group cleanup, so a hung Codex cannot
 prevent the Gemini probe. It asks each CLI one cheap question and reports `READY`, `QUOTA` with the reset
-window, `UNAVAILABLE`, `TIMEOUT`, `NO ANSWER` or `MISSING`. Exit 0 means at
-least one reviewer can answer; exit 1 means none can and the pass does not
+window, `UNAVAILABLE`, `TIMEOUT`, `NO ANSWER`, `MISSING`, or `AUTHOR` with its probe result.
+Exit 0 means at least one independent reviewer can answer; exit 1 means none can and the pass does not
 start. Those outcomes are not interchangeable: quota is account-wide so a
 downshift cannot help and the only options are waiting or proceeding partial;
 availability is per model so the next rung may answer; a timeout is
 inconclusive and says to retry with a longer print timeout.
 
-A failed probe leaves that reviewer uncovered. Report partial coverage only if another
-required invocation succeeded; otherwise report no coverage. Change probe behavior in
+A failed probe or authorship disqualification leaves that reviewer uncovered. Report partial
+coverage only if another independent required invocation succeeded; otherwise report no coverage. Change probe behavior in
 `preflight.sh` and verify it with `tests/preflight.bats`.
 
 ## Shared rubric — both reviewers get this text VERBATIM
@@ -254,7 +276,7 @@ Prompt drift between the two reviewers corrupts the agree/disagree triage. Compo
 
    > Return a numbered list of findings, each with file/function references and a severity. Return the list **even when you found nothing**: emit the heading and the single line `No findings.` Never answer with prose instead of the list.
 
-   The empty list is what separates a reviewer that ran and found nothing from one that never ran. **Absent output means the review did not happen — nothing else does.** A reviewer that returns `No findings.` has covered the material; a reviewer that returns nothing at all has not, and the coverage line must say which.
+   The empty list is what separates a reviewer that ran and found nothing from one that never ran. **Absent output means the review did not happen — nothing else does.** An independent reviewer that returns `No findings.` has covered the material; a reviewer that returns nothing at all has not, and the coverage line must say which. An author's output remains disqualified regardless of its findings.
 
 ## Modes
 

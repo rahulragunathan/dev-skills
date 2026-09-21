@@ -297,3 +297,46 @@ printf "%s\\n" "$@" > "$TEST_TMP/codex-args"\
   run grep -Fx 'selected:medium' "$TEST_TMP/codex-args"
   [ "$status" -ne 0 ]
 }
+
+# ---------------------------------------------------------------------------
+# A reviewer that authored the diff is not a reviewer of it.
+#
+# The skill states this one way only -- "a second opinion from the same model
+# is not a second opinion" -- and names Claude. It has to hold for any author:
+# when Astra writes the diff, Codex is the author and cannot clear its own work.
+# Nothing today expresses that, so a pass with both CLIs ready reads as full
+# coverage even when one of them wrote the code under review.
+# ---------------------------------------------------------------------------
+
+# Fails if a pass reports full coverage while one of the two answering
+# reviewers authored the diff. Full coverage here is the ABSENCE of a partial
+# line, so the assertion has to look for the line rather than for its lack.
+@test "an authoring reviewer does not count toward coverage" {
+  fake_codex_ready; fake_agy_ready          # BOTH answer
+  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected --authored-by codex
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -q 'PARTIAL COVERAGE'
+}
+
+# Fails if excluding the only answering reviewer still reports coverage.
+@test "excluding the only answering reviewer leaves no coverage" {
+  fake_codex_ready; fake_agy_unavailable
+  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected --authored-by codex
+  [ "$status" -ne 0 ]
+  printf '%s\n' "$output" | grep -q 'NO REVIEWER CAN ANSWER'
+}
+
+# Fails if an excluded reviewer is reported as unable to answer. It answered
+# fine; it is barred. Conflating the two hides why coverage dropped, and the
+# operator cannot tell a broken CLI from a disqualified author.
+@test "an excluded reviewer is reported as the author, not as unable to answer" {
+  fake_codex_ready; fake_agy_ready
+  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected --authored-by codex
+  # Require a completed pass first: without this the assertions below are
+  # satisfied by the "unknown argument: --authored-by" rejection, which
+  # contains the string "author" and would pass with the flag unimplemented.
+  [ "$status" -eq 0 ]
+  local msg="$output"
+  printf '%s\n' "$msg" | grep -qi 'author'
+  [[ "$msg" != *"codex cannot answer"* ]] || false
+}
