@@ -52,7 +52,7 @@ machine setup, which is not held.
 
 **Severity:** Critical
 **Likelihood:** Rare
-**Where:** [toggle.sh:117-119](../skills/claude-toggle-backend/toggle.sh#L117-L119)
+**Where:** [toggle.sh](../skills/claude-toggle-backend/toggle.sh) — `json.dump(cfg, f, indent=2)`
 
 ### What happens
 
@@ -90,7 +90,7 @@ keys. Related: KI-02, which is the same switch failing for a different reason.
 
 **Severity:** Critical · **Partly fixed**
 **Likelihood:** Rare
-**Where:** [llama-autostart.sh:75](../skills/claude-toggle-backend/llama-autostart.sh#L75)
+**Where:** [llama-autostart.sh](../skills/claude-toggle-backend/llama-autostart.sh) — `if [ -f "$HOME/.zshrc" ] && grep -q "# >>>`
 
 **Fixed in `claude-toggle-backend`'s alias block, held in `llama-autostart.sh`.** The
 shell-block installer that had the same defect was hardened — it requires both markers, backs
@@ -132,8 +132,8 @@ and is verified against a hand-deleted closing marker.
 
 **Severity:** High
 **Likelihood:** Almost always
-**Where:** [grade_batch.py](../skills/design-review/tests/grade_batch.py) (packet assembly),
-[s05-report-form.md](../skills/design-review/tests/s05-report-form.md)
+**Where:** [grade_batch.py](../skills/design-review/tests/grade_batch.py) — `def packet_text(` (packet assembly),
+[s05-report-form.md](../skills/design-review/tests/s05-report-form.md) — `omits the reason: neither a fitting existing home`
 
 ### What happens
 
@@ -164,7 +164,7 @@ verified by claude-opus-5.
 
 **Severity:** High
 **Likelihood:** Almost always
-**Where:** [s07-process-rules.md](../skills/design-review/tests/s07-process-rules.md) condition 2b,
+**Where:** [s07-process-rules.md](../skills/design-review/tests/s07-process-rules.md) — `This condition is about the audit's bookkeeping` condition 2b,
 `loaded-phase-workflow.md` in each round's evidence directory
 
 ### What happens
@@ -195,7 +195,7 @@ verified by claude-opus-5.
 
 **Severity:** High
 **Likelihood:** Almost always
-**Where:** [backup-projects.sh:107-120](../skills/drive-backup/backup-projects.sh#L107-L120)
+**Where:** [backup-projects.sh](../skills/drive-backup/backup-projects.sh) — `cfg_files=(`
 
 ### What happens
 
@@ -209,7 +209,7 @@ cfg_files=(
 ```
 
 `settings.json` holds `env.ANTHROPIC_AUTH_TOKEN` and `env.ANTHROPIC_API_KEY` — written there
-by [toggle.sh:112-115](../skills/claude-toggle-backend/toggle.sh#L112-L115) — and
+by [toggle.sh](../skills/claude-toggle-backend/toggle.sh) — and
 `claude_desktop_config.json` commonly holds MCP server credentials. Nothing scans, redacts or
 warns.
 
@@ -236,7 +236,7 @@ is otherwise unrecoverable, so stripping fields makes the copy less useful for r
 
 **Severity:** High
 **Likelihood:** Almost always
-**Where:** [toggle.bats:36-44](../skills/claude-toggle-backend/tests/toggle.bats#L36-L44)
+**Where:** [toggle.bats](../skills/claude-toggle-backend/tests/toggle.bats) — `@test "switch to anthropic preserves`
 
 ### What happens
 
@@ -270,7 +270,7 @@ mutation check from `phase-workflow` §3 step 3 to confirm the test goes red for
 
 **Severity:** High
 **Likelihood:** Almost always
-**Where:** [toggle.bats:45](../skills/claude-toggle-backend/tests/toggle.bats#L45)
+**Where:** [toggle.bats](../skills/claude-toggle-backend/tests/toggle.bats) — `@test "switch to mlx sets base url without`
 
 ### What happens
 
@@ -303,7 +303,7 @@ cannot be satisfied by the wrong line.
 
 **Severity:** High
 **Likelihood:** Almost always
-**Where:** [mlx-serve.bats:61-69](../skills/claude-toggle-backend/tests/mlx-serve.bats#L61-L69)
+**Where:** [mlx-serve.bats](../skills/claude-toggle-backend/tests/mlx-serve.bats) — `@test "start succeeds when repo is cached and server`
 
 ### What happens
 
@@ -337,7 +337,7 @@ into a contract check without needing a real server.
 
 **Severity:** High
 **Likelihood:** Almost always
-**Where:** [mlx-serve.bats:85-91](../skills/claude-toggle-backend/tests/mlx-serve.bats#L85-L91)
+**Where:** [mlx-serve.bats](../skills/claude-toggle-backend/tests/mlx-serve.bats) — `@test "stop removes state and reports`
 
 ### What happens
 
@@ -372,7 +372,7 @@ appears in the output. Capture the PID before calling stop.
 
 **Severity:** High
 **Likelihood:** Almost always
-**Where:** [backup-projects.sh:133](../skills/drive-backup/backup-projects.sh#L133)
+**Where:** [backup-projects.sh](../skills/drive-backup/backup-projects.sh) — `synced="$synced Config"`
 
 ### What happens
 
@@ -407,7 +407,7 @@ status, report which inputs vanished, and correct the description in
 
 **Severity:** High
 **Likelihood:** Almost always
-**Where:** [drive-backup/SKILL.md:51](../skills/drive-backup/SKILL.md#L51)
+**Where:** [drive-backup/SKILL.md](../skills/drive-backup/SKILL.md) — `BACKUP_DEST="$CODE_ROOT/Claude-Projects"`
 
 ### What happens
 
@@ -437,7 +437,7 @@ this skill out of `claude-setup` and left the variable behind.
 
 **Severity:** High
 **Likelihood:** Almost always
-**Where:** [drive-backup/SKILL.md:87-89](../skills/drive-backup/SKILL.md#L87-L89)
+**Where:** [drive-backup/SKILL.md](../skills/drive-backup/SKILL.md) — `**Already set up iff all three hold:**`
 
 ### What happens
 
@@ -466,7 +466,7 @@ line newer than the seed run.
 
 **Severity:** High
 **Likelihood:** Almost always
-**Where:** [backup-projects.sh:112-129](../skills/drive-backup/backup-projects.sh#L112-L129)
+**Where:** [backup-projects.sh](../skills/drive-backup/backup-projects.sh) — `cfg_files=(`
 
 ### What happens
 
@@ -495,7 +495,7 @@ independently restorable.
 
 **Severity:** High
 **Likelihood:** Likely
-**Where:** [toggle.sh:63-96](../skills/claude-toggle-backend/toggle.sh#L63-L96)
+**Where:** [toggle.sh](../skills/claude-toggle-backend/toggle.sh) — `MODEL="$ANTHROPIC_MODEL"`
 
 ### What happens
 
@@ -533,7 +533,7 @@ back to the previous backend on failure.
 
 **Severity:** High
 **Likelihood:** Likely
-**Where:** [local-models/SKILL.md:175](../skills/local-models/SKILL.md#L175), [local-models/SKILL.md:81](../skills/local-models/SKILL.md#L81)
+**Where:** [local-models/SKILL.md](../skills/local-models/SKILL.md) — `- **One local model at a time.** Even on 64`, [local-models/SKILL.md](../skills/local-models/SKILL.md) — `- **mlx (Apple Silicon, MLX-native)** —`
 
 ### What happens
 
@@ -564,7 +564,7 @@ second is a one-line change and is honest.
 
 **Severity:** High
 **Likelihood:** Likely
-**Where:** [backup-projects.sh:47-67](../skills/drive-backup/backup-projects.sh#L47-L67), [drive-backup/SKILL.md](../skills/drive-backup/SKILL.md)
+**Where:** [backup-projects.sh](../skills/drive-backup/backup-projects.sh) — `destfile="$HOME/.claude/projects-backup.dest"`, [drive-backup/SKILL.md](../skills/drive-backup/SKILL.md) — `**Destination resolution, first match wins:**`
 
 ### What happens
 
@@ -599,7 +599,7 @@ skills-source discovery in `claude-setup`.
 
 **Severity:** High
 **Likelihood:** Likely
-**Where:** [mlx-serve.bats:111](../skills/claude-toggle-backend/tests/mlx-serve.bats#L111)
+**Where:** [mlx-serve.bats](../skills/claude-toggle-backend/tests/mlx-serve.bats) — `pkill -f 'sleep 300' 2>/dev/null || true`
 
 ### What happens
 
@@ -632,7 +632,7 @@ group rather than searching by name.
 
 **Severity:** High
 **Likelihood:** Likely
-**Where:** [backup-projects.sh:101-102](../skills/drive-backup/backup-projects.sh#L101-L102), [backup-projects.sh:123-129](../skills/drive-backup/backup-projects.sh#L123-L129)
+**Where:** [backup-projects.sh](../skills/drive-backup/backup-projects.sh) — `"$src/" "$dest/$sub/" 2>>"$log"`, [backup-projects.sh](../skills/drive-backup/backup-projects.sh) — `rsync -t "$f" "$dest/Config/" 2>>"$log"`
 
 ### What happens
 
@@ -663,7 +663,7 @@ about the log word, this one is about inputs never attempted.
 
 **Severity:** High
 **Likelihood:** Rare
-**Where:** [llama-serve.sh:31-35](../skills/claude-toggle-backend/llama-serve.sh#L31-L35), [mlx-serve.sh:51-55](../skills/claude-toggle-backend/mlx-serve.sh#L51-L55)
+**Where:** [llama-serve.sh](../skills/claude-toggle-backend/llama-serve.sh) — `is_alive() {`, [mlx-serve.sh](../skills/claude-toggle-backend/mlx-serve.sh) — `is_alive() {`
 
 ### What happens
 
@@ -702,7 +702,7 @@ file whose content is not a positive integer, which also removes the negative-PI
 
 **Severity:** High
 **Likelihood:** Rare
-**Where:** [llama-serve.sh:49-57](../skills/claude-toggle-backend/llama-serve.sh#L49-L57), [mlx-serve.sh:67-75](../skills/claude-toggle-backend/mlx-serve.sh#L67-L75)
+**Where:** [llama-serve.sh](../skills/claude-toggle-backend/llama-serve.sh) — `local stray; stray="$(pgrep -f 'llama-server`, [mlx-serve.sh](../skills/claude-toggle-backend/mlx-serve.sh) — `local stray; stray="$(pgrep -f 'vllm-mlx`
 
 ### What happens
 
@@ -739,7 +739,7 @@ touching the code.
 
 **Severity:** High
 **Likelihood:** Rare
-**Where:** [backup-projects.sh:73-77](../skills/drive-backup/backup-projects.sh#L73-L77)
+**Where:** [backup-projects.sh](../skills/drive-backup/backup-projects.sh) — `lock="${TMPDIR:-/tmp}/claude-projects-backup.lock`
 
 ### What happens
 
@@ -778,7 +778,7 @@ failure.
 
 **Severity:** High
 **Likelihood:** Rare
-**Where:** [grade_batch.py:264-266](../skills/design-review/tests/grade_batch.py#L264-L266)
+**Where:** [grade_batch.py](../skills/design-review/tests/grade_batch.py) — `jpath, rpath = out / "judgements" /`
 
 ### What happens
 
@@ -810,7 +810,7 @@ before `prepare` and never replace a slot afterwards.
 
 **Severity:** High
 **Likelihood:** Rare
-**Where:** [grade_eval.py:270-290](../skills/design-review/tests/grade_eval.py#L270-L290)
+**Where:** [grade_eval.py](../skills/design-review/tests/grade_eval.py) — `self.unexecuted_guards(tail, env, scope,`
 
 ### What happens
 
@@ -839,8 +839,8 @@ could-not-evaluate. The behaviour predates the overnight QC passes.
 
 **Severity:** Medium
 **Likelihood:** Almost always
-**Where:** [tests/README.md](../skills/design-review/tests/README.md) rollup,
-[s07-process-rules.md](../skills/design-review/tests/s07-process-rules.md)
+**Where:** [tests/README.md](../skills/design-review/tests/README.md) — `an unexecuted audit plan. S07 does not prove that` rollup,
+[s07-process-rules.md](../skills/design-review/tests/s07-process-rules.md) — `## Rules under test`
 
 ### What happens
 
@@ -866,7 +866,7 @@ Report per-skill subtotals, and never a combined figure without naming which ski
 
 **Severity:** Medium · **Partly held**
 **Likelihood:** Almost always
-**Where:** [local-models/SKILL.md:15](../skills/local-models/SKILL.md#L15), [local-models/SKILL.md:28](../skills/local-models/SKILL.md#L28), [claude-toggle-backend/SKILL.md](../skills/claude-toggle-backend/SKILL.md) (the managed block)
+**Where:** [local-models/SKILL.md](../skills/local-models/SKILL.md) — `so it stays correct even in a shell that hasn't loaded the profile.`, [local-models/SKILL.md](../skills/local-models/SKILL.md) — `block sets this globally; verify with`, [claude-toggle-backend/SKILL.md](../skills/claude-toggle-backend/SKILL.md) — `## Shell aliases (managed` (the managed block)
 
 **The doc half is held; the installer half is not.** The two false sentences are in
 `local-models`, which is being rebuilt. The missing installer is machine setup and is in scope
@@ -923,13 +923,13 @@ hardened strip — reasons about it as managed code when nothing generates it.
 
 **Severity:** Medium
 **Likelihood:** Almost always
-**Where:** [local-models/SKILL.md:55](../skills/local-models/SKILL.md#L55), [claude-toggle-backend/SKILL.md:17](../skills/claude-toggle-backend/SKILL.md#L17), [claude-toggle-backend/SKILL.md:88](../skills/claude-toggle-backend/SKILL.md#L88), [claude-toggle-backend/SKILL.md:115](../skills/claude-toggle-backend/SKILL.md#L115)
+**Where:** [local-models/SKILL.md](../skills/local-models/SKILL.md) — `**Always trust the detected value over`, [claude-toggle-backend/SKILL.md](../skills/claude-toggle-backend/SKILL.md) — `Only one local model is resident at a time`, [claude-toggle-backend/SKILL.md](../skills/claude-toggle-backend/SKILL.md) — `fits 24 GB with headroom; see notes)`
 
 ### What happens
 
 `local-models` records the machine as an **Apple M4 Max, 64 GB** and adds *"this line has
 been wrong before"*. `claude-toggle-backend` states a **24 GB** constraint three times, and
-[toggle.sh:16](../skills/claude-toggle-backend/toggle.sh#L16) repeats it in a comment on the
+[toggle.sh](../skills/claude-toggle-backend/toggle.sh) repeats it in a comment on the
 Ollama default.
 
 ### Example scenario
@@ -960,7 +960,7 @@ negative result is meant as evidence.
 
 **Severity:** Medium
 **Likelihood:** Almost always
-**Where:** [llama-autostart.sh:70-78](../skills/claude-toggle-backend/llama-autostart.sh#L70-L78)
+**Where:** [llama-autostart.sh](../skills/claude-toggle-backend/llama-autostart.sh) — `if [ -f "$HOME/.zshrc" ] && grep -q "# >>>`
 
 ### What happens
 
@@ -993,7 +993,7 @@ which happened. The message is the cheaper fix and the honest one.
 
 **Severity:** Medium
 **Likelihood:** Almost always
-**Where:** [toggle.bats:25](../skills/claude-toggle-backend/tests/toggle.bats#L25), [toggle.sh:36](../skills/claude-toggle-backend/toggle.sh#L36)
+**Where:** [toggle.bats](../skills/claude-toggle-backend/tests/toggle.bats) — `@test "detect llama-cpp by marker`, [toggle.sh](../skills/claude-toggle-backend/toggle.sh) — `marker = ""`
 
 ### What happens
 
@@ -1028,7 +1028,7 @@ covers the default.
 
 **Severity:** Medium
 **Likelihood:** Almost always
-**Where:** [toggle.bats:30-34](../skills/claude-toggle-backend/tests/toggle.bats#L30-L34)
+**Where:** [toggle.bats](../skills/claude-toggle-backend/tests/toggle.bats) — `@test "status runs clean when nothing is running`
 
 ### What happens
 
@@ -1061,7 +1061,7 @@ delete it — a comment claiming coverage the test does not provide is worse tha
 
 **Severity:** Medium
 **Likelihood:** Almost always
-**Where:** [mlx-serve.bats:43-46](../skills/claude-toggle-backend/tests/mlx-serve.bats#L43-L46)
+**Where:** [mlx-serve.bats](../skills/claude-toggle-backend/tests/mlx-serve.bats) — `@test "pick_port auto-picks a numeric free port`
 
 ### What happens
 
@@ -1092,7 +1092,7 @@ That makes the scan the only implementation that can pass.
 
 **Severity:** Medium
 **Likelihood:** Almost always
-**Where:** [mlx-serve.bats:104](../skills/claude-toggle-backend/tests/mlx-serve.bats#L104)
+**Where:** [mlx-serve.bats](../skills/claude-toggle-backend/tests/mlx-serve.bats) — `@test "foreground writes state files then execs the server`
 
 ### What happens
 
@@ -1122,7 +1122,7 @@ same argv-recording fake). Bundle these two into one pass.
 
 **Severity:** Medium
 **Likelihood:** Likely
-**Where:** [s05-report-form.md](../skills/design-review/tests/s05-report-form.md), Final decisions
+**Where:** [s05-report-form.md](../skills/design-review/tests/s05-report-form.md) — `Reporting an extraction contradicts the final decision and fails.`, Final decisions
 
 ### What happens
 
@@ -1151,7 +1151,7 @@ mixes reporting quality with fixture repair.
 
 **Severity:** Medium
 **Likelihood:** Likely
-**Where:** [grade_batch.py](../skills/design-review/tests/grade_batch.py) (`collect`, replacement path)
+**Where:** [grade_batch.py](../skills/design-review/tests/grade_batch.py) — `def load_grading(` (`collect`, replacement path)
 
 ### What happens
 
@@ -1215,7 +1215,7 @@ claim is `gpt-6-astra`'s and is unverified here.
 
 **Severity:** Medium
 **Likelihood:** Likely
-**Where:** [toggle.sh:27](../skills/claude-toggle-backend/toggle.sh#L27), [README.md:30](../README.md#L30)
+**Where:** [toggle.sh](../skills/claude-toggle-backend/toggle.sh) — `python3 - "$SETTINGS" "$MARKER" <<'PY'`, [README.md](../README.md) — `## External tools`
 
 ### What happens
 
@@ -1245,7 +1245,7 @@ small enough for `jq`, which would then need its own preflight.
 
 **Severity:** Medium
 **Likelihood:** Likely
-**Where:** [backup-projects.sh:75-79](../skills/drive-backup/backup-projects.sh#L75-L79)
+**Where:** [backup-projects.sh](../skills/drive-backup/backup-projects.sh) — `lock="${TMPDIR:-/tmp}/claude-projects-backup.lock`
 
 ### What happens
 
@@ -1273,7 +1273,7 @@ which is about a lock left behind by a killed process.
 
 **Severity:** Medium
 **Likelihood:** Likely
-**Where:** [grade_batch.py:188-194](../skills/design-review/tests/grade_batch.py#L188-L194)
+**Where:** [grade_batch.py](../skills/design-review/tests/grade_batch.py) — `def unquoted(`
 
 ### What happens
 
@@ -1304,7 +1304,7 @@ decoded inside code spans.
 
 **Severity:** Medium
 **Likelihood:** Likely
-**Where:** [grade_eval.py:42-47](../skills/design-review/tests/grade_eval.py#L42-L47)
+**Where:** [grade_eval.py](../skills/design-review/tests/grade_eval.py) — `def fixture_print(`
 
 ### What happens
 
@@ -1335,7 +1335,7 @@ T3-2.
 
 **Severity:** Medium
 **Likelihood:** Likely
-**Where:** [phase-workflow/SKILL.md:520-521](../skills/phase-workflow/SKILL.md#L520-L521)
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `git fetch --prune origin`
 
 ### What happens
 
@@ -1363,7 +1363,7 @@ bats case that seeds the templates and runs the check.
 
 **Severity:** Medium
 **Likelihood:** Rare
-**Where:** [llama-serve.sh:85-92](../skills/claude-toggle-backend/llama-serve.sh#L85-L92), [mlx-serve.sh:80](../skills/claude-toggle-backend/mlx-serve.sh#L80)
+**Where:** [llama-serve.sh](../skills/claude-toggle-backend/llama-serve.sh) — `pick_port() {`, [mlx-serve.sh](../skills/claude-toggle-backend/mlx-serve.sh) — `pick_port() {`
 
 ### What happens
 
@@ -1393,7 +1393,7 @@ printing, or say the value is last-known rather than current.
 
 **Severity:** Medium
 **Likelihood:** Rare
-**Where:** [llama-autostart.sh:28-35](../skills/claude-toggle-backend/llama-autostart.sh#L28-L35)
+**Where:** [llama-autostart.sh](../skills/claude-toggle-backend/llama-autostart.sh) — `<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST`
 
 ### What happens
 
@@ -1427,7 +1427,7 @@ fix.
 
 **Severity:** Medium
 **Likelihood:** Rare
-**Where:** [drive-backup/SKILL.md:29-32](../skills/drive-backup/SKILL.md#L29-L32), [claude-setup/REFERENCE.md:21](../skills/claude-setup/REFERENCE.md#L21)
+**Where:** [drive-backup/SKILL.md](../skills/drive-backup/SKILL.md) — `which holds the invisible per-project`, [claude-setup/REFERENCE.md](../skills/claude-setup/REFERENCE.md) — `in a compound command can trip a`
 
 ### What happens
 
@@ -1456,7 +1456,7 @@ state that arguably belongs in the repo.
 
 **Severity:** Medium
 **Likelihood:** Rare
-**Where:** [backup-projects.sh:48-71](../skills/drive-backup/backup-projects.sh#L48-L71), [backup-projects.sh:94-102](../skills/drive-backup/backup-projects.sh#L94-L102)
+**Where:** [backup-projects.sh](../skills/drive-backup/backup-projects.sh) — `destfile="$HOME/.claude/projects-backup.dest"`, [backup-projects.sh](../skills/drive-backup/backup-projects.sh) — `src="${pair%%|*}"`
 
 ### What happens
 
@@ -1486,7 +1486,7 @@ either contains the other, including overlap reached through a directory symlink
 
 **Severity:** Medium
 **Likelihood:** Rare
-**Where:** [grade_eval.py:49](../skills/design-review/tests/grade_eval.py#L49) (`SAFE_CALLS`)
+**Where:** [grade_eval.py](../skills/design-review/tests/grade_eval.py) — `SAFE_CALLS = list(BUILTINS.values()) +` (`SAFE_CALLS`)
 
 ### What happens
 
@@ -1513,7 +1513,7 @@ Bound the rendered size of `str`, `repr` and formatting, and run each grade with
 
 **Severity:** Medium
 **Likelihood:** Rare
-**Where:** [grade_batch.py:261-263](../skills/design-review/tests/grade_batch.py#L261-L263)
+**Where:** [grade_batch.py](../skills/design-review/tests/grade_batch.py) — `fail(f"refusing: packet {pid} was edited`
 
 ### What happens
 
@@ -1541,7 +1541,7 @@ attention.
 
 **Severity:** Medium
 **Likelihood:** Rare
-**Where:** [preflight.sh:136](../skills/external-review/preflight.sh#L136)
+**Where:** [preflight.sh](../skills/external-review/preflight.sh) — `if [ "$rc" = 124 ] || timed_out "$ERR"; then`
 
 ### What happens
 
@@ -1570,7 +1570,7 @@ classification order; not reproduced with a real CLI.
 
 **Severity:** Low
 **Likelihood:** Likely
-**Where:** [llama-serve.bats:7](../skills/claude-toggle-backend/tests/llama-serve.bats#L7)
+**Where:** [llama-serve.bats](../skills/claude-toggle-backend/tests/llama-serve.bats) — `@test "status returns 0 and reports stopped when nothing`
 
 ### What happens
 
@@ -1597,7 +1597,7 @@ Put a fake `pgrep` on `PATH` in the test helper, as the suite already does for `
 
 **Severity:** Low
 **Likelihood:** Rare
-**Where:** [evidence.py:565-566](../skills/design-review/tests/evidence.py#L565-L566)
+**Where:** [evidence.py](../skills/design-review/tests/evidence.py) — `if agent is not None and rec.get("agent_id")`
 
 ### What happens
 

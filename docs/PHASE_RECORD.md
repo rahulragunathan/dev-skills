@@ -113,6 +113,24 @@ The suite passes under both, so the gate is not weakened; but a result gathered 
 longer means what it meant before this phase, and the hand-off says which interpreter each number
 came from.
 
+## Task 3 mutation audit — ten behaviours, and two tests that proved nothing
+
+One mutation per behaviour, checking **which** test went red rather than the exit status. Eight
+of ten were red at their named test first time. Two left all 38 tests passing:
+
+| Behaviour mutated | Outcome |
+| --- | --- |
+| Fence delimiter length (`len(match[1]) >= len(opened)` → `True`) | **green** — fixture had two inner three-backtick lines, so the toggles landed evenly and the Where line was unfenced either way |
+| Where-field continuation (`lines[i + 1:]` → `[]`) | **green** — the control asserted a wrapped field stays clean, and dropping a *valid* reference produces no finding either way |
+
+Both were test defects of mine, both fixed, both now red at the named test. The fence fixture
+needs **exactly one** inner three-backtick line and the comment says so; the wrapped field gained
+a sibling test whose second line carries an absent fragment, so the line must be read for the
+check to fail. The control stayed, because it is what stops the fix over-reaching.
+
+The audit is the only thing that separated these two from the eight that worked. Reading them did
+not, and neither did their passing.
+
 ## Findings from executing the workflow
 
 Filed properly in Task 5; recorded here as they are found.

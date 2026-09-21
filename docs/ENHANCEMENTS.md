@@ -32,7 +32,7 @@ ENH-02, ENH-04 and ENH-05 are held in full; ENH-03 and ENH-07 are held in part.
 ## ENH-02 — Cover the untested llama.cpp and toggle paths
 
 **Priority:** High · **Effort:** ~1 day · **Held**
-**Where:** [llama-serve.bats](../skills/claude-toggle-backend/tests/llama-serve.bats), [toggle.bats](../skills/claude-toggle-backend/tests/toggle.bats)
+**Where:** [llama-serve.bats](../skills/claude-toggle-backend/tests/llama-serve.bats) — `trip set -e and make`, [toggle.bats](../skills/claude-toggle-backend/tests/toggle.bats) — `detect() { bash "$SCRIPT_DIR/toggle.sh" __detect; }`
 
 ### What it is
 
@@ -67,7 +67,7 @@ around them without fixing them first just adds more tests that cannot fail.
 ## ENH-03 — Test the two destructive scripts that have no tests at all
 
 **Priority:** High · **Effort:** ~1 day · **Partly held**
-**Where:** [backup-projects.sh](../skills/drive-backup/backup-projects.sh), [llama-autostart.sh](../skills/claude-toggle-backend/llama-autostart.sh)
+**Where:** [backup-projects.sh](../skills/drive-backup/backup-projects.sh) — `a run is already in progress`, [llama-autostart.sh](../skills/claude-toggle-backend/llama-autostart.sh) — `PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"`
 
 **Scope now:** `backup-projects.sh` only. The `llama-autostart.sh` half is held for the
 `claude-toggle-backend` rebuild, which will need its own harness anyway.
@@ -172,7 +172,7 @@ is, the task-by-task plan probably is not.
 ## ENH-14 — Share recorded-answer validation between evidence and grading
 
 **Priority:** Medium · **Effort:** ~1 day
-**Where:** [evidence.py](../skills/design-review/tests/evidence.py) · **Regression net:** `skills/design-review/tests/evidence.bats`
+**Where:** [evidence.py](../skills/design-review/tests/evidence.py) — `A batch is only worth grading if every answer in it was produced` · **Regression net:** `skills/design-review/tests/evidence.bats`
 
 ### What it is
 
@@ -193,7 +193,7 @@ Preserve evidence.py and grade_batch.py commands, exit codes and manifest format
 ## ENH-15 — Probe independent reviewers concurrently
 
 **Priority:** Medium · **Effort:** ~1 day
-**Where:** [preflight.sh](../skills/external-review/preflight.sh) · **Regression net:** `skills/external-review/tests/preflight.bats`
+**Where:** [preflight.sh](../skills/external-review/preflight.sh) — `One probe answers that before the` · **Regression net:** `skills/external-review/tests/preflight.bats`
 
 ### What it is
 
@@ -214,7 +214,7 @@ Keep per-reviewer readiness, quota and incomplete-turn semantics, high effort fl
 ## ENH-16 — Emit shared answer evidence once in grading JSON
 
 **Priority:** Medium · **Effort:** ~1 day
-**Where:** [grade.py](../skills/design-review/tests/grade.py) · **Regression net:** `skills/design-review/tests/grade.bats`
+**Where:** [grade.py](../skills/design-review/tests/grade.py) — `def build_report(` · **Regression net:** `skills/design-review/tests/grade.bats`
 
 ### What it is
 
@@ -235,7 +235,7 @@ Audit all consumers and provide a migration for existing reports before changing
 ## ENH-17 — Give roadmap rating scales one source
 
 **Priority:** Medium · **Effort:** ~1 day
-**Where:** [roadmap.py](../skills/phase-workflow/roadmap.py) · **Regression net:** `skills/phase-workflow/tests/roadmap.bats`
+**Where:** [roadmap.py](../skills/phase-workflow/roadmap.py) — `def index_rows(` · **Regression net:** `skills/phase-workflow/tests/roadmap.bats`
 
 ### What it is
 
@@ -256,7 +256,7 @@ Choose structured shared data or a validated template reader. Test ordering and 
 ## ENH-18 — Evaluate an isolated subprocess alternative to the fixture interpreter
 
 **Priority:** Medium · **Effort:** ~1 day
-**Where:** [grade_eval.py](../skills/design-review/tests/grade_eval.py) · **Regression net:** `skills/design-review/tests/grade.bats`
+**Where:** [grade_eval.py](../skills/design-review/tests/grade_eval.py) — `A bounded interpreter for fixture expressions` · **Regression net:** `skills/design-review/tests/grade.bats`
 
 ### What it is
 
@@ -277,7 +277,7 @@ A subprocess alone is not isolation. Preserve the prohibition on arbitrary files
 ## ENH-19 — Declare scenario grading rules as scenario data
 
 **Priority:** Medium · **Effort:** ~1 day
-**Where:** [grade.py](../skills/design-review/tests/grade.py) · **Regression net:** `skills/design-review/tests/grade.bats`
+**Where:** [grade.py](../skills/design-review/tests/grade.py) — `def mechanical_s05(` · **Regression net:** `skills/design-review/tests/grade.bats`
 
 ### What it is
 
@@ -298,7 +298,7 @@ The S05 banned-word scan now reads its rule text; other mappings remain in Pytho
 ## ENH-20 — Run mutation audits in a disposable checkout
 
 **Priority:** Medium · **Effort:** ~1 day
-**Where:** [mutation-restore.sh](../skills/phase-workflow/mutation-restore.sh) · **Regression net:** `skills/phase-workflow/tests/phase-git.bats`
+**Where:** [mutation-restore.sh](../skills/phase-workflow/mutation-restore.sh) — `The mutation is applied to the current checkout` · **Regression net:** `skills/phase-workflow/tests/phase-git.bats`
 
 ### What it is
 
@@ -319,7 +319,7 @@ Define dependency and ignored-file availability, command working directories, cl
 ## ENH-21 — Reconcile bundle and export scope exclusions
 
 **Priority:** Medium · **Effort:** ~1 day
-**Where:** [capture.sh](../skills/external-review/capture.sh) · **Regression net:** `skills/external-review/tests/capture.bats`
+**Where:** [capture.sh](../skills/external-review/capture.sh) — `NUL-delimited paths in scope before exclusions` · **Regression net:** `skills/external-review/tests/capture.bats`
 
 ### What it is
 
@@ -340,7 +340,7 @@ Choose whether to restrict the shared vocabulary or implement matching semantics
 ## ENH-22 — Validate verbatim judgement evidence in grade.py
 
 **Priority:** Medium · **Effort:** ~1 day
-**Where:** [grade.py](../skills/design-review/tests/grade.py) · **Regression net:** `skills/design-review/tests/grade_batch.bats`
+**Where:** [grade.py](../skills/design-review/tests/grade.py) — `Execute fixture checks and expose unresolved artifact judgements.` · **Regression net:** `skills/design-review/tests/grade_batch.bats`
 
 ### What it is
 
@@ -361,7 +361,7 @@ Deferred by the user after Claude's grading-tool review. Define allowed multi-ex
 ## ENH-23 — Calibrate graders with blind hand-graded anchors
 
 **Priority:** Medium · **Effort:** ~1 day
-**Where:** [grade_batch.py](../skills/design-review/tests/grade_batch.py) · **Regression net:** `skills/design-review/tests/grade_batch.bats`
+**Where:** [grade_batch.py](../skills/design-review/tests/grade_batch.py) — `Graders receive the whole packet, not just the prompt` · **Regression net:** `skills/design-review/tests/grade_batch.bats`
 
 ### What it is
 
@@ -382,7 +382,7 @@ Deferred by the user after Claude's grading-tool review. Retain reference proven
 ## ENH-24 — Report agreement with condition base rates and a fixed repeat fraction
 
 **Priority:** Medium · **Effort:** ~1 day
-**Where:** [grade_batch.py](../skills/design-review/tests/grade_batch.py) · **Regression net:** `skills/design-review/tests/grade_batch.bats`
+**Where:** [grade_batch.py](../skills/design-review/tests/grade_batch.py) — `A repeat grades the same answer, so it shares the first packet` · **Regression net:** `skills/design-review/tests/grade_batch.bats`
 
 ### What it is
 
@@ -403,7 +403,7 @@ Deferred by the user after Claude's grading-tool review. Specify repeat sampling
 ## ENH-25 — Measure how much answers reveal their experimental arm
 
 **Priority:** Medium · **Effort:** ~1 day
-**Where:** [grade_batch.py](../skills/design-review/tests/grade_batch.py) · **Regression net:** `skills/design-review/tests/grade_batch.bats`
+**Where:** [grade_batch.py](../skills/design-review/tests/grade_batch.py) — `condition text. A sample of answers is graded twice` · **Regression net:** `skills/design-review/tests/grade_batch.bats`
 
 ### What it is
 
@@ -424,7 +424,7 @@ Deferred by the user after Claude's grading-tool review. Decide when to elicit g
 ## ENH-26 — Test the conversion of a helper's evaluation gap into an opaque call
 
 **Priority:** Medium · **Effort:** ~1 hour
-**Where:** [grade_eval.py:158-162](../skills/design-review/tests/grade_eval.py#L158-L162) · **Regression net:** `skills/design-review/tests/grade.bats`
+**Where:** [grade_eval.py](../skills/design-review/tests/grade_eval.py) — `return fn(*args, **kwargs)` · **Regression net:** `skills/design-review/tests/grade.bats`
 
 ### What it is
 
@@ -445,7 +445,7 @@ Found in Claude's adversarial review of the overnight passes, 2026-09-14. Write 
 ## ENH-27 — Lint the markdown templates that live inside fences
 
 **Priority:** Medium · **Effort:** ~1 hour
-**Where:** [claude-setup/SKILL.md](../skills/claude-setup/SKILL.md) (the ```` ```markdown ```` fence) · **Regression net:** `skills/claude-setup/tests/install-standards.bats`
+**Where:** [claude-setup/SKILL.md](../skills/claude-setup/SKILL.md) — `Take the canonical text from inside the fenced block below` (the ```` ```markdown ```` fence) · **Regression net:** `skills/claude-setup/tests/install-standards.bats`
 
 ### What it is
 
@@ -492,7 +492,7 @@ in `claude-setup`.
 ## ENH-28 — let `publish-release.sh` verify remote presence instead of being told
 
 **Priority:** Medium · **Effort:** ~2 hours
-**Where:** [publish-release.sh](../skills/phase-workflow/publish-release.sh) · **Regression net:** `skills/phase-workflow/tests/phase-git.bats`
+**Where:** [publish-release.sh](../skills/phase-workflow/publish-release.sh) — `--check-origin exits before any ref changes.` · **Regression net:** `skills/phase-workflow/tests/phase-git.bats`
 
 ### What it is
 
@@ -526,7 +526,7 @@ keep the retain rule: nothing is deleted that was not proven safe.
 ## ENH-30 — anchor roadmap references to an identifier, not a line number
 
 **Priority:** Medium · **Effort:** ~half a day
-**Where:** `docs/KNOWN_ISSUES.md`, `docs/ENHANCEMENTS.md`, `docs/OPEN_QUESTIONS.md` · [roadmap.py](../skills/phase-workflow/roadmap.py) · **Regression net:** `skills/phase-workflow/tests/roadmap.bats`
+**Where:** `docs/KNOWN_ISSUES.md`, `docs/ENHANCEMENTS.md`, `docs/OPEN_QUESTIONS.md` · [roadmap.py](../skills/phase-workflow/roadmap.py) — `def verify_references(` · **Regression net:** `skills/phase-workflow/tests/roadmap.bats`
 
 ### What it is
 
@@ -576,7 +576,7 @@ Half-converted is worse than either state, so land all 59 in one phase.
 
 **Priority:** Low · **Effort:** ~2 hours · **Partly held**
 
-**Where:** [backup-projects.sh](../skills/drive-backup/backup-projects.sh), [claude-setup/SKILL.md](../skills/claude-setup/SKILL.md) (inline bash), and the four scripts under [claude-toggle-backend](../skills/claude-toggle-backend) — `toggle.sh`, `llama-serve.sh`, `mlx-serve.sh`, `llama-autostart.sh`
+**Where:** [backup-projects.sh](../skills/drive-backup/backup-projects.sh) — `snapshot Claude Code + Cowork project transcripts`, [claude-setup/SKILL.md](../skills/claude-setup/SKILL.md) — `### 1. Locate the config dir` (inline bash), and the four scripts under [claude-toggle-backend](../skills/claude-toggle-backend): toggle.sh, llama-serve.sh, mlx-serve.sh and llama-autostart.sh
 
 **Scope now:** `backup-projects.sh` and `claude-setup`'s inline bash. The
 `claude-toggle-backend` scripts are held for the rebuild, which should resolve the config dir
@@ -627,7 +627,7 @@ Deferred from the phase that closed KI-15, to keep the fix beside its tests.
 ## ENH-10 — make the project-env name mapping unambiguous
 
 **Priority:** Low · **Effort:** ~2 hours
-**Where:** [project-env/SKILL.md:18-21](../skills/project-env/SKILL.md#L18-L21)
+**Where:** [project-env/SKILL.md](../skills/project-env/SKILL.md) — `**One name for both.** The env name is the`
 
 ### What it is
 
@@ -658,7 +658,7 @@ docs.
 ## ENH-11 — reconcile an existing global markdownlint config instead of skipping it
 
 **Priority:** Low · **Effort:** ~1 hour
-**Where:** [claude-setup/SKILL.md](../skills/claude-setup/SKILL.md) step 3b
+**Where:** [claude-setup/SKILL.md](../skills/claude-setup/SKILL.md) — `### 3b. Markdown lint — install the CLI, pin one global config` step 3b
 
 ### What it is
 
@@ -686,7 +686,7 @@ step 2 merges `settings.json`.
 ## ENH-12 — feed the Gemini prompt through stdin rather than argv
 
 **Priority:** Low · **Effort:** ~1 hour
-**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) Gemini invocation
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `gemini_prompt_p<n>.txt` Gemini invocation
 
 ### What it is
 
@@ -710,7 +710,7 @@ record that argv is the only channel and keep the chunk ceiling as the control.
 ## ENH-29 — evaluate every gone branch before reporting
 
 **Priority:** Low · **Effort:** ~1 hour
-**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) §4 step 7 · **Regression net:** `skills/phase-workflow/tests/phase-git.bats`
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `$2 == "[gone]" && $1 != current` §4 step 7 · **Regression net:** `skills/phase-workflow/tests/phase-git.bats`
 
 ### What it is
 
