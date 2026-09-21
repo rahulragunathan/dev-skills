@@ -145,6 +145,10 @@ corrections are recorded here.
   unpushed commits.
 - **`ENH-29`** — the prune loop exits on the first retained branch, where `xargs git branch -d`
   attempted all of them. Fails safe; a behaviour the KI-46 fix introduced.
+- **`ENH-30`** — 44 roadmap entries carry 59 `#Lnn` anchors, and a line number is not an
+  identifier, file path, command, flag or config key, so the drift check structurally cannot
+  verify one. Two of this phase's own references drifted in-range and wrong. Replace each with a
+  greppable fragment and have `roadmap.py check` assert it still appears.
 
 ### Closed
 
