@@ -394,3 +394,201 @@ PY
   [[ "$output" == *"refusing:"* ]] || false
   [[ "$output" != *"Traceback"* ]]
 }
+
+# ---------------------------------------------------------------------------
+# ENH-30 — a roadmap reference carries a greppable fragment, and check verifies
+# it still appears in the file cited beside it.
+#
+# Five of the fifteen tests below are CONTROLS: they assert status 0 and so pass
+# before the feature exists. They are here because the other half of getting
+# this right is not flagging correct references, and a checker that refuses
+# everything would satisfy the other ten without them.
+# ---------------------------------------------------------------------------
+
+# Put reference text into KI-01's body. Multi-line input is supported, because
+# a real **Where:** field wraps and three entries in this repo do.
+put_ref() {
+  local tmp="$TEST_TMP/ki.md"
+  printf '%s\n' "$1" > "$TEST_TMP/ref.txt"
+  awk -v f="$TEST_TMP/ref.txt" '
+    $0 == "SURVIVOR-ONE" { while ((getline l < f) > 0) print l; next }
+    { print }
+  ' "$DOCS/KNOWN_ISSUES.md" > "$tmp" && mv "$tmp" "$DOCS/KNOWN_ISSUES.md"
+}
+
+# The scratch source tree the links resolve into: ../skills/x.sh from $DOCS.
+seed_source() {
+  mkdir -p "$TEST_TMP/skills/subdir"
+  printf 'guard() {\n  timed_out "$ERR" || return 1\n}\n' > "$TEST_TMP/skills/x.sh"
+  printf 'other_guard() {\n  :\n}\n' > "$TEST_TMP/skills/y.sh"
+}
+
+# Fails if check exits 0 while an entry still carries a line anchor.
+@test "refs: a #Lnn line anchor fails the check" {
+  seed_source
+  put_ref '**Where:** [x.sh:2](../skills/x.sh#L2) — `timed_out "$ERR"`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"line anchor"* ]] || false
+}
+
+# Fails if a quoted fragment that is nowhere in the cited file is accepted.
+@test "refs: a fragment absent from the cited file fails the check" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `no_such_function`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"fragment absent"* ]] || false
+}
+
+# CONTROL. Fails if a correct reference is reported as a problem.
+@test "refs: a fragment present in the cited file passes" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `timed_out "$ERR"`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
+
+# Fails if a link to a deleted or renamed file is accepted.
+@test "refs: a cited path missing from the tree fails the check" {
+  seed_source
+  put_ref '**Where:** [gone.sh](../skills/gone.sh) — `guard`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"cited path missing"* ]] || false
+}
+
+# CONTROL. Fails if the checker reads an entry's own example as a real
+# reference. ENH-30 demonstrates the banned form in a fence; successors will.
+@test "refs: a #Lnn shown inside a fenced block is not a finding" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `guard`
+
+```markdown
+before:  [x.sh:2](../skills/x.sh#L2)
+```'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
+
+# Fails if an entry can name where a bug lives with nothing greppable.
+@test "refs: a file link with no fragment fails the check" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) and the guard it holds'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no fragment"* ]] || false
+}
+
+# Fails if one verified fragment is allowed to certify a whole entry. This is
+# the false green both external reviewers attacked: the entry reports verified
+# while y.sh rots unwatched.
+@test "refs: a second file link without a fragment fails, even when the first has one" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `timed_out "$ERR"`, [y.sh](../skills/y.sh)'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no fragment"* ]] || false
+  [[ "$output" == *"y.sh"* ]] || false
+}
+
+# CONTROL. Fails if the checker reads only the first line of the field: the
+# fragment for y.sh is on line 2, and KI-47, KI-48 and KI-49 all wrap.
+@test "refs: a Where field wrapped onto a second line is read whole" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `timed_out "$ERR"`,
+[y.sh](../skills/y.sh) — `other_guard`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
+
+# Fails if fence tracking toggles on the inner three-backtick line: `inside`
+# stays true past the real close and every later reference disappears, which is
+# a false green rather than a false alarm.
+@test "refs: a four-backtick fence does not swallow the rest of the entry" {
+  seed_source
+  put_ref '````markdown
+```
+inner fence
+```
+````
+
+**Where:** [x.sh:2](../skills/x.sh#L2) — `timed_out "$ERR"`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"line anchor"* ]] || false
+}
+
+# Fails if an unrecognised link shape reads as no reference at all. A title
+# would otherwise bypass both anchor rejection and the fragment rule.
+@test "refs: a link carrying a title is parsed, not skipped" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh#L2 "the guard") — `timed_out "$ERR"`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"line anchor"* ]] || false
+}
+
+# CONTROL. Fails if an existence-only reference is forced to carry a fragment.
+# ENH-04 cites a directory and ENH-07 cites a skill folder.
+@test "refs: a directory link needs no fragment" {
+  seed_source
+  put_ref '**Where:** [subdir](../skills/subdir)'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
+
+# Fails if a degenerate fragment certifies a reference. A four-backtick inline
+# span parses down to a single space, which is present in every file.
+@test "refs: a whitespace-only fragment fails the check" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — ` `'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"fragment too weak"* ]] || false
+}
+
+# Fails if a line anchor outside the **Where:** field escapes the check.
+#
+# The two rules have different scopes and conflating them leaves a false green:
+# a fragment is required where the bug lives, so that requirement is scoped to
+# **Where:**, but no entry may carry a line anchor ANYWHERE. KI-07 and KI-17
+# both cite one in prose, and a gate that reports the roadmap clean while two
+# anchors remain is the failure ENH-30 exists to remove.
+@test "refs: a #Lnn line anchor in prose fails the check" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `timed_out "$ERR"`
+
+The behaviour is set by [x.sh:2](../skills/x.sh#L2) and nothing else.'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"line anchor"* ]] || false
+}
+
+# Fails if a link whose target is a near-miss typo escapes verification.
+#
+# `[x.sh](skills/x.sh)` is missing the `../`, so it resolves to `docs/skills/x.sh`
+# and nothing is there. Measured before this test existed: exit 0 with no
+# finding at all — a recognised link, silently skipped, which is the very thing
+# `_references` refuses to do for an unrecognised one. Once the conversion
+# removes every line anchor, no other check would catch it.
+@test "refs: a near-miss target with no ../ prefix is a finding, not a skip" {
+  seed_source
+  put_ref '**Where:** [x.sh](skills/x.sh) — `timed_out "$ERR"`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"cited path missing"* ]] || false
+}
+
+# CONTROL. Fails if a legitimate doc-relative link is forced to carry a
+# fragment. ENH-05 cites two plan documents exactly this way, and they resolve
+# inside docs/ rather than into the source tree, so there is no code for a
+# fragment to anchor to. This test is what stops the fix above over-reaching.
+@test "refs: a doc-relative link inside docs needs no fragment" {
+  seed_source
+  mkdir -p "$DOCS/superpowers/plans"
+  printf '# a plan\n' > "$DOCS/superpowers/plans/p.md"
+  put_ref '**Where:** [p.md](superpowers/plans/p.md)'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}

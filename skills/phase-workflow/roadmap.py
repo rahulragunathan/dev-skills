@@ -20,6 +20,7 @@ Exit 0 on success, 1 on refusal. Nothing is written unless every check passes.
 from __future__ import annotations
 
 import argparse
+import collections
 import os
 import tempfile
 import shutil
@@ -33,6 +34,16 @@ FILES = {
     "ENH": "ENHANCEMENTS.md",
     "UNK": "OPEN_QUESTIONS.md",
 }
+FENCE = re.compile(r'^ {0,3}(`{3,}|~{3,})(.*)$')
+LINK = re.compile(
+    r'\[[^\[\]\n]*\]\(\s*(?:<([^<>\n]*)>|([^()<>\s]*))'
+    r'(?:\s+(?:"[^"]*"|\'[^\']*\'|\([^()]*\)))?\s*\)')
+LOOSE = re.compile(r'\]\s*\(')
+FRAGMENT = re.compile(r'(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)', re.S)
+FIELD = re.compile(r'\*\*[^*\n]+:\*\*')
+LINE_ANCHOR = re.compile(r'#L\d+')
+WHERE = "**Where:**"
+Ref = collections.namedtuple("Ref", "target fragment")
 
 
 def fail(msg: str) -> None:
@@ -156,6 +167,156 @@ def reconcile(docs: pathlib.Path, proposed: dict[str, str] | None = None):
     return ok, problems
 
 
+def _fenced_lines(text: str) -> list[bool]:
+    """Keep nested, shorter fences from hiding the references after a block.
+
+    Only the opening character repeated at least as many times, followed by
+    whitespace alone, closes the block. Backticks in an info string instead
+    make the apparent opening fence ordinary text.
+    """
+    flags, opened = [], None
+    for line in text.splitlines():
+        match = FENCE.match(line)
+        if opened is None:
+            if match and (match[1][0] == "~" or "`" not in match[2]):
+                opened = match[1]
+            flags.append(opened is not None)
+        else:
+            flags.append(True)
+            if (match and match[1][0] == opened[0]
+                    and len(match[1]) >= len(opened) and not match[2].strip(" \t")):
+                opened = None
+    return flags
+
+
+def _where_field(lines: list[str]) -> str:
+    """Wrapped links and fragments belong to the same field, not to its body.
+
+    Stopping at paragraph and field boundaries prevents later examples from
+    supplying a missing fragment for an earlier citation.
+    """
+    for i, line in enumerate(lines):
+        line = line.lstrip()
+        if not line.startswith(WHERE):
+            continue
+        out = [line]
+        for nxt in lines[i + 1:]:
+            if not nxt.strip() or nxt.lstrip().startswith(("**", "#", "|")):
+                break
+            out.append(nxt)
+        return " ".join(out)
+    return ""
+
+
+def _references(field: str) -> list[Ref]:
+    """Unrecognised links must be findings, never silently missing references.
+
+    Code spans can themselves contain markdown; mask them while identifying
+    links and field boundaries, then bind each fragment to its preceding link.
+    """
+    syntax = FRAGMENT.sub(lambda m: " " * len(m[0]), field)
+    stop = FIELD.search(syntax, len(WHERE))
+    if stop:
+        field, syntax = field[:stop.start()], syntax[:stop.start()]
+    matches = [m for m in LINK.finditer(field) if syntax[m.start()] == "["]
+    remaining = list(syntax)
+    for match in matches:
+        remaining[match.start():match.end()] = " " * (match.end() - match.start())
+    if LOOSE.search("".join(remaining)):
+        raise ValueError("a link in this Where field is not in the accepted reference form")
+
+    refs = []
+    for i, match in enumerate(matches):
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(field)
+        span = FRAGMENT.search(field, match.end(), end)
+        fragment = span[2] if span else None
+        # Markdown trims one padding space at each end, except for all-space
+        # spans. Compare the quoted code, not the delimiter padding.
+        if (fragment and fragment.startswith(" ") and fragment.endswith(" ")
+                and fragment.strip(" ")):
+            fragment = fragment[1:-1]
+        destination = match[1] if match[1] is not None else match[2]
+        target = destination.partition("#")[0]
+        refs.append(Ref(target, fragment))
+    return refs
+
+
+def verify_references(docs: pathlib.Path) -> tuple[bool, list[str]]:
+    """Index agreement cannot reveal references whose cited source has drifted.
+
+    Unfenced entry text cannot carry line anchors. In the Where field, each
+    file link outside docs needs its own fragment; document links and directories
+    carry only an existence claim. Collect findings so reconciliation cannot
+    hide them.
+    """
+    ok, problems = True, []
+    docs = docs.resolve()
+    contents: dict[pathlib.Path, str] = {}
+    for name in FILES.values():
+        findings = []
+        _, entries = split_entries((docs / name).read_text())
+        for eid, body in entries.items():
+            # Keep a boundary where a fence was, rather than joining a field
+            # before the example to unrelated text after it.
+            lines = ["" if fenced else line
+                     for line, fenced in zip(body.splitlines(), _fenced_lines(body))]
+            # Line anchors are banned throughout the entry. Parse links only
+            # to retain their destination in the diagnostic, not to limit scope.
+            text = "\n".join(lines)
+            links = list(LINK.finditer(text))
+            for anchor in LINE_ANCHOR.finditer(text):
+                finding = f"  {eid}: line anchor {anchor[0]}"
+                for link in links:
+                    group = 1 if link[1] is not None else 2
+                    if link.start(group) <= anchor.start() < link.end(group):
+                        target, marker, suffix = link[group].partition("#")
+                        finding = f"  {eid}: line anchor {marker + suffix} on {target}"
+                        break
+                findings.append(finding)
+            field = _where_field(lines)
+            if not field:
+                continue
+            try:
+                refs = _references(field)
+            except ValueError as exc:
+                findings.append(f"  {eid}: {exc}")
+                continue
+            for ref in refs:
+                if "://" in ref.target:
+                    continue
+                try:
+                    path = (docs / ref.target).resolve()
+                    if not path.exists():
+                        findings.append(f"  {eid}: cited path missing: {ref.target}")
+                    elif path.is_dir():
+                        if ref.fragment is not None:
+                            findings.append(f"  {eid}: fragment on a directory link: {ref.target}")
+                    elif not path.is_file():
+                        findings.append(f"  {eid}: cited path is not a file: {ref.target}")
+                    elif path.is_relative_to(docs):
+                        continue
+                    elif ref.fragment is None:
+                        findings.append(f"  {eid}: file link with no fragment: {ref.target}")
+                    # This floor rejects degenerate fragments (spaces, fi, do, {),
+                    # but else/then/pass/next still pass. Distinctiveness needs
+                    # human judgement when converting citations.
+                    elif sum(not c.isspace() for c in ref.fragment) < 4:
+                        findings.append(f"  {eid}: fragment too weak to verify: {ref.target}")
+                    else:
+                        if path not in contents:
+                            contents[path] = path.read_text()
+                        if ref.fragment not in contents[path]:
+                            findings.append(f"  {eid}: fragment absent from {ref.target}: {ref.fragment}")
+                except (OSError, UnicodeError) as exc:
+                    findings.append(f"  {eid}: cannot read cited path {ref.target}: {exc}")
+        if findings:
+            ok = False
+        status = "INVALID" if findings else "verified"
+        problems.append(f"{name:22} references {status}")
+        problems.extend(findings)
+    return ok, problems
+
+
 def load(docs: pathlib.Path) -> tuple[str, dict[str, tuple[str, dict[str, str]]]]:
     roadmap_p = docs / "ROADMAP.md"
     if not roadmap_p.is_file():
@@ -172,9 +333,10 @@ def load(docs: pathlib.Path) -> tuple[str, dict[str, tuple[str, dict[str, str]]]
 def cmd_check(docs: pathlib.Path) -> int:
     load(docs)          # refuses early if a file is missing or malformed
     ok, problems = reconcile(docs)
-    for line in problems:
+    refs_ok, refs_problems = verify_references(docs)
+    for line in problems + refs_problems:
         print(line)
-    return 0 if ok else 1
+    return 0 if (ok and refs_ok) else 1
 
 
 def cmd_close(docs: pathlib.Path, eid: str) -> int:
