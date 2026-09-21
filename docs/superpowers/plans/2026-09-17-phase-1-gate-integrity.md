@@ -268,63 +268,30 @@ target test and reports a failure at the target line.
 
 - [ ] **Step 1: Write the failing tests**
 
-Fixtures live in a committed scratch repository, because `mutation-restore.sh` requires the target
-present at the SHA and addressed repo-relative (F-24), and `$SHA` must be set (F-25).
-`bats -f` takes an unanchored regex, so the name is anchored and quoted (F-26).
+**Two things in the recipe first drafted here were wrong and are corrected below**, because a plan
+that documents a failing recipe is worse than one that says so.
+
+*Astra disputed the first draft and was right.* It copied `verify_assertions.sh` into the scratch
+repository while the prompt required the script to resolve `mutation-restore.sh` as a sibling —
+both could not hold. The script is therefore run from its real home, with the scratch repository
+as the working directory:
 
 ```bash
-setup() {
-  export TEST_TMP="$(mktemp -d)"
-  export REPO="$TEST_TMP/repo"; mkdir -p "$REPO/t"
-  SCRIPT_SRC="$(cd "$BATS_TEST_DIRNAME/.." && pwd)/verify_assertions.sh"
-  cd "$REPO"; git init -q -b main .
-  git config user.email t@example.invalid; git config user.name Test
-  cp "$SCRIPT_SRC" ./verify_assertions.sh 2>/dev/null || touch ./verify_assertions.sh
-  cat > t/vac.bats <<'FIXTURE'
-@test "vacuous" {
-  [[ "a" == "b" ]]
-  [ 1 -eq 1 ]
-}
-FIXTURE
-  cat > t/real.bats <<'FIXTURE'
-@test "loadbearing" {
-  [ "a" = "a" ]
-  [ 1 -eq 1 ]
-}
-FIXTURE
-  git add -A && git commit -qm base
-  export SHA="$(git rev-parse HEAD)"
-}
-teardown() { cd /; rm -rf "$TEST_TMP"; }
-
-@test "a mid-test [[ ]] assertion is GREEN because negating it cannot fail its test" {
-  run bats t/vac.bats
-  [ "$status" -eq 0 ]                       # the fixture really is vacuous before we verify it
-  run bash ./verify_assertions.sh "$SHA" t/vac.bats 2 vacuous
-  [ "$status" -eq 1 ]
-  printf '%s\n' "$output" | grep -q '^GREEN'
-}
-
-@test "a converted assertion is RED because negating it fails its test" {
-  run bash ./verify_assertions.sh "$SHA" t/real.bats 2 loadbearing
-  [ "$status" -eq 0 ]
-  printf '%s\n' "$output" | grep -q '^RED'
-}
-
-@test "a fixture error under mutation is REFUSED, not RED" {
-  cat > t/broken.bats <<'FIXTURE'
-@test "needs a missing helper" {
-  load nonexistent_helper
-  [ "a" = "a" ]
-}
-FIXTURE
-  git add -A && git commit -qm broken
-  SHA2="$(git rev-parse HEAD)"
-  run bash ./verify_assertions.sh "$SHA2" t/broken.bats 3 'needs a missing helper'
-  [ "$status" -eq 1 ]
-  printf '%s\n' "$output" | grep -q '^REFUSED'
-}
+  local here; here="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"
+  export VERIFY="$here/verify_assertions.sh"
+  cp "$BATS_TEST_DIRNAME"/fixtures/verify/*.bats "$REPO/t/"
+  cd "$REPO"
 ```
+
+*Fixtures are real files, never heredocs.* Bats rewrites `@test` lines wherever they appear in a
+`.bats` file, heredoc bodies included, so an inline fixture arrives as
+`bats_test_function --description ... -- test_x;test_x() {` rather than the source it was meant to
+be. Verified directly. The fixtures live under `tests/fixtures/verify/`.
+
+The suite ends with nine tests. Beyond the three first planned, each of the following was added
+after a mutation audit or a review showed the behaviour was unprotected: a red at the wrong line,
+a regex-metacharacter test name, a compound disjunction, a continued-line disjunction, an
+ambiguous operator, and a load-bearing classification.
 
 - [ ] **Step 2: Run all three and confirm each fails for its own reason**
 

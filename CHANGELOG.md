@@ -93,6 +93,18 @@ here; the fifth misread a local utility as part of the merge cycle.
   never fire and the retain message blamed the branch. It is now an explicit
   `--confirmed-on-remote` flag — the right contract for a local utility whose caller is a human.
 
+- **`verify_assertions.sh` reported `GREEN` when an operator appeared inside a quoted literal.**
+  Found by external review of the code. The line-addressed `sed` takes the first matching
+  operator, so `[[ "$output" != *"a == b"* ]] || false` had its glob rewritten while the real
+  `!=` stood; the assertion held, the test passed, and `GREEN` means "not load-bearing". It now
+  counts occurrences of the same token set the substitutions use and refuses when more than one
+  is present. Shell quoting is not something to parse with `sed`, so the answer is to decline
+  the verdict.
+
+  That is the third false verdict from this tool, all fixed the same way — exit status alone
+  meant `RED`, a disjunction meant `GREEN`, an ambiguous line meant `GREEN`. Its `REFUSED` path
+  is where the correctness lives.
+
 The fifth read `publish-release.sh` as part of the documented merge cycle. It is not: §4 prunes
 with its own fence, and the script's header records it as a local-only utility. A test asserting
 that coupling was wrong and was removed along with the mode it forced.
