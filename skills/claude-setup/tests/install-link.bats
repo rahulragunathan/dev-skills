@@ -9,7 +9,7 @@ teardown() { rm -rf "$T"; }
 @test "missing source leaves the existing setup directory enabled" {
   run bash "$SCRIPT" "$T/missing" "$T/link"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"SOURCE"* ]]
+  [[ "$output" == *"SOURCE"* ]] || false
   [ -f "$T/link/keep" ]
   [ ! -e "$T/link.local.bak" ]
 }
@@ -19,7 +19,7 @@ teardown() { rm -rf "$T"; }
   chmod +x "$T/bin/ln"
   PATH="$T/bin:$PATH" run bash "$SCRIPT" "$T/source" "$T/link"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"LINK FAILED"* ]]
+  [[ "$output" == *"LINK FAILED"* ]] || false
   [ -f "$T/link/keep" ]
 }
 @test "successful link keeps original backup and resolves to physical source" {

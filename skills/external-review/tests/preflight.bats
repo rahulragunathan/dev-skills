@@ -63,7 +63,7 @@ EOF
   fake_codex_ready; fake_agy_ready
   run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
   [ "$status" -eq 0 ]
-  [[ "$output" == *"codex"*"READY"* ]]
+  [[ "$output" == *"codex"*"READY"* ]] || false
   [[ "$output" == *"gemini"*"READY"* ]]
 }
 
@@ -72,7 +72,7 @@ EOF
   # two demand different responses: downshift for one, wait for the other.
   fake_codex_ready; fake_agy_quota
   run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
-  [[ "$output" == *"gemini"*"QUOTA"* ]]
+  [[ "$output" == *"gemini"*"QUOTA"* ]] || false
   [[ "$output" != *"gemini"*"UNAVAILABLE"* ]]
 }
 
@@ -87,7 +87,7 @@ EOF
 @test "an availability error is UNAVAILABLE, so the caller downshifts instead of waiting" {
   fake_codex_ready; fake_agy_unavailable
   run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
-  [[ "$output" == *"gemini"*"UNAVAILABLE"* ]]
+  [[ "$output" == *"gemini"*"UNAVAILABLE"* ]] || false
   [[ "$output" != *"gemini"*"QUOTA"* ]]
 }
 
@@ -108,14 +108,14 @@ EOF
 @test "a missing CLI is MISSING, and is not confused with a failing one" {
   fake_agy_ready
   run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
-  [[ "$output" == *"codex"*"MISSING"* ]]
+  [[ "$output" == *"codex"*"MISSING"* ]] || false
   [ "$status" -eq 0 ]
 }
 
 @test "both CLIs missing is exit 1 and says so" {
   run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
   [ "$status" -eq 1 ]
-  [[ "$output" == *"codex"*"MISSING"* ]]
+  [[ "$output" == *"codex"*"MISSING"* ]] || false
   [[ "$output" == *"gemini"*"MISSING"* ]]
 }
 
@@ -124,7 +124,9 @@ EOF
   # alone cannot tell a finished review from an exhausted account.
   fake_codex_silent_zero; fake_agy_ready
   run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
-  [[ "$output" != *"codex"*"READY"* ]]
+  # Scoped to the codex line: a bare glob spans newlines, so *"codex"*"READY"*
+  # also matches codex on one line and gemini's READY on the next.
+  [[ "$(printf '%s\n' "$output" | grep '^codex')" != *"READY"* ]] || false
   [[ "$output" == *"codex"*"NO ANSWER"* ]]
 }
 
@@ -140,8 +142,8 @@ exit 0
 EOF
   chmod +x "$BIN/agy"
   run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
-  [[ "$output" == *"gemini"*"TIMEOUT"* ]]
-  [[ "$output" != *"gemini"*"QUOTA"* ]]
+  [[ "$output" == *"gemini"*"TIMEOUT"* ]] || false
+  [[ "$output" != *"gemini"*"QUOTA"* ]] || false
   [[ "$output" != *"gemini"*"READY"* ]]
 }
 
@@ -156,7 +158,7 @@ exit 0
 EOF
   chmod +x "$BIN/agy"
   run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
-  [[ "$output" == *"gemini"*"QUOTA"* ]]
+  [[ "$output" == *"gemini"*"QUOTA"* ]] || false
   [[ "$output" == *"110h19m32s"* ]]
 }
 
@@ -172,7 +174,7 @@ EOF
   printf '#!/bin/sh\necho ready\necho "print timeout: turn in progress" >&2\n' > "$BIN/agy"
   chmod +x "$BIN/agy"
   run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
-  [[ "$output" == *"gemini"*"TIMEOUT"* ]]
+  [[ "$output" == *"gemini"*"TIMEOUT"* ]] || false
   [[ "$output" != *"gemini"*"READY"* ]]
 }
 
@@ -192,8 +194,8 @@ EOF
   PREFLIGHT_TIMEOUT=1 run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
   [ "$status" -eq 0 ]
   [ "$((SECONDS - started))" -lt 8 ]
-  [[ "$output" == *"codex"*"TIMEOUT"* ]]
-  [[ "$output" == *"gemini"*"READY"* ]]
+  [[ "$output" == *"codex"*"TIMEOUT"* ]] || false
+  [[ "$output" == *"gemini"*"READY"* ]] || false
   ! kill -0 "$(cat "$TEST_TMP/child")" 2>/dev/null
 }
 
@@ -212,7 +214,7 @@ echo ready > "$out"
 SH
   chmod +x "$BIN/codex"
   run bash "$PREFLIGHT" --codex-model unavailable --codex-model discovered --gemini-model selected
-  [[ "$output" == *"codex"*"discovered"*"READY"* ]]
+  [[ "$output" == *"codex"*"discovered"*"READY"* ]] || false
   [ "$(cat "$TEST_TMP/models")" = $'unavailable\ndiscovered' ]
 }
 
@@ -220,7 +222,7 @@ SH
   fake_codex_ready
   run bash "$PREFLIGHT" --codex-model selected
   [ "$status" -eq 0 ]
-  [[ "$output" == *"gemini"*"MISSING"* ]]
+  [[ "$output" == *"gemini"*"MISSING"* ]] || false
   [[ "$output" == *"PARTIAL COVERAGE"* ]]
 }
 
@@ -273,4 +275,68 @@ PY
   run bash "$PREFLIGHT" --gemini-model first --gemini-model last
   [ "$status" -eq 1 ]
   [ "$(printf '%s\n' "$output" | grep -c 'last .*UNAVAILABLE')" -eq 1 ]
+}
+
+# Fails if a rung's effort is ignored and the probe runs at the hardcoded high.
+# preflight.sh receives the ladder's candidates via --codex-model and then runs
+# `-c model_reasoning_effort="high"` regardless, so a probe could clear a rung
+# at an effort the real review never uses. "QC T2-4" above pins high as the
+# default when a bare slug is given; this pins the pair overriding it.
+@test "a slug:effort rung probes at that effort, and -m gets the slug alone" {
+  fake_codex_ready; fake_agy_ready
+  sed -i.bak '2i\
+printf "%s\\n" "$@" > "$TEST_TMP/codex-args"\
+' "$BIN/codex"
+  run bash "$PREFLIGHT" --codex-model selected:medium --gemini-model selected
+  [ "$status" -eq 0 ]
+  grep -Fx 'model_reasoning_effort=medium' "$TEST_TMP/codex-args"
+  run grep -Fx 'model_reasoning_effort=high' "$TEST_TMP/codex-args"
+  [ "$status" -ne 0 ]
+  # -m must carry the slug only; "selected:medium" is not a model id
+  grep -Fx 'selected' "$TEST_TMP/codex-args"
+  run grep -Fx 'selected:medium' "$TEST_TMP/codex-args"
+  [ "$status" -ne 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# A reviewer that authored the diff is not a reviewer of it.
+#
+# The skill states this one way only -- "a second opinion from the same model
+# is not a second opinion" -- and names Claude. It has to hold for any author:
+# when Astra writes the diff, Codex is the author and cannot clear its own work.
+# Nothing today expresses that, so a pass with both CLIs ready reads as full
+# coverage even when one of them wrote the code under review.
+# ---------------------------------------------------------------------------
+
+# Fails if a pass reports full coverage while one of the two answering
+# reviewers authored the diff. Full coverage here is the ABSENCE of a partial
+# line, so the assertion has to look for the line rather than for its lack.
+@test "an authoring reviewer does not count toward coverage" {
+  fake_codex_ready; fake_agy_ready          # BOTH answer
+  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected --authored-by codex
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -q 'PARTIAL COVERAGE'
+}
+
+# Fails if excluding the only answering reviewer still reports coverage.
+@test "excluding the only answering reviewer leaves no coverage" {
+  fake_codex_ready; fake_agy_unavailable
+  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected --authored-by codex
+  [ "$status" -ne 0 ]
+  printf '%s\n' "$output" | grep -q 'NO REVIEWER CAN ANSWER'
+}
+
+# Fails if an excluded reviewer is reported as unable to answer. It answered
+# fine; it is barred. Conflating the two hides why coverage dropped, and the
+# operator cannot tell a broken CLI from a disqualified author.
+@test "an excluded reviewer is reported as the author, not as unable to answer" {
+  fake_codex_ready; fake_agy_ready
+  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected --authored-by codex
+  # Require a completed pass first: without this the assertions below are
+  # satisfied by the "unknown argument: --authored-by" rejection, which
+  # contains the string "author" and would pass with the flag unimplemented.
+  [ "$status" -eq 0 ]
+  local msg="$output"
+  printf '%s\n' "$msg" | grep -qi 'author'
+  [[ "$msg" != *"codex cannot answer"* ]] || false
 }

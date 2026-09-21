@@ -383,7 +383,7 @@ python3 skills/design-review/tests/rollup.py --check skills/design-review/tests/
 | S04 | `a287991c188d2a36` | `0619345ddc2e9548` | `47196f444f840946` | Current; Current |
 | S05 | `a0032527302c3acf` | `1c72d3ab44485175` | `47196f444f840946` | Current; Current |
 | S06 | `790832afba8ba5fa` | `aa21e532b4457c8b` | `47196f444f840946` | Current; Current |
-| S07 | `562115beedc26965` | `1c6a4c0f44c0d4bc` | `eece8525b5b13e01` | Current; Current |
+| S07 | `562115beedc26965` | `1c6a4c0f44c0d4bc` | `eece8525b5b13e01` | Current; **Expired** — phase 1 (2026-09-21) changed the loaded skill: `phase-workflow/SKILL.md` moved from `eece8525b5b13e01` to `db9d0e7280194046`. Grade retained. Re-gathering is blocked on KI-48: this arm was shown the two expressions its Mutation choice condition grades. |
 <!-- END GENERATED ROLLUP -->
 
 The revision table quotes the scenario records' applicability labels. “Current” is scoped to

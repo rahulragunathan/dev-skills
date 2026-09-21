@@ -391,6 +391,6 @@ p=pathlib.Path(sys.argv[1]); p.write_text(p.read_text().replace('| [KI-01](KNOWN
 PY
   run python3 "$RM" check --docs "$DOCS"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"refusing:"* ]]
+  [[ "$output" == *"refusing:"* ]] || false
   [[ "$output" != *"Traceback"* ]]
 }

@@ -39,7 +39,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 
 1. **Preflight before any phase-start mutation.** Use Bash for these blocks. Replace angle-bracket placeholders before running them. Run from the repo root. Stop on any failed command.
 
-   **Initial discovery.** Run this block once at phase start. Later sections load the recorded values; they do not re-run discovery. `gh` must be installed and able to read the repository and its merge settings. Resolve the repository from `origin`, not an upstream setting.
+   **Initial discovery.** Run this block once at phase start. Later sections load the recorded values from `docs/PHASE_RECORD.md`; they do not re-run discovery. `gh` must be installed and able to read the repository and its merge settings. Resolve the repository from `origin`, not an upstream setting.
 
    ```bash
    set -euo pipefail
@@ -54,7 +54,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    git check-ref-format "refs/heads/$DEFAULT_BRANCH"
    MERGE_METHOD="$(gh api "repos/$REPO" --jq 'if .allow_squash_merge then "squash" elif .allow_rebase_merge then "rebase" elif .allow_merge_commit then "merge" else empty end')"
    case "$MERGE_METHOD" in squash|rebase|merge) ;; *) echo "NO ALLOWED MERGE METHOD — stop"; exit 1 ;; esac
-   git fetch origin "+refs/heads/$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
+   git fetch origin "+refs/heads/${DEFAULT_BRANCH}:refs/remotes/origin/${DEFAULT_BRANCH}"
    git rev-parse --verify "refs/remotes/origin/$DEFAULT_BRANCH^{commit}"
    ```
 
@@ -79,7 +79,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 
    Body ends with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
 
-3. **Record exactly one allowed merge method at phase start.** The preflight selects `squash`, then `rebase`, then `merge`, taking the first allowed method. Persist `ORIGIN_URL`, `ORIGIN_PUSH_URL`, `REPO`, `DEFAULT_BRANCH`, `PHASE_BRANCH` and that selection in the phase record before publishing the branch. Preserve that record across sessions. If the user specifies another method, verify it is allowed before selecting it. Later checks do not replace this record. At the gate and merge, load the recorded method into `MERGE_METHOD`. A disabled method ends the merge attempt; do not silently substitute one. Repo rules and required reviews still apply.
+3. **Record exactly one allowed merge method at phase start.** The preflight selects `squash`, then `rebase`, then `merge`, taking the first allowed method. Persist `ORIGIN_URL`, `ORIGIN_PUSH_URL`, `REPO`, `DEFAULT_BRANCH`, `PHASE_BRANCH` and that selection in **`docs/PHASE_RECORD.md`** before publishing the branch — that file is the phase record, it is linked from `ROADMAP.md`, and it holds the phase in flight only. Overwrite it at each phase start rather than appending: one record per phase accumulating is the phase ledger the roadmap rules forbid. When no phase is in flight its body is the single line `No phase in flight.`, so the pointer never dangles and §4 always has somewhere to read. Preserve that record across sessions. If the user specifies another method, verify it is allowed before selecting it. Later checks do not replace this record. At the gate and merge, load the recorded method into `MERGE_METHOD`. A disabled method ends the merge attempt; do not silently substitute one. Repo rules and required reviews still apply.
 
 4. **Land the plan's diagram generators.** `design-review` builds them into the scratchpad at §1, because §1 runs before this branch exists, and the plan's front matter records their filenames. Copy **every** generator the plan recorded into `docs/` as this phase's first task **and commit it**. That commit is the baseline `design-review phase` compares against at §3 step 2. Skip this step entirely when the plan recorded none, which is the no-`drawio` path.
 5. Seed/refresh `ROADMAP.md`, `KNOWN_ISSUES.md`, `ENHANCEMENTS.md`, and `OPEN_QUESTIONS.md` under `docs/` from the templates next to this file, if the project doesn't have them.
@@ -218,6 +218,12 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    - **docs/ARCHITECTURE.md** — **records and explains every diagram the project has**, one short section each saying what it depicts and when to regenerate it, not a bare embed. Regenerate each one with the `drawio` skill and compare against the generator committed at §2 (commit the `.drawio` source, generator script, and rendered PNG). **Drift-check the generator, not the PNG** — its box and edge labels are string literals naming modules and files, so they drop into the identifier check below, while a PNG is opaque to it. Catch a stale render mechanically: regenerate, then `git status`; if the PNG changes it was already out of date with its own source.
    - **CHANGELOG.md** — this phase's user-visible changes, appended to `[Unreleased]` under Added/Changed/Fixed/Removed. Never edit a released section. Every entry here is *moved* out of ROADMAP and its supporting file, not copied. Decide the version now (minor for additive work, patch for fixes and docs, major for a break). Prepare the release before external review: rename the populated `[Unreleased]` heading to `## [<version>] - <date> — <phase name>`, add a fresh empty `[Unreleased]` above it, and add the compare link under `## Reference`. Commit and push these edits before step 5. Record the version in the hand-off. Tag only after the approved PR merges.
    - **KNOWN_ISSUES.md / ENHANCEMENTS.md / OPEN_QUESTIONS.md** — every finding triaged out of steps 1–3 gets a full entry in the right one and a pointer row in ROADMAP, not a one-liner in ROADMAP alone. Getting these current *before* step 5 is what lets the external reviewers be told what is already tracked, so they stop re-deriving the backlog. Rate it when you write it; an unrated item is an untriaged item. Re-check the ordering, and re-check the filing: a question that has become a defined bug moves to KNOWN_ISSUES.
+   - **docs/PHASE_RECORD.md** — bring it current. It is written at §2 step 3 and then goes stale by
+     default: the phase's later tasks, the deviations taken, the findings triaged and the version
+     cut all happen after it was last touched. Record what the phase actually did, not what it
+     planned to do. **§4 reads `MERGE_METHOD` from this file**, so a stale record is not a tidiness
+     problem — it is the merge cycle reading the wrong value. Overwrite, never append: one record
+     per phase accumulating is the phase ledger the roadmap rules forbid.
    - **Location** — root keeps README.md, CLAUDE.md, CHANGELOG.md, LICENSE; every other doc lives in `docs/`. If a doc is at root that shouldn't be, `git mv` it so the rename is tracked, then fix every inbound link.
    - **Current-state rule:** every doc except CLAUDE.md, **CHANGELOG.md** and the roadmap files (`ROADMAP.md`, `KNOWN_ISSUES.md`, `ENHANCEMENTS.md`, `OPEN_QUESTIONS.md`) documents only what the code *is*. CHANGELOG is exempt because describing removed features is most of a changelog's job; no "what we didn't build", no rejected alternatives, no removed features. Decisions-not-taken that future developers/agents must know go in the **project CLAUDE.md** only.
    - **Project CLAUDE.md** — updated to match the code as it actually is, plus those awareness notes.
@@ -257,6 +263,31 @@ what remains expired.
 6. **Post-fix drift re-check — narrow, not another holistic pass.** If step 5's fixes moved a module, the diagrams are back in scope: regenerate and compare. Step 5 changed code after step 4 declared the docs true. Re-check only what those fixes touched: the docs and code comments the changed files invalidate, and the CHANGELOG entries whose claims moved. Then confirm every filing from every pass has both its full entry and its ROADMAP pointer row, with ratings that agree. Report what you found, not only what you fixed.
 7. **Present to the user and stop** — the phase gate.
    - **Include a findings table per review pass** from step 5, in `external-review`'s canonical format, with the phase-mode disposition vocabulary. Chat-only — never written to a per-phase review file. It exists so the user can see every finding and pull any deferred one back into this phase before signing off.
+   - **Confirm `docs/PHASE_RECORD.md` is current, and do not take that on trust.** Step 4 brought
+     it current, but steps 5 to 7 and every re-gate come after step 4, so it goes stale again by
+     default. Compare its last commit against `HEAD`:
+
+     ```bash
+     LAST_RECORD="$(git log -1 --format=%H -- docs/PHASE_RECORD.md)"
+     BEHIND="$(git rev-list --count "$LAST_RECORD"..HEAD)"
+     [ "$BEHIND" -eq 0 ] || { echo "PHASE RECORD PREDATES $BEHIND LATER COMMITS — re-read it"; exit 1; }
+     ```
+
+     Updating it makes it the newest commit again, which is why this is the last edit before
+     presenting. **A phase whose record still describes an earlier task has not reached the
+     gate**, whatever the tests say — §4 reads `MERGE_METHOD` from that file.
+
+   - **Record the PR number and the release version in `docs/PHASE_RECORD.md` before presenting.**
+     §4 loads `MERGE_METHOD` from that file and needs `APPROVED_SHA` too, and a hand-off in chat
+     does not survive a session boundary — which is what "preserve that record across sessions" at
+     §2 step 3 requires. §2 could not record either value: neither is known until the gate.
+
+     **Do not write the SHA into the file.** A commit cannot contain its own hash: the write
+     changes the commit it describes, and amending to correct it regresses without end. Record the
+     `PR` instead and resolve the SHA from it — the gate has already verified that the PR head,
+     `origin/<branch>` and local `HEAD` are the same commit, so this is exact rather than a
+     convenience. Sign-off binds to that head; an edit afterwards moves it and means re-requesting
+     review on the new one.
    - **Do not merge.** The merge is the post-sign-off action; it happens in §4 and nowhere else. Committing and pushing are not — those happened per task, throughout the phase.
    - **The gate has two checkable states.** First, **the work is committed, pushed, and on a PR marked ready for review** — every one of those is a fact git or `gh` will answer, none is self-attested:
 
@@ -310,6 +341,47 @@ what remains expired.
    - **End the hand-off with the actual state:** "Committed and pushed on `<branch>`, PR `<n>` ready at `<gate SHA>`, awaiting your sign-off to merge."
    - **Any edit while waiting for sign-off invalidates approval**, including a typo or release metadata edit. Commit and push it, name it in a follow-up, repeat the gate and obtain sign-off on the new SHA.
 
+### Writing bats assertions — three things that cost a phase
+
+**A false `[[ ]]` does not fail its test unless it is the test's last command.** Measured on bash
+3.2.57 with bats 1.14.0; a false `[ ]` does stop it. Sixty-eight assertions in this repo were
+therefore read by their author and never by the suite. `bats_assertions.py` finds them.
+
+**It is also the standing regression check.** An assertion ending in `|| false` is load-bearing
+wherever it sits, so the tool reports it `final`. Across the four in-scope skills the count of
+`mid` rows is therefore **0**, and any number above zero is an assertion that went in unguarded:
+
+```bash
+python3 skills/phase-workflow/bats_assertions.py skills/*/tests/*.bats | awk -F'\t' '$4=="mid"'
+```
+
+`claude-toggle-backend` is the exception — its five are held with that skill's rebuild, per KI-52.
+Its fourth column is `mid` for an unguarded assertion followed by more commands and
+`final` for either the last command or an assertion already ending in `|| false`.
+
+**Convert by appending `|| false`, not by rewriting.** `[[ ... ]] || false` is load-bearing and
+leaves the expression untouched, so the assertion cannot quietly come to mean something else.
+Rewriting into `printf | grep -q` is the tempting alternative and it narrows every pattern that
+spans lines — see below. `verify_assertions.sh` proves an assertion is load-bearing; only reading
+the diff proves the conversion preserved its meaning.
+Run `verify_assertions.sh` from the repo root with a repo-relative file path;
+absolute paths are refused.
+
+**`$output` is multiline, and line-oriented tools reason about it wrongly.** Three separate
+defects in one phase came from this:
+
+| Form | What goes wrong |
+| ------ | ---------------- |
+| `[[ "$output" == *"A"*"B"* ]]` | globs span newlines, so it matches `A` on one line and `B` on another |
+| `grep -q 'A.*B'` | line-based, so it does **not** match across lines — the reverse mistake |
+| `grep -qv 'A'` | succeeds when *any* line lacks `A`; it cannot show `A` is absent |
+
+To assert a substring is absent from the whole output, use `[[ "$output" != *"A"* ]] || false`.
+To scope a match to one line, select it first: `[[ "$(printf '%s\n' "$output" | grep '^codex')" != *"READY"* ]] || false`.
+
+**Also: a second `run` overwrites `$output`.** Save the text you mean to assert on before the
+next `run`, or the assertion checks the wrong thing and passes.
+
 ## 4. Post-sign-off merge cycle
 
 Sign-off — as defined at the top of this file — is the only trigger. Once it comes, run the whole cycle without re-asking.
@@ -329,7 +401,7 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
 1. **Confirm release preparation.** The approved commit already contains the release heading and compare link from §3 step 4. Do not repeat those edits. If anything is missing, return to §3 and obtain approval for the new SHA.
 2. **Confirm publication.** The gate recorded matching local, origin and PR SHAs. Do not add a release commit after sign-off. On resume, inspect the PR state first: `MERGED` proceeds to step 5, an open PR proceeds to step 3, and a closed unmerged PR stops. Require its `headRefOid` to equal `APPROVED_SHA` in every case.
 3. **Wait for checks** on an open PR: `gh pr checks "$PR" -R "$REPO" --watch`. A failing check, an unknown check state or a blocking required review ends this attempt. Report it and stop. If no checks exist, verify that against the repo's requirements before proceeding. Do not bypass branch rules or push fixes through an approved gate.
-4. **Merge the approved head with the recorded method.** Do not request branch deletion during merge. Queue-based repositories choose their queue's merge strategy. Leave queued work pending until GitHub confirms completion; do not tag an open PR or treat it as merged.
+4. **Merge the approved head with the method recorded in `docs/PHASE_RECORD.md`.** Do not request branch deletion during merge. Queue-based repositories choose their queue's merge strategy. Leave queued work pending until GitHub confirms completion; do not tag an open PR or treat it as merged.
 
    ```bash
    set -euo pipefail
@@ -422,9 +494,17 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
    CURRENT="$(git symbolic-ref --quiet --short HEAD || true)"
    GONE="$(printf '%s\n' "$BRANCHES" | awk -v current="$CURRENT" '$2 == "[gone]" && $1 != current {print $1}')"
    if [ -n "$GONE" ]; then
-     # -d refuses a branch holding unmerged work, which is exactly the retain rule.
-     # Never -D here: a force-delete discards commits that were never pushed.
-     echo "$GONE" | xargs git branch -d || { echo "RETAINED — branch deletion failed; inspect it by hand"; exit 1; }
+     # Never -D except at the approved tip already confirmed present on the remote.
+     # That tip contains no unpushed commits; use -d for every other branch.
+     while IFS= read -r b; do
+       if [ "$(git rev-parse "$b")" = "${APPROVED_SHA:-}" ]; then
+         git branch -D "$b"
+       elif git branch -d "$b"; then
+         :
+       else
+         echo "RETAINED — $b holds commits absent from ${DEFAULT_BRANCH:-the default branch}"; exit 1
+       fi
+     done <<< "$GONE"
    else
      echo "Nothing to clean up."
    fi

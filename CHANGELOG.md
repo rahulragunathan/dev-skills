@@ -10,6 +10,152 @@ here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-09-21 — Phase 1, gate integrity
+
+Two of the checks that judge every later phase were not checking. This phase repaired them, and
+the repairs found more of the same class in their own code.
+
+### Added
+
+- **`bats_assertions.py`** reports every `[[ ]]` assertion in a bats file and whether another
+  command follows it in its test. Extent comes from `@test` and top-level function boundaries,
+  never brace depth, which breaks on `${...}` and embedded python; heredoc bodies are skipped so
+  fixture text is never inventoried as code. Measured inventory for the four in-scope skills: 309
+  tests, 123 assertions, **68 mid-test**. The figures previously recorded in KI-45 — 325, 145, 78
+  — were read rather than measured.
+- **`verify_assertions.sh`** confirms one converted assertion is load-bearing by negating it and
+  requiring its own test to fail at that line. It drives `mutation-restore.sh` rather than adding
+  mutation logic. `mutation-restore.sh` exits 0 whenever the test returned exactly 1, and bats
+  returns 1 for a fixture error too, so exit status alone cannot certify discrimination.
+- **`--authored-by <codex|gemini>`** in `preflight.sh` disqualifies a reviewer from coverage when
+  it wrote the diff under review. It is reported as the author with its probe result, not as
+  unable to answer: it answered and is barred, and an operator has to be able to tell a broken
+  CLI from a disqualified one.
+- **`docs/PHASE_RECORD.md`** is the phase record, linked from ROADMAP. It holds the phase in
+  flight only and is overwritten at each phase start; when none is in flight its body is one
+  line. `phase-workflow` referenced "the phase record" in three places and defined it nowhere.
+- **`KI-47` to `KI-52`** filed from `gpt-6-astra`'s review of the round-9 evidence and grading.
+  The two that change a conclusion: no grading packet carries S05's banned-word list its Rule 4
+  grades against, and S07's with-skill arm is shown the two expressions its mutation-choice
+  condition grades. Both verified independently.
+
+### Changed
+
+- **The Codex ladder emits `slug:effort` rungs.** Effort identifies a rung: every model in the
+  cache defaults to `low`, so naming a slug alone got the weakest setting of the strongest model
+  while the log read as if the strongest had run. A `priority` tie also resolved by position in
+  the JSON — `gpt-5.6-sol` and `gpt-6-astra` both sit at 1 — and now breaks on higher version.
+  `ultra` is excluded: it delegates tasks automatically, so the diff may not come from the model
+  recorded against it.
+- **Reviewer independence is a property of the diff's author**, not of Claude. The rule ran one
+  way only and named Claude; when a non-Claude reviewer writes the diff, it cannot clear its own
+  work either.
+
+### Fixed
+
+- **`KI-45` — 68 mid-test `[[ ]]` assertions across twelve suites were checked by the reader and
+  never by the suite.** Appending `|| false` is the whole change: the expression is untouched, so
+  no assertion can quietly mean something different afterwards. Each of the 68 was then verified
+  load-bearing — 66 by `verify_assertions.sh`, 2 by hand after falsifying every branch of a
+  disjunction.
+- **A broken assertion that had never been evaluated.** `preflight.bats:127` asserted
+  `[[ "$output" != *"codex"*"READY"* ]]`. Globs span newlines, so it matched `codex` on one line
+  and `gemini ... READY` on the next, and could never have passed once evaluated. `preflight.sh`
+  was correct; the assertion is now scoped to the codex line.
+- **`KI-46` — the phase cleanup could not delete a squash-merged branch.** `-D` is now reached
+  only at a tip already confirmed present on the remote, and the retain message gives its reason.
+  `publish-release.sh` carried the same call under a message that was false for a squash merge.
+- **`KI-53` — zsh mangled the phase-start refspec.** `$DEFAULT_BRANCH:refs/...` read as a `:r`
+  history modifier, building `+refs/heads/mainefs/remotes/origin/main`. The block is labelled
+  bash, but zsh is the default macOS shell and the step tells the operator to run it.
+- **`KI-54` — the phase record had three consumers and no path.** §2 step 3 wrote it, §2 and §4
+  read it back for `MERGE_METHOD`, and nothing said where it lived.
+
+### Fixed at the gate
+
+`/code-review high` found five defects in this phase's own code. Four were real and are fixed
+here; the fifth misread a local utility as part of the merge cycle.
+
+- **`verify_assertions.sh` reported `GREEN` for a disjunction split across continued lines.** It
+  read only the requested line and required `]]` on it, so `[[ A \` / `|| B ]] || false` slipped
+  past the compound guard and earned the one verdict the guard exists to prevent — and §3 step 3
+  has an assertion failing the audit fixed or deleted, so a working assertion would have been
+  deleted on the strength of it.
+- **`bats_assertions.py` read `$(( 1 << 2 ))` as opening a heredoc**, took `2` as the delimiter,
+  swallowed the rest of the file and refused it outright. Latent, and total for any file using
+  arithmetic shift.
+- **A converted assertion was still reported `mid`.** Classification was positional only, so
+  `[[ ... ]] || false` looked identical to an unguarded assertion and the inventory could not
+  detect a regression. An explicit trailing `|| false` now classifies as `final`, which makes the
+  count of `mid` rows across the in-scope skills **0** and turns the inventory into a standing
+  check. Continued lines are joined first, so a wrapped assertion is judged by its logical form.
+- **`publish-release.sh` gated `-D` on an `APPROVED_SHA` that no fence exports**, so it could
+  never fire and the retain message blamed the branch. It is now an explicit
+  `--confirmed-on-remote` flag — the right contract for a local utility whose caller is a human.
+
+- **`verify_assertions.sh` reported `GREEN` when an operator appeared inside a quoted literal.**
+  Found by external review of the code. The line-addressed `sed` takes the first matching
+  operator, so `[[ "$output" != *"a == b"* ]] || false` had its glob rewritten while the real
+  `!=` stood; the assertion held, the test passed, and `GREEN` means "not load-bearing". It now
+  counts occurrences of the same token set the substitutions use and refuses when more than one
+  is present. Shell quoting is not something to parse with `sed`, so the answer is to decline
+  the verdict.
+
+  That is the third false verdict from this tool, all fixed the same way — exit status alone
+  meant `RED`, a disjunction meant `GREEN`, an ambiguous line meant `GREEN`. Its `REFUSED` path
+  is where the correctness lives.
+
+The fifth read `publish-release.sh` as part of the documented merge cycle. It is not: §4 prunes
+with its own fence, and the script's header records it as a local-only utility. A test asserting
+that coupling was wrong and was removed along with the mode it forced.
+
+### Corrected
+
+Three claims in released sections were wrong. Released sections are never edited, so the
+corrections are recorded here.
+
+- **v1.10.2 said KI-46's entry records that "`git cherry` discriminates where `-d` does not".**
+  It does not. Measured: a two-commit branch squash-merged reports `+` for every commit while the
+  tree is identical, so it is retained forever; and a branch whose unique work is a merge commit
+  reports *nothing*, because `git cherry` skips merge commits, so it is **deleted although it
+  holds work nothing else has**. The earlier verification used a one-commit branch. Comparing
+  trees discriminates; comparing per-commit patches does not.
+- **v1.10.0 said "the Codex model ladder tops out at `gpt-6-astra`".** Nothing in the cache ranks
+  it above `gpt-5.6-sol`; both sit at `priority: 1`, so the claim held only by file order.
+- **v1.10.0 said "every listed model supports low through max".** `gpt-5.6-luna` has no `ultra`
+  and `gpt-5.5` has neither `max` nor `ultra`.
+
+### Evidence
+
+- **S07's with-skill evidence is expired by this phase.** S07 loads `phase-workflow`, whose
+  `SKILL.md` moved from `eece8525b5b13e01` to `db9d0e7280194046`, and a changed loaded skill
+  expires its with-skill run. The round-9 row is marked **Expired** with the reason and its grade
+  retained; the rollup is regenerated. S07's baselines stay current — its prompt and condition
+  hashes are unchanged, and a baseline does not expire because a skill changed.
+- **S01 to S06 are unaffected.** They load `design-review/SKILL.md`, which this phase did not
+  touch: it still hashes to `47196f444f840946`, exactly as round 9 recorded.
+- **Re-gathering S07 is blocked on KI-48**, not merely pending. That arm was shown the two
+  expressions its Mutation choice condition grades, so re-running it before the scenario is fixed
+  would buy a fresh hash over the same invalid comparison.
+
+### Filed
+
+- **`ENH-28`** — `--confirmed-on-remote` is an operator assertion, not a verification. The script
+  can establish remote presence itself, and `-D` is the one command here that can discard
+  unpushed commits.
+- **`ENH-29`** — the prune loop exits on the first retained branch, where `xargs git branch -d`
+  attempted all of them. Fails safe; a behaviour the KI-46 fix introduced.
+- **`ENH-30`** — 44 roadmap entries carry 59 `#Lnn` anchors, and a line number is not an
+  identifier, file path, command, flag or config key, so the drift check structurally cannot
+  verify one. Two of this phase's own references drifted in-range and wrong. Replace each with a
+  greppable fragment and have `roadmap.py check` assert it still appears.
+
+### Closed
+
+- **`UNK-02`** — no test here can be shown to discriminate from git history alone. Answered "do
+  nothing" and recorded in CLAUDE.md: the mutation check replaces historical evidence. This phase
+  also measured that substitute's limits.
+
 ## [1.10.2] - 2026-09-16
 
 ### Added
@@ -669,7 +815,8 @@ here — the plugin manifest's version is the only record of them.
 
 ## Reference
 
-[Unreleased]: https://github.com/rahulragunathan/localclaude/compare/v1.10.2...HEAD
+[Unreleased]: https://github.com/rahulragunathan/localclaude/compare/v1.11.0...HEAD
+[1.11.0]: https://github.com/rahulragunathan/localclaude/compare/v1.10.2...v1.11.0
 [1.10.2]: https://github.com/rahulragunathan/localclaude/compare/v1.10.1...v1.10.2
 [1.10.1]: https://github.com/rahulragunathan/localclaude/compare/v1.10.0...v1.10.1
 [1.10.0]: https://github.com/rahulragunathan/localclaude/compare/v1.8.0...v1.10.0

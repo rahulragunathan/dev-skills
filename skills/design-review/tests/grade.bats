@@ -566,7 +566,7 @@ PY
   printf '```python\na, b = 5\nassert a == 5\n```\n' > "$T/answer.md"
   run report
   [ "$status" -eq 2 ]
-  [[ "$output" != *"Traceback"* ]]
+  [[ "$output" != *"Traceback"* ]] || false
   check_report "[c['status'] for c in r['checks']]==['could-not-evaluate']"
 }
 
@@ -613,7 +613,7 @@ PY
     for invalid in none partial; do
       run python3 "$G" --scenario "$S" --answer "$T/answer.md" --judgements "$T/$invalid.json" --json
       [ "$status" -eq 3 ]
-      [[ "$output" == *"disputes"* ]]
+      [[ "$output" == *"disputes"* ]] || false
     done
     run python3 "$G" --scenario "$S" --answer "$T/answer.md" --judgements "$T/all.json" --json
     [ "$status" -eq 0 ]
