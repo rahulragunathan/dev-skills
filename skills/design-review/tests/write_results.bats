@@ -43,7 +43,7 @@ cell() { python3 "$W" "$SCEN" --show | awk -v r="$1" -v c="$2" '
   local before; before="$(cat "$SCEN")"
   run python3 "$W" "$SCEN" --run "With skill (round 2)" --set "Notez=oops"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"no such column"* ]]
+  [[ "$output" == *"no such column"* ]] || false
   [ "$(cat "$SCEN")" = "$before" ]
 }
 
@@ -109,7 +109,7 @@ cell() { python3 "$W" "$SCEN" --show | awk -v r="$1" -v c="$2" '
   local before; before="$(cat "$SCEN")"
   run python3 "$W" "$SCEN" --add --run "With skill (round 2)" --set "Date=2026-09-09"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"already"* ]]
+  [[ "$output" == *"already"* ]] || false
   [ "$(cat "$SCEN")" = "$before" ]
 }
 
@@ -303,7 +303,7 @@ PY
   cp "$SCEN" "$SCEN.before"
   run python3 "$W" "$SCEN" --repair-layout "$TEST_TMP/repair.json"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"separator"* ]]
+  [[ "$output" == *"separator"* ]] || false
   cmp "$SCEN" "$SCEN.before"
 }
 
@@ -322,7 +322,7 @@ PY
   cp "$SCEN" "$SCEN.before"
   run python3 "$W" "$SCEN" --show
   [ "$status" -eq 0 ]
-  [[ "$output" == *"extra"* ]]
-  [[ "$output" == *"malformed separator"* ]]
+  [[ "$output" == *"extra"* ]] || false
+  [[ "$output" == *"malformed separator"* ]] || false
   cmp "$SCEN" "$SCEN.before"
 }

@@ -1,0 +1,123 @@
+skills/claude-setup/tests/install-link.bats	12	missing source leaves the existing setup directory enabled	mid
+skills/claude-setup/tests/install-link.bats	22	link failure restores the original setup directory	mid
+skills/claude-setup/tests/install-standards.bats	78	closing marker deleted by hand: refuses and changes nothing	mid
+skills/claude-setup/tests/install-standards.bats	159	two managed blocks: refuses and changes nothing	mid
+skills/claude-setup/tests/install-standards.bats	194	a dangling symlink target is refused, not written through	mid
+skills/claude-setup/tests/install-standards.bats	220	legacy unmarked standards refuse ambiguous reconciliation without appending	mid
+skills/claude-setup/tests/install-standards.bats	267	QC T2-2: unmarked reworded legacy content requires explicit adoption without backup	mid
+skills/design-review/tests/evidence.bats	137	check: a batch gathered against the current skills is current	final
+skills/design-review/tests/evidence.bats	147	check: only the scenario whose skill moved is reported expired	mid
+skills/design-review/tests/evidence.bats	148	check: only the scenario whose skill moved is reported expired	final
+skills/design-review/tests/evidence.bats	160	check: a changed grading condition also expires the scenario	final
+skills/design-review/tests/evidence.bats	183	record: a baseline that used a tool is refused as contaminated	mid
+skills/design-review/tests/evidence.bats	203	check: an incomplete batch is reported, not passed	final
+skills/design-review/tests/evidence.bats	217	init: a scenario that does not declare its skill is refused	final
+skills/design-review/tests/evidence.bats	229	record: a run dispatched with a different prompt is refused	mid
+skills/design-review/tests/evidence.bats	259	record: a transcript captured mid-run is refused	mid
+skills/design-review/tests/evidence.bats	275	check: a batch whose answer files are gone is not current	mid
+skills/design-review/tests/evidence.bats	276	check: a batch whose answer files are gone is not current	final
+skills/design-review/tests/evidence.bats	290	check: an answer edited after recording is reported	final
+skills/design-review/tests/evidence.bats	309	record: a final message that still holds a tool call is incomplete	final
+skills/design-review/tests/evidence.bats	342	check: a batch missing a replicate is not complete	mid
+skills/design-review/tests/evidence.bats	343	check: a batch missing a replicate is not complete	mid
+skills/design-review/tests/evidence.bats	344	check: a batch missing a replicate is not complete	mid
+skills/design-review/tests/evidence.bats	398	check: malformed manifest replicate counts cannot bypass completeness	mid
+skills/design-review/tests/evidence.bats	456	record: a finished transcript with no completion notification is refused	mid
+skills/design-review/tests/evidence.bats	468	record: a run the harness reported failed or killed is refused	mid
+skills/design-review/tests/evidence.bats	500	record: completion text written by a model is not a notification	final
+skills/design-review/tests/evidence.bats	510	record: --session names the dispatching session for a transcript kept elsewhere	mid
+skills/design-review/tests/evidence.bats	542	log-dispatch: a second dispatch for one slot needs --replace, which replaces the line	mid
+skills/design-review/tests/evidence.bats	575	record-log: a run still generating is pending, not refused	mid
+skills/design-review/tests/evidence.bats	589	record-log: a contaminated baseline is named for re-dispatch while the rest record	mid
+skills/design-review/tests/evidence.bats	602	record-log: running it again changes nothing	mid
+skills/design-review/tests/evidence.bats	628	record-log: a malformed log records nothing	mid
+skills/design-review/tests/grade.bats	189	a human verdict needs reviewer reasoning and matching answer and condition hashes	final
+skills/design-review/tests/grade.bats	283	explicit hash-bound human judgements support a grade and survive in output	final
+skills/design-review/tests/grade.bats	569	QC T3-3: invalid unpacking in an answer is an evaluation gap, not refused input	mid
+skills/design-review/tests/grade.bats	578	QC T3-3: invalid replicate metadata cannot inherit evidence exit one	final
+skills/design-review/tests/grade.bats	590	QC T3-3: null reviewer is invalid input with no traceback	final
+skills/design-review/tests/grade.bats	598	QC T3-3: renumbered S07 refuses a missing fixture condition without traceback	final
+skills/design-review/tests/grade.bats	616	QC T3-4: every scenario protects executed failures unless all linked checks are disputed	mid
+skills/design-review/tests/grade_batch.bats	141	F-05: summary excludes an old first grade while its replacement is pending	final
+skills/design-review/tests/grade_batch.bats	153	F-06: already collected packets are still checked for edits	final
+skills/design-review/tests/grade_batch.bats	202	collect: a verdict whose evidence is not quoted from the answer is refused	mid
+skills/design-review/tests/grade_batch.bats	215	collect: a grader that used a tool is refused	mid
+skills/design-review/tests/grade_batch.bats	225	collect: a reply that skips a condition is refused	final
+skills/design-review/tests/grade_batch.bats	236	collect: grades are refused once the grader prompt has changed since prepare	final
+skills/design-review/tests/grade_batch.bats	246	collect: a grader still running is pending, not refused	final
+skills/design-review/tests/grade_batch.bats	261	agree: a repeat that disagrees with its first grade is counted and named	mid
+skills/design-review/tests/grade_batch.bats	262	agree: a repeat that disagrees with its first grade is counted and named	mid
+skills/design-review/tests/grade_batch.bats	263	agree: a repeat that disagrees with its first grade is counted and named	mid
+skills/design-review/tests/grade_batch.bats	264	agree: a repeat that disagrees with its first grade is counted and named	final
+skills/design-review/tests/grade_batch.bats	277	summary: counts first grades per arm and condition, and ignores repeats	mid
+skills/design-review/tests/grade_batch.bats	278	summary: counts first grades per arm and condition, and ignores repeats	mid
+skills/design-review/tests/grade_batch.bats	279	summary: counts first grades per arm and condition, and ignores repeats	final
+skills/design-review/tests/grade_batch.bats	294	collect: a packet edited after prepare is refused	mid
+skills/design-review/tests/rollup.bats	44	QC T3-9: checked README rollup matches and rejects drift without writing	mid
+skills/design-review/tests/write_results.bats	46	an unknown column name is refused, and the file is untouched	mid
+skills/design-review/tests/write_results.bats	112	add: a duplicate Run value is refused	mid
+skills/design-review/tests/write_results.bats	306	QC T1-1: separator repair refuses to overwrite a data row	mid
+skills/design-review/tests/write_results.bats	325	QC T5 writer: show diagnoses malformed rows without modifying them	mid
+skills/design-review/tests/write_results.bats	326	QC T5 writer: show diagnoses malformed rows without modifying them	mid
+skills/external-review/tests/capture.bats	124	repo: a read failure refuses the bundle	final
+skills/external-review/tests/capture.bats	284	repo: an output directory inside the repository is refused	final
+skills/external-review/tests/capture.bats	351	plan: --exclude is refused rather than silently ignored	final
+skills/external-review/tests/capture.bats	436	QC T1-2: credential-shaped ancestors above the repository do not exclude its files	mid
+skills/external-review/tests/capture.bats	461	QC T1-3: a read failure remains fatal beyond a pipe buffer of withheld records	final
+skills/external-review/tests/codex-root.bats	67	an exclusion that matches nothing is refused	final
+skills/external-review/tests/codex-root.bats	76	a dirty tree is refused rather than reviewed as HEAD	mid
+skills/external-review/tests/codex-root.bats	95	an excluded path is not reachable through git either	final
+skills/external-review/tests/codex-root.bats	109	export inside the source repository is refused before exposing parent history	mid
+skills/external-review/tests/codex-root.bats	119	export through a symlink into another repository is refused	final
+skills/external-review/tests/preflight.bats	66	both reviewers ready: reports both and exits 0	mid
+skills/external-review/tests/preflight.bats	67	both reviewers ready: reports both and exits 0	final
+skills/external-review/tests/preflight.bats	75	an exhausted account is reported as QUOTA, not as a model problem	mid
+skills/external-review/tests/preflight.bats	76	an exhausted account is reported as QUOTA, not as a model problem	final
+skills/external-review/tests/preflight.bats	84	the quota reset window is surfaced, not swallowed	final
+skills/external-review/tests/preflight.bats	90	an availability error is UNAVAILABLE, so the caller downshifts instead of waiting	mid
+skills/external-review/tests/preflight.bats	91	an availability error is UNAVAILABLE, so the caller downshifts instead of waiting	final
+skills/external-review/tests/preflight.bats	98	one reviewer ready is exit 0: the pass runs with partial coverage	final
+skills/external-review/tests/preflight.bats	111	a missing CLI is MISSING, and is not confused with a failing one	mid
+skills/external-review/tests/preflight.bats	118	both CLIs missing is exit 1 and says so	mid
+skills/external-review/tests/preflight.bats	119	both CLIs missing is exit 1 and says so	final
+skills/external-review/tests/preflight.bats	127	a CLI that exits 0 without producing an answer is not READY	mid
+skills/external-review/tests/preflight.bats	128	a CLI that exits 0 without producing an answer is not READY	final
+skills/external-review/tests/preflight.bats	143	a probe timeout is TIMEOUT, not confused with an exhausted account	mid
+skills/external-review/tests/preflight.bats	144	a probe timeout is TIMEOUT, not confused with an exhausted account	mid
+skills/external-review/tests/preflight.bats	145	a probe timeout is TIMEOUT, not confused with an exhausted account	final
+skills/external-review/tests/preflight.bats	159	an exhausted account that exits 0 is still reported as QUOTA	mid
+skills/external-review/tests/preflight.bats	160	an exhausted account that exits 0 is still reported as QUOTA	final
+skills/external-review/tests/preflight.bats	167	preflight requires discovered candidates rather than fixed default models	final
+skills/external-review/tests/preflight.bats	175	nonempty timeout output never reports readiness	mid
+skills/external-review/tests/preflight.bats	176	nonempty timeout output never reports readiness	final
+skills/external-review/tests/preflight.bats	184	unexpected nonempty answer is not the readiness token	final
+skills/external-review/tests/preflight.bats	195	codex deadline kills the process group and still probes Gemini	mid
+skills/external-review/tests/preflight.bats	196	codex deadline kills the process group and still probes Gemini	mid
+skills/external-review/tests/preflight.bats	215	unavailable candidate falls through to the next supplied model	mid
+skills/external-review/tests/preflight.bats	223	one discovered ladder still reports a missing other reviewer	mid
+skills/external-review/tests/preflight.bats	224	one discovered ladder still reports a missing other reviewer	final
+skills/external-review/tests/preflight.bats	235	QC T2-3: healthy Codex configuration output cannot become a timeout	final
+skills/phase-workflow/tests/phase-git.bats	50	restore: refuses on a dirty tree rather than discarding the work	mid
+skills/phase-workflow/tests/phase-git.bats	57	restore: a test that passes under mutation is reported, not certified	mid
+skills/phase-workflow/tests/phase-git.bats	66	restore: a collection error is not accepted as an assertion red	mid
+skills/phase-workflow/tests/phase-git.bats	75	restore: a mutation that matches nothing is refused	final
+skills/phase-workflow/tests/phase-git.bats	84	restore: a symlinked target is refused	final
+skills/phase-workflow/tests/phase-git.bats	117	publish: refuses when the push URL was repointed after the gate	mid
+skills/phase-workflow/tests/phase-git.bats	155	publish: retains a branch that advanced past the approved SHA	mid
+skills/phase-workflow/tests/phase-git.bats	186	origin check: rejects a changed fetch URL	final
+skills/phase-workflow/tests/phase-git.bats	193	origin check: rejects a changed push URL	final
+skills/phase-workflow/tests/phase-git.bats	201	origin check: rejects a second push URL even when the first matches	final
+skills/phase-workflow/tests/phase-git.bats	221	restore: a SHA that is not HEAD is refused before anything is mutated	mid
+skills/phase-workflow/tests/phase-git.bats	241	restore: a restore that silently does nothing is reported, not swallowed	final
+skills/phase-workflow/tests/phase-git.bats	254	restore: a test still red on normal code refuses certification	mid
+skills/phase-workflow/tests/phase-git.bats	261	restore: unrelated tracked index and worktree drift is retained and refused	mid
+skills/phase-workflow/tests/phase-git.bats	289	adversarial: documented cleanup returns failure when fetch fails	final
+skills/phase-workflow/tests/phase-git.bats	328	documented release: a conflicting remote tag is retained	mid
+skills/phase-workflow/tests/phase-git.bats	339	documented release: failed tag push can resume without moving the retained local tag	mid
+skills/phase-workflow/tests/roadmap.bats	208	check: a dangling index row is reported	final
+skills/phase-workflow/tests/roadmap.bats	284	check: an index row pointing at the wrong anchor is reported	final
+skills/phase-workflow/tests/roadmap.bats	317	check: wrong-file displayed IDs cannot disappear from reconciliation	final
+skills/phase-workflow/tests/roadmap.bats	324	check: mismatched detail and pointer ratings are refused	final
+skills/phase-workflow/tests/roadmap.bats	336	check: rating order is validated independently of agreement	final
+skills/phase-workflow/tests/roadmap.bats	394	QC T3-10: missing trailing pipe refuses with a diagnostic instead of IndexError	mid
+skills/phase-workflow/tests/roadmap.bats	395	QC T3-10: missing trailing pipe refuses with a diagnostic instead of IndexError	final

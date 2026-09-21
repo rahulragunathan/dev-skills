@@ -21,6 +21,22 @@ setup() {
   git add -A && git commit -qm base
 }
 
+# Build a runnable copy of the documented Codex invocation loop, with the
+# ladder stubbed to emit $1. Both invocation tests need this; the copies
+# differed only in the stub's output.
+write_invoke_script() {   # $1 = ladder output, $2 = destination
+  python3 - "$CODEX_ROOT" "$2" "$TEST_TMP" "$1" <<'INVOKE_PY'
+import pathlib,re,sys
+text=pathlib.Path(sys.argv[1]).with_name('SKILL.md').read_text()
+block=next(b for b in re.findall(r'```bash\n(.*?)```',text,re.S)
+           if 'for m in $(codex_ladder)' in b and 'codex exec' in b)
+prelude=('codex_ladder() { echo ' + sys.argv[4] + '; }\n'
+         'codex() { printf "%s\\n" "$@" > "$ARGS"; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2"; }\n')
+pathlib.Path(sys.argv[2]).write_text(prelude+block.replace('<scratchpad>',sys.argv[3]).replace('<repo-root>','SOURCE-REPO'))
+INVOKE_PY
+}
+
+
 teardown() { teardown_capture_env; }
 
 @test "the pruned root holds the in-scope files" {
@@ -73,7 +89,7 @@ teardown() { teardown_capture_env; }
   printf 'UNCOMMITTED\n' >> README.md
   run bash "$CODEX_ROOT" "$ROOT" --exclude skills/held
   [ "$status" -eq 1 ]
-  [[ "$output" == *"DIRTY"* ]]
+  [[ "$output" == *"DIRTY"* ]] || false
   grep -q 'UNCOMMITTED' "$REPO/README.md"
 }
 
@@ -106,7 +122,7 @@ teardown() { teardown_capture_env; }
 @test "export inside the source repository is refused before exposing parent history" {
   run bash "$CODEX_ROOT" "$REPO/export" --exclude skills/held
   [ "$status" -eq 1 ]
-  [[ "$output" == *"ENCLOSING REPOSITORY"* ]]
+  [[ "$output" == *"ENCLOSING REPOSITORY"* ]] || false
   [ ! -e "$REPO/export/README.md" ]
 }
 
@@ -157,13 +173,7 @@ teardown() { teardown_capture_env; }
 }
 
 @test "adversarial: documented Codex loop uses the prepared root and export flag" {
-  python3 - "$CODEX_ROOT" "$TEST_TMP/invoke.sh" "$TEST_TMP" <<'PY'
-import pathlib,re,sys
-text=pathlib.Path(sys.argv[1]).with_name('SKILL.md').read_text()
-block=next(b for b in re.findall(r'```bash\n(.*?)```',text,re.S) if 'for m in $(codex_ladder)' in b and 'codex exec' in b)
-prelude='codex_ladder() { echo fixture-model; }\ncodex() { printf "%s\\n" "$@" > "$ARGS"; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2"; }\n'
-pathlib.Path(sys.argv[2]).write_text(prelude+block.replace('<scratchpad>',sys.argv[3]).replace('<repo-root>','SOURCE-REPO'))
-PY
+  write_invoke_script 'fixture-model' "$TEST_TMP/invoke.sh"
   ARGS="$TEST_TMP/args" run bash "$TEST_TMP/invoke.sh"
   [ "$status" -eq 0 ]
   python3 - "$TEST_TMP/args" "$ROOT" <<'PY'
@@ -188,4 +198,81 @@ PY
   echo dirty >> README.md
   run bash -c 'root=$(bash "$CODEX_ROOT" "$ROOT" 2> "$TEST_TMP/error"); rc=$?; [ "$rc" = 1 ] && [ -z "$root" ] && grep -q "TREE IS DIRTY" "$TEST_TMP/error"'
   [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# The Codex ladder emits (slug, effort) rungs.
+#
+# codex_ladder() has never run under test: the invocation tests stub it with
+# `codex_ladder() { echo fixture-model; }`, which is why two defects survived.
+#
+#  1. It emits bare slugs, so the real ladder -- Sol-medium, Astra-low,
+#     Astra-max -- cannot be expressed at all, and every rung ran at whatever
+#     effort the caller hardcoded.
+#  2. `gpt-5.6-sol` and `gpt-6-astra` both sit at `priority: 1` in the live
+#     cache, so `sorted(key=priority)` is stable and rung 1 resolves to
+#     whichever appears first in the JSON file, not to rank.
+# ---------------------------------------------------------------------------
+
+ladder_fn() {
+  python3 - "$(dirname "$CAPTURE")/SKILL.md" <<'PY'
+import pathlib,re,sys
+blocks=re.findall(r'```bash\n(.*?)```',pathlib.Path(sys.argv[1]).read_text(),re.S)
+print(next(b for b in blocks if 'codex_ladder()' in b))
+PY
+}
+
+# Fails if a priority tie resolves by position in the cache file, or if a rung
+# omits the effort it should run at.
+@test "a priority tie is broken by version, and each rung carries its effort" {
+  mkdir -p "$TEST_TMP/home/.codex"
+  cat > "$TEST_TMP/home/.codex/models_cache.json" <<'JSON'
+{"models":[
+ {"slug":"gpt-5.6-sol","visibility":"list","priority":1,"default_reasoning_level":"low",
+  "supported_reasoning_levels":[{"effort":"low"},{"effort":"medium"},{"effort":"max"}]},
+ {"slug":"gpt-6-astra","visibility":"list","priority":1,"default_reasoning_level":"low",
+  "supported_reasoning_levels":[{"effort":"low"},{"effort":"medium"},{"effort":"max"}]}]}
+JSON
+  # fixture property: the tie is real and file order disagrees with the rule
+  [ "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["models"][0]["slug"])' \
+        "$TEST_TMP/home/.codex/models_cache.json")" = "gpt-5.6-sol" ] || false
+  run bash -c "$(ladder_fn); HOME='$TEST_TMP/home' codex_ladder"
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | tr ' ' '\n' | grep -c .)" -eq 2 ] || false
+  [ "$(printf '%s\n' "$output" | tr ' ' '\n' | sed -n 1p)" = "gpt-6-astra:max" ]
+  [ "$(printf '%s\n' "$output" | tr ' ' '\n' | sed -n 2p)" = "gpt-5.6-sol:max" ]
+}
+
+# Fails if `ultra` is offered as a rung. It delegates tasks automatically, so
+# the diff may not come from the model recorded against it.
+@test "ultra is never selected as a rung" {
+  mkdir -p "$TEST_TMP/home/.codex"
+  cat > "$TEST_TMP/home/.codex/models_cache.json" <<'JSON'
+{"models":[{"slug":"gpt-6-astra","visibility":"list","priority":1,"default_reasoning_level":"low",
+ "supported_reasoning_levels":[{"effort":"max"},{"effort":"ultra"}]}]}
+JSON
+  grep -q ultra "$TEST_TMP/home/.codex/models_cache.json" || false
+  run bash -c "$(ladder_fn); HOME='$TEST_TMP/home' codex_ladder"
+  [ "$status" -eq 0 ]
+  [ "$output" = "gpt-6-astra:max" ]
+}
+
+# Fails if the documented invocation loop passes a slug:effort rung straight to
+# `-m`. The loop above this one stubs the ladder with a bare `fixture-model`,
+# so the pair-splitting branch never runs there and the rung format added for
+# the ladder had no test reaching it.
+@test "adversarial: the documented Codex loop splits a slug:effort rung" {
+  write_invoke_script 'fixture-model:medium' "$TEST_TMP/invoke.sh"
+  ARGS="$TEST_TMP/args2" run bash "$TEST_TMP/invoke.sh"
+  [ "$status" -eq 0 ]
+  python3 - "$TEST_TMP/args2" <<'PY'
+import pathlib,sys
+args=pathlib.Path(sys.argv[1]).read_text().splitlines()
+# -m carries the slug alone; the pair is not a model id
+assert args[args.index('-m')+1] == 'fixture-model', args
+assert 'fixture-model:medium' not in args, args
+# and the rung's effort reaches the invocation, not a hardcoded high
+assert 'model_reasoning_effort=medium' in args, args
+assert 'model_reasoning_effort=high' not in args, args
+PY
 }

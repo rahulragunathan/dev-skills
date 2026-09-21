@@ -487,6 +487,89 @@ in `claude-setup`.
 
 ---
 
+<a id="enh-28"></a>
+
+## ENH-28 — let `publish-release.sh` verify remote presence instead of being told
+
+**Priority:** Medium · **Effort:** ~2 hours
+**Where:** [publish-release.sh](../skills/phase-workflow/publish-release.sh) · **Regression net:** `skills/phase-workflow/tests/phase-git.bats`
+
+### What it is
+
+`--confirmed-on-remote` is an operator assertion, not a verification. The script runs
+`git branch -D` on the strength of a flag, having checked only that the branch tip equals the
+positional `<approved-sha>`.
+
+### Why it matters
+
+`-D` is the one command in this workflow that can discard commits that were never pushed. The
+flag replaced an invisible `APPROVED_SHA` environment dependency, which was worse — it could
+never fire and the retain message blamed the branch — but neither form proves the commits reached
+the remote. An operator who passes the flag while the branch holds an amended or fixup commit
+loses it.
+
+### Notes for the work
+
+The script can establish this itself. `git for-each-ref --contains <sha> refs/remotes/origin/`
+non-empty shows the commit is reachable from a remote-tracking ref, and
+`[ -z "$(git diff <branch> <default>)" ]` shows the work landed even when a squash discarded the
+commits — that tree comparison was measured correct for both the squash and merge-commit cases
+`git cherry` gets wrong. Decide whether the flag becomes redundant or remains as an override, and
+keep the retain rule: nothing is deleted that was not proven safe.
+
+**Source:** gemini-3.8-flash-high — phase review, phase 1 gate integrity, 2026-09-21.
+
+---
+
+<a id="enh-30"></a>
+
+## ENH-30 — anchor roadmap references to an identifier, not a line number
+
+**Priority:** Medium · **Effort:** ~half a day
+**Where:** `docs/KNOWN_ISSUES.md`, `docs/ENHANCEMENTS.md`, `docs/OPEN_QUESTIONS.md` · [roadmap.py](../skills/phase-workflow/roadmap.py) · **Regression net:** `skills/phase-workflow/tests/roadmap.bats`
+
+### What it is
+
+44 entries carry 59 `#Lnn` line anchors. Replace each with the file link plus a greppable
+identifier or code fragment:
+
+```markdown
+before:  [preflight.sh:136](../skills/external-review/preflight.sh#L136)
+after:   [preflight.sh](../skills/external-review/preflight.sh) — `timed_out "$ERR"`
+```
+
+Then extend `roadmap.py check` to assert the quoted fragment still appears in the cited file.
+
+### Why it matters
+
+The project's drift check confirms "every identifier, file path, command, flag, and config key a
+doc names still exists". **A line number is none of those**, so it is the one reference type the
+check structurally cannot verify — and out-of-range is the only mechanically detectable failure.
+
+Phase 1 demonstrated the cost. Its own edits pushed content down two files, and KI-40 came to cite
+`SKILL.md:454-455` for a `roadmap.py` line then at 520-521 while KI-43 cited `preflight.sh:119`
+for a check at 136. Both were **in range** and both were wrong; both were found by reading, not by
+a gate. Every phase that edits a referenced file rots more of them, and nothing fails.
+
+An identifier is also more informative than a position: `timed_out "$ERR"` says what is wrong,
+where `:136` says where it once was. One grep finds it regardless of edits above, so the easy
+reference the anchors were added for improves rather than degrades.
+
+### Notes for the work
+
+Choosing the fragment is judgement, not substitution — it must be distinctive enough to grep and
+stable enough to survive a refactor, which means preferring a function name or a guard's condition
+over a whole line. Read each entry; do not batch-rewrite. The check needs a red test first: an
+entry whose fragment is absent from the cited file must fail `roadmap.py check`. Decide whether a
+fragment is required or optional for new entries, and whether the templates mandate it.
+
+Half-converted is worse than either state, so land all 59 in one phase.
+
+**Source:** claude-opus-5 — phase 1 gate integrity, after two of its own references drifted,
+2026-09-21.
+
+---
+
 <a id="enh-07"></a>
 
 ## ENH-07 — Honour `$CLAUDE_CONFIG_DIR` in the bundled scripts
@@ -622,3 +705,31 @@ Check whether `agy` accepts a prompt on stdin or from a file flag. If it does, u
 record that argv is the only channel and keep the chunk ceiling as the control.
 
 **Source:** gemini-3.1-pro-high — phase review pass 5, 2026-09-08.
+<a id="enh-29"></a>
+
+## ENH-29 — evaluate every gone branch before reporting
+
+**Priority:** Low · **Effort:** ~1 hour
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) §4 step 7 · **Regression net:** `skills/phase-workflow/tests/phase-git.bats`
+
+### What it is
+
+The prune loop exits on the first retained branch, so branches after it in `$GONE` are never
+considered. The previous `echo "$GONE" | xargs git branch -d` attempted all of them.
+
+### Why it matters
+
+Low, because it fails safe: nothing is deleted that should not be, and re-running after dealing
+with the first branch continues. The cost is that an operator with three stale branches learns
+about them one run at a time, and a phase whose cleanup reports one retention looks the same as
+one reporting three.
+
+### Notes for the work
+
+Evaluate every branch, collect the retained ones with their reasons, print them together, and
+exit non-zero at the end if any were retained. A behaviour introduced by the KI-46 fix, not
+present before it.
+
+**Source:** gemini-3.8-flash-high — phase review, phase 1 gate integrity, 2026-09-21.
+
+---

@@ -30,6 +30,17 @@ setup() {
   export PUSH_URL="$(git remote get-url --push origin)"
 }
 
+# Extract one executable fence from SKILL.md by a substring it contains.
+# Three tests needed this and the copies were drifting apart.
+extract_fence() {   # $1 = selector, $2 = destination, $3 = SKILL.md path
+  python3 - "$3" "$2" "$1" <<'FENCE_PY'
+import pathlib,re,sys
+blocks=re.findall(r'```bash\n(.*?)```',pathlib.Path(sys.argv[1]).read_text(),re.S)
+pathlib.Path(sys.argv[2]).write_text(next(b for b in blocks if sys.argv[3] in b))
+FENCE_PY
+}
+
+
 teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/null; rm -rf "$TEST_TMP"; }
 
 # --- mutation restore ------------------------------------------------------
@@ -47,14 +58,14 @@ teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/nul
   printf 'UNCOMMITTED\n' >> README.md
   run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a - b/' bash -c 'exit 1'
   [ "$status" -eq 1 ]
-  [[ "$output" == *"TREE IS DIRTY"* ]]
+  [[ "$output" == *"TREE IS DIRTY"* ]] || false
   grep -q 'UNCOMMITTED' README.md
 }
 
 @test "restore: a test that passes under mutation is reported, not certified" {
   run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a - b/' bash -c 'exit 0'
   [ "$status" -eq 1 ]
-  [[ "$output" == *"does not discriminate"* ]]
+  [[ "$output" == *"does not discriminate"* ]] || false
   [ -z "$(git status --porcelain)" ]
 }
 
@@ -63,7 +74,7 @@ teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/nul
   # the audit is looking for.
   run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a - b/' bash -c 'exit 2'
   [ "$status" -eq 1 ]
-  [[ "$output" == *"NOT AN ASSERTION RED"* ]]
+  [[ "$output" == *"NOT AN ASSERTION RED"* ]] || false
   [ -z "$(git status --porcelain)" ]
 }
 
@@ -114,7 +125,7 @@ teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/nul
 
   run bash "$PUBLISH" "$sha" v1.0.0 feature "$FETCH_URL" "$PUSH_URL"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"PUSH URL CHANGED"* ]]
+  [[ "$output" == *"PUSH URL CHANGED"* ]] || false
   ! git rev-parse --verify --quiet refs/tags/v1.0.0
   git rev-parse --verify --quiet refs/heads/feature
 }
@@ -152,7 +163,7 @@ teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/nul
 
   run bash "$PUBLISH" "$sha" v1.0.0 feature "$FETCH_URL" "$PUSH_URL"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"ADVANCED"* ]]
+  [[ "$output" == *"ADVANCED"* ]] || false
   git rev-parse --verify --quiet refs/heads/feature
 }
 
@@ -218,7 +229,7 @@ teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/nul
   git add -A && git commit -qm "later work"
   run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a * b/' bash -c 'exit 1'
   [ "$status" -eq 1 ]
-  [[ "$output" == *"NOT HEAD"* ]]
+  [[ "$output" == *"NOT HEAD"* ]] || false
   grep -q 'def sub' calc.py
 }
 
@@ -251,14 +262,14 @@ EOF
 @test "restore: a test still red on normal code refuses certification" {
   run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a - b/' bash -c 'exit 1'
   [ "$status" -eq 1 ]
-  [[ "$output" == *"RESTORED TEST FAILED"* ]]
+  [[ "$output" == *"RESTORED TEST FAILED"* ]] || false
   [ -z "$(git status --porcelain)" ]
 }
 
 @test "restore: unrelated tracked index and worktree drift is retained and refused" {
   run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a - b/' bash -c 'echo DRIFT >> README.md; git add README.md; grep -q "a + b" calc.py'
   [ "$status" -eq 1 ]
-  [[ "$output" == *"TRACKED TREE CHANGED"* ]]
+  [[ "$output" == *"TRACKED TREE CHANGED"* ]] || false
   grep -q DRIFT README.md
   ! git diff --cached --quiet
 }
@@ -276,11 +287,7 @@ EOF
 }
 
 @test "adversarial: documented cleanup returns failure when fetch fails" {
-  python3 - "$(dirname "$PUBLISH")/SKILL.md" "$TEST_TMP/cleanup.sh" <<'PYCODE'
-import pathlib,re,sys
-blocks=re.findall(r'```bash\n(.*?)```',pathlib.Path(sys.argv[1]).read_text(),re.S)
-pathlib.Path(sys.argv[2]).write_text(next(b for b in blocks if 'GONE=' in b))
-PYCODE
+  extract_fence 'GONE=' "$TEST_TMP/cleanup.sh" "$(dirname "$PUBLISH")/SKILL.md"
   mkdir "$TEST_TMP/bin"
   printf '#!/bin/sh\nexit 128\n' > "$TEST_TMP/bin/git"
   chmod +x "$TEST_TMP/bin/git"
@@ -302,11 +309,7 @@ prepare_documented_release() {
 case "$*" in *mergeCommit*) echo "$MERGE_SHA" ;; *) echo "$APPROVED_SHA" ;; esac
 SH
   chmod +x "$TEST_TMP/bin/gh"
-  python3 - "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/SKILL.md" "$TEST_TMP/release.sh" <<'PY'
-import pathlib,re,sys
-blocks=re.findall(r'```bash\n(.*?)```',pathlib.Path(sys.argv[1]).read_text(),re.S)
-pathlib.Path(sys.argv[2]).write_text(next(b for b in blocks if 'REMOTE_TAG=' in b))
-PY
+  extract_fence 'REMOTE_TAG=' "$TEST_TMP/release.sh" "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/SKILL.md"
 }
 
 @test "documented release: publishes the merge commit rather than the approved PR head" {
@@ -325,7 +328,7 @@ PY
   git tag -d "$TAG"
   PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/release.sh"
   [ "$status" -eq 1 ]
-  [[ "$output" == *'REMOTE TAG CONFLICT'* ]]
+  [[ "$output" == *'REMOTE TAG CONFLICT'* ]] || false
   [ "$(git --git-dir="$FORK" rev-parse "$TAG^{commit}")" = "$TASK_SHA" ]
 }
 
@@ -336,7 +339,7 @@ PY
   chmod +x "$TEST_TMP/bin/git"
   PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/release.sh"
   [ "$status" -eq 1 ]
-  [[ "$output" == *'TAG PUSH FAILED'* ]]
+  [[ "$output" == *'TAG PUSH FAILED'* ]] || false
   [ "$(git rev-parse "$TAG^{commit}")" = "$MERGE_SHA" ]
   rm "$TEST_TMP/bin/git"
   PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/release.sh"
@@ -356,4 +359,158 @@ PY
   run bash "$RESTORE" "$TASK_SHA" calc.py 's/a + b/a - b/' bash -c 'if grep -q "a + b" calc.py; then echo generated > coverage.xml; echo broken >> calc.py; kill -TERM "$PPID"; exit 143; else exit 1; fi'
   [ "$status" -ne 0 ]
   [ -z "$(git status --porcelain -uall)" ]
+}
+
+# ---------------------------------------------------------------------------
+# KI-46 — the phase cleanup must delete a branch whose commits are on the
+# remote and retain everything else.
+#
+# `git branch -d` refuses a squash-merged branch however completely its work
+# landed, and `git cherry` is wrong in both directions: a multi-commit squash
+# reports `+` for every commit though the tree is identical, and a merge commit
+# whose parents are upstream reports nothing though it carries unique work.
+# ---------------------------------------------------------------------------
+
+ki46_extract_cleanup() { extract_fence 'GONE=' "$TEST_TMP/cleanup.sh" "$(dirname "$PUBLISH")/SKILL.md"; }
+
+# Publish a branch, land it on main by $2, then orphan its upstream so the
+# prune fence considers it at all.
+ki46_orphan() {
+  local branch="$1"
+  git push -q -u origin "$branch"
+  git checkout -q main
+  git push -q origin main
+  git push -q origin --delete "$branch"
+  git fetch -q --prune origin
+}
+
+@test "KI-46: a multi-commit squash-merged branch at the approved tip is deleted" {
+  ki46_extract_cleanup
+  git checkout -q -b feature/multi
+  echo one > f1; git add -A; git commit -qm one
+  echo two > f2; git add -A; git commit -qm two
+  git push -q -u origin feature/multi
+  git checkout -q main
+  git merge -q --squash feature/multi && git commit -qm "squashed feature/multi"
+  export APPROVED_SHA="$(git rev-parse feature/multi)"
+  ki46_orphan feature/multi
+  # fixture properties: upstream gone, more than one commit, work already landed
+  [ "$(git for-each-ref --format='%(upstream:track)' refs/heads/feature/multi)" = '[gone]' ] || false
+  [ "$(git rev-list --count main..feature/multi)" -eq 2 ] || false
+  [ -z "$(git diff feature/multi main)" ] || false
+  run git branch -d feature/multi
+  [ "$status" -ne 0 ]                      # -d alone cannot do this
+  run bash "$TEST_TMP/cleanup.sh"
+  [ "$status" -eq 0 ]
+  run git rev-parse --verify feature/multi
+  [ "$status" -ne 0 ]
+}
+
+@test "KI-46: a branch holding an unmerged commit is retained with the reason" {
+  ki46_extract_cleanup
+  git checkout -q -b feature/un
+  echo unique > g1; git add -A; git commit -qm unique
+  export APPROVED_SHA="$TASK_SHA"
+  ki46_orphan feature/un
+  [ -n "$(git diff feature/un main)" ] || false
+  run bash "$TEST_TMP/cleanup.sh"
+  [ "$status" -ne 0 ]
+  printf '%s\n' "$output" | grep -q 'RETAINED'
+  run git rev-parse --verify feature/un
+  [ "$status" -eq 0 ]
+}
+
+@test "KI-46: a branch whose unique work is a merge commit is retained" {
+  ki46_extract_cleanup
+  # Both sides land on main first, so every ordinary commit on feature/mc is
+  # already upstream. What is NOT upstream is the merge commit's conflict
+  # resolution -- and `git cherry` skips merge commits entirely, so it reports
+  # nothing unique while the trees plainly differ.
+  git checkout -q -b sideA; printf 'A\n' > c1; git add -A; git commit -qm A
+  git checkout -q main; git merge -q --no-ff sideA -m "merge sideA"
+  git checkout -q -b sideB main~1; printf 'B\n' > c1; git add -A; git commit -qm B
+  git checkout -q main; git merge -q --no-ff sideB -m "merge sideB" || {
+    printf 'main-resolution\n' > c1; git add -A; git commit -qm "merge sideB"; }
+  git checkout -q -b feature/mc sideA
+  git merge --no-ff sideB -m "merge with resolution" >/dev/null 2>&1 || true
+  printf 'branch-only-resolution\n' > c1; git add -A
+  git commit -q --no-edit          # completes the conflicted merge
+  export APPROVED_SHA="$TASK_SHA"
+  ki46_orphan feature/mc
+  # fixture properties: every non-merge commit is upstream, the tree is not
+  [ -z "$(git cherry main feature/mc | grep '^+' || true)" ] || false
+  [ -n "$(git diff feature/mc main)" ] || false
+  [ "$(git rev-list --parents -1 feature/mc | wc -w)" -eq 3 ] || false
+  run bash "$TEST_TMP/cleanup.sh"
+  [ "$status" -ne 0 ]
+  run git rev-parse --verify feature/mc
+  [ "$status" -eq 0 ]
+}
+
+@test "KI-46: an ordinary merged branch is still deleted" {
+  ki46_extract_cleanup
+  git checkout -q -b feature/ff; echo f > f3; git add -A; git commit -qm ff
+  git checkout -q main; git merge -q --no-ff feature/ff -m "merge ff"
+  export APPROVED_SHA="$TASK_SHA"
+  ki46_orphan feature/ff
+  run bash "$TEST_TMP/cleanup.sh"
+  [ "$status" -eq 0 ]
+  run git rev-parse --verify feature/ff
+  [ "$status" -ne 0 ]
+}
+
+# KI-53 — zsh applies its `:r` history modifier to an unbraced `$VAR:`, so
+# "+refs/heads/$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH" expands to
+# "+refs/heads/mainefs/remotes/origin/main" and the phase-start fetch dies with
+# a nonsense message. The block is labelled bash, but zsh is the default macOS
+# shell and the step tells the operator to run it.
+@test "KI-53: the phase-start refspec survives zsh parameter modifiers" {
+  command -v zsh >/dev/null || skip "zsh is not installed"
+  local refspec
+  refspec=$(grep -o '"+refs/heads/[^"]*"' "$(dirname "$PUBLISH")/SKILL.md" | head -1)
+  [ -n "$refspec" ] || false
+  run zsh -c "DEFAULT_BRANCH=main; printf '%s' $refspec"
+  [ "$output" = "+refs/heads/main:refs/remotes/origin/main" ]
+}
+
+# KI-46 (publish-release.sh half) — the script takes the approved SHA
+# POSITIONALLY as $APPROVED and never sets APPROVED_SHA. Gating -D on an
+# undeclared environment variable means the same invocation behaves differently
+# depending on the caller's environment, and with it unset the squash-merged
+# branch is retained: the bug, unfixed, in the half of KI-46 that names this
+# script. The dependency has to be explicit and its absence has to say so.
+
+ki46_squash_branch() {          # leaves feature squash-merged, tip in $1
+  git checkout -q -b feature
+  echo one > s1; git add -A; git commit -qm one
+  echo two > s2; git add -A; git commit -qm two
+  local tip; tip="$(git rev-parse feature)"
+  git checkout -q main
+  git merge -q --squash feature >/dev/null 2>&1 && git commit -qm squashed
+  git push -q origin main
+  printf '%s' "$tip"          # stdout is the return channel; keep git quiet
+}
+
+@test "KI-46: publish-release deletes a squash-merged branch when approval is confirmed" {
+  local tip; tip="$(ki46_squash_branch)"
+  [ -n "$(git rev-list main..feature)" ] || false      # commits absent from main
+  [ -z "$(git diff feature main)" ] || false           # yet the work landed
+  run bash "$PUBLISH" "$tip" v3.0.0 feature "$FETCH_URL" "$PUSH_URL" --confirmed-on-remote
+  [ "$status" -eq 0 ]
+  run git rev-parse --verify feature
+  [ "$status" -ne 0 ]
+}
+
+@test "KI-46: publish-release says approval was unconfirmed rather than blaming the branch" {
+  local tip; tip="$(ki46_squash_branch)"
+  run bash "$PUBLISH" "$tip" v3.0.1 feature "$FETCH_URL" "$PUSH_URL"
+  [ "$status" -ne 0 ]
+  # Save the diagnostic before any later `run` overwrites $output (F-20).
+  local msg="$output"
+  printf '%s\n' "$msg" | grep -qi 'approval'
+  # A glob over the whole string, not `grep -qv`: grep -qv succeeds when ANY
+  # line lacks the pattern, so on multiline output it cannot detect its presence.
+  [[ "$msg" != *"holds commits absent"* ]] || false
+  run git rev-parse --verify feature
+  [ "$status" -eq 0 ]
 }

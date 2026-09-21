@@ -62,6 +62,15 @@ preamble alone, the files went in the bundle anyway, and the reviewer reported o
 
 ## Decisions taken and not taken
 
+**Historical red-state evidence is not required, and not recoverable here.** This repository's
+history begins with implementation and tests together at the v1.8.0 import, so no test's red
+state can be recovered from a commit. The answer was to do nothing: the mutation check in
+`phase-workflow` §3 step 3 breaks the named behaviour now and confirms the test fails on the
+named assertion, which works whatever the history contains. Closed as UNK-02, 2026-09-21. The
+2026-09-20 phase measured the limit of that substitute — a mutation can show an assertion is
+load-bearing, but not that a conversion preserved its meaning, and it cannot falsify a
+disjunction by negating one operator.
+
 **The phase gate is a PR ready for review — not uncommitted work.** The rejected alternative
 was holding a phase's work unpushed in the working tree so the user saw it before anything
 landed. Dropped because the retrospective points `git checkout`, worktree and stash operations

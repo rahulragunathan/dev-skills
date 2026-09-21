@@ -3,13 +3,15 @@
 #
 # Usage:
 #   publish-release.sh --check-origin <origin-fetch-url> <origin-push-url>
-#   publish-release.sh <approved-sha> <tag> <branch> <origin-fetch-url> <origin-push-url>
+#   publish-release.sh <approved-sha> <tag> <branch> <origin-fetch-url> <origin-push-url> [--confirmed-on-remote]
 #
 # Every destination recorded at the gate is passed in. Nothing is re-derived
 # here, because a guard that reads the value it is checking guards nothing.
 #
 # --check-origin exits before any ref changes.
 # The full form is a local-only utility; the phase SOP uses --check-origin.
+# A manual caller uses --confirmed-on-remote to assert the tip's approval and
+# presence on the remote, permitting -D only at the approved tip.
 # Actual remote publication and cleanup are in SKILL.md, whose fences are
 # executed directly by phase-git.bats. The local utility does not push a tag.
 # Exit 0 on completion; exit 1 on refusal or failure.
@@ -17,16 +19,23 @@
 set -uo pipefail
 
 CHECK_ONLY=0
+CONFIRMED_ON_REMOTE=0
 if [ "${1:-}" = --check-origin ]; then
   CHECK_ONLY=1
   WANT_FETCH="${2:?missing recorded fetch url}"
   WANT_PUSH="${3:?missing recorded push url}"
 else
-  APPROVED="${1:?usage: publish-release.sh <approved-sha> <tag> <branch> <fetch-url> <push-url>}"
+  APPROVED="${1:?usage: publish-release.sh <approved-sha> <tag> <branch> <fetch-url> <push-url> [--confirmed-on-remote]}"
   TAG="${2:?missing tag}"
   BRANCH="${3:?missing branch}"
   WANT_FETCH="${4:?missing recorded fetch url}"
   WANT_PUSH="${5:?missing recorded push url}"
+  shift 5
+  case "$#:${1:-}" in
+    0:) ;;
+    1:--confirmed-on-remote) CONFIRMED_ON_REMOTE=1 ;;
+    *) echo "UNKNOWN ARGUMENTS — expected only optional --confirmed-on-remote"; exit 1 ;;
+  esac
 fi
 
 git rev-parse --git-dir >/dev/null 2>&1 || { echo "NOT A GIT REPOSITORY"; exit 1; }
@@ -72,8 +81,19 @@ head_now="$(git rev-parse --verify --quiet "refs/heads/$BRANCH" || true)"
 if [ -n "$head_now" ]; then
   [ "$head_now" = "$(git rev-parse "$APPROVED^{commit}")" ] \
     || { echo "BRANCH ADVANCED SINCE APPROVAL — retaining it"; exit 1; }
-  git branch -d "$BRANCH" >/dev/null 2>&1 \
-    || { echo "BRANCH HOLDS UNMERGED WORK — retaining it"; exit 1; }
+  # The caller explicitly confirms this approved tip was present on the remote.
+  # It contains no unpushed commits; the positional APPROVED alone is not proof.
+  if [ "$CONFIRMED_ON_REMOTE" = 1 ]; then
+    git branch -D "$BRANCH" >/dev/null 2>&1 \
+      || { echo "RETAINED — branch deletion failed; inspect it by hand"; exit 1; }
+  elif git branch -d "$BRANCH" >/dev/null 2>&1; then
+    :
+  else
+    # A -d refusal can also mean a squash merge; it does not prove missing work.
+    echo "RETAINED — approval was not confirmed for $BRANCH at tip $head_now; -d refused, so -D was not attempted."
+    echo "Missing --confirmed-on-remote; pass it only after confirming this tip's approval and presence on the remote."
+    exit 1
+  fi
 fi
 
 echo "published $TAG at $APPROVED; branch $BRANCH removed"

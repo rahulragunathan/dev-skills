@@ -433,7 +433,7 @@ SH
   cd "$REPO"
   run bash "$CAPTURE" repo "$OUT"
   [ "$status" -eq 0 ]
-  [[ "$output" == *'bundle contains 1 of 1 files'* ]]
+  [[ "$output" == *'bundle contains 1 of 1 files'* ]] || false
   grep -q hello "$OUT/bundle.txt"
 }
 

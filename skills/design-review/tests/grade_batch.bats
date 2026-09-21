@@ -199,7 +199,7 @@ PY
   grade_packet "$P" grader02 pass pass "" "The answer has a fine module table"
   run python3 "$GB" collect "$GD" --session "$SESS"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"not quoted"* ]]
+  [[ "$output" == *"not quoted"* ]] || false
   [ ! -e "$GD/reports/$P.json" ]
   [ ! -e "$GD/judgements/$P.json" ]
 }
@@ -212,7 +212,7 @@ PY
   grade_packet "$P" grader03 pass pass Read
   run python3 "$GB" collect "$GD" --session "$SESS"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"tool"* ]]
+  [[ "$output" == *"tool"* ]] || false
   [ ! -e "$GD/reports/$P.json" ]
 }
 
@@ -258,9 +258,9 @@ PY
   python3 "$GB" collect "$GD" --session "$SESS" >/dev/null
   run python3 "$GB" agree "$GD"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"| S01 | 1 | 2/2 |"* ]]
-  [[ "$output" == *"| S01 | 2 | 0/2 |"* ]]
-  [[ "$output" == *"Overall: 2/4"* ]]
+  [[ "$output" == *"| S01 | 1 | 2/2 |"* ]] || false
+  [[ "$output" == *"| S01 | 2 | 0/2 |"* ]] || false
+  [[ "$output" == *"Overall: 2/4"* ]] || false
   [[ "$output" == *"condition 2: pass then fail"* ]]
 }
 
@@ -274,8 +274,8 @@ PY
   python3 "$GB" collect "$GD" --session "$SESS" >/dev/null
   run python3 "$GB" summary "$GD"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"| S01 | 1 | 2/2 | 2/2 |"* ]]
-  [[ "$output" == *"| S01 | 2 | 2/2 | 0/2 |"* ]]
+  [[ "$output" == *"| S01 | 1 | 2/2 | 2/2 |"* ]] || false
+  [[ "$output" == *"| S01 | 2 | 2/2 | 0/2 |"* ]] || false
   [[ "$output" == *"| S01 | all conditions | 2/2 | 0/2 |"* ]]
 }
 
@@ -291,7 +291,7 @@ PY
   grade_packet "$P" edited01 pass pass
   run python3 "$GB" collect "$GD" --session "$SESS"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"edited after prepare"* ]]
+  [[ "$output" == *"edited after prepare"* ]] || false
   [ ! -e "$GD/reports/$P.json" ]
 }
 
