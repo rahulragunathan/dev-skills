@@ -112,3 +112,19 @@ teardown() { cd /; rm -rf "$TEST_TMP"; }
   printf '%s\n' "$output" | grep -q '^REFUSED'
   printf '%s\n' "$output" | grep -qv '^GREEN'
 }
+
+# Fails if an operator inside a quoted literal is mutated in place of the
+# assertion's own. The sed substitutions are line-addressed and take the first
+# match, so `[[ "$output" != *"a == b"* ]] || false` has its glob pattern
+# rewritten while the real `!=` stands: the assertion still holds, the test
+# still passes, and the tool prints GREEN -- which §3 step 3 reads as licence
+# to delete a working assertion. Refusing is the only safe answer; the script
+# cannot tell which occurrence is the operator.
+@test "an ambiguous operator on the line is REFUSED, not GREEN" {
+  run bats t/quoted.bats
+  [ "$status" -eq 0 ]
+  run bash "$VERIFY" "$SHA" t/quoted.bats 3 'quoted operator'
+  [ "$status" -eq 1 ]
+  printf '%s\n' "$output" | grep -q '^REFUSED'
+  printf '%s\n' "$output" | grep -qv '^GREEN'
+}

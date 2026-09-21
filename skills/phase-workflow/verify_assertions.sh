@@ -29,14 +29,32 @@ fi
 # Branch after the first substitution so inverse pairs cannot undo each other.
 # The address restricts every substitution to the requested assertion line.
 expr="$line{"
+operators=
 for pair in '== !=' '!= ==' '= !=' '-eq -ne' '-ne -eq' \
             '-lt -ge' '-ge -lt' '-le -gt' '-gt -le' '-z -n' '-n -z'; do
+  operators="${operators:+$operators|}${pair% *}"
   expr="$expr
 s/\([[:space:]]\)${pair% *}\([[:space:]]\)/\1${pair#* }\2/
 t"
 done
 expr="$expr
 }"
+
+# Count the same whitespace-delimited tokens on the physical mutation line.
+# Quoted literals count too: choosing the assertion's operator would be a guess.
+matches=$(awk -v target="$line" -v operators="$operators" '
+  NR == target {
+    while (match($0, "[[:space:]](" operators ")[[:space:]]")) {
+      count++
+      # Keep the trailing space: it may also precede the next operator.
+      $0 = substr($0, RSTART + RLENGTH - 1)
+    }
+    exit
+  }
+  END { print count + 0 }
+' "$file") || refuse 'cannot count operators on target line'
+[ "$matches" -le 1 ] \
+  || refuse 'ambiguous operator occurrences on target line; check it by hand'
 
 # Bats filters are extended regular expressions, not literal test names.
 filter="^$(printf '%s' "$name" | sed 's/[][\\.^$*+?(){}|]/\\&/g')$"
