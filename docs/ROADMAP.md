@@ -115,10 +115,12 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 | [ENH-25](ENHANCEMENTS.md#enh-25) | Measure how much answers reveal their experimental arm | Medium | ~1 day |
 | [ENH-26](ENHANCEMENTS.md#enh-26) | Test the conversion of a helper's evaluation gap into an opaque call | Medium | ~1 hour |
 | [ENH-27](ENHANCEMENTS.md#enh-27) | Lint the markdown templates that live inside fences | Medium | ~1 hour |
+| [ENH-28](ENHANCEMENTS.md#enh-28) | Let `publish-release.sh` verify remote presence itself | Medium | ~2 hours |
 | [ENH-10](ENHANCEMENTS.md#enh-10) | Make the project-env name mapping unambiguous | Low | ~2 hours |
 | [ENH-11](ENHANCEMENTS.md#enh-11) | Reconcile an existing global markdownlint config | Low | ~1 hour |
 | [ENH-12](ENHANCEMENTS.md#enh-12) | Feed the Gemini prompt through stdin rather than argv | Low | ~1 hour |
 | [ENH-07](ENHANCEMENTS.md#enh-07) | Honour `$CLAUDE_CONFIG_DIR` in the bundled scripts | Low | ~2 hours |
+| [ENH-29](ENHANCEMENTS.md#enh-29) | Evaluate every gone branch before reporting | Low | ~1 hour |
 
 ## Open Questions
 

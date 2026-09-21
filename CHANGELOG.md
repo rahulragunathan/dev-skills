@@ -125,6 +125,14 @@ corrections are recorded here.
 - **v1.10.0 said "every listed model supports low through max".** `gpt-5.6-luna` has no `ultra`
   and `gpt-5.5` has neither `max` nor `ultra`.
 
+### Filed
+
+- **`ENH-28`** — `--confirmed-on-remote` is an operator assertion, not a verification. The script
+  can establish remote presence itself, and `-D` is the one command here that can discard
+  unpushed commits.
+- **`ENH-29`** — the prune loop exits on the first retained branch, where `xargs git branch -d`
+  attempted all of them. Fails safe; a behaviour the KI-46 fix introduced.
+
 ### Closed
 
 - **`UNK-02`** — no test here can be shown to discriminate from git history alone. Answered "do
