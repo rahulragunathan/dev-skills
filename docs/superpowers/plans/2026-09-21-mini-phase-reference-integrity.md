@@ -260,21 +260,24 @@ EOF
 
 - [ ] **Step 2: Pin each interpreter explicitly and measure both**
 
-**Do not select the interpreter with `PATH`.** `/opt/homebrew/bin` already precedes `/bin` on this
-machine, so after the install an unqualified `bats` would run under bash 5 — and both arms of the
-comparison would be bash 5 while reading as a comparison. `bats` is
-`#!/usr/bin/env bash`, so the interpreter is chosen by invoking the wanted bash on the bats script
-itself, with the same bats 1.14.0 executable in both arms.
+**An unqualified `bats` is not the system bash.** `/opt/homebrew/bin` precedes `/bin` on this
+machine — position 2 against position 11 — so once bash 5 is installed, plain `bats` runs under
+it. Both arms would be bash 5 while reading as a comparison.
+
+**And invoking the wanted bash on the bats script does not pin it either.** That was this plan's
+first fix and it was wrong: `bats` re-execs `bats-exec-file` and `bats-exec-test`, each
+`#!/usr/bin/env bash`, so the interpreter is resolved from `PATH` however the outer script was
+started. Measured — `/bin/bash "$(command -v bats)" …` reported `BASH_VERSION=5.3.20` from inside
+the run.
+
+**Pin it by putting the wanted bash's directory first on `PATH`, then read `BASH_VERSION` from
+inside the run to confirm it took.** The confirmation is not ceremony: it is what caught the
+failed pinning above.
 
 ```bash
-BATS="$(command -v bats)"
-SYS_BASH=/bin/bash
-BREW_BASH="$(brew --prefix)/bin/bash"
-
-for b in "$SYS_BASH" "$BREW_BASH"; do
-  [ -x "$b" ] || { echo "MISSING INTERPRETER: $b"; continue; }
-  echo "=== $b ($("$b" --version | head -1)) ==="
-  "$b" "$BATS" skills/phase-workflow/tests/fixtures/vacuity.bats; echo "exit=$?"
+for dir in /bin "$(brew --prefix)/bin"; do
+  echo "=== PATH front: $dir ==="
+  PATH="$dir:$PATH" bats skills/phase-workflow/tests/fixtures/vacuity.bats
 done
 ```
 
@@ -303,10 +306,10 @@ statements are **scoped to the exact versions measured** rather than to "modern 
 - [ ] **Step 4: Re-run the in-scope suite under both interpreters**
 
 ```bash
-for b in "$SYS_BASH" "$BREW_BASH"; do
-  echo "=== $b ==="
-  "$b" "$BATS" skills/{claude-setup,design-review,external-review,phase-workflow}/tests/*.bats \
-    | tail -3
+for dir in /bin "$(brew --prefix)/bin"; do
+  echo "=== PATH front: $dir ==="
+  PATH="$dir:$PATH" bats \
+    skills/{claude-setup,design-review,external-review,phase-workflow}/tests/*.bats | tail -3
 done
 ```
 
@@ -939,17 +942,17 @@ behaviour, and its red baseline is eight failures and four named controls.
 
 **Task 2 is a measurement and is verified differently:** its claim is "this is what this
 interpreter did", and what makes it checkable is that the fixture, the commands and the
-`BASH_VERSION` each run reported are recorded together. The interpreter is pinned by invoking it
-on the bats script, never selected by `PATH`.
+`BASH_VERSION` each run reported are recorded together. The interpreter is pinned by `PATH` order
+and **confirmed from inside the run**, because the first two pinning methods tried both failed
+silently and only the inside reading caught them.
 
 **Before hand-off.**
 
 ```bash
-BATS="$(command -v bats)"
-for b in /bin/bash "$(brew --prefix)/bin/bash"; do
-  echo "=== $b ($("$b" --version | head -1)) ==="
-  "$b" "$BATS" skills/{claude-setup,design-review,external-review,phase-workflow}/tests/*.bats \
-    | tail -3
+for dir in /bin "$(brew --prefix)/bin"; do
+  echo "=== PATH front: $dir ==="
+  PATH="$dir:$PATH" bats \
+    skills/{claude-setup,design-review,external-review,phase-workflow}/tests/*.bats | tail -3
 done
 python3 skills/phase-workflow/roadmap.py check || exit 1
 python3 skills/phase-workflow/bats_assertions.py \

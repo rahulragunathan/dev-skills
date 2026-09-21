@@ -343,21 +343,50 @@ what remains expired.
 
 ### Writing bats assertions — three things that cost a phase
 
-**A false `[[ ]]` does not fail its test unless it is the test's last command.** Measured on bash
-3.2.57 with bats 1.14.0; a false `[ ]` does stop it. Sixty-eight assertions in this repo were
-therefore read by their author and never by the suite. `bats_assertions.py` finds them.
+**A false `[[ ]]` does not fail its test unless it is the test's last command — on bash 3.2.**
+Measured with bats 1.14.0: under **bash 3.2.57** a false mid-test `[[ ]]` passes its test while a
+false `[ ]` stops it; under **bash 5.3.20** both stop it. Sixty-eight assertions in this repo were
+therefore read by their author and never by the suite on the interpreter macOS ships.
+`bats_assertions.py` finds them.
 
-**It is also the standing regression check.** An assertion ending in `|| false` is load-bearing
-wherever it sits, so the tool reports it `final`. Across the four in-scope skills the count of
-`mid` rows is therefore **0**, and any number above zero is an assertion that went in unguarded:
+**The vacuity belongs to the interpreter, which scopes every claim made about it.** Appending
+`|| false` is correct under both, and load-bearing only where the bare form was not — so the
+evidence that the suffix supplies the discrimination holds for bash 3.2.57 and not for bash
+5.3.20. A test that asserts the vacuity itself **decides its own scope by running its fixture**,
+never by reading `$BASH_VERSION`: two measured points say nothing about bash 4, and a test whose
+fixture no longer carries the property under test asserts nothing. `verify-assertions.bats` skips
+that one test, with the interpreter named in the skip reason.
+
+**To measure an interpreter's behaviour, pin it with `PATH` and confirm it from inside the run.**
+`bats` re-execs `bats-exec-file` and `bats-exec-test`, each `#!/usr/bin/env bash`, so the
+interpreter is resolved from `PATH` however the outer script was started — `/bin/bash "$(command
+-v bats)"` runs the tests under whatever `env bash` finds, not under `/bin/bash`. Put the wanted
+directory first on `PATH`, and have the fixture `echo "$BASH_VERSION" >&3`: that reading is what
+caught two pinning methods that had both looked right.
+
+**It is also the standing regression check, and it is about the interpreter macOS ships.** An
+assertion ending in `|| false` is load-bearing wherever it sits, so the tool reports it `final`.
+Across the four in-scope skills the count of `mid` rows is **0**, and any number above zero is an
+assertion that went in unguarded — vacuous on stock bash even when the machine running the gate
+has a newer one:
 
 ```bash
-python3 skills/phase-workflow/bats_assertions.py skills/*/tests/*.bats | awk -F'\t' '$4=="mid"'
+python3 skills/phase-workflow/bats_assertions.py \
+  skills/{claude-setup,design-review,external-review,phase-workflow}/tests/*.bats \
+  > "$TMPDIR/scan.tsv" || { echo "SCAN FAILED — the gate proves nothing"; exit 1; }
+MID="$(awk -F'\t' '$4=="mid"' "$TMPDIR/scan.tsv" | tee /dev/stderr | wc -l | tr -d ' ')"
+[ "$MID" -eq 0 ] || { echo "MID ASSERTIONS PRESENT: $MID"; exit 1; }
 ```
 
-`claude-toggle-backend` is the exception — its five are held with that skill's rebuild, per KI-52.
-Its fourth column is `mid` for an unguarded assertion followed by more commands and
-`final` for either the last command or an assertion already ending in `|| false`.
+**Check the scanner ran before reading its count, and name the four in-scope skills.** Two ways
+this gate used to pass without proving anything: piping the scanner straight into `awk` prints
+nothing when the scanner fails outright, and nothing is exactly what a clean result looks like;
+and a `skills/*/tests/*.bats` glob sweeps in `claude-toggle-backend`, whose five unconverted
+assertions are held with that skill's rebuild — see the **Held** section in
+`docs/KNOWN_ISSUES.md` — so the documented command reported 5 while the text beside it claimed 0.
+
+The fourth column is `mid` for an unguarded assertion followed by more commands, and `final` for
+either the last command or an assertion already ending in `|| false`.
 
 **Convert by appending `|| false`, not by rewriting.** `[[ ... ]] || false` is load-bearing and
 leaves the expression untouched, so the assertion cannot quietly come to mean something else.

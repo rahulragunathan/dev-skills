@@ -22,7 +22,7 @@ in flight the body is the single line `No phase in flight.`
 | `MERGE_METHOD` | `squash` |
 | Branched from | `origin/main` at `bcf5473` |
 | Started | 2026-09-21 |
-| `PR` | recorded here once §2 step 2 opens it |
+| `PR` | [#6](https://github.com/rahulragunathan/localclaude/pull/6) |
 | Release | v1.12.0 |
 | `APPROVED_SHA` | the PR head at sign-off — see **Gate** below |
 
@@ -71,6 +71,48 @@ the red test first.
    drafted and reviewed in `~/.claude/plans/` and moved in as this phase's first commit. Filed as
    a finding — the two documents are consistent and neither says this.
 
+## KI-52 — measured
+
+**The vacuity is host-dependent. Astra's claim was right and phase 1's evidence was narrower than
+phase 1 thought.** bats 1.14.0 in both arms, interpreter confirmed from inside each run:
+
+| Interpreter | false mid-test `[[ ]]` | false mid-test `[ ]` |
+| --- | --- | --- |
+| bash 3.2.57 (`/bin/bash`, stock macOS) | **passes** — vacuous | fails |
+| bash 5.3.20 (Homebrew) | **fails** | fails |
+
+Consequences, all recorded in `SKILL.md`:
+
+1. `|| false` is correct under both, and **load-bearing only under bash 3.2**. Phase 1's claim
+   that the suffix supplies the discrimination holds for 3.2.57 and not for 5.3.20.
+2. The 68 conversions stand. What narrows is the claim made for them.
+3. The 0-`mid` gate is about **the interpreter macOS ships**, not about the machine running it.
+
+**One phase-1 test encoded the 3.2 behaviour and failed under bash 5.** `verify-assertions.bats`
+asserted `verify_assertions.sh` reports `GREEN` for a mid-test `[[ ]]`; under bash 5 its fixture
+no longer passes, so the property under test does not exist there. The test now decides its own
+scope by **running the fixture** rather than reading `$BASH_VERSION` — two measured points say
+nothing about bash 4 — and skips with the interpreter named. `verify_assertions.sh` itself needed
+no change: reporting `RED` for every assertion under bash 5 is correct there.
+
+**Two pinning methods failed silently before one worked.** Selecting the interpreter with an
+unqualified `bats` runs whatever is first on `PATH`. Invoking the wanted bash *on the bats script*
+also fails, because `bats` re-execs `bats-exec-file` and `bats-exec-test`, each
+`#!/usr/bin/env bash`, so the shebang resolves from `PATH` regardless: `/bin/bash "$(command -v
+bats)"` reported `BASH_VERSION=5.3.20`. Only putting the wanted directory first on `PATH` works,
+and **only reading `BASH_VERSION` from inside the run caught the two failures**. The external
+review had insisted on that reading; it then caught the review's own fix.
+
+## This phase changed how the project is verified
+
+`brew install bash` put bash 5.3.20 at `/opt/homebrew/bin/bash`, and `/opt/homebrew/bin` precedes
+`/bin` on this machine — position 2 against position 11. **Every unpinned `bats` run on this
+machine is now bash 5.3.20.** `/bin/bash` is untouched at 3.2.57.
+
+The suite passes under both, so the gate is not weakened; but a result gathered without pinning no
+longer means what it meant before this phase, and the hand-off says which interpreter each number
+came from.
+
 ## Findings from executing the workflow
 
 Filed properly in Task 5; recorded here as they are found.
@@ -78,7 +120,9 @@ Filed properly in Task 5; recorded here as they are found.
 | ID | Finding |
 | --- | --- |
 | — | The documented 0-`mid` gate in `phase-workflow/SKILL.md` cannot fail: a scanner failure prints nothing, which reads as clean. Confirmed by running it against a missing file. |
+| — | The same gate's `skills/*/tests/*.bats` glob sweeps in `claude-toggle-backend`, so the documented command reported **5** `mid` rows while the text beside it claimed **0**. Fixed here by naming the four in-scope skills. |
 | — | §1's plan review cannot run with the plan inside the repo (deviation 1 above). |
+| — | `bats` cannot be pinned by invoking a bash on its script; its helpers re-exec through `env bash`. Worth a line in the skill for anyone measuring interpreter behaviour again. |
 
 ## External review, plan pass
 
