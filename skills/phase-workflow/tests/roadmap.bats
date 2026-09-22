@@ -633,3 +633,35 @@ The behaviour is set by [x.sh:2](../skills/x.sh#L2) and nothing else.'
   [ "$status" -eq 1 ]
   [[ "$output" == *"not in the accepted reference form"* ]] || false
 }
+
+# CONTROL. Fails if the fragment requirement leaks out of the **Where:** field.
+#
+# The two rules have deliberately different scopes: no line anchor anywhere, but
+# a fragment only where the bug lives. KI-07 and KI-17 both link a file in prose
+# after their Where field, and requiring a fragment there would make those
+# entries unwritable. Nothing else asserts this, so a change that tightened the
+# scope would pass every other test.
+@test "refs: a file link in prose needs no fragment" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `timed_out "$ERR"`
+
+The same guard is reached from [y.sh](../skills/y.sh) during startup.'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
+
+# Fails if a tilde fence is not treated as a fence.
+#
+# CommonMark allows ~~~ as well as ```, and an entry may show a banned reference
+# inside one. Untested until now: no roadmap file uses tilde fences, so this
+# guards a path that has never run on real content.
+@test "refs: a tilde-fenced example is not a finding" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `timed_out "$ERR"`
+
+~~~markdown
+before:  [x.sh:2](../skills/x.sh#L2)
+~~~'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
