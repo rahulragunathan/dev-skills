@@ -40,6 +40,7 @@ The plugin itself needs nothing installed. Each skill checks the tools its curre
 | `vllm-mlx` | claude-toggle-backend, mlx backend | `uv tool install vllm-mlx` |
 | `ollama` | claude-toggle-backend, ollama backend | `brew install ollama` |
 | `hf` + `huggingface-skills` plugin | local-models | `brew install huggingface-cli`; plugin via `/plugin` |
+| `bash` 5 (optional) | phase-workflow, to reproduce the mid-test assertion measurement | `brew install bash` |
 | `codex` | external-review (Codex reviewer) | OpenAI Codex CLI, then `codex login` |
 | `agy` | external-review (Gemini reviewer) | Antigravity CLI |
 | `gh` | phase-workflow (draft PR, checks, merge, tag) | `brew install gh`, then `gh auth login` |

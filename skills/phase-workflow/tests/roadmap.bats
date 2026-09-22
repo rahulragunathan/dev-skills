@@ -399,10 +399,10 @@ PY
 # ENH-30 — a roadmap reference carries a greppable fragment, and check verifies
 # it still appears in the file cited beside it.
 #
-# Five of the seventeen tests below are CONTROLS: they assert status 0 and so pass
+# Seven of the twenty tests below are CONTROLS: they assert status 0 and so pass
 # before the feature exists. They are here because the other half of getting
 # this right is not flagging correct references, and a checker that refuses
-# everything would satisfy the other twelve without them.
+# everything would satisfy the other thirteen without them.
 # ---------------------------------------------------------------------------
 
 # Put reference text into KI-01's body. Multi-line input is supported, because
@@ -650,7 +650,7 @@ The same guard is reached from [y.sh](../skills/y.sh) during startup.'
   [ "$status" -eq 0 ]
 }
 
-# Fails if a tilde fence is not treated as a fence.
+# CONTROL. Fails if a tilde fence is not treated as a fence.
 #
 # CommonMark allows ~~~ as well as ```, and an entry may show a banned reference
 # inside one. Untested until now: no roadmap file uses tilde fences, so this
@@ -664,4 +664,21 @@ before:  [x.sh:2](../skills/x.sh#L2)
 ~~~'
   run python3 "$RM" check --docs "$DOCS"
   [ "$status" -eq 0 ]
+}
+
+# Fails if a fragment that occurs more than once in the cited file is accepted.
+#
+# "Greppable" promises one hit, and the conversion verified all 89 fragments as
+# occurring exactly once -- CHANGELOG says so. The gate only tested presence,
+# so the enforced guarantee was weaker than the documented one: a fragment
+# chosen as unique can become ambiguous later, when the guarded code is copied
+# elsewhere in the same file, with nothing failing.
+@test "refs: a fragment occurring twice in the cited file fails the check" {
+  seed_source
+  printf 'guard() {\n  timed_out "$ERR" || return 1\n}\n\nguard_again() {\n  timed_out "$ERR" || return 1\n}\n' \
+    > "$TEST_TMP/skills/x.sh"
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `timed_out "$ERR"`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"occurs more than once"* ]] || false
 }

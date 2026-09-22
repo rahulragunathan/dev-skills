@@ -173,6 +173,10 @@ def _fenced_lines(text: str) -> list[bool]:
     Only the opening character repeated at least as many times, followed by
     whitespace alone, closes the block. Backticks in an info string instead
     make the apparent opening fence ordinary text.
+
+    Second fence tracker, after skills/design-review/tests/write_results.py; only
+    this one rejects backtick fences with backticks in their info strings.
+    Two stay separate under the rule of three; a third occurrence creates a shared home.
     """
     flags, opened = [], None
     for line in text.splitlines():
@@ -305,8 +309,11 @@ def verify_references(docs: pathlib.Path) -> tuple[bool, list[str]]:
                     else:
                         if path not in contents:
                             contents[path] = path.read_text()
-                        if ref.fragment not in contents[path]:
+                        occurrences = contents[path].count(ref.fragment)
+                        if occurrences == 0:
                             findings.append(f"  {eid}: fragment absent from {ref.target}: {ref.fragment}")
+                        elif occurrences > 1:
+                            findings.append(f"  {eid}: fragment occurs more than once in {ref.target}: {ref.fragment}")
                 except (OSError, UnicodeError) as exc:
                     findings.append(f"  {eid}: cannot read cited path {ref.target}: {exc}")
         if findings:
@@ -332,6 +339,8 @@ def load(docs: pathlib.Path) -> tuple[str, dict[str, tuple[str, dict[str, str]]]
 
 def cmd_check(docs: pathlib.Path) -> int:
     load(docs)          # refuses early if a file is missing or malformed
+    # A third pass over these files makes roadmap.py a module with its own
+    # directory, not a fourth function.
     ok, problems = reconcile(docs)
     refs_ok, refs_problems = verify_references(docs)
     for line in problems + refs_problems:

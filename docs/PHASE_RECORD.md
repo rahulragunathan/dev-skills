@@ -183,6 +183,48 @@ fences, so the toggles landed evenly and the Where line was unfenced whether or 
 worked; and the wrapped-field control could not detect the field being truncated, because
 dropping a valid reference produces no finding either way.
 
+## design-review, phase mode
+
+| Unit | Responsibility | Interface | Depends on |
+| --- | --- | --- | --- |
+| `roadmap.py` · `_fenced_lines` | Mark which lines sit inside a fenced block, by delimiter char and run length | `_fenced_lines(text) -> list[bool]` | — |
+| `roadmap.py` · `_where_field` | Return an entry's whole `**Where:**` field, continuation lines included | `_where_field(lines) -> str` | — |
+| `roadmap.py` · `_references` | Parse one field into `(target, fragment)` pairs, refusing a shape it cannot read | `_references(field) -> list[Ref]` | — |
+| `roadmap.py` · `verify_references` | Resolve each reference and confirm its fragment is still in the cited file | `verify_references(docs) -> (bool, list[str])` | the three above, filesystem |
+| `roadmap.py` · `cmd_check` | Run reconciliation and reference verification, report both | `cmd_check(docs) -> int` | `reconcile`, `verify_references` |
+| `phase-workflow/SKILL.md` | State the reference rule and what the interpreter measurement showed | — | — |
+| `KNOWN_ISSUES-template.md` | Show the reference shape a new entry copies | — | — |
+| `docs/KNOWN_ISSUES.md`, `docs/ENHANCEMENTS.md` | Carry entry detail, anchored by fragment rather than by position | — | the source files they cite |
+
+**Expected change:** a referenced source file gets edited. That should mean `roadmap.py check` stays
+green because the fragment moved with its code, or fails naming the entry and the reference.
+
+**Shared state:** none. Every function takes its input and returns; the content cache lives for one
+call.
+
+### Checks that fired
+
+- **Responsibility — `roadmap.py` now holds two passes with different reasons to change.**
+  `reconcile` asks whether the index agrees with the detail files; `verify_references` asks whether
+  the detail files agree with the source tree, and it reaches outside `docs/` to do it. Resolved by
+  keeping them separate functions composed in `cmd_check` rather than one pass. Recorded for the
+  next phase: a **third** pass over these files is the point at which the file becomes a module
+  with its own directory, not a fourth function.
+- **Duplication — `_fenced_lines` is the second fence tracker in this repo**, after the one inline
+  in `design-review/tests/write_results.py`. Deliberately not consolidated. The two differ in a
+  load-bearing way — only this one implements the rule that a backtick fence whose info string
+  contains a backtick is not a fence — they sit in different skills with no shared module between
+  them, and two occurrences do not justify creating one. The third occurrence creates the home.
+- **Surface — `verify_references` takes one argument, not two.** The obvious signature threads a
+  repository root through it, and it is unnecessary: a link inside `docs/KNOWN_ISSUES.md` is
+  written relative to that file, so `docs / "../skills/x"` already resolves. The CLI surface did
+  not change.
+- **Variation — `_references` refuses rather than extends.** The first draft planned "one regex, no
+  registry". That was the wrong shape of answer: the risk is not too few syntaxes but an
+  unrecognised one being read as *no reference*, which is silent. It now raises, and the caller
+  turns that into a finding, so adding a syntax costs a rule and a test — which is the cost that
+  should be paid.
+
 ## Gate
 
 Recorded at §3 step 7.

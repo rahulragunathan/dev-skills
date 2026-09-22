@@ -961,7 +961,7 @@ python3 skills/phase-workflow/bats_assertions.py \
 MID="$(awk -F'\t' '$4=="mid"' "$TMPDIR/scan.tsv" | tee /dev/stderr | wc -l | tr -d ' ')"
 [ "$MID" -eq 0 ] || { echo "MID ASSERTIONS PRESENT: $MID"; exit 1; }
 markdownlint-cli2 --config ~/.markdownlint.jsonc docs/*.md CHANGELOG.md CLAUDE.md \
-  skills/phase-workflow/SKILL.md skills/phase-workflow/templates/*.md
+  skills/phase-workflow/SKILL.md skills/phase-workflow/*-template.md
 ```
 
 **`project-env` names no suite because it has none** — it is `SKILL.md` alone. Four suites for five
