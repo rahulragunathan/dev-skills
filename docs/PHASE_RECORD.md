@@ -321,7 +321,33 @@ rather than reverting the feature. It identified the exact class this phase had 
 
 ## Gate
 
-Recorded at §3 step 7.
+| | |
+| --- | --- |
+| Presented | 2026-09-22 |
+| `APPROVED_SHA` | the head of PR #6 at sign-off, read with `gh pr view 6 --json headRefOid` |
+| Tests | 351 passing under bash 3.2.57; 351 passing and 1 skipped under bash 5.3.20 |
+| Gates | `roadmap.py check` clean · markdownlint clean over 19 files · 0 `mid` assertions |
+| External review | **Partial coverage** — Codex disqualified as the diff's author; `gemini-3.1-pro-high` the only independent reviewer, over two chunks |
+| Merge method | `squash`, recorded at phase start |
+| Release | v1.12.0 |
+
+§4 loads `MERGE_METHOD` from the table at the top of this file and resolves `APPROVED_SHA` from
+the recorded `PR`. The record cannot hold its own commit's SHA — writing one changes the commit it
+describes — and the gate has already verified that the PR head, `origin/<branch>` and local `HEAD`
+are the same commit, so resolving from the PR is exact.
+
+**The one skipped test is expected and is not a gap.** It asserts the mid-test `[[ ]]` vacuity,
+which does not exist under bash 5.3.20, and it decides its own scope by running its fixture rather
+than by reading `$BASH_VERSION`. Under bash 3.2.57 it runs and passes.
+
+## What this phase changed about how it is verified
+
+`brew install bash` put bash 5.3.20 at `$(brew --prefix)/bin/bash`, ahead of `/bin` on this
+machine's `PATH`. **Every unpinned `bats` run here is now bash 5.3.20**, not the stock 3.2.57 that
+every earlier phase implicitly measured. `/bin/bash` is untouched. The suite passes under both, so
+the gate is not weakened — but a result gathered without pinning no longer means what it meant
+before this phase, and README's external-tools table now carries the fact so it survives this
+file being overwritten.
 
 ## Evidence state
 
