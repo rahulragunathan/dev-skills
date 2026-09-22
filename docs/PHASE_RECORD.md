@@ -183,6 +183,33 @@ fences, so the toggles landed evenly and the Where line was unfenced whether or 
 worked; and the wrapped-field control could not detect the field being truncated, because
 dropping a valid reference produces no finding either way.
 
+## Test-validity audit — every test this phase added or changed
+
+**20 `refs:` tests, all with a proven red.** Thirteen went red under a mutation of the behaviour
+they name. The seven controls assert the *absence* of a finding, so their discriminating mutation
+is the opposite one — something that makes the checker over-report — and each was found:
+
+| Control | Mutation that reds it |
+| --- | --- |
+| a fragment present in the cited file passes | force the absent branch |
+| a #Lnn inside a fenced block is not a finding | never open a fence |
+| a Where field wrapped onto a second line is read whole | force the absent branch |
+| a directory link needs no fragment | remove the directory exemption |
+| a doc-relative link inside docs needs no fragment | remove the docs-relative skip |
+| a file link in prose needs no fragment | extend the field past its blank line |
+| a tilde-fenced example is not a finding | never open a fence |
+
+I expected the wrapped-field control to have no discriminating mutation, because truncating the
+field removes a *valid* reference and produces no finding either way. That was too pessimistic:
+an over-reporting mutation reds it. The sibling test asserting a bad reference on line 2 is still
+the one that proves the line is read.
+
+**`verify-assertions.bats`** had one test changed rather than added: it now decides its own scope
+by running its fixture. Under bash 3.2.57 it runs and passes, under 5.3.20 it skips with the
+interpreter named. Its GREEN assertion was proven by mutation in phase 1 and is unchanged.
+
+**`tests/fixtures/vacuity.bats`** is a fixture, not part of any suite, and asserts nothing.
+
 ## design-review, phase mode
 
 | Unit | Responsibility | Interface | Depends on |
