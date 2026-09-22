@@ -10,7 +10,7 @@ here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
 
-## [1.12.0] - 2026-09-21 — Mini phase, reference integrity
+## [1.12.0] - 2026-09-22 — Mini phase, reference integrity
 
 Two instruments phase 1 left uncalibrated, taken before the next phase so the rest of the
 programme is not measured with them.
@@ -55,6 +55,23 @@ programme is not measured with them.
 - **Three roadmap references were themselves drift**, found by reading: KI-17's fourth link
   pointed at a blank line in an alias block, and KI-07 and KI-17 each carried a line anchor in
   prose rather than in the Where field.
+- **Four ways a reference could be skipped without saying so**, all found by review of the new
+  code and all of the class the check exists to remove. An unpaired backtick made the links after
+  it vanish, because masking code spans erased the `](` the unparseable-link guard watches for —
+  so the guard could not fire and the entry reported clean. An entry whose `**Where:**` field did
+  not parse was answered with a bare skip. An empty link target resolved to `docs/` itself and
+  passed the directory exemption. And the external-link escape tested for `://`, so `mailto:`
+  reached the filesystem as a missing path no author could satisfy.
+- **A fragment must now occur exactly once**, not merely appear. The conversion verified
+  uniqueness and the docs claimed it; the check tested presence, so a fragment could go ambiguous
+  later with nothing failing.
+- **The ENHANCEMENTS template still showed a bare link with no fragment** — the shape the new
+  check rejects — so copying it would have produced an entry that failed on its first run.
+- **The hand-off lint globbed a `templates/` directory that does not exist**, so the one template
+  this phase edited was never linted by the command that claimed to lint it.
+- **The bash-version skip in `verify-assertions.bats` fired on any failure**, so a broken fixture
+  would have skipped with a misleading interpreter reason rather than failing. It now asserts the
+  specific failure first.
 
 ### Corrected
 
