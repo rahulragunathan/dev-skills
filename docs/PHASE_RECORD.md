@@ -252,6 +252,73 @@ call.
   turns that into a finding, so adding a syntax costs a rule and a test — which is the cost that
   should be paid.
 
+## External review, phase pass 1
+
+**Partial coverage** — `Gemini gemini-3.1-pro-high · chunk 1: 3 · chunk 2: 6 → 9 findings ·
+Codex AUTHOR — disqualified (probe: READY)`. Two chunks of 52,000 and 67,000 characters;
+`bundle contains 17 of 17 files; 0 withheld, 0 excluded`, reconciling as 7 code files + 7 document
+files + 3 phase artifacts named as deliberately not sent.
+
+**Codex authored every production diff, so it cannot review it.** `preflight.sh --authored-by
+codex` reported `AUTHOR — disqualified` and warned partial coverage before the pass started —
+the rule phase 1 added, on its second real use. Gemini was the only independent reviewer, and the
+prompt said so, because Claude wrote every test and neither author is independent of this work.
+
+**Split by concern, not alphabetically.** Phase 1 chunked an alphabetically-ordered diff and the
+reviewer saw only `docs/`, producing twelve findings about code it never read. Chunk 1 was the
+code and its tests, chunk 2 the documents the conversion rewrote, each naming what the other
+covered.
+
+| # | Finding | Model | Likelihood | Severity | Verdict | Disposition |
+| --- | --- | --- | --- | --- | --- | --- |
+| F-01 | The gate's reach follows `../` and absolute paths outside the repository | gemini-3.1-pro-high | Rare | Low (gemini) | Confirmed | Fixed in phase |
+| F-02 | `awk \| wc -l` reports 0 when `awk` fails, so the 0-`mid` gate passes | gemini-3.1-pro-high | Likely | Medium (gemini) | Confirmed | Fixed in phase |
+| F-03 | `ENH-07`'s fragment is the file's description header, unrelated to its subject | gemini-3.1-pro-high | Almost always | High (gemini) | Confirmed | Fixed in phase |
+| F-04 | `KI-32`'s second fragment describes bash syntax, not approval state | gemini-3.1-pro-high | Almost always | High (gemini) | Confirmed | Fixed in phase |
+| F-05 | An entry omitting its `**Where:**` field entirely is skipped in silence | gemini-3.1-pro-high | Rare | Medium (gemini) | Confirmed | Filed ENH-31 |
+| F-06 | CHANGELOG claims `KI-07`/`KI-17` prose-anchor fixes the diff does not show | gemini-3.1-pro-high | — | High (gemini) | Rejected | Rejected |
+| F-07 | `KI-44`'s link and fragment are unrelated to its subject | gemini-3.1-pro-high | — | High (gemini) | Rejected | Rejected |
+| F-08 | `KI-14`'s fragment points at a success test, contradicting its subject | gemini-3.1-pro-high | — | Low (gemini) | Rejected | Rejected |
+| F-09 | `KI-26` silently dropped a fourth link | gemini-3.1-pro-high | — | Low (gemini) | Rejected | Rejected |
+
+**F-02** — *When it fires:* `awk` fails while counting the scanner's output. *What happens:*
+`wc -l` receives nothing, prints `0`, and `[ "$MID" -eq 0 ]` passes, so the gate proves nothing.
+*Reviewer's fix:* "Set `set -o pipefail` before executing the pipeline, or check `${PIPESTATUS[0]}`
+to ensure an `awk` failure explicitly fails the gate." *Commentary:* This is the same defect one
+level below a fix made earlier in this phase. I made the *scanner* failure loud and left the
+identical hole in the command that reads its output. Worth recording as a pattern: fixing a silent
+failure at one level invites checking the next.
+
+**F-03, F-04** — *When they fire:* a reader opens the entry to find the code it describes. *What
+happens:* the fragment is unique, so the gate says verified, and it points at something unrelated.
+*Reviewer's fix:* "Change the fragment to point to the specific line where the config path is
+hardcoded." *Commentary:* Both confirmed, and the review found a pattern rather than two
+instances. Auditing all 34 title-chosen fragments turned up a third (`ENH-25`, anchored to repeat
+grading rather than the blinding it is about) and two weak ones. **`KI-32` is the more important
+case:** its original line anchor pointed at item 5 of the cited file, about `cd` in compound
+commands, while the entry is about item 6, the `~/.claude.json` approval state. The reference was
+drift before the conversion and the conversion anchored it faithfully. **Anchoring a wrong
+reference makes it verifiable and still wrong** — a limit of this mechanism the phase should state
+rather than discover later.
+
+**F-06 to F-09 — rejected, and the reason is one cause, not four.** All four assert something
+about an entry the reviewer mis-identified, reading a diff without enough surrounding context.
+F-06 claims the CHANGELOG invented the `KI-07`/`KI-17` prose-anchor fixes: `grep -c '#L[0-9]'` on
+`docs/KNOWN_ISSUES.md` returns **0**, both prose links are converted, and `KI-17` carries three
+links where it carried four. F-07 attributes `KI-27`'s fragment to `KI-44`, whose Where field
+cites `evidence.py` at the dispatch-log filter — correct for its subject. F-08 attributes
+`KI-11`'s fragment to `KI-14`. F-09 attributes `KI-17`'s dropped link to `KI-26`; that removal is
+disclosed in its commit message and in the CHANGELOG.
+
+Each was checked against the file rather than acted on. A reviewer confidently wrong about four
+entries is worth recording as a property of reviewing a diff in chunks, not as a slight: F-03 and
+F-04, which it got right, were worth the pass on their own.
+
+**Test-discrimination answer.** The reviewer observed that the eight controls would pass with the
+change reverted, since they assert exit 0 and the old script exited 0 always. That is true as
+stated and is the reason the audit above mutates each control with an *over-reporting* mutation
+rather than reverting the feature. It identified the exact class this phase had already measured.
+
 ## Gate
 
 Recorded at §3 step 7.

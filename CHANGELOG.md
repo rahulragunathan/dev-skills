@@ -72,6 +72,25 @@ programme is not measured with them.
 - **The bash-version skip in `verify-assertions.bats` fired on any failure**, so a broken fixture
   would have skipped with a misleading interpreter reason rather than failing. It now asserts the
   specific failure first.
+- **The gate's reach had no boundary.** `(docs / target).resolve()` followed `../` past the
+  repository root, and `pathlib` lets an absolute target win outright, so an entry could aim the
+  check at any readable file on the machine and have its contents read and counted. The boundary
+  test now runs before the file is opened.
+- **The 0-`mid` gate still hid a failure one level below its own fix.** Checking that the scanner
+  succeeded left `awk | wc -l` in the pipeline, which reports `0` when `awk` fails. Both copies
+  now use `pipefail`.
+- **Four fragments passed the gate and failed the reader.** `ENH-07` was anchored to its file's
+  description header rather than anything about `$CLAUDE_CONFIG_DIR`, and `ENH-25` to repeat
+  grading rather than the blinding it describes. `KI-32` is the phase's third already-wrong
+  reference: its subject is the `~/.claude.json` approval state, item 6 of the cited file, while
+  the original anchor pointed at item 5 — the conversion faithfully anchored the wrong line, which
+  is a real limit of this mechanism.
+
+### Filed (continued)
+
+- **ENH-31** — report an entry that omits its `**Where:**` field entirely. The check reports a
+  field that looks like one and does not parse, but an entry with no such line is skipped in
+  silence. The obvious fix reds the test fixture, so the work is fixture-first.
 
 ### Corrected
 

@@ -521,6 +521,42 @@ keep the retain rule: nothing is deleted that was not proven safe.
 
 ---
 
+<a id="enh-31"></a>
+
+## ENH-31 — report an entry that omits its `**Where:**` field entirely
+
+**Priority:** Low · **Effort:** ~1 hour
+**Where:** [roadmap.py](../skills/phase-workflow/roadmap.py) — `def verify_references(` · **Regression net:** `skills/phase-workflow/tests/roadmap.bats`
+
+### What it is
+
+`verify_references` reports a `**Where:**` field that looks like one and does not parse — a list
+item, a `**Where**:` typo. An entry with no Where-ish line at all is skipped in silence, so a
+`KI-nn` or `ENH-nn` whose field was deleted is never verified and the gate still says
+`references verified`.
+
+### Why it matters
+
+Every live KNOWN_ISSUES and ENHANCEMENTS entry carries the field, so nothing is unverified today.
+But the templates mandate it, the check now enforces its contents, and the one way to escape that
+enforcement entirely is to remove the field — which is exactly the shape of change nobody reviews
+closely.
+
+### Notes for the work
+
+**The obvious fix breaks the tests, and that is the whole difficulty.** Requiring the field for
+`KI-`/`ENH-` entries reds `roadmap.bats`'s baseline and several controls, because the scratch
+fixture in `setup()` builds KI-01 to KI-03 and ENH-01 with no Where fields. `gpt-6-astra` refused
+this exact change during the reference-integrity phase for that reason and was right to.
+
+So the work is fixture-first: give the scratch entries a Where field and a seeded source tree in
+`setup()`, confirm the twenty-odd unrelated tests still pass, and only then enforce the rule.
+`UNK-nn` entries must stay exempt — open questions legitimately have no Where field.
+
+**Source:** gemini-3.1-pro-high — phase review, mini phase reference integrity, 2026-09-22.
+
+---
+
 <a id="enh-07"></a>
 
 ## ENH-07 — Honour `$CLAUDE_CONFIG_DIR` in the bundled scripts
