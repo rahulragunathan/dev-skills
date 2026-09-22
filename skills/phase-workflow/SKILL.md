@@ -554,7 +554,9 @@ Then stop. The next phase's branch is created at phase start (§2 step 1) — ne
 - The rating in a ROADMAP row mirrors the supporting file, which is authoritative. The drift check verifies they agree, that ordering is descending, and that every ID appears in both.
 - Completed items are deleted from both files, not annotated in place.
 - **A reference to a repo file carries a greppable fragment, never a line number**, and
-  `roadmap.py check` confirms that fragment still appears in the file it cites:
+  `roadmap.py check` confirms that fragment still occurs in the file it cites **exactly once** —
+  greppable means one hit, and a fragment that has since been duplicated is refused as loudly as
+  one that has gone:
 
   ```markdown
   **Where:** [preflight.sh](../skills/external-review/preflight.sh) — `timed_out "$ERR"`

@@ -43,6 +43,7 @@ FRAGMENT = re.compile(r'(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)', re.S)
 FIELD = re.compile(r'\*\*[^*\n]+:\*\*')
 LINE_ANCHOR = re.compile(r'#L\d+')
 WHERE = "**Where:**"
+WHERE_LIKE = re.compile(r'^\s*(?:[-+*]\s+|\d+[.)]\s+)?\*\*Where(?::\*\*|\*\*:)')
 Ref = collections.namedtuple("Ref", "target fragment")
 
 
@@ -222,6 +223,10 @@ def _references(field: str) -> list[Ref]:
     stop = FIELD.search(syntax, len(WHERE))
     if stop:
         field, syntax = field[:stop.start()], syntax[:stop.start()]
+    # Balanced code spans are masked; any remaining backtick is unpaired and
+    # may have caused a link to be swallowed by the preceding span.
+    if "`" in syntax:
+        raise ValueError("unbalanced backticks in this Where field")
     matches = [m for m in LINK.finditer(field) if syntax[m.start()] == "["]
     remaining = list(syntax)
     for match in matches:
@@ -241,6 +246,8 @@ def _references(field: str) -> list[Ref]:
             fragment = fragment[1:-1]
         destination = match[1] if match[1] is not None else match[2]
         target = destination.partition("#")[0]
+        if not target:
+            raise ValueError("a link in this Where field has an empty target")
         refs.append(Ref(target, fragment))
     return refs
 
@@ -279,6 +286,8 @@ def verify_references(docs: pathlib.Path) -> tuple[bool, list[str]]:
                 findings.append(finding)
             field = _where_field(lines)
             if not field:
+                if any(WHERE_LIKE.match(line) for line in lines):
+                    findings.append(f"  {eid}: malformed Where field")
                 continue
             try:
                 refs = _references(field)
@@ -286,7 +295,7 @@ def verify_references(docs: pathlib.Path) -> tuple[bool, list[str]]:
                 findings.append(f"  {eid}: {exc}")
                 continue
             for ref in refs:
-                if "://" in ref.target:
+                if re.match(r'[A-Za-z][A-Za-z0-9+.-]*:', ref.target):
                     continue
                 try:
                     path = (docs / ref.target).resolve()

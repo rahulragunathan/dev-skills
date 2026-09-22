@@ -48,6 +48,13 @@ teardown() { cd /; rm -rf "$TEST_TMP"; }
 @test "a mid-test [[ ]] assertion is GREEN because negating it cannot fail its test" {
   run bats t/vac.bats
   if [ "$status" -ne 0 ]; then
+    # Skip for ONE reason only: this bash stops a false mid-test [[ ]]. Any
+    # other failure means the fixture is broken, and skipping on it would hide
+    # that -- the same conflation of "harness error" with "the red I wanted"
+    # that the REFUSED test below exists to prevent. Assert the reason before
+    # accepting it.
+    [[ "$output" == *"not ok 1 vacuous"* ]] || false
+    [[ "$output" == *'[[ "a" == "b" ]]'* ]] || false
     skip "bash $BASH_VERSION fails a mid-test [[ ]]; no vacuity here to report GREEN"
   fi
   run bash "$VERIFY" "$SHA" t/vac.bats 2 vacuous

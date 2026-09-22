@@ -399,10 +399,10 @@ PY
 # ENH-30 — a roadmap reference carries a greppable fragment, and check verifies
 # it still appears in the file cited beside it.
 #
-# Seven of the twenty tests below are CONTROLS: they assert status 0 and so pass
+# Eight of the twenty-four tests below are CONTROLS: they assert status 0 and so pass
 # before the feature exists. They are here because the other half of getting
 # this right is not flagging correct references, and a checker that refuses
-# everything would satisfy the other thirteen without them.
+# everything would satisfy the other sixteen without them.
 # ---------------------------------------------------------------------------
 
 # Put reference text into KI-01's body. Multi-line input is supported, because
@@ -681,4 +681,52 @@ before:  [x.sh:2](../skills/x.sh#L2)
   run python3 "$RM" check --docs "$DOCS"
   [ "$status" -eq 1 ]
   [[ "$output" == *"occurs more than once"* ]] || false
+}
+
+# Fails if an unbalanced backtick makes the links after it disappear.
+#
+# The masking pass blanks code spans before finding links, so a lone backtick
+# swallows the rest of the field -- including the `](` that LOOSE watches for.
+# _references then returns [] and the entry reports clean. That is precisely
+# the "unrecognised links must be findings, never silently missing references"
+# contract the function's own docstring states, and the guard cannot catch it
+# because the evidence was erased in the same pass.
+@test "refs: an unbalanced backtick in the field is a finding, not silence" {
+  seed_source
+  put_ref '**Where:** the `guard helper in [x.sh](../skills/x.sh) — `timed_out "$ERR"`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+}
+
+# Fails if a KI or ENH entry with no parseable **Where:** field is skipped
+# silently. A list item, a `**Where**:` typo or a dropped field all yield "",
+# and verify_references answers that with a bare continue -- so the entry is
+# never checked and the gate still says verified. Open questions legitimately
+# have no Where field; known issues and enhancements do not.
+@test "refs: an entry whose Where field does not parse is a finding" {
+  seed_source
+  put_ref '- **Where:** [x.sh](../skills/x.sh) — `timed_out "$ERR"`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+}
+
+# Fails if a link with an empty target is treated as an existence-only
+# reference. `docs / ""` resolves to docs itself, which is a directory that
+# exists, so a doc-internal anchor link passes the directory exemption and is
+# never checked against anything.
+@test "refs: a link with an empty target is not an existence-only reference" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `timed_out "$ERR"`, [KI-42](#ki-42)'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+}
+
+# CONTROL. Fails if a non-filesystem URL is stat-ed. The escape tests for
+# "://", so an authority-less scheme such as mailto: falls through and is
+# reported as a missing path that no author can satisfy.
+@test "refs: a mailto link is left alone, not reported missing" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `timed_out "$ERR"`, [owner](mailto:someone@example.com)'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
 }
