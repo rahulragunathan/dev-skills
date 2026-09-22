@@ -158,6 +158,31 @@ All 17 rows incorporated. The two that changed the phase:
 - **One verified fragment concealed every other reference in its entry.** Found independently by
   both reviewers, and the reason decision 1 above went to the strict reading.
 
+## What the phase did
+
+| Closed | ENH-30, KI-52 |
+| --- | --- |
+| Filed | KI-55 |
+
+59 line anchors became 89 verified fragments across 71 entries; `roadmap.py check` gained the
+pass that verifies them; and KI-52 was answered by measurement rather than by assertion.
+
+Three references turned out to be drift already, found by reading and not by any gate: KI-17's
+fourth link pointed at a blank line in an alias block, and KI-07 and KI-17 each carried a line
+anchor in prose rather than in the Where field.
+
+**Astra wrote every production diff; Claude wrote every test.** Astra raised no dispute this
+round. Its two defects were both found by my review of its diff rather than by a test: the
+line-anchor scan read only the `**Where:**` field, missing two real prose anchors, and a
+recognised link with a near-miss target was skipped silently by both the existence and fragment
+checks. Each got a red test before the fix.
+
+**My defects were again test-side**, and the mutation audit is what found them: two of the
+fifteen tests passed for the wrong reason. The four-backtick fixture had an even number of inner
+fences, so the toggles landed evenly and the Where line was unfenced whether or not the rule
+worked; and the wrapped-field control could not detect the field being truncated, because
+dropping a valid reference produces no finding either way.
+
 ## Gate
 
 Recorded at §3 step 7.

@@ -553,6 +553,21 @@ Then stop. The next phase's branch is created at phase start (§2 step 1) — ne
 - **No phase ledger.** A phase ends by cutting a CHANGELOG release whose heading names it, so the release history is the phase history. ROADMAP records only what is in flight or planned. Version by what the phase did: minor for additive work, patch for fixes and docs, major for a break.
 - The rating in a ROADMAP row mirrors the supporting file, which is authoritative. The drift check verifies they agree, that ordering is descending, and that every ID appears in both.
 - Completed items are deleted from both files, not annotated in place.
+- **A reference to a repo file carries a greppable fragment, never a line number**, and
+  `roadmap.py check` confirms that fragment still appears in the file it cites:
+
+  ```markdown
+  **Where:** [preflight.sh](../skills/external-review/preflight.sh) — `timed_out "$ERR"`
+  ```
+
+  A `#Lnn` anchor is rejected anywhere in an entry, fenced examples excepted. Three further
+  rules come from what the files actually contain: a link whose target is a **directory** is an
+  existence-only reference and takes no fragment; a fragment **cannot contain a backtick**, so
+  quote something else from the same file; and the requirement covers file links in the
+  `**Where:**` field only, so a file mentioned in passing in prose needs nothing. Choosing the
+  fragment is judgement — prefer a function name or a guard's condition to a whole line, and
+  never a token that occurs everywhere. The four-character floor in the gate catches only the
+  degenerate cases.
 - An entry filed from an external review carries a provenance line naming the model ids that found it — `Source: gpt-5.6-sol, gemini-3.1-pro-high — phase review, phase 4` — never the CLI name, so the attribution survives without a separate review store.
 
 Close completed entries with the bundled helper from the repository root. It removes the

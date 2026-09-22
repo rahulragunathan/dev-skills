@@ -120,7 +120,7 @@ The process and setup suites run against scratch repositories and temporary dire
 | --- | --- |
 | `claude-setup` | standards installation, link installation, README installation command |
 | `external-review` | bundle capture, pruned export, documented Codex invocation, preflight |
-| `phase-workflow` | mutation restoration, release checks, documented release and cleanup commands, roadmap edits |
+| `phase-workflow` | mutation restoration, release checks, documented release and cleanup commands, roadmap edits, reference verification, bats assertion enumeration |
 | `design-review` | transcript handling, fixture evaluation, Results writer, rollup tooling |
 
 Run them with:

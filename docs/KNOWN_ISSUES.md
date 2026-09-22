@@ -1175,40 +1175,6 @@ denominators, this one is about discarded evidence.
 
 ---
 
-<a id="ki-52"></a>
-
-## KI-52 — mid-test `[[ ]]` vacuity may depend on the bash version
-
-**Severity:** Medium
-**Likelihood:** Likely
-**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) §3 step 3,
-every `*.bats` suite
-
-### What happens
-
-Measured on this machine — bash 3.2.57, bats 1.14.0 — a false mid-test `[[ ]]` passes and a false
-mid-test `[ ]` fails, which is the behaviour the 68 conversions rest on. `gpt-6-astra` asserts that
-modern bash stops the test. If that holds, the vacuity is host-dependent, and so is any
-verification predicting a red for it.
-
-### Example scenario
-
-§3 step 3 forbids a mutation "whose predicted outcome depends on the machine the suite runs on",
-because such a red certifies the runner rather than the test. The `|| false` conversion is safe
-either way — it makes the assertion load-bearing under any bash — but the *evidence* gathered for
-it was collected under one interpreter and has not been reproduced under another.
-
-### Notes for a fix
-
-Measure the behaviour under bash 5 and record both results. Then decide whether the suites pin an
-interpreter or the workflow accepts the variance in writing. `claude-toggle-backend`'s five
-single-line mid-test assertions are also unconverted, and are held with that skill's rebuild.
-
-**Source:** claude-opus-5 — measured while converting the assertions, 2026-09-20; the bash 5
-claim is `gpt-6-astra`'s and is unverified here.
-
----
-
 <a id="ki-18"></a>
 
 ## KI-18 — `toggle.sh` needs `python3` and never checks for it
@@ -1354,6 +1320,43 @@ Seed templates that pass the check, or let the check accept untouched placeholde
 bats case that seeds the templates and runs the check.
 
 **Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.
+
+---
+
+<a id="ki-55"></a>
+
+## KI-55 — the plan review cannot run while the plan is inside the repository
+
+**Severity:** Medium
+**Likelihood:** Likely
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `## 1. Plan review (before the user approves)`, [codex-root.sh](../skills/external-review/codex-root.sh) — `TREE IS DIRTY — commit first; the reviewer only ever sees HEAD`
+
+### What happens
+
+`codex-root.sh` refuses to build the Codex export whenever `git status --porcelain` is non-empty,
+and that includes untracked files. §1 runs before the phase branch exists, so the plan it reviews
+cannot yet be committed. If the plan was written to `docs/superpowers/plans/` as
+`superpowers:writing-plans` directs, the export fails and the Codex half of the plan review cannot
+run at all.
+
+### Example scenario
+
+Draft the plan at `docs/superpowers/plans/<date>-<phase>.md`, then run
+`/localclaude:external-review plan`. `codex-root.sh` exits with `TREE IS DIRTY — commit first`.
+The workaround is to hold the plan outside the repository for the review and move it in at §2,
+which is what the reference-integrity phase did.
+
+### Notes for a fix
+
+The two documents are individually consistent and neither states the ordering the other needs:
+`external-review`'s plan mode already says plans live in `~/.claude/plans` by design and adds that
+directory to its allowed roots. Either say in §1 that the plan is drafted outside the repository
+and lands as the phase's first commit, or let `codex-root.sh` ignore untracked paths it has been
+told to exclude. The first is a wording fix. The second changes a guard whose whole value is
+refusing to review a tree that differs from HEAD, so prefer the wording.
+
+**Source:** claude-opus-5 — hit while running §1 for the reference-integrity mini phase,
+2026-09-21.
 
 ---
 

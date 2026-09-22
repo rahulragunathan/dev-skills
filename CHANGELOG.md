@@ -10,6 +10,69 @@ here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-09-21 — Mini phase, reference integrity
+
+Two instruments phase 1 left uncalibrated, taken before the next phase so the rest of the
+programme is not measured with them.
+
+### Added
+
+- **`roadmap.py check` verifies that a roadmap reference still points at real code.** A
+  reference is now a file link plus a greppable fragment, and the check confirms that fragment
+  still appears in the file it cites. A `#Lnn` line anchor is rejected anywhere in an entry.
+  The drift check verifies "every identifier, file path, command, flag and config key a doc
+  names" — a line number was none of those, and was the one reference type no gate could catch.
+- **Four functions behind it, split by what makes each change:** `_fenced_lines` tracks a
+  fence's delimiter character and run length, `_where_field` reads a field's continuation lines,
+  `_references` refuses a link shape it cannot parse rather than reading it as no reference, and
+  `verify_references` resolves each one. A run-scoped cache reads each cited file once.
+- **`skills/phase-workflow/tests/fixtures/vacuity.bats`** — the fixture behind the bash
+  measurement, which records `$BASH_VERSION` from inside the run because that is the only place
+  the answer is trustworthy.
+
+### Changed
+
+- **59 line anchors across 71 entries became 89 verified fragments.** Each was chosen by reading
+  the cited code and each occurs exactly once in the file it cites.
+- **The mid-test `[[ ]]` claim is now scoped to the interpreter it was measured on.** Under bash
+  3.2.57 a false mid-test `[[ ]]` passes its test; under bash 5.3.20 it fails. `|| false` is
+  correct under both and load-bearing only under 3.2, so phase 1's 68 conversions stand and the
+  claim made for them narrows.
+- **The entry templates show the new reference shape**, so a new entry is written that way from
+  the start.
+
+### Fixed
+
+- **The documented 0-`mid` regression gate could not fail.** Piping the scanner into `awk`
+  prints nothing when the scanner fails outright, and nothing is exactly what a clean result
+  looks like. It now checks the scan succeeded before reading its count.
+- **The same gate's `skills/*/tests/*.bats` glob swept in an out-of-scope skill**, so the
+  documented command reported 5 while the text beside it claimed 0. It now names the four
+  in-scope skills.
+- **A phase-1 test encoded bash 3.2's behaviour and failed under bash 5.** It now decides its own
+  scope by running its fixture rather than by reading `$BASH_VERSION`, because two measured
+  points say nothing about bash 4, and skips with the interpreter named.
+- **Three roadmap references were themselves drift**, found by reading: KI-17's fourth link
+  pointed at a blank line in an alias block, and KI-07 and KI-17 each carried a line anchor in
+  prose rather than in the Where field.
+
+### Corrected
+
+- **`bats` cannot be pinned by invoking a bash on its script.** Its helpers re-exec through
+  `#!/usr/bin/env bash`, so the interpreter comes from `PATH` however the outer script started.
+  Recorded in the skill, because two pinning methods failed silently before one worked.
+- The programme spec predicted a patch release for phase 1; it shipped 1.11.0, a minor.
+
+### Filed
+
+- **KI-55** — the plan review cannot run while the plan is inside the repository, because
+  `codex-root.sh` refuses any untracked file and a pre-branch plan is necessarily untracked.
+
+### Closed
+
+- **ENH-30** — anchor roadmap references to an identifier rather than a line number.
+- **KI-52** — measured: the mid-test `[[ ]]` vacuity does depend on the bash version.
+
 ## [1.11.0] - 2026-09-21 — Phase 1, gate integrity
 
 Two of the checks that judge every later phase were not checking. This phase repaired them, and
@@ -815,7 +878,8 @@ corrections are recorded here.
 
 ## Reference
 
-[Unreleased]: https://github.com/rahulragunathan/localclaude/compare/v1.11.0...HEAD
+[Unreleased]: https://github.com/rahulragunathan/localclaude/compare/v1.12.0...HEAD
+[1.12.0]: https://github.com/rahulragunathan/localclaude/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/rahulragunathan/localclaude/compare/v1.10.2...v1.11.0
 [1.10.2]: https://github.com/rahulragunathan/localclaude/compare/v1.10.1...v1.10.2
 [1.10.1]: https://github.com/rahulragunathan/localclaude/compare/v1.10.0...v1.10.1
