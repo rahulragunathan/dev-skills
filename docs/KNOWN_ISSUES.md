@@ -1430,7 +1430,7 @@ fix.
 
 **Severity:** Medium
 **Likelihood:** Rare
-**Where:** [drive-backup/SKILL.md](../skills/drive-backup/SKILL.md) — `which holds the invisible per-project`, [claude-setup/REFERENCE.md](../skills/claude-setup/REFERENCE.md) — `in a compound command can trip a`
+**Where:** [drive-backup/SKILL.md](../skills/drive-backup/SKILL.md) — `which holds the invisible per-project`, [claude-setup/REFERENCE.md](../skills/claude-setup/REFERENCE.md) — `clicks are invisible and non-portable.`
 
 ### What happens
 

@@ -399,7 +399,7 @@ PY
 # ENH-30 — a roadmap reference carries a greppable fragment, and check verifies
 # it still appears in the file cited beside it.
 #
-# Eight of the twenty-four tests below are CONTROLS: they assert status 0 and so pass
+# Eight of the twenty-five tests below are CONTROLS: they assert status 0 and so pass
 # before the feature exists. They are here because the other half of getting
 # this right is not flagging correct references, and a checker that refuses
 # everything would satisfy the other sixteen without them.
@@ -729,4 +729,25 @@ before:  [x.sh:2](../skills/x.sh#L2)
   put_ref '**Where:** [x.sh](../skills/x.sh) — `timed_out "$ERR"`, [owner](mailto:someone@example.com)'
   run python3 "$RM" check --docs "$DOCS"
   [ "$status" -eq 0 ]
+}
+
+# Fails if a reference can make the gate read a file outside the repository.
+#
+# `.resolve()` follows `../` past the repo root, so an entry could aim the
+# check at any readable file on the machine and have its contents counted.
+# Nothing in a roadmap entry should reach outside the repository it describes.
+#
+# The first version of this test cited /etc/hosts with the fragment `localhost`
+# and PASSED -- but for the wrong reason: localhost occurs three times there,
+# so the uniqueness rule fired and the path rule was never reached. It was also
+# host-dependent, which §3 step 3 forbids. The sentinel below is created by the
+# test, so it occurs exactly once and exists on every machine.
+@test "refs: a target outside the repository is a finding, not a read" {
+  seed_source
+  outside="$TEST_TMP/../outside-$$.txt"
+  printf 'sentinel-value-for-this-test\n' > "$outside"
+  put_ref "**Where:** [outside](../../outside-$$.txt) — \`sentinel-value-for-this-test\`"
+  run python3 "$RM" check --docs "$DOCS"
+  rm -f "$outside"
+  [ "$status" -eq 1 ]
 }

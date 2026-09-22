@@ -299,7 +299,9 @@ def verify_references(docs: pathlib.Path) -> tuple[bool, list[str]]:
                     continue
                 try:
                     path = (docs / ref.target).resolve()
-                    if not path.exists():
+                    if not path.is_relative_to(docs.parent):
+                        findings.append(f"  {eid}: cited path outside repository: {ref.target}")
+                    elif not path.exists():
                         findings.append(f"  {eid}: cited path missing: {ref.target}")
                     elif path.is_dir():
                         if ref.fragment is not None:

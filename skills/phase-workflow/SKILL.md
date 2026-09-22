@@ -374,7 +374,8 @@ has a newer one:
 python3 skills/phase-workflow/bats_assertions.py \
   skills/{claude-setup,design-review,external-review,phase-workflow}/tests/*.bats \
   > "$TMPDIR/scan.tsv" || { echo "SCAN FAILED — the gate proves nothing"; exit 1; }
-MID="$(awk -F'\t' '$4=="mid"' "$TMPDIR/scan.tsv" | tee /dev/stderr | wc -l | tr -d ' ')"
+MID="$(set -o pipefail; awk -F'\t' '$4=="mid"' "$TMPDIR/scan.tsv" | tee /dev/stderr | wc -l | tr -d ' ')" \
+  || { echo "COUNTING FAILED — the gate proves nothing"; exit 1; }
 [ "$MID" -eq 0 ] || { echo "MID ASSERTIONS PRESENT: $MID"; exit 1; }
 ```
 

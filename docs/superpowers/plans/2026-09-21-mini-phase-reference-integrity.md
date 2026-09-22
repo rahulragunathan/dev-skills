@@ -647,7 +647,8 @@ behind an unrelated rating mismatch.
 bats skills/phase-workflow/tests/roadmap.bats
 python3 skills/phase-workflow/bats_assertions.py skills/phase-workflow/tests/roadmap.bats \
   > "$TMPDIR/scan.tsv" || { echo "SCAN FAILED — the gate proves nothing"; exit 1; }
-MID="$(awk -F'\t' '$4=="mid"' "$TMPDIR/scan.tsv" | tee /dev/stderr | wc -l | tr -d ' ')"
+MID="$(set -o pipefail; awk -F'\t' '$4=="mid"' "$TMPDIR/scan.tsv" | tee /dev/stderr | wc -l | tr -d ' ')" \
+  || { echo "COUNTING FAILED — the gate proves nothing"; exit 1; }
 [ "$MID" -eq 0 ] || { echo "MID ASSERTIONS PRESENT: $MID"; exit 1; }
 ```
 
@@ -958,7 +959,8 @@ python3 skills/phase-workflow/roadmap.py check || exit 1
 python3 skills/phase-workflow/bats_assertions.py \
   skills/{claude-setup,design-review,external-review,phase-workflow}/tests/*.bats \
   > "$TMPDIR/scan.tsv" || { echo "SCAN FAILED — the gate proves nothing"; exit 1; }
-MID="$(awk -F'\t' '$4=="mid"' "$TMPDIR/scan.tsv" | tee /dev/stderr | wc -l | tr -d ' ')"
+MID="$(set -o pipefail; awk -F'\t' '$4=="mid"' "$TMPDIR/scan.tsv" | tee /dev/stderr | wc -l | tr -d ' ')" \
+  || { echo "COUNTING FAILED — the gate proves nothing"; exit 1; }
 [ "$MID" -eq 0 ] || { echo "MID ASSERTIONS PRESENT: $MID"; exit 1; }
 markdownlint-cli2 --config ~/.markdownlint.jsonc docs/*.md CHANGELOG.md CLAUDE.md \
   skills/phase-workflow/SKILL.md skills/phase-workflow/*-template.md

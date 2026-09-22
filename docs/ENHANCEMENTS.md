@@ -32,7 +32,7 @@ ENH-02, ENH-04 and ENH-05 are held in full; ENH-03 and ENH-07 are held in part.
 ## ENH-02 — Cover the untested llama.cpp and toggle paths
 
 **Priority:** High · **Effort:** ~1 day · **Held**
-**Where:** [llama-serve.bats](../skills/claude-toggle-backend/tests/llama-serve.bats) — `trip set -e and make`, [toggle.bats](../skills/claude-toggle-backend/tests/toggle.bats) — `detect() { bash "$SCRIPT_DIR/toggle.sh" __detect; }`
+**Where:** [llama-serve.bats](../skills/claude-toggle-backend/tests/llama-serve.bats) — `@test "port errors when not running" {`, [toggle.bats](../skills/claude-toggle-backend/tests/toggle.bats) — `detect() { bash "$SCRIPT_DIR/toggle.sh" __detect; }`
 
 ### What it is
 
@@ -403,7 +403,7 @@ Deferred by the user after Claude's grading-tool review. Specify repeat sampling
 ## ENH-25 — Measure how much answers reveal their experimental arm
 
 **Priority:** Medium · **Effort:** ~1 day
-**Where:** [grade_batch.py](../skills/design-review/tests/grade_batch.py) — `condition text. A sample of answers is graded twice` · **Regression net:** `skills/design-review/tests/grade_batch.bats`
+**Where:** [grade_batch.py](../skills/design-review/tests/grade_batch.py) — `the grader never sees the arm,` · **Regression net:** `skills/design-review/tests/grade_batch.bats`
 
 ### What it is
 
@@ -527,7 +527,7 @@ keep the retain rule: nothing is deleted that was not proven safe.
 
 **Priority:** Low · **Effort:** ~2 hours · **Partly held**
 
-**Where:** [backup-projects.sh](../skills/drive-backup/backup-projects.sh) — `snapshot Claude Code + Cowork project transcripts`, [claude-setup/SKILL.md](../skills/claude-setup/SKILL.md) — `### 1. Locate the config dir` (inline bash), and the four scripts under [claude-toggle-backend](../skills/claude-toggle-backend): toggle.sh, llama-serve.sh, mlx-serve.sh and llama-autostart.sh
+**Where:** [backup-projects.sh](../skills/drive-backup/backup-projects.sh) — `log="${CLAUDE_PROJECTS_BACKUP_LOG:-$HOME/.claude/projects-backup.log}"`, [claude-setup/SKILL.md](../skills/claude-setup/SKILL.md) — `### 1. Locate the config dir` (inline bash), and the four scripts under [claude-toggle-backend](../skills/claude-toggle-backend): toggle.sh, llama-serve.sh, mlx-serve.sh and llama-autostart.sh
 
 **Scope now:** `backup-projects.sh` and `claude-setup`'s inline bash. The
 `claude-toggle-backend` scripts are held for the rebuild, which should resolve the config dir
