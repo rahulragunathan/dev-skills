@@ -231,7 +231,8 @@ def _references(field: str) -> list[Ref]:
     remaining = list(syntax)
     for match in matches:
         remaining[match.start():match.end()] = " " * (match.end() - match.start())
-    if LOOSE.search("".join(remaining)):
+    # Shortcut references like [x.sh] are ambiguous with bracketed prose and out of scope.
+    if "][" in syntax or LOOSE.search("".join(remaining)):
         raise ValueError("a link in this Where field is not in the accepted reference form")
 
     refs = []
