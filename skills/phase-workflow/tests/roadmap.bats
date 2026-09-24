@@ -399,21 +399,34 @@ PY
 # ENH-30 — a roadmap reference carries a greppable fragment, and check verifies
 # it still appears in the file cited beside it.
 #
-# Eight of the twenty-five tests below are CONTROLS: they assert status 0 and so pass
-# before the feature exists. They are here because the other half of getting
-# this right is not flagging correct references, and a checker that refuses
-# everything would satisfy the other sixteen without them.
+# Tests marked CONTROL assert status 0 and so pass before the feature exists.
+# They are here because the other half of getting this right is not flagging
+# correct references: a checker that refused everything would satisfy the rest.
 # ---------------------------------------------------------------------------
 
 # Put reference text into KI-01's body. Multi-line input is supported, because
 # a real **Where:** field wraps and three entries in this repo do.
+#
+# Refuses unless the marker occurs exactly once, and checks it was consumed.
+# Without both, a missing marker left the fixture unchanged and reported
+# success, so a CONTROL test then passed against an entry that never received
+# the reference under test.
 put_ref() {
-  local tmp="$TEST_TMP/ki.md"
+  local tmp="$TEST_TMP/ki.md" n
+  n="$(grep -cx 'SURVIVOR-ONE' "$DOCS/KNOWN_ISSUES.md" || true)"
+  if [ "$n" != 1 ]; then
+    echo "put_ref: expected one SURVIVOR-ONE marker, found $n" >&2
+    return 1
+  fi
   printf '%s\n' "$1" > "$TEST_TMP/ref.txt"
   awk -v f="$TEST_TMP/ref.txt" '
     $0 == "SURVIVOR-ONE" { while ((getline l < f) > 0) print l; next }
     { print }
   ' "$DOCS/KNOWN_ISSUES.md" > "$tmp" && mv "$tmp" "$DOCS/KNOWN_ISSUES.md"
+  if grep -qx 'SURVIVOR-ONE' "$DOCS/KNOWN_ISSUES.md"; then
+    echo "put_ref: marker survived the substitution" >&2
+    return 1
+  fi
 }
 
 # The scratch source tree the links resolve into: ../skills/x.sh from $DOCS.
@@ -541,14 +554,17 @@ inner fence
   [[ "$output" == *"line anchor"* ]] || false
 }
 
-# Fails if an unrecognised link shape reads as no reference at all. A title
-# would otherwise bypass both anchor rejection and the fragment rule.
+# Fails if a link carrying a title is not parsed. The fragment is absent from
+# x.sh, so a parsed link reports "fragment absent" while an unparsed one is
+# refused as not in the accepted reference form. The input carries no line
+# anchor, so no other check can produce the asserted finding.
 @test "refs: a link carrying a title is parsed, not skipped" {
   seed_source
-  put_ref '**Where:** [x.sh](../skills/x.sh#L2 "the guard") — `timed_out "$ERR"`'
+  put_ref '**Where:** [x.sh](../skills/x.sh "the guard") — `no_such_function`'
   run python3 "$RM" check --docs "$DOCS"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"line anchor"* ]] || false
+  [[ "$output" == *"fragment absent from ../skills/x.sh"* ]] || false
+  [[ "$output" != *"accepted reference form"* ]] || false
 }
 
 # CONTROL. Fails if an existence-only reference is forced to carry a fragment.
@@ -731,23 +747,50 @@ before:  [x.sh:2](../skills/x.sh#L2)
   [ "$status" -eq 0 ]
 }
 
-# Fails if a reference can make the gate read a file outside the repository.
+# Fails if a reference outside the repository is read rather than refused.
 #
-# `.resolve()` follows `../` past the repo root, so an entry could aim the
-# check at any readable file on the machine and have its contents counted.
-# Nothing in a roadmap entry should reach outside the repository it describes.
-#
-# The first version of this test cited /etc/hosts with the fragment `localhost`
-# and PASSED -- but for the wrong reason: localhost occurs three times there,
-# so the uniqueness rule fired and the path rule was never reached. It was also
-# host-dependent, which §3 step 3 forbids. The sentinel below is created by the
-# test, so it occurs exactly once and exists on every machine.
-@test "refs: a target outside the repository is a finding, not a read" {
-  seed_source
-  outside="$TEST_TMP/../outside-$$.txt"
-  printf 'sentinel-value-for-this-test\n' > "$outside"
-  put_ref "**Where:** [outside](../../outside-$$.txt) — \`sentinel-value-for-this-test\`"
+# The repository here is $TEST_TMP/repo, so the outside file still sits inside
+# the test's own temp tree and teardown removes it. The file is unreadable: a
+# check that refuses on containment reports "outside repository", while one
+# that reads first reports "cannot read cited path" instead.
+@test "refs: a relative target outside the repository is refused, not read" {
+  mkdir -p "$TEST_TMP/repo"
+  mv "$DOCS" "$TEST_TMP/repo/docs"
+  DOCS="$TEST_TMP/repo/docs"
+  printf 'sentinel-value-for-this-test\n' > "$TEST_TMP/outside.txt"
+  chmod 000 "$TEST_TMP/outside.txt"
+  put_ref '**Where:** [outside](../../outside.txt) — `sentinel-value-for-this-test`'
   run python3 "$RM" check --docs "$DOCS"
-  rm -f "$outside"
   [ "$status" -eq 1 ]
+  [[ "$output" == *"cited path outside repository: ../../outside.txt"* ]] || false
+  [[ "$output" != *"cannot read"* ]] || false
+}
+
+# Same property for an absolute target, which pathlib lets win outright over
+# the docs directory it is joined to. Kept inside the test's temp tree.
+@test "refs: an absolute target outside the repository is refused, not read" {
+  mkdir -p "$TEST_TMP/repo"
+  mv "$DOCS" "$TEST_TMP/repo/docs"
+  DOCS="$TEST_TMP/repo/docs"
+  printf 'sentinel-value-for-this-test\n' > "$TEST_TMP/outside.txt"
+  chmod 000 "$TEST_TMP/outside.txt"
+  put_ref "**Where:** [outside]($TEST_TMP/outside.txt) — \`sentinel-value-for-this-test\`"
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"cited path outside repository: $TEST_TMP/outside.txt"* ]] || false
+  [[ "$output" != *"cannot read"* ]] || false
+}
+
+# Fails if a reference-style link is verified without being checked. The
+# parser recognises inline links only, and a reference-style link contains no
+# inline `](` for the refusal guard to see, so the entry reported verified with
+# no fragment at all.
+@test "refs: a reference-style link is refused, not silently verified" {
+  seed_source
+  put_ref '**Where:** [x.sh][src] holds the guard
+
+[src]: ../skills/x.sh'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"KI-01: a link in this Where field is not in the accepted reference form"* ]] || false
 }
