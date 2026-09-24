@@ -323,9 +323,9 @@ rather than reverting the feature. It identified the exact class this phase had 
 
 | | |
 | --- | --- |
-| Presented | 2026-09-22 |
+| Presented | 2026-09-22; re-presented 2026-09-24 after the post-gate fixes |
 | `APPROVED_SHA` | the head of PR #6 at sign-off, read with `gh pr view 6 --json headRefOid` |
-| Tests | 351 passing under bash 3.2.57; 351 passing and 1 skipped under bash 5.3.20 |
+| Tests | 353 passing under bash 3.2.57; 353 passing and 1 skipped under bash 5.3.20 |
 | Gates | `roadmap.py check` clean · markdownlint clean over 19 files · 0 `mid` assertions |
 | External review | **Partial coverage** — Codex disqualified as the diff's author; `gemini-3.1-pro-high` the only independent reviewer, over two chunks |
 | Merge method | `squash`, recorded at phase start |
@@ -339,6 +339,20 @@ are the same commit, so resolving from the PR is exact.
 **The one skipped test is expected and is not a gap.** It asserts the mid-test `[[ ]]` vacuity,
 which does not exist under bash 5.3.20, and it decides its own scope by running its fixture rather
 than by reading `$BASH_VERSION`. Under bash 3.2.57 it runs and passes.
+
+## Post-gate review, 2026-09-24
+
+A step-back review of the programme — Claude on `claude-opus-5-5`, with `gpt-6-astra` consulted
+twice — found four defects in this phase's own tests and one in its code, all fixed here:
+
+- The title test passed with title support removed; it observed the anchor scan, not the parser.
+- `put_ref` succeeded silently when its marker was missing.
+- The boundary test wrote into the shared temp directory and did not show the file went unread.
+- Reference-style links were reported verified with no fragment checked.
+
+Each fix was checked by mutation, and each red landed on the assertion the test names. The review's
+wider conclusions — about the skills, the global standards and the test harness — are for the next
+plan, not for this PR.
 
 ## What this phase changed about how it is verified
 

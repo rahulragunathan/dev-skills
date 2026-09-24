@@ -10,7 +10,7 @@ here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
 
-## [1.12.0] - 2026-09-22 — Mini phase, reference integrity
+## [1.12.0] - 2026-09-24 — Mini phase, reference integrity
 
 Two instruments phase 1 left uncalibrated, taken before the next phase so the rest of the
 programme is not measured with them.
@@ -85,6 +85,14 @@ programme is not measured with them.
   reference: its subject is the `~/.claude.json` approval state, item 6 of the cited file, while
   the original anchor pointed at item 5 — the conversion faithfully anchored the wrong line, which
   is a real limit of this mechanism.
+
+- **Four reference tests did not prove what they claimed**, found by a post-gate review and
+  each confirmed by running it. The title test asserted a line-anchor finding that the anchor scan
+  reports whether or not titles parse, so it passed with title support removed. The fixture helper
+  succeeded silently when its marker was missing, so a control test could pass against an entry
+  that never received the reference under test. The boundary test wrote into the shared system
+  temp directory and never showed the outside file went unread. Reference-style links were
+  reported verified with no fragment checked; they are now refused.
 
 ### Filed (continued)
 
