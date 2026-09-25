@@ -43,7 +43,7 @@ rating hides which you are looking at. Both still get fixed.
 
 **Severity:** `<level>`
 **Likelihood:** `<almost always | likely | rare>`
-**Where:** [file.py:12-30](../file.py#L12-L30)
+**Where:** [file.py](../file.py) — `def the_function_that_is_wrong(`
 
 ### What happens
 

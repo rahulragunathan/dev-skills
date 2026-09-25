@@ -25,7 +25,7 @@ Priority is about value, not urgency. Effort is a rough estimate — a session, 
 ## ENH-01 — `<title>`
 
 **Priority:** `<level>` · **Effort:** `<~hours / ~days>`
-**Where:** [file.py](../file.py) · **Regression net:** `tests/test_<x>.py`
+**Where:** [file.py](../file.py) — `def the_function_to_change(` · **Regression net:** `tests/test_<x>.py`
 
 ### What it is
 
