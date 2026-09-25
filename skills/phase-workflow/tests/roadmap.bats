@@ -394,3 +394,403 @@ PY
   [[ "$output" == *"refusing:"* ]] || false
   [[ "$output" != *"Traceback"* ]]
 }
+
+# ---------------------------------------------------------------------------
+# ENH-30 — a roadmap reference carries a greppable fragment, and check verifies
+# it still appears in the file cited beside it.
+#
+# Tests marked CONTROL assert status 0 and so pass before the feature exists.
+# They are here because the other half of getting this right is not flagging
+# correct references: a checker that refused everything would satisfy the rest.
+# ---------------------------------------------------------------------------
+
+# Put reference text into KI-01's body. Multi-line input is supported, because
+# a real **Where:** field wraps and three entries in this repo do.
+#
+# Refuses unless the marker occurs exactly once, and checks it was consumed.
+# Without both, a missing marker left the fixture unchanged and reported
+# success, so a CONTROL test then passed against an entry that never received
+# the reference under test.
+put_ref() {
+  local tmp="$TEST_TMP/ki.md" n
+  n="$(grep -cx 'SURVIVOR-ONE' "$DOCS/KNOWN_ISSUES.md" || true)"
+  if [ "$n" != 1 ]; then
+    echo "put_ref: expected one SURVIVOR-ONE marker, found $n" >&2
+    return 1
+  fi
+  printf '%s\n' "$1" > "$TEST_TMP/ref.txt"
+  awk -v f="$TEST_TMP/ref.txt" '
+    $0 == "SURVIVOR-ONE" { while ((getline l < f) > 0) print l; next }
+    { print }
+  ' "$DOCS/KNOWN_ISSUES.md" > "$tmp" && mv "$tmp" "$DOCS/KNOWN_ISSUES.md"
+  if grep -qx 'SURVIVOR-ONE' "$DOCS/KNOWN_ISSUES.md"; then
+    echo "put_ref: marker survived the substitution" >&2
+    return 1
+  fi
+}
+
+# The scratch source tree the links resolve into: ../skills/x.sh from $DOCS.
+seed_source() {
+  mkdir -p "$TEST_TMP/skills/subdir"
+  printf 'guard() {\n  timed_out "$ERR" || return 1\n}\n' > "$TEST_TMP/skills/x.sh"
+  printf 'other_guard() {\n  :\n}\n' > "$TEST_TMP/skills/y.sh"
+}
+
+# Fails if check exits 0 while an entry still carries a line anchor.
+@test "refs: a #Lnn line anchor fails the check" {
+  seed_source
+  put_ref '**Where:** [x.sh:2](../skills/x.sh#L2) — `timed_out "$ERR"`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"line anchor"* ]] || false
+}
+
+# Fails if a quoted fragment that is nowhere in the cited file is accepted.
+@test "refs: a fragment absent from the cited file fails the check" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `no_such_function`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"fragment absent"* ]] || false
+}
+
+# CONTROL. Fails if a correct reference is reported as a problem.
+@test "refs: a fragment present in the cited file passes" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `timed_out "$ERR"`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
+
+# Fails if a link to a deleted or renamed file is accepted.
+@test "refs: a cited path missing from the tree fails the check" {
+  seed_source
+  put_ref '**Where:** [gone.sh](../skills/gone.sh) — `guard`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"cited path missing"* ]] || false
+}
+
+# CONTROL. Fails if the checker reads an entry's own example as a real
+# reference. ENH-30 demonstrates the banned form in a fence; successors will.
+@test "refs: a #Lnn shown inside a fenced block is not a finding" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `guard`
+
+```markdown
+before:  [x.sh:2](../skills/x.sh#L2)
+```'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
+
+# Fails if an entry can name where a bug lives with nothing greppable.
+@test "refs: a file link with no fragment fails the check" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) and the guard it holds'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no fragment"* ]] || false
+}
+
+# Fails if one verified fragment is allowed to certify a whole entry. This is
+# the false green both external reviewers attacked: the entry reports verified
+# while y.sh rots unwatched.
+@test "refs: a second file link without a fragment fails, even when the first has one" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `timed_out "$ERR"`, [y.sh](../skills/y.sh)'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no fragment"* ]] || false
+  [[ "$output" == *"y.sh"* ]] || false
+}
+
+# CONTROL. Fails if the checker reads only the first line of the field: the
+# fragment for y.sh is on line 2, and KI-47, KI-48 and KI-49 all wrap.
+@test "refs: a Where field wrapped onto a second line is read whole" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `timed_out "$ERR"`,
+[y.sh](../skills/y.sh) — `other_guard`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
+
+# Fails if a reference on the field's second line goes unchecked.
+#
+# The control above asserts a wrapped field stays clean, which cannot detect
+# the field being truncated: dropping a valid reference produces no finding
+# either way. Measured -- truncating the field left that control green. This
+# puts a fragment that is absent from the cited file on line 2, so the second
+# line must actually be read for the check to fail.
+@test "refs: a bad reference on the field's second line is still checked" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `timed_out "$ERR"`,
+[y.sh](../skills/y.sh) — `no_such_symbol`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"fragment absent"* ]] || false
+  [[ "$output" == *"y.sh"* ]] || false
+}
+
+# Fails if fence tracking toggles on the inner three-backtick line: `inside`
+# stays true past the real close and every later reference disappears, which is
+# a false green rather than a false alarm.
+#
+# EXACTLY ONE inner three-backtick line, and that is load-bearing. With two,
+# the toggles land evenly and the Where line ends up unfenced either way -- the
+# first version of this test passed under mutation and proved nothing. With
+# one, breaking the length rule leaves the fence open across the Where line and
+# the anchor goes unseen.
+@test "refs: a four-backtick fence does not swallow the rest of the entry" {
+  seed_source
+  put_ref '````markdown
+```
+inner fence
+````
+
+**Where:** [x.sh:2](../skills/x.sh#L2) — `timed_out "$ERR"`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"line anchor"* ]] || false
+}
+
+# Fails if a link carrying a title is not parsed. The fragment is absent from
+# x.sh, so a parsed link reports "fragment absent" while an unparsed one is
+# refused as not in the accepted reference form. The input carries no line
+# anchor, so no other check can produce the asserted finding.
+@test "refs: a link carrying a title is parsed, not skipped" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh "the guard") — `no_such_function`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"fragment absent from ../skills/x.sh"* ]] || false
+  [[ "$output" != *"accepted reference form"* ]] || false
+}
+
+# CONTROL. Fails if an existence-only reference is forced to carry a fragment.
+# ENH-04 cites a directory and ENH-07 cites a skill folder.
+@test "refs: a directory link needs no fragment" {
+  seed_source
+  put_ref '**Where:** [subdir](../skills/subdir)'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
+
+# Fails if a degenerate fragment certifies a reference. A four-backtick inline
+# span parses down to a single space, which is present in every file.
+@test "refs: a whitespace-only fragment fails the check" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — ` `'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"fragment too weak"* ]] || false
+}
+
+# Fails if a line anchor outside the **Where:** field escapes the check.
+#
+# The two rules have different scopes and conflating them leaves a false green:
+# a fragment is required where the bug lives, so that requirement is scoped to
+# **Where:**, but no entry may carry a line anchor ANYWHERE. KI-07 and KI-17
+# both cite one in prose, and a gate that reports the roadmap clean while two
+# anchors remain is the failure ENH-30 exists to remove.
+@test "refs: a #Lnn line anchor in prose fails the check" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `timed_out "$ERR"`
+
+The behaviour is set by [x.sh:2](../skills/x.sh#L2) and nothing else.'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"line anchor"* ]] || false
+}
+
+# Fails if a link whose target is a near-miss typo escapes verification.
+#
+# `[x.sh](skills/x.sh)` is missing the `../`, so it resolves to `docs/skills/x.sh`
+# and nothing is there. Measured before this test existed: exit 0 with no
+# finding at all — a recognised link, silently skipped, which is the very thing
+# `_references` refuses to do for an unrecognised one. Once the conversion
+# removes every line anchor, no other check would catch it.
+@test "refs: a near-miss target with no ../ prefix is a finding, not a skip" {
+  seed_source
+  put_ref '**Where:** [x.sh](skills/x.sh) — `timed_out "$ERR"`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"cited path missing"* ]] || false
+}
+
+# CONTROL. Fails if a legitimate doc-relative link is forced to carry a
+# fragment. ENH-05 cites two plan documents exactly this way, and they resolve
+# inside docs/ rather than into the source tree, so there is no code for a
+# fragment to anchor to. This test is what stops the fix above over-reaching.
+@test "refs: a doc-relative link inside docs needs no fragment" {
+  seed_source
+  mkdir -p "$DOCS/superpowers/plans"
+  printf '# a plan\n' > "$DOCS/superpowers/plans/p.md"
+  put_ref '**Where:** [p.md](superpowers/plans/p.md)'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
+
+# Fails if a link shape the parser cannot read is treated as absence of a
+# reference rather than as a finding.
+#
+# A target containing a space matches no accepted form, so LINK does not match
+# it while the `](` is still there. That is the one case where "I did not
+# understand this" must not become "there was nothing here" — every other
+# check in this pass is downstream of a link the parser recognised.
+#
+# Written after the code, so its discrimination is established by mutation
+# rather than by having watched it go red first: removing the raise leaves the
+# entry reported clean.
+@test "refs: an unparseable link shape is a finding, not an absence" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/my file.sh) — `timed_out "$ERR"`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"not in the accepted reference form"* ]] || false
+}
+
+# CONTROL. Fails if the fragment requirement leaks out of the **Where:** field.
+#
+# The two rules have deliberately different scopes: no line anchor anywhere, but
+# a fragment only where the bug lives. KI-07 and KI-17 both link a file in prose
+# after their Where field, and requiring a fragment there would make those
+# entries unwritable. Nothing else asserts this, so a change that tightened the
+# scope would pass every other test.
+@test "refs: a file link in prose needs no fragment" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `timed_out "$ERR"`
+
+The same guard is reached from [y.sh](../skills/y.sh) during startup.'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
+
+# CONTROL. Fails if a tilde fence is not treated as a fence.
+#
+# CommonMark allows ~~~ as well as ```, and an entry may show a banned reference
+# inside one. Untested until now: no roadmap file uses tilde fences, so this
+# guards a path that has never run on real content.
+@test "refs: a tilde-fenced example is not a finding" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `timed_out "$ERR"`
+
+~~~markdown
+before:  [x.sh:2](../skills/x.sh#L2)
+~~~'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
+
+# Fails if a fragment that occurs more than once in the cited file is accepted.
+#
+# "Greppable" promises one hit, and the conversion verified all 89 fragments as
+# occurring exactly once -- CHANGELOG says so. The gate only tested presence,
+# so the enforced guarantee was weaker than the documented one: a fragment
+# chosen as unique can become ambiguous later, when the guarded code is copied
+# elsewhere in the same file, with nothing failing.
+@test "refs: a fragment occurring twice in the cited file fails the check" {
+  seed_source
+  printf 'guard() {\n  timed_out "$ERR" || return 1\n}\n\nguard_again() {\n  timed_out "$ERR" || return 1\n}\n' \
+    > "$TEST_TMP/skills/x.sh"
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `timed_out "$ERR"`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"occurs more than once"* ]] || false
+}
+
+# Fails if an unbalanced backtick makes the links after it disappear.
+#
+# The masking pass blanks code spans before finding links, so a lone backtick
+# swallows the rest of the field -- including the `](` that LOOSE watches for.
+# _references then returns [] and the entry reports clean. That is precisely
+# the "unrecognised links must be findings, never silently missing references"
+# contract the function's own docstring states, and the guard cannot catch it
+# because the evidence was erased in the same pass.
+@test "refs: an unbalanced backtick in the field is a finding, not silence" {
+  seed_source
+  put_ref '**Where:** the `guard helper in [x.sh](../skills/x.sh) — `timed_out "$ERR"`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+}
+
+# Fails if a KI or ENH entry with no parseable **Where:** field is skipped
+# silently. A list item, a `**Where**:` typo or a dropped field all yield "",
+# and verify_references answers that with a bare continue -- so the entry is
+# never checked and the gate still says verified. Open questions legitimately
+# have no Where field; known issues and enhancements do not.
+@test "refs: an entry whose Where field does not parse is a finding" {
+  seed_source
+  put_ref '- **Where:** [x.sh](../skills/x.sh) — `timed_out "$ERR"`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+}
+
+# Fails if a link with an empty target is treated as an existence-only
+# reference. `docs / ""` resolves to docs itself, which is a directory that
+# exists, so a doc-internal anchor link passes the directory exemption and is
+# never checked against anything.
+@test "refs: a link with an empty target is not an existence-only reference" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `timed_out "$ERR"`, [KI-42](#ki-42)'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+}
+
+# CONTROL. Fails if a non-filesystem URL is stat-ed. The escape tests for
+# "://", so an authority-less scheme such as mailto: falls through and is
+# reported as a missing path that no author can satisfy.
+@test "refs: a mailto link is left alone, not reported missing" {
+  seed_source
+  put_ref '**Where:** [x.sh](../skills/x.sh) — `timed_out "$ERR"`, [owner](mailto:someone@example.com)'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
+
+# Fails if a reference outside the repository is read rather than refused.
+#
+# The repository here is $TEST_TMP/repo, so the outside file still sits inside
+# the test's own temp tree and teardown removes it. The file is unreadable: a
+# check that refuses on containment reports "outside repository", while one
+# that reads first reports "cannot read cited path" instead.
+@test "refs: a relative target outside the repository is refused, not read" {
+  mkdir -p "$TEST_TMP/repo"
+  mv "$DOCS" "$TEST_TMP/repo/docs"
+  DOCS="$TEST_TMP/repo/docs"
+  printf 'sentinel-value-for-this-test\n' > "$TEST_TMP/outside.txt"
+  chmod 000 "$TEST_TMP/outside.txt"
+  put_ref '**Where:** [outside](../../outside.txt) — `sentinel-value-for-this-test`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"cited path outside repository: ../../outside.txt"* ]] || false
+  [[ "$output" != *"cannot read"* ]] || false
+}
+
+# Same property for an absolute target, which pathlib lets win outright over
+# the docs directory it is joined to. Kept inside the test's temp tree.
+@test "refs: an absolute target outside the repository is refused, not read" {
+  mkdir -p "$TEST_TMP/repo"
+  mv "$DOCS" "$TEST_TMP/repo/docs"
+  DOCS="$TEST_TMP/repo/docs"
+  printf 'sentinel-value-for-this-test\n' > "$TEST_TMP/outside.txt"
+  chmod 000 "$TEST_TMP/outside.txt"
+  put_ref "**Where:** [outside]($TEST_TMP/outside.txt) — \`sentinel-value-for-this-test\`"
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"cited path outside repository: $TEST_TMP/outside.txt"* ]] || false
+  [[ "$output" != *"cannot read"* ]] || false
+}
+
+# Fails if a reference-style link is verified without being checked. The
+# parser recognises inline links only, and a reference-style link contains no
+# inline `](` for the refusal guard to see, so the entry reported verified with
+# no fragment at all.
+@test "refs: a reference-style link is refused, not silently verified" {
+  seed_source
+  put_ref '**Where:** [x.sh][src] holds the guard
+
+[src]: ../skills/x.sh'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"KI-01: a link in this Where field is not in the accepted reference form"* ]] || false
+}

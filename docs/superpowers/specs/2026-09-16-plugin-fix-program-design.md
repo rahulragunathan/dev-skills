@@ -28,13 +28,36 @@ Nothing is measured with an instrument that has not been repaired.
 
 | # | Phase | Items | Release |
 | --- | ------- | ------- | --------- |
-| 1 | Gate integrity | KI-45, KI-46, plus three skill gaps found while planning | patch |
+| 1 | Gate integrity | KI-45, KI-46, plus three skill gaps found while planning | minor — v1.11.0 |
+| 1a | Reference integrity | ENH-30, KI-52 — both filed *during* phase 1 | minor |
 | 2 | design-review grading correctness | KI-36, KI-37, KI-38, KI-39, KI-41, KI-42, KI-44, ENH-26, ENH-14 | minor |
 | 3 | design-review methodology and scenarios | UNK-04, ENH-19, ENH-22 to ENH-25, KI-47 to KI-51 (new, below) | minor |
 | 4 | external-review | KI-43, ENH-15, ENH-21, ENH-12 | minor |
 | 5 | claude-setup | ENH-27, ENH-11 | minor |
 | 6 | project-env | ENH-10, and the bats harness it needs first | minor |
 | spike | ENH-18 | interpreter versus isolated subprocess | lands nothing |
+
+### Why a mini phase sits between 1 and 2
+
+ENH-30 and KI-52 did not exist when this spec was written. Both were filed during phase 1, and
+both are instruments rather than fixes — which is the same argument that put phase 1 first.
+
+- **ENH-30.** The drift check verifies "every identifier, file path, command, flag and config key
+  a doc names". A line number is none of those, so it is the one reference type no gate can catch.
+  Phase 1 demonstrated the cost on itself: its own edits left two roadmap entries citing the wrong
+  lines, both **in range**, so only reading found them. Four more phases editing referenced files
+  would rot more of the 59 anchors with nothing failing.
+- **KI-52.** Phase 1 converted 68 assertions on behaviour measured under one interpreter. If that
+  behaviour differs by bash version, then §3 step 3's own rule — never predict a red whose outcome
+  depends on the machine — applies to the evidence phase 1 collected, and every later phase cites
+  it.
+
+Numbered 1a rather than 7 because the ordering principle is what places it: instruments before
+measurements. Taking it after phase 6 would mean working four phases on instruments already known
+to be uncalibrated.
+
+**Phase 1's release was a minor, not the patch predicted above.** It added two bundled scripts and
+a flag, which the table's prediction did not anticipate. The cell records what shipped.
 
 ### Why phase 1 bundles KI-45 and KI-46
 

@@ -35,9 +35,28 @@ setup() {
 teardown() { cd /; rm -rf "$TEST_TMP"; }
 
 # Fails if an assertion that cannot fail its test is reported RED.
+#
+# Scoped to interpreters where the vacuity exists. Measured (KI-52): a false
+# mid-test [[ ]] passes its test under bash 3.2.57 and fails it under bash
+# 5.3.20, so on bash 5 there is no vacuous assertion for GREEN to describe and
+# the fixture no longer carries the property under test.
+#
+# The scope is decided by running the fixture, never by reading $BASH_VERSION:
+# the property is "this interpreter does not fail a mid-test [[ ]]", which is
+# observable directly, and version ranges between the two measured points are
+# guesses.
 @test "a mid-test [[ ]] assertion is GREEN because negating it cannot fail its test" {
   run bats t/vac.bats
-  [ "$status" -eq 0 ]
+  if [ "$status" -ne 0 ]; then
+    # Skip for ONE reason only: this bash stops a false mid-test [[ ]]. Any
+    # other failure means the fixture is broken, and skipping on it would hide
+    # that -- the same conflation of "harness error" with "the red I wanted"
+    # that the REFUSED test below exists to prevent. Assert the reason before
+    # accepting it.
+    [[ "$output" == *"not ok 1 vacuous"* ]] || false
+    [[ "$output" == *'[[ "a" == "b" ]]'* ]] || false
+    skip "bash $BASH_VERSION fails a mid-test [[ ]]; no vacuity here to report GREEN"
+  fi
   run bash "$VERIFY" "$SHA" t/vac.bats 2 vacuous
   [ "$status" -eq 1 ]
   printf '%s\n' "$output" | grep -q '^GREEN'
