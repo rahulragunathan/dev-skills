@@ -6,7 +6,7 @@ this file carries enough detail to pick an item up without digging.
 Each entry has a stable ID — use it in branch names (`feature/enh-01-<slug>`) and in the
 CHANGELOG entry that closes it. When an item ships, delete it from here and from the ROADMAP
 index; the record lives in [CHANGELOG.md](../CHANGELOG.md). An item dropped rather than built
-moves to "Decisions taken and not taken" in [CLAUDE.md](../CLAUDE.md). IDs are never reused.
+moves to "Decisions taken and not taken" in [AGENTS.md](../AGENTS.md). IDs are never reused.
 
 ## Priority
 
