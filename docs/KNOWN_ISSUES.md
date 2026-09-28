@@ -340,7 +340,7 @@ run at all.
 ### Example scenario
 
 Draft the plan at `docs/superpowers/plans/<date>-<phase>.md`, then run
-`/localclaude:external-review plan`. `codex-root.sh` exits with `TREE IS DIRTY — commit first`.
+`external-review` in `plan` mode. `codex-root.sh` exits with `TREE IS DIRTY — commit first`.
 The workaround is to hold the plan outside the repository for the review and move it in at §2,
 which is what the reference-integrity phase did.
 
