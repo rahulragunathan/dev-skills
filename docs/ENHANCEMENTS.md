@@ -6,7 +6,7 @@ this file carries enough detail to pick an item up without digging.
 Each entry has a stable ID — use it in branch names (`feature/enh-01-<slug>`) and in the
 CHANGELOG entry that closes it. When an item ships, delete it from here and from the ROADMAP
 index; the record lives in [CHANGELOG.md](../CHANGELOG.md). An item dropped rather than built
-moves to "Decisions taken and not taken" in [CLAUDE.md](../CLAUDE.md). IDs are never reused.
+moves to "Decisions taken and not taken" in [AGENTS.md](../AGENTS.md). IDs are never reused.
 
 ## Priority
 
@@ -577,7 +577,7 @@ the standards and settings to one place while Claude Code reads another.
 
 The documentation used to claim the variable was honoured, which was the defect recorded as
 KI-15. That claim is gone, and no skill asserts the opposite either: the decision lives once,
-in the repo `CLAUDE.md` under "Decisions taken and not taken", because it is a plugin-wide
+in the repo `AGENTS.md` under "Decisions taken and not taken", because it is a plugin-wide
 choice rather than a step in anyone's procedure. This entry is the remaining capability, not
 a bug.
 

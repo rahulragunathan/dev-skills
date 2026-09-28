@@ -224,9 +224,9 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
      planned to do. **§4 reads `MERGE_METHOD` from this file**, so a stale record is not a tidiness
      problem — it is the merge cycle reading the wrong value. Overwrite, never append: one record
      per phase accumulating is the phase ledger the roadmap rules forbid.
-   - **Location** — root keeps README.md, CLAUDE.md, CHANGELOG.md, LICENSE; every other doc lives in `docs/`. If a doc is at root that shouldn't be, `git mv` it so the rename is tracked, then fix every inbound link.
-   - **Current-state rule:** every doc except CLAUDE.md, **CHANGELOG.md** and the roadmap files (`ROADMAP.md`, `KNOWN_ISSUES.md`, `ENHANCEMENTS.md`, `OPEN_QUESTIONS.md`) documents only what the code *is*. CHANGELOG is exempt because describing removed features is most of a changelog's job; no "what we didn't build", no rejected alternatives, no removed features. Decisions-not-taken that future developers/agents must know go in the **project CLAUDE.md** only.
-   - **Project CLAUDE.md** — updated to match the code as it actually is, plus those awareness notes.
+   - **Location** — root keeps README.md, AGENTS.md (or CLAUDE.md), CHANGELOG.md, LICENSE; every other doc lives in `docs/`. If a doc is at root that shouldn't be, `git mv` it so the rename is tracked, then fix every inbound link.
+   - **Current-state rule:** every doc except AGENTS.md, **CHANGELOG.md** and the roadmap files (`ROADMAP.md`, `KNOWN_ISSUES.md`, `ENHANCEMENTS.md`, `OPEN_QUESTIONS.md`) documents only what the code *is*. CHANGELOG is exempt because describing removed features is most of a changelog's job; no "what we didn't build", no rejected alternatives, no removed features. Decisions-not-taken that future developers/agents must know go in the **project CLAUDE.md** only.
+   - **Project AGENTS.md** (or CLAUDE.md) — updated to match the code as it actually is, plus those awareness notes.
    - **Docs about this project that live outside its repo.** A repo nested inside a container folder is usually described by that folder's own `README.md` and `CLAUDE.md` — a plugin inside a marketplace folder, a skill inside a synced skills folder. Those drift exactly like the in-repo docs and are missed exactly because they are one level up. Sweep them in the same pass: the skill list, the command table, the bundled-script list, anything naming a count.
 
      **They will not show up in `git status`.** The container folder is often not a git repo at all, so edits to it are invisible to the phase diff and to step 7's gate check. **Name them explicitly in the hand-off** — path and what changed — or the user signs off on a diff that does not contain them.
@@ -547,7 +547,7 @@ Then stop. The next phase's branch is created at phase start (§2 step 1) — ne
 
 - Fixed vocabulary: **Done** (never "Implemented"), consistent status terms throughout.
 - `docs/ROADMAP.md` is future-tense and index-level only. Exactly these sections: **Status** (prose, plus a short note on the phase in flight or planned — often none), **Known Issues**, **Enhancements**, and **Open Questions** — three pointer tables, no prose. Confidence-check findings land in Open Questions.
-- No `Resolved` section and no `Notes` section. Shipped work belongs in CHANGELOG.md; standing limitations belong in ARCHITECTURE.md or the project CLAUDE.md.
+- No `Resolved` section and no `Notes` section. Shipped work belongs in CHANGELOG.md; standing limitations belong in ARCHITECTURE.md or the project AGENTS.md.
 - **No phase ledger.** A phase ends by cutting a CHANGELOG release whose heading names it, so the release history is the phase history. ROADMAP records only what is in flight or planned. Version by what the phase did: minor for additive work, patch for fixes and docs, major for a break.
 - The rating in a ROADMAP row mirrors the supporting file, which is authoritative. The drift check verifies they agree, that ordering is descending, and that every ID appears in both.
 - Completed items are deleted from both files, not annotated in place.

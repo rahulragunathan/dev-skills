@@ -57,7 +57,7 @@ external-review runs two independent reviewers, so one missing CLI is not fatal:
 | --- | --- |
 | What each skill does | this file |
 | How the pieces fit together | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| Conventions for working in this repo | [CLAUDE.md](CLAUDE.md) |
+| Conventions for working in this repo | [AGENTS.md](AGENTS.md) |
 | What already shipped | [CHANGELOG.md](CHANGELOG.md) |
 | What is planned, open or held | [docs/ROADMAP.md](docs/ROADMAP.md) |
 

@@ -14,7 +14,7 @@ not describe what shipped or how the code works today.
 | What already shipped | [CHANGELOG.md](../CHANGELOG.md) |
 | What each skill does | [README.md](../README.md) |
 | How the pieces fit together | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| Conventions for working in this repo | [CLAUDE.md](../CLAUDE.md) |
+| Conventions for working in this repo | [AGENTS.md](../AGENTS.md) |
 
 The tables below are **pointers, not summaries** — ID, title, rating, link. Nothing is
 described twice.
