@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "dev-skills",
+  "description": "Agent skills for a phase-based development process.",
+  "owner": {
+    "name": "Rahul Ragunathan"
+  },
+  "plugins": [
+    {
+      "name": "dev-skills",
+      "description": "Plan review, phase gates, structural design review and outside model review.",
+      "source": "./",
+      "category": "development"
+    }
+  ]
+}

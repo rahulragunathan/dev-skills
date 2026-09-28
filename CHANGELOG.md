@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the `localclaude` plugin are recorded here.
+All notable changes to the `dev-skills` plugin, named `localclaude` before 2.0.0, are recorded here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -9,6 +9,44 @@ Versions before 1.8.0 predate this file. Their changes are not reconstructed
 here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
+
+## [2.0.0] - 2026-09-28
+
+The plugin becomes `dev-skills`: the development-process skills only, written to work in any
+repo, on any machine, and under Codex as well as Claude Code. Machine setup moves to private
+repos of its own.
+
+### Removed
+
+- **`claude-setup`, `claude-toggle-backend`, `drive-backup`, `local-models` and `project-env`**
+  leave the plugin. Each becomes a private repo, imported from `7d7272d`, and the MLX backend
+  spec and plan go with `claude-toggle-backend`. The global standards block and the link
+  installer move to a private setup hub.
+
+### Changed
+
+- **The plugin is renamed `dev-skills`.** The name appears only in the manifests, the README and
+  this file, and `tests/test_plugin_name.py` fails if it spreads further, so a later rename is a
+  small edit.
+- **The repo ships its own `.claude-plugin/marketplace.json`**, so it installs from GitHub with
+  `/plugin marketplace add rahulragunathan/dev-skills`.
+- **Skills name each other by bare name** (`design-review` in `plan` mode), not
+  `/localclaude:design-review plan`. Codex has no plugin namespace.
+- **The project conventions file is `AGENTS.md`.** Claude Code reads it when no `CLAUDE.md`
+  exists, and Codex reads it natively. `phase-workflow` and the roadmap templates now name
+  `AGENTS.md` as the project file.
+- **`phase-workflow`'s assertion scan covers `skills/*/tests/*.bats`** again, now that no
+  departing suite is held back from it.
+
+### Roadmap
+
+- **Moved with their skills, keeping their IDs:** 19 known issues and ENH-02, ENH-04, ENH-05 to
+  `claude-toggle-backend`; 11 known issues and ENH-03, ENH-07 to `drive-backup`; KI-05, KI-16 and
+  KI-17 to `local-models`; ENH-10 to `project-env`; UNK-03 to `claude-setup`; ENH-11 to the setup
+  hub.
+- **Closed as not planned:** ENH-12, ENH-15, ENH-19, ENH-24, ENH-25 and KI-42.
+- **Closed, ENH-27:** the standards block is now a Markdown file of its own in the setup hub, so
+  the lint gate covers it.
 
 ## [1.12.0] - 2026-09-24 — Mini phase, reference integrity
 

@@ -29,8 +29,8 @@ Subagents may commit their own task; they never push, merge, or tag (global CLAU
 
 The plan the user sees is always the **revised** one. Reviewing after approval is too late — the findings arrive when the decision is already made.
 
-1. Draft the plan, **running `/localclaude:design-review plan` as part of it.** Its output — the module table, the expected-change and shared-state lines, and whatever checks fired — fills the **File Structure** section `superpowers:writing-plans` already reserves. This is not an extra step: doing it here means the table reaches the reviewers in step 2 at no extra cost, and the Interface column is the same content `writing-plans` wants in each task's `Interfaces: Consumes / Produces` block, written once at the top instead of scattered.
-2. Run `/localclaude:external-review plan` on the draft (Codex + Gemini).
+1. Draft the plan, **running `design-review` in `plan` mode as part of it.** Its output — the module table, the expected-change and shared-state lines, and whatever checks fired — fills the **File Structure** section `superpowers:writing-plans` already reserves. This is not an extra step: doing it here means the table reaches the reviewers in step 2 at no extra cost, and the Interface column is the same content `writing-plans` wants in each task's `Interfaces: Consumes / Produces` block, written once at the top instead of scattered.
+2. Run `external-review` in `plan` mode on the draft (Codex + Gemini).
 3. **Revise the plan** to incorporate every finding you verified as having merit.
 4. Add the **findings table** to the plan — the canonical format is in `external-review`. It goes **after the plan itself and before the testing strategy**, so the user reads the approach, then what outside review said about it, then how it will be verified. Every finding gets a row and a disposition; valid findings that are out of scope are filed rather than dropped, classified by what they are — defined wrong behaviour is a `KI-nn`, wanted work an `ENH-nn`, an unsettled question a `UNK-nn`. A reviewer reading a plan routinely finds a real bug in existing code, and filing that as an open question misuses the file.
 5. Present the whole thing in one pass, whatever the severities. A confirmed Critical does not hold the plan back — the user is in plan mode and can send it back.
@@ -84,7 +84,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 4. **Land the plan's diagram generators.** `design-review` builds them into the scratchpad at §1, because §1 runs before this branch exists, and the plan's front matter records their filenames. Copy **every** generator the plan recorded into `docs/` as this phase's first task **and commit it**. That commit is the baseline `design-review phase` compares against at §3 step 2. Skip this step entirely when the plan recorded none, which is the no-`drawio` path.
 5. Seed/refresh `ROADMAP.md`, `KNOWN_ISSUES.md`, `ENHANCEMENTS.md`, and `OPEN_QUESTIONS.md` under `docs/` from the templates next to this file, if the project doesn't have them.
 6. **`/simplify`'s primary home is the TDD refactor step**, not the retrospective — the *refactor while green* beat of each red-green-refactor cycle, where the diff is one feature and the tests that just passed re-validate whatever it rewrites. §3 step 2 then runs it as a sweep for cross-feature duplication no single refactor step could see. A big haul there means the refactor steps were skipped.
-7. Adopting this workflow on an existing project with no in-flight branch? Run `/localclaude:external-review repo` first — it reviews the current state and seeds `docs/KNOWN_ISSUES.md`, `docs/ENHANCEMENTS.md`, and `docs/OPEN_QUESTIONS.md`, with their ROADMAP pointer rows, before phase 1 is planned.
+7. Adopting this workflow on an existing project with no in-flight branch? Run `external-review` in `repo` mode first — it reviews the current state and seeds `docs/KNOWN_ISSUES.md`, `docs/ENHANCEMENTS.md`, and `docs/OPEN_QUESTIONS.md`, with their ROADMAP pointer rows, before phase 1 is planned.
 
 ## 3. Phase end — retrospective (before hand-off)
 
@@ -113,7 +113,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 | "The tests pass, so they test the right thing" | Passing is what a test does when the bug is absent *and* when the test is vacuous. Step 3 is what tells them apart. |
 
 1. **Confidence check:** explicitly answer "what am I least confident about right now?" (untested edge cases, quota/API assumptions, auth corners) and use it to direct extra tests/verification.
-2. **Consolidation & simplification analysis** of the codebase as it now stands. Run **`/localclaude:design-review phase` first, then `/simplify`, then `/code-review high`** — in that order.
+2. **Consolidation & simplification analysis** of the codebase as it now stands. Run **`design-review` in `phase` mode first, then `/simplify`, then `/code-review high`** — in that order.
    - **That order, not the reverse.** Each pass must read the shape the one before it left: `design-review` moves responsibilities, `/simplify` rewrites, and `/code-review` is the correctness pass over everything that moved.
    - **Invoke it; do not restate its questions here.** The rubric lives in `design-review`; a second copy is a second edit site.
    - **Re-run the test suite after `/simplify`.** It rewrites code after the phase's green bar was established, and step 7 hands the user a diff to sign off on. Green is re-earned and reported, never assumed.
@@ -224,9 +224,9 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
      planned to do. **§4 reads `MERGE_METHOD` from this file**, so a stale record is not a tidiness
      problem — it is the merge cycle reading the wrong value. Overwrite, never append: one record
      per phase accumulating is the phase ledger the roadmap rules forbid.
-   - **Location** — root keeps README.md, CLAUDE.md, CHANGELOG.md, LICENSE; every other doc lives in `docs/`. If a doc is at root that shouldn't be, `git mv` it so the rename is tracked, then fix every inbound link.
-   - **Current-state rule:** every doc except CLAUDE.md, **CHANGELOG.md** and the roadmap files (`ROADMAP.md`, `KNOWN_ISSUES.md`, `ENHANCEMENTS.md`, `OPEN_QUESTIONS.md`) documents only what the code *is*. CHANGELOG is exempt because describing removed features is most of a changelog's job; no "what we didn't build", no rejected alternatives, no removed features. Decisions-not-taken that future developers/agents must know go in the **project CLAUDE.md** only.
-   - **Project CLAUDE.md** — updated to match the code as it actually is, plus those awareness notes.
+   - **Location** — root keeps README.md, AGENTS.md (or CLAUDE.md), CHANGELOG.md, LICENSE; every other doc lives in `docs/`. If a doc is at root that shouldn't be, `git mv` it so the rename is tracked, then fix every inbound link.
+   - **Current-state rule:** every doc except AGENTS.md, **CHANGELOG.md** and the roadmap files (`ROADMAP.md`, `KNOWN_ISSUES.md`, `ENHANCEMENTS.md`, `OPEN_QUESTIONS.md`) documents only what the code *is*. CHANGELOG is exempt because describing removed features is most of a changelog's job; no "what we didn't build", no rejected alternatives, no removed features. Decisions-not-taken that future developers/agents must know go in the **project CLAUDE.md** only.
+   - **Project AGENTS.md** (or CLAUDE.md) — updated to match the code as it actually is, plus those awareness notes.
    - **Docs about this project that live outside its repo.** A repo nested inside a container folder is usually described by that folder's own `README.md` and `CLAUDE.md` — a plugin inside a marketplace folder, a skill inside a synced skills folder. Those drift exactly like the in-repo docs and are missed exactly because they are one level up. Sweep them in the same pass: the skill list, the command table, the bundled-script list, anything naming a count.
 
      **They will not show up in `git status`.** The container folder is often not a git repo at all, so edits to it are invisible to the phase diff and to step 7's gate check. **Name them explicitly in the hand-off** — path and what changed — or the user signs off on a diff that does not contain them.
@@ -255,7 +255,7 @@ This matters most where re-gathering is expensive — fresh subagents, paid API 
 because that cost is exactly what tempts a skip. Say in the hand-off what was re-gathered and
 what remains expired.
 
-5. **External review loop:** `/localclaude:external-review phase` (Codex + Gemini). Use its disposition vocabulary and filing rules. Pause after every external review pass. Report the findings trend and your recommendation; the user decides whether to run another pass or land the phase.
+5. **External review loop:** `external-review` in `phase` mode (Codex + Gemini). Use its disposition vocabulary and filing rules. Pause after every external review pass. Report the findings trend and your recommendation; the user decides whether to run another pass or land the phase.
    - **It runs after the docs pass**, including release preparation. Fold later phase fixes into that unpublished release and commit them before the next pass or gate.
    - Build the combined table using `external-review`'s output contract and
      [coverage classification](../external-review/SKILL.md#coverage-classification).
@@ -366,25 +366,22 @@ caught two pinning methods that had both looked right.
 
 **It is also the standing regression check, and it is about the interpreter macOS ships.** An
 assertion ending in `|| false` is load-bearing wherever it sits, so the tool reports it `final`.
-Across the four in-scope skills the count of `mid` rows is **0**, and any number above zero is an
+Across the repo's skills the count of `mid` rows is **0**, and any number above zero is an
 assertion that went in unguarded — vacuous on stock bash even when the machine running the gate
 has a newer one:
 
 ```bash
 python3 skills/phase-workflow/bats_assertions.py \
-  skills/{claude-setup,design-review,external-review,phase-workflow}/tests/*.bats \
+  skills/*/tests/*.bats \
   > "$TMPDIR/scan.tsv" || { echo "SCAN FAILED — the gate proves nothing"; exit 1; }
 MID="$(set -o pipefail; awk -F'\t' '$4=="mid"' "$TMPDIR/scan.tsv" | tee /dev/stderr | wc -l | tr -d ' ')" \
   || { echo "COUNTING FAILED — the gate proves nothing"; exit 1; }
 [ "$MID" -eq 0 ] || { echo "MID ASSERTIONS PRESENT: $MID"; exit 1; }
 ```
 
-**Check the scanner ran before reading its count, and name the four in-scope skills.** Two ways
-this gate used to pass without proving anything: piping the scanner straight into `awk` prints
-nothing when the scanner fails outright, and nothing is exactly what a clean result looks like;
-and a `skills/*/tests/*.bats` glob sweeps in `claude-toggle-backend`, whose five unconverted
-assertions are held with that skill's rebuild — see the **Held** section in
-`docs/KNOWN_ISSUES.md` — so the documented command reported 5 while the text beside it claimed 0.
+**Check the scanner ran before reading its count.** Piping the scanner straight into `awk`
+prints nothing when the scanner fails outright, and nothing is exactly what a clean result looks
+like.
 
 The fourth column is `mid` for an unguarded assertion followed by more commands, and `final` for
 either the last command or an assertion already ending in `|| false`.
@@ -550,7 +547,7 @@ Then stop. The next phase's branch is created at phase start (§2 step 1) — ne
 
 - Fixed vocabulary: **Done** (never "Implemented"), consistent status terms throughout.
 - `docs/ROADMAP.md` is future-tense and index-level only. Exactly these sections: **Status** (prose, plus a short note on the phase in flight or planned — often none), **Known Issues**, **Enhancements**, and **Open Questions** — three pointer tables, no prose. Confidence-check findings land in Open Questions.
-- No `Resolved` section and no `Notes` section. Shipped work belongs in CHANGELOG.md; standing limitations belong in ARCHITECTURE.md or the project CLAUDE.md.
+- No `Resolved` section and no `Notes` section. Shipped work belongs in CHANGELOG.md; standing limitations belong in ARCHITECTURE.md or the project AGENTS.md.
 - **No phase ledger.** A phase ends by cutting a CHANGELOG release whose heading names it, so the release history is the phase history. ROADMAP records only what is in flight or planned. Version by what the phase did: minor for additive work, patch for fixes and docs, major for a break.
 - The rating in a ROADMAP row mirrors the supporting file, which is authoritative. The drift check verifies they agree, that ordering is descending, and that every ID appears in both.
 - Completed items are deleted from both files, not annotated in place.

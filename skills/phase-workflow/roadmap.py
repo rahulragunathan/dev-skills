@@ -409,7 +409,7 @@ def cmd_close(docs: pathlib.Path, eid: str) -> int:
 def install_documents(docs: pathlib.Path, proposed: dict[str, str]) -> None:
     # Keep recovery copies outside the tree. Each replacement is staged beside
     # its destination so os.replace stays atomic even across filesystem devices.
-    recovery = pathlib.Path(tempfile.mkdtemp(prefix="localclaude-roadmap-"))
+    recovery = pathlib.Path(tempfile.mkdtemp(prefix="roadmap-"))
     installed = []
     retain_recovery = False
 

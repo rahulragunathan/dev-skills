@@ -9,7 +9,7 @@ behavior with a known fix is a bug — move it to [KNOWN_ISSUES.md](KNOWN_ISSUES
 
 Each entry has a stable ID. When one is settled it leaves this file: into the code plus a
 CHANGELOG entry if it changed anything, into KNOWN_ISSUES or ENHANCEMENTS if it became work,
-or into "Decisions taken and not taken" in [CLAUDE.md](../CLAUDE.md) if the answer was to do
+or into "Decisions taken and not taken" in [AGENTS.md](../AGENTS.md) if the answer was to do
 nothing. IDs are never reused.
 
 ## Kind
@@ -50,32 +50,3 @@ enough. The reworded condition changes the condition hash, so the affected rows 
 re-grading against it.
 
 **Source:** claude-opus-5 — round-9 grading, 2026-09-14.
-
----
-
-<a id="unk-03"></a>
-
-## UNK-03 — verify the installed Claude Code permission behavior
-
-**Kind:** Verification
-
-### The question
-
-The [current permission reference](https://code.claude.com/docs/en/permissions) documents
-`Bash(cmd*)` as a broader wildcard and `Bash(cmd:*)` as equivalent to `Bash(cmd *)`.
-Setup now follows that contract. The installed extension's actual prompt behavior has not
-been verified in an isolated session.
-
-### Why it matters
-
-The docs must not treat a broader wildcard as inert. Runtime matching and extension reload
-behavior can also differ by version, so documentation alone cannot establish this machine's
-behavior.
-
-### What would settle it
-
-Write both forms into a scratch configuration, start an isolated session, and observe command
-matching without changing the user's live configuration. Record the CLI and extension versions.
-
-**Source:** gpt-6-astra — phase review pass 5, 2026-09-08; documentation checked during the
-2026-09-10 adversarial review. Live permission-session verification remains open.
