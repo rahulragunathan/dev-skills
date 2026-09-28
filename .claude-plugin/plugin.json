@@ -1,20 +1,17 @@
 {
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
-  "name": "localclaude",
-  "description": "Personal Claude Code toolkit: bootstrap config conventions (claude-setup), switch the backend between Anthropic / Ollama / local llama.cpp / local MLX (claude-toggle-backend), discover and manage local models (local-models), run the phase-based development process (phase-workflow), back Claude transcripts and config up to Drive (drive-backup), build project environments outside Drive (project-env), decide structure at plan time (design-review), and get external Codex + Gemini reviews at its checkpoints (external-review).",
-  "version": "1.12.0",
+  "name": "dev-skills",
+  "description": "Agent skills for a phase-based development process: plan review and phase gates (phase-workflow), structural design review at plan time (design-review), and outside review from other models (external-review).",
+  "version": "2.0.0",
   "author": {
     "name": "Rahul Ragunathan",
     "email": "rahul.ragunathan@answerrocket.com"
   },
   "license": "MIT",
   "keywords": [
-    "local-llm",
-    "ollama",
-    "llama.cpp",
-    "mlx",
-    "metal",
-    "apple-silicon",
-    "claude-code-config"
+    "agent-skills",
+    "development-process",
+    "code-review",
+    "design-review"
   ]
 }
