@@ -1,4 +1,4 @@
-"""Generate the localclaude module map.
+"""Generate the plugin module map.
 
 Helpers vendored from the drawio skill's assets/build_template.py, as that
 skill prescribes. Regenerate and re-validate at every phase end:
@@ -63,14 +63,14 @@ COLOR_CONSUMER_PURPLE = "#9c27b0"  # External consumer / subscriber
 # --------------------------------------------------------------------------
 # Canvas dimensions. Adjust to fit your content.
 # --------------------------------------------------------------------------
-W, H = 1300, 1090
+W, H = 1300, 590
 
 
 # --------------------------------------------------------------------------
 # XML scaffolding.
 # --------------------------------------------------------------------------
 mxfile = ET.Element("mxfile", host="app.diagrams.net", type="device", version="24.0.0")
-diagram = ET.SubElement(mxfile, "diagram", name="localclaude architecture", id="localclaude-architecture")
+diagram = ET.SubElement(mxfile, "diagram", name="architecture", id="architecture")
 graph = ET.SubElement(
     diagram,
     "mxGraphModel",
@@ -532,47 +532,32 @@ def desc(text, size=11):
 
 
 # ==========================================================================
-# localclaude module map.
+# Module map.
 #
-# Layout: each pair of zones that talks sits side by side, so every
-# cross-zone edge uses the one vertical gap at x=680..720.
+# Layout: the process skills sit left of the tools they shell out to, so every
+# cross-zone edge uses the one vertical gap at x=680..760.
 #
 #   [ Development process ] [ External tools ]
-#   [ Local backends      ] [ Machine state  ]
-#   [ Machine config      ] [                ]
 #
 # Reserved routing corridors — keep these in sync when the layout moves:
 #   y=265  lane    — phase-workflow down into its two sub-skills
 #   y=490  lane    — design-review across to the drawio skill
-#   y=700  lane    — claude-toggle-backend out to settings.json
-#   x=680..760 is the one inter-zone gap; every cross-zone edge uses it:
-#   x=690  channel — claude-setup to CLAUDE.md
 #   x=695  channel — external-review to codex
-#   x=700  channel — claude-setup to settings.json
 #   x=710  channel — external-review to agy
-#   x=705  channel — drive-backup to settings.json
-#   x=715  channel — drive-backup to Drive
 #   x=725  channel — phase-workflow to gh
-#   x=735  channel — claude-toggle-backend to settings.json
 #   x=740  channel — design-review to the drawio skill
 # ==========================================================================
 
 PROCESS = COLOR_ORCH_PURPLE  # the phase process skills
-CONFIG = COLOR_CONFIG_GOLD  # machine configuration
-BACKEND = COLOR_DATASTORE_NAVY  # local model backends
 EXTERNAL = COLOR_PRIMARY_BLUE  # third-party CLIs this plugin shells out to
-STATE = COLOR_FRONTEND_GREEN  # files and destinations on the machine
 
-box(40, 20, W - 80, 50, "localclaude — module map", fill="#1f3864", fontSize=18)
+box(40, 20, W - 80, 50, "Module map", fill="#1f3864", fontSize=18)
 
 # --------------------------------------------------------------------------
 # Zones.
 # --------------------------------------------------------------------------
 container(40, 100, 640, 380, "Development process", stroke=PROCESS, fill="#f3f0fb")
 container(760, 100, 500, 380, "External tools", stroke=EXTERNAL, fill="#eaf3fb")
-container(40, 520, 640, 200, "Local backends", stroke=BACKEND, fill="#eaeff5")
-container(760, 520, 500, 490, "Machine state", stroke=STATE, fill="#ecf7ee")
-container(40, 760, 640, 250, "Machine configuration", stroke=CONFIG, fill="#fbf6e6")
 
 # --------------------------------------------------------------------------
 # Development process.
@@ -603,7 +588,7 @@ review = box(
     260,
     120,
     "<b>external-review</b><br>"
-    + desc("Non-Claude review of a plan, a phase diff, or the whole repo"),
+    + desc("Review by other models of a plan, a phase diff, or the whole repo"),
     fill=PROCESS,
     bold=False,
 )
@@ -615,68 +600,6 @@ codex = box(800, 150, 420, 60, "<b>codex</b> " + sub("OpenAI Codex CLI"), fill=E
 agy = box(800, 230, 420, 60, "<b>agy</b> " + sub("Gemini CLI"), fill=EXTERNAL)
 gh = box(800, 310, 420, 60, "<b>gh</b> " + sub("GitHub CLI"), fill=EXTERNAL)
 drawio = box(800, 390, 420, 60, "<b>drawio</b> " + sub("Diagram skill"), fill=EXTERNAL)
-
-# --------------------------------------------------------------------------
-# Local backends.
-# --------------------------------------------------------------------------
-toggle = box(
-    80,
-    570,
-    250,
-    100,
-    "<b>claude-toggle-backend</b><br>"
-    + desc("Anthropic API, Ollama, llama.cpp or MLX. Four bash scripts"),
-    fill=BACKEND,
-    bold=False,
-)
-models = box(
-    430,
-    570,
-    210,
-    100,
-    "<b>local-models</b><br>" + desc("Finds, sizes and fetches local models"),
-    fill=BACKEND,
-    bold=False,
-)
-
-# --------------------------------------------------------------------------
-# Machine configuration.
-# --------------------------------------------------------------------------
-setup = box(
-    80,
-    805,
-    560,
-    80,
-    "<b>claude-setup</b><br>"
-    + desc("Permission allowlist, plugin pruning, the standards block, Drive wiring"),
-    fill=CONFIG,
-    bold=False,
-)
-projenv = box(
-    80,
-    945,
-    270,
-    50,
-    "<b>project-env</b> " + sub("Envs outside Drive"),
-    fill=CONFIG,
-    bold=False,
-)
-backup = box(
-    370,
-    945,
-    270,
-    50,
-    "<b>drive-backup</b> " + sub("Stop-Hook Backup"),
-    fill=CONFIG,
-    bold=False,
-)
-
-# --------------------------------------------------------------------------
-# Machine state.
-# --------------------------------------------------------------------------
-settings = box(800, 570, 420, 60, "<b>~/.claude/settings.json</b>", fill=STATE)
-claudemd = box(800, 660, 420, 60, "<b>~/.claude/CLAUDE.md</b>", fill=STATE)
-drive = box(800, 900, 420, 60, "<b>Google Drive</b>", fill=STATE)
 
 # --------------------------------------------------------------------------
 # Edges. Emitted after every box so labels layer on top.
@@ -765,112 +688,12 @@ edge(
     label_x=140,
 )
 
-# local-models resolves which model the backend switch should start.
-edge(
-    models,
-    toggle,
-    color=BACKEND,
-    label="Resolves<div>Model</div>",
-    exitX=0,
-    exitY=0.5,
-    entryX=1,
-    entryY=0.5,
-    label_bg="#eaeff5",
-)
-
-# The backend switch patches the same file claude-setup owns — y=700 lane.
-edge(
-    toggle,
-    settings,
-    color=BACKEND,
-    label="Patch Model And<div>ANTHROPIC_* Keys</div>",
-    waypoints=[(205, 700), (735, 700), (735, 615)],
-    exitX=0.5,
-    exitY=1,
-    entryX=0,
-    entryY=0.75,
-    label_x=100,
-    label_bg="#eaeff5",
-)
-
-# claude-setup writes both managed files.
-edge(
-    setup,
-    settings,
-    color=CONFIG,
-    label="Merge<div>Allowlist</div>",
-    waypoints=[(700, 845), (700, 585)],
-    exitX=1,
-    exitY=0.5,
-    entryX=0,
-    entryY=0.25,
-    label_y=-150,
-)
-edge(
-    setup,
-    claudemd,
-    color=CONFIG,
-    label="Managed<div>Block</div>",
-    waypoints=[(690, 865), (690, 690)],
-    exitX=1,
-    exitY=0.72,
-    entryX=0,
-    entryY=0.5,
-    label_y=25,
-)
-edge(
-    setup,
-    projenv,
-    color=CONFIG,
-    label="Delegates",
-    exitX=0.25,
-    exitY=1,
-    entryX=0.5,
-    entryY=0,
-    label_bg="#fbf6e6",
-)
-edge(
-    setup,
-    backup,
-    color=CONFIG,
-    label="Delegates",
-    exitX=0.76,
-    exitY=1,
-    entryX=0.5,
-    entryY=0,
-    label_bg="#fbf6e6",
-)
-edge(
-    backup,
-    settings,
-    color=CONFIG,
-    label="Adds Stop<div>Hook</div>",
-    waypoints=[(705, 955), (705, 600)],
-    exitX=1,
-    exitY=0.2,
-    entryX=0,
-    entryY=0.5,
-    label_y=-105,
-)
-edge(
-    backup,
-    drive,
-    color=CONFIG,
-    label="Copy Transcripts<div>And Config</div>",
-    waypoints=[(715, 970), (715, 930)],
-    exitX=1,
-    exitY=0.5,
-    entryX=0,
-    entryY=0.5,
-    label_x=-95,
-)
-
 # --------------------------------------------------------------------------
 # Legend.
 # --------------------------------------------------------------------------
 box(
     40,
-    1030,
+    530,
     W - 80,
     36,
     desc(

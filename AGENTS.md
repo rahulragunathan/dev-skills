@@ -39,7 +39,6 @@ with a separate hub holding the bootstrap script and the global standards. The s
 work in any repo, on any machine, and under Codex as well as Claude Code, so they name no
 setup skill and assume nothing it installs.
 
-
 **Historical red-state evidence is not required, and not recoverable here.** This repository's
 history begins with implementation and tests together at the v1.8.0 import, so no test's red
 state can be recovered from a commit. The answer was to do nothing: the mutation check in
