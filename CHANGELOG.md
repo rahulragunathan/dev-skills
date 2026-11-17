@@ -10,6 +10,12 @@ here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-11-17
+
+### Fixed
+
+- `plugin.json`: the author email is the personal address, not the old work one.
+
 ## [2.0.0] - 2026-09-28
 
 The plugin becomes `dev-skills`: the development-process skills only, written to work in any
