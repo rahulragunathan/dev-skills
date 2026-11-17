@@ -2,10 +2,10 @@
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "dev-skills",
   "description": "Agent skills for a phase-based development process: plan review and phase gates (phase-workflow), structural design review at plan time (design-review), and outside review from other models (external-review).",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": {
     "name": "Rahul Ragunathan",
-    "email": "rahul.ragunathan@answerrocket.com"
+    "email": "13843999+rahulragunathan@users.noreply.github.com"
   },
   "license": "MIT",
   "keywords": [
