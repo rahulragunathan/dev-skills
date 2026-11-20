@@ -45,6 +45,10 @@ LINE_ANCHOR = re.compile(r'#L\d+')
 WHERE = "**Where:**"
 WHERE_LIKE = re.compile(r'^\s*(?:[-+*]\s+|\d+[.)]\s+)?\*\*Where(?::\*\*|\*\*:)')
 Ref = collections.namedtuple("Ref", "target fragment")
+# The rated fields of each kind of entry, in sort-key order. Their levels are
+# not listed here: they are read from the templates bundled beside this file.
+FIELDS = {"KI": ["Severity", "Likelihood"], "ENH": ["Priority"], "UNK": ["Kind"]}
+TEMPLATES = pathlib.Path(__file__).resolve().parent
 
 
 def fail(msg: str) -> None:
@@ -91,6 +95,11 @@ def split_entries(text: str) -> tuple[str, dict[str, str]]:
     return text[:first_start], entries
 
 
+def _cells(line: str) -> list[str]:
+    """The cells of one Markdown table row, stripped."""
+    return [c.strip() for c in line.strip().split("|")[1:-1]]
+
+
 def index_rows(roadmap: str, prefix: str) -> dict[str, dict]:
     """{entry-id: {"line": the row, "anchor": what the link actually targets}}.
 
@@ -101,7 +110,7 @@ def index_rows(roadmap: str, prefix: str) -> dict[str, dict]:
     rows: dict[str, dict] = {}
     headers = []
     for line in roadmap.splitlines(keepends=True):
-        cells = [c.strip() for c in line.strip().split("|")[1:-1]]
+        cells = _cells(line)
         if cells and cells[0] == "ID":
             headers = cells
         m = re.match(rf'^\|\s*\[?({prefix}-\d+)\b', line)
@@ -119,6 +128,40 @@ def index_rows(roadmap: str, prefix: str) -> dict[str, dict]:
     return rows
 
 
+def load_scales(template_dir: pathlib.Path) -> dict[str, dict[str, list[str]]]:
+    """{prefix: {field: [levels, best first]}}, read from each template's scale table.
+
+    The scale tables in the templates are the one source of the levels: a row
+    added or moved there changes what `check` accepts, with no second copy here.
+    """
+    scales: dict[str, dict[str, list[str]]] = {}
+    for prefix, fields in FIELDS.items():
+        name = FILES[prefix].replace(".md", "-template.md")
+        lines = (template_dir / name).read_text().splitlines()
+        scales[prefix] = {}
+        for field in fields:
+            try:
+                start = lines.index(f"## {field}")
+            except ValueError:
+                fail(f"refusing: no {field} scale in {name}")
+            rows, in_table = [], False
+            for line in lines[start + 1:]:
+                if line.startswith("|"):
+                    in_table = True
+                    rows.append(line)
+                elif in_table:
+                    break
+            # Skip the header and delimiter rows; a level is the bold first cell.
+            levels = [_cells(r)[0].strip("*").strip() for r in rows[2:]]
+            if not levels:
+                fail(f"refusing: the {field} scale in {name} is empty")
+            repeated = sorted(lv for lv, n in collections.Counter(levels).items() if n > 1)
+            if repeated:
+                fail(f"refusing: the {field} scale in {name} repeats {repeated}")
+            scales[prefix][field] = levels
+    return scales
+
+
 def reconcile(docs: pathlib.Path, proposed: dict[str, str] | None = None):
     """Check the index against the detail files. `proposed` replaces a file's
     text in memory, so a change can be reconciled before anything is written."""
@@ -127,6 +170,7 @@ def reconcile(docs: pathlib.Path, proposed: dict[str, str] | None = None):
         return proposed[name] if name in proposed else (docs / name).read_text()
 
     roadmap = text_of("ROADMAP.md")
+    scales = load_scales(TEMPLATES)
     ok, problems = True, []
     for prefix, name in FILES.items():
         _, entries = split_entries(text_of(name))
@@ -144,7 +188,7 @@ def reconcile(docs: pathlib.Path, proposed: dict[str, str] | None = None):
             problems.append(f"  entries with no index row:      {orphaned}"); ok = False
         if destinations:
             problems.append(f"  wrong destination: {destinations}"); ok = False
-        fields = {"KI": ["Severity", "Likelihood"], "ENH": ["Priority"], "UNK": ["Kind"]}[prefix]
+        fields = FIELDS[prefix]
         ratings = {}
         for eid, body in entries.items():
             ratings[eid] = {}
@@ -154,13 +198,16 @@ def reconcile(docs: pathlib.Path, proposed: dict[str, str] | None = None):
                 ratings[eid][field] = val
                 if eid in rows and (not val or rows[eid]["cells"].get(field) != val):
                     problems.append(f"  rating mismatch: {eid} {field}"); ok = False
-        ranks = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3,
-                 "Almost always": 0, "Likely": 1, "Rare": 2}
+                if val and val not in scales[prefix][field]:
+                    problems.append(f"  unknown {field}: {eid} ({val})"); ok = False
+        # Open questions are grouped by kind, but their order is not checked.
         if prefix != "UNK":
             for label, ids in [("detail", entries), ("index", rows)]:
-                keys = [tuple(ranks.get(ratings[e][f], 99) for f in fields)
-                        for e in ids if e in ratings]
-                if keys != sorted(keys) or any(99 in k for k in keys):
+                # An unknown level is reported above, so order only the known ones.
+                keys = [tuple(scales[prefix][f].index(ratings[e][f]) for f in fields)
+                        for e in ids if e in ratings
+                        and all(ratings[e][f] in scales[prefix][f] for f in fields)]
+                if keys != sorted(keys):
                     problems.append(f"  rating order invalid: {label}"); ok = False
         if wrong:
             detail = [f"{e} -> #{rows[e]['anchor']}" for e in wrong]

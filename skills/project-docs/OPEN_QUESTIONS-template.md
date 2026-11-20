@@ -14,6 +14,9 @@ nothing. IDs are never reused.
 
 ## Kind
 
+These levels come from the copy of this template bundled with `project-docs`; `roadmap.py check`
+reads that copy, in row order. Editing this table changes nothing.
+
 | Kind | Means |
 | ------ | ------- |
 | **Decision** | The code does something defensible, but nobody has chosen whether it is right. Asks for an answer. |

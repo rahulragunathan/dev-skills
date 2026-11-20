@@ -794,3 +794,79 @@ before:  [x.sh:2](../skills/x.sh#L2)
   [ "$status" -eq 1 ]
   [[ "$output" == *"KI-01: a link in this Where field is not in the accepted reference form"* ]] || false
 }
+
+# The rating scales come from the templates bundled beside roadmap.py. These
+# tests run a copy of the skill so they can edit its templates.
+skill_copy() {
+  export SKILL="$TEST_TMP/skill"
+  mkdir -p "$SKILL"
+  cp "$RM" "$(dirname "$RM")"/*-template.md "$SKILL/"
+  export RMC="$SKILL/roadmap.py"
+}
+
+@test "scales: a level added to a template is accepted in rank order" {
+  # Fails while the ranks are hard-coded: an unknown level breaks the order check.
+  skill_copy
+  python3 - "$SKILL/KNOWN_ISSUES-template.md" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+row = next(l for l in t.splitlines(True) if l.startswith('| **Medium** |'))
+p.write_text(t.replace(row, '| **Severe** | Between high and medium. |\n' + row, 1))
+PY
+  grep -q '^| \*\*Severe\*\*' "$SKILL/KNOWN_ISSUES-template.md" || false
+  sed -i.bak 's/^\*\*Severity:\*\* Medium/**Severity:** Severe/' "$DOCS/KNOWN_ISSUES.md"
+  sed -i.bak 's/doomed issue | Likely | Medium/doomed issue | Likely | Severe/' "$DOCS/ROADMAP.md"
+  run python3 "$RMC" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
+
+@test "scales: a reordered template changes the accepted order" {
+  # Fails while the ranks are hard-coded: Low before Medium is refused.
+  skill_copy
+  python3 - "$SKILL/KNOWN_ISSUES-template.md" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1]); s = p.read_text().splitlines(True)
+m = next(i for i, l in enumerate(s) if l.startswith('| **Medium** |'))
+l = next(i for i, l in enumerate(s) if l.startswith('| **Low** |'))
+s[m], s[l] = s[l], s[m]; p.write_text(''.join(s))
+PY
+  sed -i.bak 's/^\*\*Severity:\*\* Medium/**Severity:** LOWTMP/; s/^\*\*Severity:\*\* Low/**Severity:** Medium/; s/LOWTMP/Low/' "$DOCS/KNOWN_ISSUES.md"
+  sed -i.bak 's/doomed issue | Likely | Medium/doomed issue | Likely | Low/; s/third issue | Almost always | Low/third issue | Almost always | Medium/' "$DOCS/ROADMAP.md"
+  run python3 "$RMC" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
+
+@test "scales: a missing, empty or repeated scale is refused by name" {
+  # Fails if a broken scale table is silently ignored instead of refused.
+  skill_copy
+  cp "$SKILL/KNOWN_ISSUES-template.md" "$TEST_TMP/ki.orig"
+  for broken in missing empty repeated; do
+    cp "$TEST_TMP/ki.orig" "$SKILL/KNOWN_ISSUES-template.md"
+    python3 - "$SKILL/KNOWN_ISSUES-template.md" "$broken" <<'PY'
+import pathlib, re, sys
+p = pathlib.Path(sys.argv[1]); t = p.read_text(); how = sys.argv[2]
+rows = re.compile(r'^\| \*\*(Critical|High|Medium|Low)\*\* \|.*\n', re.M)
+if how == 'missing':
+    t = t.replace('## Severity', '## Seriousness', 1)
+elif how == 'empty':
+    t = rows.sub('', t)
+else:
+    first = rows.search(t)[0]
+    t = t.replace(first, first + first, 1)
+p.write_text(t)
+PY
+    run python3 "$RMC" check --docs "$DOCS"
+    [ "$status" -eq 1 ] || false
+    [[ "$output" == *"KNOWN_ISSUES-template.md"* ]] || false
+    [[ "$output" == *"Severity"* ]] || false
+  done
+}
+
+@test "scales: an unknown Kind is refused" {
+  # Fails while Kind is only compared between the entry and its row, never against the scale.
+  sed -i.bak 's/^\*\*Kind:\*\* Verification/**Kind:** Maybe/' "$DOCS/OPEN_QUESTIONS.md"
+  sed -i.bak 's/a question | Verification/a question | Maybe/' "$DOCS/ROADMAP.md"
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"unknown Kind: UNK-01"* ]]
+}
