@@ -250,7 +250,7 @@ Prompt drift between the two reviewers corrupts the agree/disagree triage. Compo
 3. **Focus list** by mode:
    - *plan*: gaps and missing steps, risks and failure modes, sequencing problems, simpler approaches missed, anything underspecified.
    - *phase / repo*: real bugs (report everything, do not self-filter for severity), silent failures, security issues, design choices that will not hold up, code duplication/consolidation opportunities, genuinely missing test coverage; plus doc-vs-code contradictions (README, ARCHITECTURE, CLAUDE.md, ROADMAP + KNOWN_ISSUES/ENHANCEMENTS/OPEN_QUESTIONS, CHANGELOG).
-4. **Test-discrimination question** (*phase / repo* only): *"For each test in the material below, say whether it would still pass with the change it covers reverted. Name any test that asserts on a mock, on a constant, or on something true before the change."* This is a backstop — phase-workflow §3 step 3 already runs the check by **mutating** the named behaviour in place and re-running, which a reviewer cannot do. Ask anyway: a reviewer reading the assertion catches a different class than a mutation catches.
+4. **Test-discrimination question** (*phase / repo* only): *"For each test in the material below, say whether it would still pass with the change it covers reverted. Name any test that asserts on a mock, on a constant, or on something true before the change."* This is a backstop — phase-workflow §3 step 3 already checks that every new test has a recorded red, and **mutates** the named behaviour of a test written after its fix, which a reviewer cannot do. Ask anyway: a reviewer reading the assertion catches a different class than a mutation catches.
 5. **Do-not-read instruction (mandatory, both reviewers):**
 
    > Do not open `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `credentials*`, `.netrc`, `.npmrc`, `id_rsa*`, `id_ed25519*`, or anything else shaped like a secret. If a finding depends on one, name the file and say what you would need rather than reading it.
@@ -440,8 +440,8 @@ model downshift. The probe must carry the same do-not-read instruction as the re
 ## Triage — verify before presenting
 
 1. **Verify each finding against the repo** (read the cited file/function) before it reaches the user. A confident false finding routed into the roadmap files is worse than no review. Verification decides the **Verdict**, never whether the row appears.
-2. **Deduplicate across reviewers.** One row per distinct finding. Two reviewers reporting the same thing is signal, not noise — merge them into one row listing **both model ids, including Codex's effort**, per the Model column rule below. Never `Both`: a row can outlive this table by being filed as a roadmap entry, and `Both` resolves only against a coverage line that is chat-only.
-3. **Give every finding a disposition** and present them in the findings table below. *plan* mode: the table goes in the plan. *phase / repo* mode: the table goes in the hand-off at the gate.
+2. **Deduplicate across reviewers.** One row per distinct finding. Two reviewers reporting the same thing is signal, not noise — merge them into one row listing **both model ids, including Codex's effort**, per the Model column rule below. Never `Both`: a row can outlive this table by being filed as a roadmap entry, and `Both` resolves only against one pass's coverage line.
+3. **Give every finding a disposition** and present them in the findings table below. *plan* mode: the table goes in the plan. *phase* mode: the [review record](#the-phase-review-record) goes in the PR description and the hand-off. *repo* mode: the table goes in the hand-off.
 
 ## The findings table (canonical format — both modes)
 
@@ -497,7 +497,7 @@ Column rules:
 - **#** — `F-01`, `F-02`, … Stable within this review only; they exist so the user can say "also fix F-03" without quoting titles.
 - **Finding** — one short line. Not a summary of the explanation.
 - **Files** — where the finding lives, as `path` or `path:start-end`, comma-separated when it spans more than one. **Take the reviewer's own reference and verify it against the repo during triage** — a wrong path is itself a signal the finding was not verified. Two or three paths is the cap; a finding touching more than that is really a finding about the design, so name the area (`skills/*/SKILL.md — every skill`) rather than listing every file. Use `—` only where the finding genuinely has no location, such as a missing file or an absent test. This column is what makes a filed `KI-nn`/`ENH-nn` entry actionable from cold, since the roadmap entry inherits it.
-- **Model** — the **model id that produced the finding, with Codex's effort**, not the CLI that ran it: `gpt-5.6-sol:max`, `gemini-3.1-pro-high`. Which rung of the ladder actually answered changes how much weight a finding deserves, and that is per-run state the CLI name cannot carry. When both reviewers found the same thing, **list both ids, retaining the effort** — `gpt-5.6-sol:max, gemini-3.1-pro-high` — never `Both`: a row can outlive this table by being filed as a `KI-nn`/`ENH-nn`/`UNK-nn` entry, and `Both` resolves only against a coverage line that is chat-only. Two ids in one cell is also the agreement signal, stated so it survives the move. Never write `Codex` or `Gemini` alone in this column.
+- **Model** — the **model id that produced the finding, with Codex's effort**, not the CLI that ran it: `gpt-5.6-sol:max`, `gemini-3.1-pro-high`. Which rung of the ladder actually answered changes how much weight a finding deserves, and that is per-run state the CLI name cannot carry. When both reviewers found the same thing, **list both ids, retaining the effort** — `gpt-5.6-sol:max, gemini-3.1-pro-high` — never `Both`: a row can outlive this table by being filed as a `KI-nn`/`ENH-nn`/`UNK-nn` entry, and `Both` resolves only against one pass's coverage line. Two ids in one cell is also the agreement signal, stated so it survives the move. Never write `Codex` or `Gemini` alone in this column.
 - **Likelihood** — `Rare` | `Likely` | `Almost always`. **How often a user following the
   documented workflow actually hits the harm**, not how often the code path runs. The two come
   apart: a bad count computed on every run is `Rare` if it only misleads when something else has
@@ -520,44 +520,69 @@ Column rules:
 
 ### Disposition vocabulary — *plan* mode
 
-`Incorporated — <where>` | `Already covered — <where>` | `Filed KI-nn / ENH-nn / UNK-nn` | `Not incorporated` (Verdict `Rejected`).
+`Incorporated — <where>` | `Already covered — <where>` | `Filed KI-nn / ENH-nn / UNK-nn` | `Open — no roadmap files` | `Not incorporated` (Verdict `Rejected`).
 
-A valid finding that is out of scope for this phase is **filed, not dropped** — it gets a `KI-nn`, `ENH-nn` or `UNK-nn` entry with its ROADMAP pointer row, the same as at phase end. **A reviewer reading a plan often finds a real defect in the existing code; that is a `KI-nn`.** Use `UNK-nn` only for unsettled questions, per the `OPEN_QUESTIONS` template. Present the whole table in one pass regardless of severity: a confirmed Critical does not block the plan reaching the user, who is in plan mode and can send it back.
+A valid finding that is out of scope for this phase is **kept, not dropped**. Where the repository has `docs/ROADMAP.md`, it is filed through `project-docs` as a `KI-nn`, `ENH-nn` or `UNK-nn` entry with its ROADMAP pointer row. Where it does not, the row stays in this table as `Open — no roadmap files`; nothing creates roadmap files unless the user asks. **A reviewer reading a plan often finds a real defect in the existing code; that is a `KI-nn`.** Use `UNK-nn` only for unsettled questions, per the `OPEN_QUESTIONS` template. Present the whole table in one pass regardless of severity: a confirmed Critical does not block the plan reaching the user, who is in plan mode and can send it back.
 
 ### Disposition vocabulary — *phase / repo* mode
 
-`Fixed in phase` | `Filed KI-nn` | `Filed ENH-nn` | `Filed UNK-nn` | `Rejected`.
+`Fixed in phase` | `Filed KI-nn` | `Filed ENH-nn` | `Filed UNK-nn` | `Confirmed: accepted, no work planned` | `Open — no roadmap files` | `Rejected`.
 
-Exactly five buckets, and **every row lands in one** — that is what guarantees nothing is quietly lost. Regressions this phase introduced are fixed before hand-off; everything else that survives verification becomes a rated entry in `docs/KNOWN_ISSUES.md`, `docs/ENHANCEMENTS.md`, or `docs/OPEN_QUESTIONS.md`, each with its ROADMAP pointer row. `Rejected` is a real disposition, not a gap: a finding that fails verification produces no artifact, and forcing it into the roadmap would pollute it.
+**Every row lands in exactly one** — that is what guarantees nothing is quietly lost.
 
-The table itself is **chat-only** — do not write a per-phase review file. It presents state that already lives elsewhere: fixes are in the diff, deferrals are roadmap entries. A `docs/reviews/phase-N.md` would be a backward-looking doc outside CHANGELOG, breaking the tense split. Instead give each filed entry a provenance line carrying the same model ids and Codex effort as the Model column — `Source: gpt-5.6-sol:max, gemini-3.1-pro-high — phase review, phase 4` — so the attribution survives the move into a durable doc without a second store.
+- `Fixed in phase` — fixed on the branch, with a failing test written first. Regressions this phase introduced always land here.
+- `Filed …` — valid and deferred, filed through `project-docs` as a rated entry with its ROADMAP pointer row. Only where `docs/ROADMAP.md` exists.
+- `Confirmed: accepted, no work planned` — valid, and accepted as it is: nothing will be built and nothing is filed. Its note says why.
+- `Open — no roadmap files` — valid and deferred in a repository without roadmap files. The review record is where it stays.
+- `Rejected` — failed verification. It is a real disposition, not a gap: it produces no artifact, and forcing it into the roadmap would pollute it.
+
+Give each filed entry a provenance line carrying the same model ids and Codex effort as the Model column — `Source: gpt-5.6-sol:max, gemini-3.1-pro-high — phase review, phase 4` — so the attribution survives the move into a durable doc. Do not write a per-phase review file under `docs/`: it would be a backward-looking doc outside CHANGELOG, breaking the tense split.
+
+### The phase review record
+
+One record covers every pass of a phase review. It goes in the PR description and the hand-off, and it has no times in it.
+
+**One table across all passes**, in finding-ID order:
+
+| ID | Pass | Found by | Severity | Finding | Disposition | Commit |
+| --- | --- | --- | --- | --- | --- | --- |
+| F-01 | 1 | gpt-5.6-sol:max, gemini-3.1-pro-high | High | Token refresh races on concurrent runs | Fixed in phase | `a1b2c3d` |
+| F-02 | 1 | gemini-3.1-pro-high | Low | README names a removed flag | Confirmed: accepted, no work planned | — |
+| F-03 | 2 | gpt-5.6-sol:max | Medium | The F-01 fix drops the retry count | Fixed in phase | `d4e5f6a` |
+
+`Found by` follows the Model column rules above: exact model ids, with Codex's effort. `Severity` follows the Severity column rules. `Commit` is the fix commit, or `—`.
+
+**Under the table, a keyed note for every row** — *When it fires*, *What happens*, *Reviewer's fix* and *Commentary*, as above. A fixed row adds:
+
+- *Fix:* the change, in one line.
+- *Scenarios:* each scenario the failing test covered, with the red you observed before the fix and the green after.
+
+**Then a short block per pass:** its coverage line with each invocation's output path and byte count; its findings counted by severity; how many were in code an earlier fix of this review wrote; and how many were accepted without work.
 
 ## Follow-up passes — *phase* mode only
 
 **This section is canonical for the review loop.** `phase-workflow` §3 step 5 states only what is phase-specific and delegates the rest here.
 
-A first review changes the code, and those changes have been reviewed by no one — so a phase review is a loop, not one shot.
-
-**There is no pass ceiling.** How many passes a phase needs depends on what the findings are and which way the count is moving, and neither is knowable at the start. Pass 1 is full scope; every later pass narrows. `plan` and `repo` modes stay single-pass: a plan already loops through the user's approval, and a `repo` review seeds the backlog rather than gating a hand-off.
+A first review changes the code, and those changes have been reviewed by no one — so a phase review is a loop, not one shot. `plan` and `repo` modes stay single-pass: a plan already loops through the user's approval, and a `repo` review seeds the backlog rather than gating a hand-off.
 
 ### The loop
 
-1. **Pass 1** — full scope, per *Modes* above.
-2. **Present the findings table and STOP.** Blocking, every time. The user decides what gets fixed, what gets filed, and what gets rejected before any code is touched. A disposition you assigned yourself is a proposal until they say so.
-3. **Fix and file** what they approved.
-4. **Pass 2** — narrow (below). Then present and stop again, and repeat on the same terms.
+Run up to three passes without checking in. Pass 1 is full scope; every later pass is narrow (below). Record the commit each pass reviewed.
 
-### Ending the loop is the user's call, every pass
+1. **Run the pass and triage it.** Verify every finding and give it a disposition.
+2. **Apply the stop rule before fixing anything.** Stop after pass 3. Stop when a pass, from pass 2 on, has no new Critical or High and fewer findings than the pass before. Stop when a pass with full coverage finds nothing. **A failed or partial pass never counts as finding nothing** — see [Coverage classification](#coverage-classification).
+3. **If the loop continues:** fix the `Fixed in phase` rows, each with a failing test first, and commit. File the deferred rows. The next pass reviews only `<commit the last pass reviewed>..HEAD`.
+4. **If it stops:** that pass's findings are not fixed. They go to the gate with their proposed dispositions, so no fix reaches the gate unreviewed. A fix the user then asks for needs another pass, and so does any pass past three: both are the user's call.
 
-Close every pass with a short assessment under the findings table, then stop:
+### What the user sees at the gate
 
-- **The trend** — the finding count for each pass so far, as a series.
-- **What the new findings are about** — fresh defects in untouched code, defects in the previous pass's own fixes, or documentation drift. A count that holds steady while the *kind* changes is a different situation from one that holds steady on the same kind.
-- **Your recommendation** — another pass, or land what is here and file the rest, with the reason.
+The review record, then a short assessment:
 
-Recommend stopping when a pass returns no confirmed finding needing a code change, or when what remains is better filed than fixed. **The decision is the user's.** Never end the loop on your own judgement, and never open another pass without asking.
+- **The trend** — the finding count for each pass, as a series.
+- **What the new findings are about** — fresh defects in untouched code, defects in an earlier pass's own fixes, or documentation drift. A count that holds steady while the *kind* changes is a different situation from one that holds steady on the same kind.
+- **Your recommendation** — land what is here, or another pass, with the reason.
 
-Whatever is still open when the loop ends is *filed* — `KI-nn`, `ENH-nn` or `UNK-nn` with its ROADMAP pointer row — never fixed-and-unreviewed. Say in the hand-off what remains open.
+Every disposition is the user's to change: they can pull a deferred or accepted row back into the phase, or overturn a rejection, before signing off. Whatever is still open when the phase lands is filed, or stays `Open — no roadmap files` in the record — never fixed-and-unreviewed.
 
 ### What "narrow" means
 
@@ -581,16 +606,16 @@ Say what you checked and why it may not be enough. *"I verified this `html.unesc
 
 ### Numbering across passes
 
-Finding IDs run in **one sequence for the whole phase** — pass 1 ends at `F-08`, pass 2 opens at `F-09`. A row can outlive the table by being filed as a roadmap entry, and per-pass numbering would make `F-01` ambiguous the moment it moves. Each pass presents its own table, headed with the pass number and its own coverage line.
+Finding IDs run in **one sequence for the whole phase** — pass 1 ends at `F-08`, pass 2 opens at `F-09`. A row can outlive the table by being filed as a roadmap entry, and per-pass numbering would make `F-01` ambiguous the moment it moves. The `Pass` column says which pass found each one.
 
 ## Hard rules
 
 - **The reviewers never write.** Codex is held to that by `--sandbox read-only`, not by prompt wording; Gemini gets text and no tools. Neither is restricted from *reading* — see the bundle section — so "read-only" here means it cannot change the repo, never that it cannot see a file.
 - **Who acts on a finding differs by mode, and both are review-only in the sense that matters — no fix is applied straight from review output.**
   - *plan*: the agent revises the plan itself, then presents the revision and the findings table together. This is deliberate: phase-workflow §1 says the plan the user sees is the revised one, so waiting for a disposition first would defeat the checkpoint.
-  - *phase / repo*: the user dispositions every finding **before any code is touched**. A disposition you assigned yourself is a proposal until they say so.
-- **The pause after a findings table is blocking.** Present, stop, wait. Not "present and start fixing while they read".
+  - *phase*: the agent dispositions and fixes within [the loop](#the-loop), and the user reviews every disposition at the gate before signing off.
+  - *repo*: the user dispositions every finding **before any code is touched**. A disposition you assigned yourself is a proposal until they say so. The pause after the table is blocking: present, stop, wait.
 - **Never widen a follow-up pass back to full scope.** If pass 2 looks thin, that is the loop working, not a reason to re-review the phase.
 - **Never report a bundle without its reconciled file count.** An unstated count is how a reviewer ends up reviewing half a phase and nobody notices.
 - The Codex stop-time review gate (`/codex:setup`) stays **off** — it reviews every turn and burns quota; these checkpoints are the intended cadence.
-- **Triage subagents gather evidence, never verdicts.** A subagent returns the quoted file lines or command output a finding turns on; the judgement stays with the main agent. That is the narrow exception to the global ban on using subagents to verify correctness — it parallelizes the lookup without asking a copy of yourself whether you were right.
+- **Triage subagents gather evidence, never verdicts.** A subagent returns the quoted file lines or command output a finding turns on; the judgement stays with the main agent. A subagent is a copy of the main agent with the same blind spots, so it never decides whether a finding is right; outside opinion comes from the other models. Where the user's or the project's own standards say something different, theirs win; otherwise both apply.
