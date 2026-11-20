@@ -502,14 +502,57 @@ def install_documents(docs: pathlib.Path, proposed: dict[str, str]) -> None:
             shutil.rmtree(recovery)
 
 
+def cmd_init(docs: pathlib.Path) -> int:
+    """Create whichever roadmap files are missing, from the templates without
+    their example entries, so a fresh set-up passes `check`. An existing file,
+    or a symlink in its place, is never touched."""
+    names = ["ROADMAP.md", *FILES.values()]
+    missing = [n for n in names if not os.path.lexists(docs / n)]
+    if not missing:
+        print("nothing to set up")
+        return 0
+    bodies = {}
+    for name in missing:
+        text = (TEMPLATES / name.replace(".md", "-template.md")).read_text()
+        if name == "ROADMAP.md":
+            examples = set()
+            for prefix in FILES:
+                examples |= {r["line"] for r in index_rows(text, prefix).values()}
+            text = "".join(l for l in text.splitlines(keepends=True) if l not in examples)
+        else:
+            text = split_entries(text)[0].rstrip("\n") + "\n"
+        bodies[name] = text
+    made_docs = not docs.exists()
+    docs.mkdir(parents=True, exist_ok=True)
+    created = []
+    try:
+        for name, text in bodies.items():
+            # Mode "x" refuses any existing entry, a dangling symlink included,
+            # so nothing that appeared since the check above is replaced.
+            with open(docs / name, "x") as f:
+                created.append(docs / name)
+                f.write(text)
+    except BaseException as exc:
+        for path in created:
+            path.unlink(missing_ok=True)
+        if made_docs:
+            docs.rmdir()
+        fail(f"refusing: set-up failed, nothing left behind: {exc}")
+    for path in created:
+        print(f"created {path}")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("command", choices=["check", "close"])
+    ap.add_argument("command", choices=["check", "close", "init"])
     ap.add_argument("id", nargs="?")
     ap.add_argument("--docs", type=pathlib.Path, default=pathlib.Path("docs"))
     args = ap.parse_args()
     if args.command == "check":
         return cmd_check(args.docs)
+    if args.command == "init":
+        return cmd_init(args.docs)
     if not args.id:
         fail("close needs an entry id, e.g. roadmap.py close KI-15")
     return cmd_close(args.docs, args.id.upper())

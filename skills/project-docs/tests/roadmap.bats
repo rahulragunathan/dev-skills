@@ -870,3 +870,65 @@ PY
   [ "$status" -eq 1 ]
   [[ "$output" == *"unknown Kind: UNK-01"* ]]
 }
+
+@test "init: a fresh set-up passes the check" {
+  # Fails if init leaves the templates' example rows in place (KI-40).
+  NEW="$TEST_TMP/fresh/docs"
+  run python3 "$RM" init --docs "$NEW"
+  [ "$status" -eq 0 ] || false
+  run python3 "$RM" check --docs "$NEW"
+  [ "$status" -eq 0 ]
+}
+
+@test "init never touches an existing file, including a dangling symlink" {
+  # Fails if init overwrites a file the project already has, or writes through a symlink.
+  NEW="$TEST_TMP/partial/docs"; mkdir -p "$NEW"
+  printf 'KEEP\n' > "$NEW/ENHANCEMENTS.md"
+  ln -s "$TEST_TMP/nowhere.md" "$NEW/OPEN_QUESTIONS.md"
+  run python3 "$RM" init --docs "$NEW"
+  [ "$status" -eq 0 ] || false
+  [ "$(cat "$NEW/ENHANCEMENTS.md")" = "KEEP" ] || false
+  [ -L "$NEW/OPEN_QUESTIONS.md" ] || false
+  [ ! -e "$TEST_TMP/nowhere.md" ] || false
+  [ -f "$NEW/ROADMAP.md" ] || false
+  [ -f "$NEW/KNOWN_ISSUES.md" ]
+}
+
+@test "init: a failure after the first file is created removes only what init created" {
+  # Fails if a failed init leaves a partial set or a new docs/ behind, or removes a file it did not create.
+  NEW="$TEST_TMP/broken/docs"; mkdir -p "$NEW"
+  printf 'KEEP\n' > "$NEW/ENHANCEMENTS.md"
+  FRESH="$TEST_TMP/fresh-broken/docs"
+  run python3 - "$RM" "$NEW" "$FRESH" <<'PY'
+import builtins, importlib.util, pathlib, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+for target in sys.argv[2:]:
+    created = []
+    def flaky(path, mode='r', *a, **kw):
+        if 'x' in mode:
+            created.append(path)
+            if len(created) == 2:
+                raise OSError('injected failure on the second file')
+        return builtins.open(path, mode, *a, **kw)
+    m.open = flaky
+    try:
+        m.cmd_init(pathlib.Path(target))
+    except SystemExit as e:
+        print('exit', e.code)
+PY
+  [[ "$output" == *"exit 1"*"exit 1"* ]] || false
+  [ "$(cat "$NEW/ENHANCEMENTS.md")" = "KEEP" ] || false
+  [ "$(ls -A "$NEW")" = "ENHANCEMENTS.md" ] || false
+  [ ! -e "$FRESH" ]
+}
+
+@test "init: keeps each template's header and scales" {
+  # Fails if stripping the example entries also strips the scale tables or the index tables.
+  NEW="$TEST_TMP/hdr/docs"
+  run python3 "$RM" init --docs "$NEW"
+  [ "$status" -eq 0 ] || false
+  grep -q '^## Severity' "$NEW/KNOWN_ISSUES.md" || false
+  grep -q '^## Likelihood' "$NEW/KNOWN_ISSUES.md" || false
+  grep -q '^| ID | Issue |' "$NEW/ROADMAP.md"
+}
