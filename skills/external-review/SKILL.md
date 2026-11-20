@@ -194,6 +194,18 @@ overwrites it. Check exit status and a non-empty answer first; only then read th
 
 **Both:** run as background tasks; **capture to scratchpad files and Read them — never pipe through `tail`/`head`**, which truncates the top of the findings list (the highest-severity items).
 
+**Post a progress line every five minutes while a pass runs.** A review takes many minutes, and
+silence looks the same as a dead process. Each update is one line per invocation, from:
+
+```bash
+bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/progress.sh" "<scratchpad>" <n>
+```
+
+It reports each invocation as done with its byte count, or running with its elapsed minutes and
+when its log last changed, and flags a run past the 30-minute print timeout. In Claude Code, start
+a Monitor that runs it every 300 seconds until no invocation is running; elsewhere, check at that
+interval. Change it in `progress.sh` and verify it with `tests/progress.bats`.
+
 **Probe each reviewer before committing a pass.**
 
 ```bash
