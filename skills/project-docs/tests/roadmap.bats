@@ -365,8 +365,8 @@ PY
   python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/commands.sh" <<'PY'
 import pathlib, re, sys
 text = pathlib.Path(sys.argv[1]).read_text()
-blocks = [b for b in re.findall(r'```bash\n(.*?)```', text, re.S) if 'roadmap.py' in b]
-assert len(blocks) == 1, 'SOP must invoke the tested roadmap close and check commands'
+blocks = [b for b in re.findall(r'```bash\n(.*?)```', text, re.S) if 'roadmap.py" close' in b]
+assert len(blocks) == 1, 'SOP must invoke the tested roadmap close and check commands in one block'
 pathlib.Path(sys.argv[2]).write_text(blocks[0].replace('<entry-id>', 'KI-02'))
 PY
   cd "$TEST_TMP"

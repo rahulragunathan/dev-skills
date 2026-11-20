@@ -47,3 +47,53 @@ python3 "$CLAUDE_PLUGIN_ROOT/skills/project-docs/roadmap.py" check || exit 1
 
 A refusal leaves the close incomplete. Resolve the reported inconsistency before retrying;
 do not replace the helper with a hand-written slice.
+
+## Docs split by tense
+
+Each fact lives in one place, and the tense decides which:
+
+- **The past:** `CHANGELOG.md`, versioned. A released section is never edited.
+- **The present:** `README.md`, `docs/ARCHITECTURE.md` and the project instructions file
+  (`AGENTS.md`, or `CLAUDE.md` in older repos). They describe only what the code is now.
+- **The future:** the roadmap files, where the repository has them.
+
+An item moves between them and is never copied: it enters ROADMAP and its supporting file
+together, and on completion is deleted from both and written into CHANGELOG `[Unreleased]`. Two
+exceptions are stated, not accidental: the instructions file keeps "Decisions taken and not
+taken", so a dropped idea is not proposed again, and a ROADMAP row mirrors its entry's rating.
+Where the user's or the project's own standards say something different, theirs win; otherwise both apply.
+
+## Setting up roadmap files — only when the user asks
+
+When the user asks for roadmap files ("set up the roadmap files here with project-docs"):
+
+```bash
+python3 "$CLAUDE_PLUGIN_ROOT/skills/project-docs/roadmap.py" init || exit 1
+```
+
+`init` creates whichever of the four files are missing, from the templates without their example
+entries, and never touches one that exists. A fresh set-up passes `roadmap.py check`. Then fill
+the Status section and the Last Updated line in `docs/ROADMAP.md`, and offer to file what is
+already known: open bugs, wanted work, unsettled questions.
+
+Never create the files to have somewhere to file a finding. Without them, a finding stays in the
+table of the review that found it.
+
+## The name check
+
+`name_check.py` lists names in a repository's Markdown that no longer exist: backticked paths,
+commands, flags and roadmap IDs, and Markdown links with their anchors.
+
+```bash
+python3 "$CLAUDE_PLUGIN_ROOT/skills/project-docs/name_check.py" --root .
+```
+
+- **It is advisory.** Fix each item it lists, or mark it with
+  `<!-- name-check: ignore NAME ... -->` on the line above. Exit 1 means it listed something;
+  it never blocks a merge.
+- **It reads, and never runs, what it checks.** A flag is looked up in the source of the repo
+  script whose command names it. Flags of external tools are not checked.
+- **It skips history and test input:** `CHANGELOG.md`, dated plans and specs, the templates, and
+  Markdown under a `tests/` folder other than its README.
+- **It cannot catch a false claim.** A doc can name only real things and still be wrong. That is
+  what the full reads at phase end are for.
