@@ -156,7 +156,8 @@ check() { run python3 "$NC" --root "$REPO" "$@"; }
   printf 'x\0--hidden\n' > "$REPO/tools/blob.bin"
   git -C "$REPO" add tools/blob.bin
   put tools/credentials.json '"--hidden"'
-  printf -- '--hidden\n' > "$TEST_TMP/out.txt"; ln -s "$TEST_TMP/out.txt" "$REPO/tools/link.txt"; git -C "$REPO" add tools/link.txt
+  printf -- '--hidden\n' > "$REPO/tools/target.txt"
+  ln -s target.txt "$REPO/tools/link.txt"; git -C "$REPO" add tools/link.txt
   put doc.md 'Run `tools/blob.bin --hidden`, `tools/credentials.json --hidden` and `tools/link.txt --hidden`.'
   check
   [ "$status" -eq 1 ] || false
@@ -253,4 +254,15 @@ PY
   check
   [ "$status" -eq 1 ] || false
   [[ "$output" == *"missing path ../sibling.skill — outside the repository"* ]]
+}
+
+@test "never reads through a tracked symlink to a folder outside the root" {
+  # Fails if a file under a symlinked folder is opened, leaking whether a string occurs outside.
+  mkdir -p "$TEST_TMP/outside"
+  printf -- '--secretflag\n' > "$TEST_TMP/outside/tool.sh"
+  ln -s "$TEST_TMP/outside" "$REPO/ext"; git -C "$REPO" add ext
+  put doc.md 'Run `ext/tool.sh --secretflag`.'
+  check
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"missing command ext/tool.sh"* ]]
 }

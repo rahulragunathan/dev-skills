@@ -92,7 +92,8 @@ discovered list is shorter, the floor arrives sooner; never pad it out by relaxi
 reach a third name.
 
 **Run the discovery block in the same shell as the loops.** The loops read `CODEX_RUNGS` and
-`GEMINI_RUNGS`, and refuse to start when a variable is unset rather than loop zero times.
+`GEMINI_RUNGS`, and refuse to start when a variable is unset rather than loop zero times. An
+empty ladder, which discovery has already reported, leaves the other reviewer running.
 
 **An empty ladder is a failure, not an empty loop.** If discovery returns nothing — a missing or
 malformed `models_cache.json`, an `agy models` that did not run — `for m in $(…)` iterates zero
@@ -135,7 +136,7 @@ a different rung or effort from the authoring run, record those separately.
 probes. Pin writes off at the tool level:
 
 ```bash
-for m in ${CODEX_RUNGS:?run the ladder discovery block first}; do
+for m in ${CODEX_RUNGS?run the ladder discovery block first}; do
   slug="${m%%:*}"
   case "$m" in *:*) effort="${m#*:}";; *) effort=high;; esac
   OUT="<scratchpad>/codex_<mode>_p<n>_c<chunk>_a<attempt>_${slug}_${effort}.txt"
@@ -167,7 +168,7 @@ done
 **Gemini (`agy -p`) is one-shot print mode — it cannot prompt for tool permissions.** Any prompt asking it to "review this repository" gets its tool calls auto-denied and fails. **Always inline the material in the prompt** and state: *"REVIEW ONLY: do not attempt to use any tools; answer purely from the text below."*
 
 ```bash
-for m in ${GEMINI_RUNGS:?run the ladder discovery block first}; do
+for m in ${GEMINI_RUNGS?run the ladder discovery block first}; do
   OUT="<scratchpad>/gemini_<mode>_p<n>_c<chunk>_a<attempt>_$m.txt"
   rm -f "$OUT" "${OUT%.txt}.err"   # never inherit a previous attempt's answer
   agy -p "$(cat "<scratchpad>/gemini_prompt_p<n>.txt")" --model "$m" \
@@ -197,12 +198,12 @@ overwrites it. Check exit status and a non-empty answer first; only then read th
 
 ```bash
 PROBE_MODELS=()
-for m in ${CODEX_RUNGS:?run the ladder discovery block first}; do
+for m in ${CODEX_RUNGS?run the ladder discovery block first}; do
   slug="${m%%:*}"
   case "$m" in *:*) effort="${m#*:}";; *) effort=high;; esac
   PROBE_MODELS+=(--codex-model "$slug:$effort")
 done
-for m in ${GEMINI_RUNGS:?run the ladder discovery block first}; do PROBE_MODELS+=(--gemini-model "$m"); done
+for m in ${GEMINI_RUNGS?run the ladder discovery block first}; do PROBE_MODELS+=(--gemini-model "$m"); done
 [ "${#PROBE_MODELS[@]}" -gt 0 ] || { echo "No discovered models to probe"; exit 1; }
 bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/preflight.sh" "${PROBE_MODELS[@]}" --timeout 120
 ```
@@ -570,9 +571,9 @@ A first review changes the code, and those changes have been reviewed by no one 
 Run up to three passes without checking in. Pass 1 is full scope; every later pass is narrow (below). Record the commit each pass reviewed.
 
 1. **Run the pass and triage it.** Verify every finding and give it a disposition.
-2. **Apply the stop rule before fixing anything.** Stop after pass 3. Stop when a pass, from pass 2 on, has no new Critical or High and fewer findings than the pass before. Stop when a pass with full coverage finds nothing. **A failed or partial pass never counts as finding nothing** — see [Coverage classification](#coverage-classification).
+2. **Apply the stop rule before fixing anything, and only to a pass with full coverage.** Stop after pass 3. Stop when a pass, from pass 2 on, has no new Critical or High and fewer findings than the pass before. Stop when a pass finds nothing. **A failed or partial pass triggers neither rule**: re-run it once its reviewer can answer, or take it to the user. It never ends the loop on its own — see [Coverage classification](#coverage-classification).
 3. **If the loop continues:** fix the `Fixed in phase` rows, each with a failing test first, and commit. File the deferred rows. The next pass reviews only `<commit the last pass reviewed>..HEAD`.
-4. **If it stops:** that pass's findings are not fixed. They go to the gate with their proposed dispositions, so no fix reaches the gate unreviewed. A fix the user then asks for needs another pass, and so does any pass past three: both are the user's call.
+4. **If it stops:** that pass's findings are not fixed. Deferred rows are filed before the gate; rows that would need a fix go to the gate marked `Proposed: fixed in phase`, so no fix reaches the gate unreviewed. A fix the user then asks for needs another pass, and so does any pass past three: both are the user's call.
 
 ### What the user sees at the gate
 
@@ -582,7 +583,7 @@ The review record, then a short assessment:
 - **What the new findings are about** — fresh defects in untouched code, defects in an earlier pass's own fixes, or documentation drift. A count that holds steady while the *kind* changes is a different situation from one that holds steady on the same kind.
 - **Your recommendation** — land what is here, or another pass, with the reason.
 
-Every disposition is the user's to change: they can pull a deferred or accepted row back into the phase, or overturn a rejection, before signing off. Whatever is still open when the phase lands is filed, or stays `Open — no roadmap files` in the record — never fixed-and-unreviewed.
+Every disposition is the user's to change: they can pull a deferred or accepted row back into the phase, or overturn a rejection, before signing off. Everything deferred is filed before the gate, or stays `Open — no roadmap files` in the record, since a commit after sign-off would be unreviewed. Nothing is fixed-and-unreviewed.
 
 ### What "narrow" means
 

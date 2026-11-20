@@ -345,3 +345,19 @@ for a in "$@"; do [ "$a" = --effort ] \&\& { echo "error: --model x conflicts wi
   run bash "$PREFLIGHT" --gemini-model gemini-4-neon-xhigh
   [[ "$output" == *"gemini"*"READY"* ]]
 }
+
+@test "the documented probe block still probes Codex when the Gemini ladder is empty" {
+  # Fails if an empty ladder aborts the block before the other reviewer is probed.
+  mkdir -p "$TEST_TMP/plugin/skills/external-review"
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$@" > "%s/probe-args"\n' "$TEST_TMP" \
+    > "$TEST_TMP/plugin/skills/external-review/preflight.sh"
+  python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/probe.sh" <<'PY'
+import pathlib, re, sys
+blocks = re.findall(r'```bash\n(.*?)```', pathlib.Path(sys.argv[1]).read_text(), re.S)
+block = next(b for b in blocks if 'PROBE_MODELS=()' in b)
+pathlib.Path(sys.argv[2]).write_text('CODEX_RUNGS="fixture:high"\nGEMINI_RUNGS=""\n' + block)
+PY
+  CLAUDE_PLUGIN_ROOT="$TEST_TMP/plugin" run bash "$TEST_TMP/probe.sh"
+  [ -f "$TEST_TMP/probe-args" ] || false
+  grep -Fx 'fixture:high' "$TEST_TMP/probe-args"
+}

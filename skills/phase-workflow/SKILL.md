@@ -11,7 +11,7 @@ Phase-based development for solo projects. One feature branch per phase, cut `--
 
 The rules below are this skill's defaults. Where the user's or the project's own standards say something different, theirs win; otherwise both apply.
 
-**When work runs as a phase.** Architectural work does. Bounded work becomes a phase when it turns out architectural partway through, when it touches a security-sensitive path or a rule other work depends on, or when the user asks for one.
+**When work runs as a phase.** Architectural work does. Bounded work becomes a phase when it turns out architectural partway through, or when the user asks for one. Calling a phase on bounded work is also right whenever its retrospective is worth having, such as a security-sensitive path or a change to a rule other work depends on.
 
 **Anything that lands cuts a release, numbered by semver.** Version by what changed, never by how the work was classified: a fix is a patch, a new flag a minor, a break major. A phase release names the phase in its CHANGELOG heading.
 
@@ -139,7 +139,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    List the tests the phase diff adds and match each to a line. The red each line records must meet the same three rules that make any red count:
 
    - **A stated failure condition** — what, specifically, would make this test fail. Not "it tests the parser": *"it fails if a `<script>` survives sanitization"*. Where the test closes a tracked issue it carries the ID (`test_ki_07_...`, or a `# KI-07` docstring line). **Most tests have no ID**, and that is fine; the stated failure condition is the requirement, always.
-   - **A fixture that carries the property under test.** No amount of breaking production code will fail a test whose input never had the property: a quote-escaping test needs a quote in its input, a timezone test needs a non-UTC account.
+   - **A fixture that carries the property under test.** Assert this *before* asserting on the outcome. No amount of breaking production code will fail a test whose input never had the property: a quote-escaping test needs a quote in its input, a timezone test needs a non-UTC account.
    - **The named failure, not a harness error** (see below).
 
    **A mutation check is needed only for a test written after its fix, a test with no `Red:` line, or one whose recorded red is in doubt.** Run it now, as follows.
@@ -277,7 +277,7 @@ what remains expired.
    - **It runs after the docs pass**, including release preparation. Fold later phase fixes into that unpublished release and commit them before the next pass or gate.
    - Build the record using `external-review`'s output contract and
      [coverage classification](../external-review/SKILL.md#coverage-classification).
-   - Every finding fixed here gets a failing test first, with its `Red:` line; step 3's check covers these tests too.
+   - Every finding fixed here gets a failing test first, with its `Red:` line. Run step 3's check on those tests before the next pass, and again before the gate.
 6. **Post-fix drift re-check — narrow, not another holistic pass.** If step 5's fixes moved a module, the diagrams are back in scope: regenerate and compare. Step 5 changed code after step 4 declared the docs true. Re-check only what those fixes touched: the docs and code comments the changed files invalidate, and the CHANGELOG entries whose claims moved. Then, where the roadmap files exist, confirm every filing from every pass has both its full entry and its ROADMAP pointer row, with ratings that agree. Report what you found, not only what you fixed.
 7. **Present to the user and stop** — the phase gate.
    - **Include the review record** from step 5 in the hand-off, and put it in the PR description — never in a per-phase review file in the repository. It exists so the user can see every finding and pull any deferred or accepted one back into this phase before signing off.

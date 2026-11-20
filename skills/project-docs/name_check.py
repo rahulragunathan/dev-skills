@@ -98,7 +98,9 @@ class Repo:
         self.ids = {m[0] for f in ROADMAP_FILES for m in ID.finditer(self.text(f) or "")}
 
     def inside(self, rel: str) -> bool:
-        full = os.path.normpath(os.path.join(self.root, rel))
+        """True when the path, with every symlink on the way resolved, is in the root.
+        A tracked symlink to a folder elsewhere does not make what is under it ours."""
+        full = os.path.realpath(os.path.join(self.root, rel))
         return full == str(self.root) or full.startswith(str(self.root) + os.sep)
 
     def present(self, rel: str) -> bool:
