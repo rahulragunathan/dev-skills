@@ -66,3 +66,11 @@ PY
   [ "$status" -eq 1 ] || false
   [ -z "$output" ]
 }
+
+@test "a malformed model entry exits 1 with no output" {
+  # Fails if an entry without a slug, or one that is not an object, crashes with a traceback.
+  printf '{"models": [{"visibility": "list"}, "oops"]}' > "$TEST_TMP/bad.json"
+  run python3 "$LADDER" "$TEST_TMP/bad.json"
+  [ "$status" -eq 1 ] || false
+  [ -z "$output" ]
+}

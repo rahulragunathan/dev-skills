@@ -165,15 +165,22 @@ def visible_lines(text: str) -> list[str]:
         if in_fence:
             out.append("")
             continue
+        # Comment markers are found with code spans blanked out, so a
+        # backticked `<!--` is text, not the start of a comment.
+        masked = FRAGMENT.sub(lambda m: " " * len(m[0]), line)
         if comment:
-            if "-->" not in line:
+            end = masked.find("-->")
+            if end < 0:
                 out.append("")
                 continue
-            comment, line = False, line.split("-->", 1)[1]
+            comment, line, masked = False, line[end + 3:], masked[end + 3:]
         if not IGNORE.search(line):
-            line = re.sub(r"<!--.*?-->", "", line)
-            if "<!--" in line:
-                line, comment = line.split("<!--", 1)[0], True
+            while (start := masked.find("<!--")) >= 0:
+                end = masked.find("-->", start + 4)
+                if end < 0:
+                    line, comment = line[:start], True
+                    break
+                line, masked = line[:start] + line[end + 3:], masked[:start] + masked[end + 3:]
         out.append(line)
     return out
 
@@ -282,7 +289,10 @@ def check_link(repo, target, rel, doc_dir) -> list[tuple]:
     if not target or SCHEME.match(target):
         return []
     path, _, anchor = urllib.parse.unquote(target).partition("#")
-    full = os.path.normpath(os.path.join(doc_dir, path)) if path else rel
+    path = path.split("?", 1)[0]
+    # A leading / is resolved from the repository root, as GitHub does.
+    base = "" if path.startswith("/") else doc_dir
+    full = os.path.normpath(os.path.join(base, path.lstrip("/"))) if path else rel
     if not repo.inside(full):
         return [("link", target, "outside the repository")]
     if not repo.present(full):
@@ -302,7 +312,12 @@ def main() -> int:
     except NotARepo as exc:
         print(exc, file=sys.stderr)
         return 2
-    docs = [f for f in (args.files or repo.tracked) if in_scope(f)]
+    named = [os.path.normpath(f) for f in args.files]
+    unknown = [f for f in named if f not in repo.tracked or not f.endswith(".md")]
+    if unknown:
+        print(f"not a tracked Markdown file: {', '.join(unknown)}", file=sys.stderr)
+        return 2
+    docs = [f for f in (named or repo.tracked) if in_scope(f)]
     findings = [f for rel in docs for f in check_doc(repo, rel)]
     for f in findings:
         print(f"{f.path}:{f.line}: missing {f.kind} {f.name}" + (f" — {f.reason}" if f.reason else ""))

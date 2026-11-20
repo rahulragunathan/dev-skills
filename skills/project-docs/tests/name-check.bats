@@ -266,3 +266,36 @@ PY
   [ "$status" -eq 1 ] || false
   [[ "$output" == *"missing command ext/tool.sh"* ]]
 }
+
+@test "a comment opener inside a code span does not hide the rest of the doc" {
+  # Fails if a backticked `<!--` starts comment mode and blanks every later line.
+  put skills/real.py 'x = 1'
+  put doc.md "$(printf 'Open a comment with `<!--`.\n\nSee `skills/gone.py`.')"
+  check
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"doc.md:3: missing path skills/gone.py"* ]]
+}
+
+@test "a named doc that is not a tracked Markdown file is a usage error" {
+  # Fails if a mistyped FILE argument is checked as an empty doc and passes.
+  put README.md '# Readme'
+  check READMEE.md
+  [ "$status" -eq 2 ] || false
+  [[ "$output" == *"READMEE.md"* ]]
+}
+
+@test "a ./ prefix on a named doc does not defeat the history exclusions" {
+  # Fails if FILE arguments are matched against the scope rules without normalising.
+  put skills/real.py 'x = 1'
+  put docs/superpowers/plans/2026-01-01-p.md '`skills/gone.py`'
+  check ./docs/superpowers/plans/2026-01-01-p.md
+  [ "$status" -eq 0 ]
+}
+
+@test "a query string or a repo-root link is resolved, not reported" {
+  # Fails if `x.md?plain=1` or `/docs/x.md` is reported though GitHub resolves both.
+  put docs/x.md '# X'
+  put sub/doc.md '[a](../docs/x.md?plain=1) and [b](/docs/x.md)'
+  check
+  [ "$status" -eq 0 ]
+}

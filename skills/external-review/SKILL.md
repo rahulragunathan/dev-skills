@@ -91,7 +91,7 @@ handling*.
 discovered list is shorter, the floor arrives sooner; never pad it out by relaxing the filter to
 reach a third name.
 
-**Run the discovery block in the same shell as the loops.** The loops read `CODEX_RUNGS` and
+**Run the discovery block in the same shell as the loops** — the same Bash call, since variables do not carry from one call to the next. The loops read `CODEX_RUNGS` and
 `GEMINI_RUNGS`, and refuse to start when a variable is unset rather than loop zero times. An
 empty ladder, which discovery has already reported, leaves the other reviewer running.
 

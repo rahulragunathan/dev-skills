@@ -58,10 +58,10 @@ def ladder(models: list[dict]) -> list[str]:
 def main() -> int:
     path = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "~/.codex/models_cache.json").expanduser()
     try:
-        models = json.loads(path.read_text())["models"]
-    except (OSError, ValueError, KeyError, TypeError):
+        rungs = ladder(json.loads(path.read_text())["models"])
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return 1
-    print(" ".join(ladder(models)))
+    print(" ".join(rungs))
     return 0
 
 

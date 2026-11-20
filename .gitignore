@@ -3,3 +3,4 @@
 .DS_Store
 RCLONE_TEST
 __pycache__/
+.claude/

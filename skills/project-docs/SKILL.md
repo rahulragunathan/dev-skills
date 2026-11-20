@@ -73,8 +73,9 @@ python3 "$CLAUDE_PLUGIN_ROOT/skills/project-docs/roadmap.py" init || exit 1
 
 `init` creates whichever of the four files are missing, from the templates without their example
 entries, and never touches one that exists. A fresh set-up passes `roadmap.py check`. Then fill
-the Status section and the Last Updated line in `docs/ROADMAP.md`, and offer to file what is
-already known: open bugs, wanted work, unsettled questions.
+the Status section and the Last Updated line in `docs/ROADMAP.md`, drop the rows of its "Looking
+for" table that point at docs the project does not have, and offer to file what is already
+known: open bugs, wanted work, unsettled questions.
 
 Never create the files to have somewhere to file a finding. Without them, a finding stays in the
 table of the review that found it.
