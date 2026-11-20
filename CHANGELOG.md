@@ -22,6 +22,8 @@ here — the plugin manifest's version is the only record of them.
 - **`name_check.py`**, an advisory check that lists backticked paths, commands, flags and
   roadmap IDs, and Markdown links and anchors, that no longer exist. It never runs what it reads.
 - **`gemini-ladder.py` and `codex-ladder.py`**, tested scripts that rank the reviewer models.
+- **A progress line every five minutes** while an external review pass runs (`progress.sh`), so
+  a long review is not mistaken for a dead one.
 - **Review record.** A phase review keeps one findings table across all passes, with a note per
   row, the red and green of each fix, and per-pass counts. It goes in the PR description.
 - **New dispositions:** `Confirmed: accepted, no work planned`, and `Open — no roadmap files`.
