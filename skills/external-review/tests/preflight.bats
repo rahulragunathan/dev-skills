@@ -237,19 +237,14 @@ echo stream_idle_timeout_ms=300000 >&2\
   [[ "$output" == *"codex"*"READY"* ]]
 }
 
-@test "QC T2-4: both probes carry the real high reasoning effort" {
+@test "QC T2-4: the Codex probe carries the real high reasoning effort" {
   fake_codex_ready; fake_agy_ready
   sed -i.bak '2i\
 printf "%s\\n" "$@" > "$TEST_TMP/codex-args"\
 ' "$BIN/codex"
-  sed -i.bak '2i\
-printf "%s\\n" "$@" > "$TEST_TMP/agy-args"\
-' "$BIN/agy"
   run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
   [ "$status" -eq 0 ]
   grep -Fx 'model_reasoning_effort=high' "$TEST_TMP/codex-args"
-  grep -Fx -- '--effort' "$TEST_TMP/agy-args"
-  grep -Fx high "$TEST_TMP/agy-args"
 }
 
 @test "F-09: the documented failure probe uses the same explicit high effort" {
@@ -339,4 +334,14 @@ printf "%s\\n" "$@" > "$TEST_TMP/codex-args"\
   local msg="$output"
   printf '%s\n' "$msg" | grep -qi 'author'
   [[ "$msg" != *"codex cannot answer"* ]] || false
+}
+
+@test "the Gemini probe passes no --effort" {
+  # Fails if the probe adds --effort, which agy refuses for any model whose id carries another effort.
+  fake_codex_ready; fake_agy_ready
+  sed -i.bak '2i\
+for a in "$@"; do [ "$a" = --effort ] \&\& { echo "error: --model x conflicts with --effort=high" >\&2; exit 2; }; done\
+' "$BIN/agy"
+  run bash "$PREFLIGHT" --gemini-model gemini-4-neon-xhigh
+  [[ "$output" == *"gemini"*"READY"* ]]
 }

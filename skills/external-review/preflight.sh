@@ -129,7 +129,8 @@ probe() {
       python3 "$RUNNER" "$DEADLINE" codex exec --skip-git-repo-check --sandbox read-only \
         -m "$slug" -c model_reasoning_effort="$effort" -o "$OUT" "$PROBE" > "$TMP/codex.stdout" 2> "$ERR" < /dev/null
     else
-      python3 "$RUNNER" "$DEADLINE" agy -p "$PROBE" --model "$model" --effort high \
+      # No --effort: the model id carries its own, and agy refuses a second one.
+      python3 "$RUNNER" "$DEADLINE" agy -p "$PROBE" --model "$model" \
         --print-timeout "${DEADLINE}s" > "$OUT" 2> "$ERR" < /dev/null
     fi
     rc=$?

@@ -80,20 +80,14 @@ print(" ".join(rungs[:3]))
 EOF
 }
 
-# Gemini — `agy models` publishes no ranking, so rank by family, then effort, then version.
-gemini_ladder() { agy models 2>/dev/null | awk '$1 ~ /^gemini-/ {print $1}' | python3 -c '
-import sys,re
-def rank(s):
-    fam = 0 if "-pro" in s else 1
-    m = re.search(r"gemini-(\d+)(?:\.(\d+))?", s)
-    ver = (-int(m.group(1)), -int(m.group(2) or 0)) if m else (0, 0)   # tuple, not float: 3.10 outranks 3.9
-    eff = {"high":0,"medium":1,"low":2}.get(s.rsplit("-",1)[-1], 3)
-    return (fam, eff, ver)
-ms=[l.strip() for l in sys.stdin if l.strip()]
-ms=[m for m in ms if not m.endswith("-low")]
-print(" ".join(sorted(ms,key=rank)[:3]))'
-}
+# Gemini — `agy models` publishes no ranking; gemini-ladder.py ranks it (see below).
+gemini_ladder() { agy models 2>"<scratchpad>/agy-models.err" \
+  | python3 "$CLAUDE_PLUGIN_ROOT/skills/external-review/gemini-ladder.py"; }
 ```
+
+**`gemini-ladder.py` owns the Gemini ranking**, and its docstring states the order; the family
+order is its `FAMILIES`. It prints an empty line when nothing qualifies. Change the ranking
+there and verify it with `tests/gemini-ladder.bats`.
 
 **Only Gemini models through `agy`.** The `^gemini-` filter is not cosmetic: `agy` also offers
 `claude-*` and `gpt-oss-*`. The filter keeps the run inside the Gemini subscription;
@@ -118,6 +112,8 @@ Check the first `slug:effort` pair before running, and record that reviewer as h
 CODEX_RUNGS="$(codex_ladder)"
 IFS=: read -r slug effort <<< "${CODEX_RUNGS%% *}"
 [ -n "$slug" ] && [ -n "$effort" ] || echo "Codex ladder discovery returned nothing — record no output for Codex, do not run"
+GEMINI_RUNGS="$(gemini_ladder)"
+[ -n "$GEMINI_RUNGS" ] || echo "Gemini ladder discovery returned nothing — record no output for Gemini, do not run; agy-models.err says why"
 ```
 
 **If all three rungs fail, that reviewer produces nothing. Never reach past the floor.** A review
@@ -180,10 +176,10 @@ done
 **Gemini (`agy -p`) is one-shot print mode — it cannot prompt for tool permissions.** Any prompt asking it to "review this repository" gets its tool calls auto-denied and fails. **Always inline the material in the prompt** and state: *"REVIEW ONLY: do not attempt to use any tools; answer purely from the text below."*
 
 ```bash
-for m in $(gemini_ladder); do
+for m in $GEMINI_RUNGS; do
   OUT="<scratchpad>/gemini_<mode>_p<n>_c<chunk>_a<attempt>_$m.txt"
   rm -f "$OUT" "${OUT%.txt}.err"   # never inherit a previous attempt's answer
-  agy -p "$(cat "<scratchpad>/gemini_prompt_p<n>.txt")" --model "$m" --effort high \
+  agy -p "$(cat "<scratchpad>/gemini_prompt_p<n>.txt")" --model "$m" \
       --print-timeout 25m > "$OUT" 2> "${OUT%.txt}.err"
   rc=$?
   [ "$rc" = 0 ] && [ -s "$OUT" ] && break
@@ -196,6 +192,8 @@ done
 ```
 
 - Build the prompt in a file (rubric + inlined material). Use the print timeout in the invocation above.
+- **Pass no `--effort`.** The model id carries its effort (`gemini-4-neon-xhigh`), and `agy`
+  refuses a second one: `--model gemini-4-neon-xhigh conflicts with --effort=high`.
 
 **Classify availability only after a failed invocation, and keep stderr in its own file.**
 Grepping a combined stream for `not supported` misreads a *successful* review whose findings
@@ -213,13 +211,13 @@ for m in $(codex_ladder); do
   case "$m" in *:*) effort="${m#*:}";; *) effort=high;; esac
   PROBE_MODELS+=(--codex-model "$slug:$effort")
 done
-for m in $(gemini_ladder); do PROBE_MODELS+=(--gemini-model "$m"); done
+for m in $GEMINI_RUNGS; do PROBE_MODELS+=(--gemini-model "$m"); done
 [ "${#PROBE_MODELS[@]}" -gt 0 ] || { echo "No discovered models to probe"; exit 1; }
 bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/preflight.sh" "${PROBE_MODELS[@]}" --timeout 120
 ```
 
 The Codex probe splits each `slug:effort` rung and uses the real pass's effort; a bare
-`--codex-model <slug>` defaults to `high`. Gemini retains explicit `high` effort. Codex console output is
+`--codex-model <slug>` defaults to `high`. The Gemini probe passes no `--effort`, since the model id carries it. Codex console output is
 kept separate from stderr; configuration names containing `timeout` do not indicate a timeout.
 A deadline or explicit incomplete-turn diagnostic still overrides a partial readiness token.
 
