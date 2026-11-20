@@ -82,7 +82,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 3. **Record exactly one allowed merge method at phase start.** The preflight selects `squash`, then `rebase`, then `merge`, taking the first allowed method. Persist `ORIGIN_URL`, `ORIGIN_PUSH_URL`, `REPO`, `DEFAULT_BRANCH`, `PHASE_BRANCH` and that selection in **`docs/PHASE_RECORD.md`** before publishing the branch — that file is the phase record, it is linked from `ROADMAP.md`, and it holds the phase in flight only. Overwrite it at each phase start rather than appending: one record per phase accumulating is the phase ledger the roadmap rules forbid. When no phase is in flight its body is the single line `No phase in flight.`, so the pointer never dangles and §4 always has somewhere to read. Preserve that record across sessions. If the user specifies another method, verify it is allowed before selecting it. Later checks do not replace this record. At the gate and merge, load the recorded method into `MERGE_METHOD`. A disabled method ends the merge attempt; do not silently substitute one. Repo rules and required reviews still apply.
 
 4. **Land the plan's diagram generators.** `design-review` builds them into the scratchpad at §1, because §1 runs before this branch exists, and the plan's front matter records their filenames. Copy **every** generator the plan recorded into `docs/` as this phase's first task **and commit it**. That commit is the baseline `design-review phase` compares against at §3 step 2. Skip this step entirely when the plan recorded none, which is the no-`drawio` path.
-5. Seed/refresh `ROADMAP.md`, `KNOWN_ISSUES.md`, `ENHANCEMENTS.md`, and `OPEN_QUESTIONS.md` under `docs/` from the templates next to this file, if the project doesn't have them.
+5. Seed/refresh `ROADMAP.md`, `KNOWN_ISSUES.md`, `ENHANCEMENTS.md`, and `OPEN_QUESTIONS.md` under `docs/` from the `project-docs` templates, if the project doesn't have them.
 6. **`/simplify`'s primary home is the TDD refactor step**, not the retrospective — the *refactor while green* beat of each red-green-refactor cycle, where the diff is one feature and the tests that just passed re-validate whatever it rewrites. §3 step 2 then runs it as a sweep for cross-feature duplication no single refactor step could see. A big haul there means the refactor steps were skipped.
 7. Adopting this workflow on an existing project with no in-flight branch? Run `external-review` in `repo` mode first — it reviews the current state and seeds `docs/KNOWN_ISSUES.md`, `docs/ENHANCEMENTS.md`, and `docs/OPEN_QUESTIONS.md`, with their ROADMAP pointer rows, before phase 1 is planned.
 
@@ -543,41 +543,7 @@ Then stop. The next phase's branch is created at phase start (§2 step 1) — ne
 
 **`git reset --hard` appears nowhere in this workflow; do not add it.** Where a reset is genuinely required, branch first (`git branch backup/<phase>-$(date +%s)`) or use `git reset --keep`, which refuses rather than discarding.
 
-## Roadmap file rules (summary — templates are canonical)
+## Roadmap file rules
 
-- Fixed vocabulary: **Done** (never "Implemented"), consistent status terms throughout.
-- `docs/ROADMAP.md` is future-tense and index-level only. Exactly these sections: **Status** (prose, plus a short note on the phase in flight or planned — often none), **Known Issues**, **Enhancements**, and **Open Questions** — three pointer tables, no prose. Confidence-check findings land in Open Questions.
-- No `Resolved` section and no `Notes` section. Shipped work belongs in CHANGELOG.md; standing limitations belong in ARCHITECTURE.md or the project AGENTS.md.
-- **No phase ledger.** A phase ends by cutting a CHANGELOG release whose heading names it, so the release history is the phase history. ROADMAP records only what is in flight or planned. Version by what the phase did: minor for additive work, patch for fixes and docs, major for a break.
-- The rating in a ROADMAP row mirrors the supporting file, which is authoritative. The drift check verifies they agree, that ordering is descending, and that every ID appears in both.
-- Completed items are deleted from both files, not annotated in place.
-- **A reference to a repo file carries a greppable fragment, never a line number**, and
-  `roadmap.py check` confirms that fragment still occurs in the file it cites **exactly once** —
-  greppable means one hit, and a fragment that has since been duplicated is refused as loudly as
-  one that has gone:
-
-  ```markdown
-  **Where:** [preflight.sh](../skills/external-review/preflight.sh) — `timed_out "$ERR"`
-  ```
-
-  A `#Lnn` anchor is rejected anywhere in an entry, fenced examples excepted. Three further
-  rules come from what the files actually contain: a link whose target is a **directory** is an
-  existence-only reference and takes no fragment; a fragment **cannot contain a backtick**, so
-  quote something else from the same file; and the requirement covers file links in the
-  `**Where:**` field only, so a file mentioned in passing in prose needs nothing. Choosing the
-  fragment is judgement — prefer a function name or a guard's condition to a whole line, and
-  never a token that occurs everywhere. The four-character floor in the gate catches only the
-  degenerate cases.
-- An entry filed from an external review carries a provenance line naming the model ids that found it — `Source: gpt-5.6-sol, gemini-3.1-pro-high — phase review, phase 4` — never the CLI name, so the attribution survives without a separate review store.
-
-Close completed entries with the bundled helper from the repository root. It removes the
-named detail entry and pointer together, preserving the surviving entries. After any roadmap
-edit, run its reconciliation check for IDs, destinations, ratings and ordering:
-
-```bash
-python3 "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/roadmap.py" close "<entry-id>" || exit 1
-python3 "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/roadmap.py" check || exit 1
-```
-
-A refusal leaves the close incomplete. Resolve the reported inconsistency before retrying;
-do not replace the helper with a hand-written slice.
+The roadmap files, their templates and `roadmap.py` belong to the `project-docs` skill, which
+states the rules for them.

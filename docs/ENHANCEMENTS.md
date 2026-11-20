@@ -67,7 +67,7 @@ Audit all consumers and provide a migration for existing reports before changing
 ## ENH-17 — Give roadmap rating scales one source
 
 **Priority:** Medium · **Effort:** ~1 day
-**Where:** [roadmap.py](../skills/phase-workflow/roadmap.py) — `def index_rows(` · **Regression net:** `skills/phase-workflow/tests/roadmap.bats`
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def index_rows(` · **Regression net:** `skills/project-docs/tests/roadmap.bats`
 
 ### What it is
 
@@ -248,7 +248,7 @@ keep the retain rule: nothing is deleted that was not proven safe.
 ## ENH-31 — report an entry that omits its `**Where:**` field entirely
 
 **Priority:** Low · **Effort:** ~1 hour
-**Where:** [roadmap.py](../skills/phase-workflow/roadmap.py) — `def verify_references(` · **Regression net:** `skills/phase-workflow/tests/roadmap.bats`
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def verify_references(` · **Regression net:** `skills/project-docs/tests/roadmap.bats`
 
 ### What it is
 
