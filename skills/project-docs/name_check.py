@@ -180,8 +180,8 @@ def visible_lines(text: str) -> list[str]:
 def path_token(token: str) -> str | None:
     """The path a backticked token names, or None when it is not path-shaped."""
     token = SUFFIX.sub("", token)
-    if (not token or "/" not in token or token.startswith("/") or SCHEME.match(token)
-            or NOT_A_PATH & set(token)):
+    if (not token or "/" not in token or token.startswith("/") or "//" in token
+            or SCHEME.match(token) or NOT_A_PATH & set(token)):
         return None
     return token
 
@@ -231,7 +231,9 @@ def check_doc(repo: Repo, rel: str) -> list[Finding]:
                 lone_flags.append(flag_name(words[0]))
             else:
                 path = locate(repo, path_token(words[0]), doc_dir)
-                if path and not repo.present(path):
+                if path and not repo.inside(path):
+                    found.append(("path", words[0], "outside the repository"))
+                elif path and not repo.present(path):
                     found.append(("path", words[0], ""))
         # A lone flag is checked only against a repo script named on the same line.
         for flag in lone_flags:

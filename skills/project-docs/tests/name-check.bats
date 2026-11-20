@@ -238,3 +238,19 @@ PY
   [ "$status" -eq 1 ] || false
   [[ "$output" == *"skills/a/SKILL.md:1: missing path references/old.md"* ]]
 }
+
+@test "an XPath or a doubled slash is not a path" {
+  # Fails if `.//mxCell` or `a//b` is read as a file path.
+  put doc.md 'Query `.//mxCell` and `docs//x`.'
+  put docs/real.md '# Real'
+  check
+  [ "$status" -eq 0 ]
+}
+
+@test "a path outside the repository says so" {
+  # Fails if a ../ path that leaves the root is reported as an ordinary missing path.
+  put doc.md 'See `../sibling.skill`.'
+  check
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"missing path ../sibling.skill — outside the repository"* ]]
+}
