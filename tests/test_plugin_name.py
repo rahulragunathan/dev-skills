@@ -13,6 +13,8 @@ ALLOWED = {
     ".claude-plugin/marketplace.json",
     "README.md",
     "CHANGELOG.md",
+    # The phase record holds the repository identity the merge cycle reads back.
+    "docs/PHASE_RECORD.md",
 }
 
 
