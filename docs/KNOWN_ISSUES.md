@@ -318,34 +318,6 @@ T3-2.
 
 ---
 
-<a id="ki-40"></a>
-
-## KI-40 — the roadmap check fails on freshly seeded roadmap files
-
-**Severity:** Medium
-**Likelihood:** Likely
-**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `git fetch --prune origin`
-
-### What happens
-
-The procedure runs `roadmap.py check || exit 1` after every roadmap edit. Roadmap files seeded
-from the bundled templates still hold placeholder rows, which the check rejects, so the first
-roadmap edit in a new repository stops the procedure.
-
-### Example scenario
-
-A new project seeds its roadmap files and the first phase files one known issue. The check
-fails on the template placeholders, not on the new entry.
-
-### Notes for a fix
-
-Seed templates that pass the check, or let the check accept untouched placeholder rows. Add a
-bats case that seeds the templates and runs the check.
-
-**Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.
-
----
-
 <a id="ki-55"></a>
 
 ## KI-55 — the plan review cannot run while the plan is inside the repository

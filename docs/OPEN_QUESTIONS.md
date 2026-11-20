@@ -50,3 +50,20 @@ enough. The reworded condition changes the condition hash, so the affected rows 
 re-grading against it.
 
 **Source:** claude-opus-5 — round-9 grading, 2026-09-14.
+
+---
+
+<a id="unk-05"></a>
+
+## UNK-05 — what drives repeat review findings?
+
+**Kind:** Verification
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `how many were in code an earlier fix of this review wrote`
+
+External review often needs several passes, and later passes keep finding problems. It is not
+known how many of those are in code the previous pass's fixes wrote, how many are fresh finds
+in untouched code, and how many are documentation drift.
+
+**What settles it:** the per-pass counts the review record now keeps, read across a few phases.
+If most repeat findings sit in fix code, the fix step needs more care; if they are fresh finds,
+the first pass needs a wider brief.

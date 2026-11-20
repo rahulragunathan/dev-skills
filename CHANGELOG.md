@@ -10,6 +10,53 @@ here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-20 — project-docs and September's rules
+
+### Added
+
+- **`project-docs`, a fourth skill.** It owns the roadmap files, their templates and
+  `roadmap.py`, moved from `phase-workflow`, and states the docs-by-tense rule.
+- **`roadmap.py init`** sets up whichever roadmap files are missing, only when the user asks. A
+  fresh set-up passes `roadmap.py check` (KI-40). It never touches an existing file and leaves
+  nothing behind on failure.
+- **`name_check.py`**, an advisory check that lists backticked paths, commands, flags and
+  roadmap IDs, and Markdown links and anchors, that no longer exist. It never runs what it reads.
+- **`gemini-ladder.py` and `codex-ladder.py`**, tested scripts that rank the reviewer models.
+- **Review record.** A phase review keeps one findings table across all passes, with a note per
+  row, the red and green of each fix, and per-pass counts. It goes in the PR description.
+- **New dispositions:** `Confirmed: accepted, no work planned`, and `Open — no roadmap files`.
+- **`phase-workflow` states when bounded work becomes a phase**, and that anything landing cuts
+  a release.
+
+### Changed
+
+- **Roadmap files are optional.** Filing goes through `project-docs` only where
+  `docs/ROADMAP.md` exists, and phase start no longer seeds the files.
+- **The rating scales have one source** (ENH-17): `roadmap.py` reads the levels from the
+  templates' scale tables, in row order, and refuses an unknown `Kind`.
+- **External review** runs up to three passes without checking in. Its stop rule applies
+  before any fix, so no fix reaches the gate unreviewed. A fourth pass is the user's call.
+- **`/simplify`** runs at a task's refactor step only when the task added or reshaped code, and
+  once on the whole branch diff before review.
+- **Test checks:** each task's commit message carries a `Red:` line per new test, and phase end
+  checks them. Mutation is kept for a test written after its fix, or one in doubt.
+- **Docs pass:** the name check runs on every doc; docs naming something the phase changed, and
+  docs found wrong, are read in full.
+- **The skills state the rules they rely on** instead of pointing at one user's global
+  standards. Where the user's or the project's standards differ, theirs win.
+
+### Fixed
+
+- **The Gemini ladder** put orchestrator models first and `xhigh` last. It now ranks by
+  version, full model before light tier, review grade before `medium`, then family (Carbon >
+  Argon > Neon > Hydrogen).
+- **Gemini calls passed `--effort high`**, which `agy` refuses for any model whose id carries
+  another effort, so the ladder could never downshift.
+- **The Codex ladder ranked by the cache's `priority`**, OpenAI's default pick: it put
+  `gpt-6.2-sol` above `gpt-6.2-astra`. It now ranks by version, then family (Astra > Sol >
+  Terra > Luna).
+- **Both ladders sorted version 4 above 4.1.**
+
 ## [2.0.1] - 2026-11-17
 
 ### Fixed
@@ -966,7 +1013,10 @@ corrections are recorded here.
 
 ## Reference
 
-[Unreleased]: https://github.com/rahulragunathan/localclaude/compare/v1.12.0...HEAD
+[Unreleased]: https://github.com/rahulragunathan/dev-skills/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/rahulragunathan/dev-skills/compare/v2.0.1...v2.1.0
+[2.0.1]: https://github.com/rahulragunathan/dev-skills/compare/v2.0.0...v2.0.1
+[2.0.0]: https://github.com/rahulragunathan/dev-skills/compare/v1.12.0...v2.0.0
 [1.12.0]: https://github.com/rahulragunathan/localclaude/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/rahulragunathan/localclaude/compare/v1.10.2...v1.11.0
 [1.10.2]: https://github.com/rahulragunathan/localclaude/compare/v1.10.1...v1.10.2

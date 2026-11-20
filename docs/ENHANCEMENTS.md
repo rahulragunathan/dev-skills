@@ -62,27 +62,6 @@ Audit all consumers and provide a migration for existing reports before changing
 
 ---
 
-<a id="enh-17"></a>
-
-## ENH-17 — Give roadmap rating scales one source
-
-**Priority:** Medium · **Effort:** ~1 day
-**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def index_rows(` · **Regression net:** `skills/project-docs/tests/roadmap.bats`
-
-### What it is
-
-Make the issue severity, likelihood and enhancement priority scales shared between the templates and the roadmap validator.
-
-### Why it matters
-
-Editing a template can leave a valid documented rating rejected by hardcoded Python ranks.
-
-### Notes for the work
-
-Choose structured shared data or a validated template reader. Test ordering and unknown ratings, preserving existing entry IDs, links and CLI refusals. Source: QC Tier 5, roadmap rating duplication.
-
----
-
 <a id="enh-18"></a>
 
 ## ENH-18 — Evaluate an isolated subprocess alternative to the fixture interpreter
@@ -305,3 +284,31 @@ exit non-zero at the end if any were retained. A behaviour introduced by the KI-
 present before it.
 
 **Source:** gemini-3.8-flash-high — phase review, phase 1 gate integrity, 2026-09-21.
+
+---
+
+<a id="enh-32"></a>
+
+## ENH-32 — drop explanations of standard tool behaviour from the skills
+
+**Priority:** Low · **Effort:** ~2 hours
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `Three dots, not two` · **Regression net:** none (prose)
+
+### What it is
+
+Several passages explain how Git works rather than stating this project's policy: why a
+three-dot diff differs from a two-dot one, what `git mv` tracks, and how `git stash` treats
+untracked files. `external-review` repeats the diff explanation in its capture section. Keep the
+policy and the commands; drop the tutorial.
+
+### Why it matters
+
+`AGENTS.md` already says skills do not explain standard tools. The passages cost reading time on
+every invocation and drift from the tools they describe.
+
+### Notes for the work
+
+Belongs with the fresh look at this plugin that follows the deep cut of the standards. Keep the
+nuances people get wrong, such as which diff a review must use.
+
+**Source:** gpt-6.2-sol:max, gpt-6.2-astra:max — plan review, project-docs phase, 2026-11-20.
