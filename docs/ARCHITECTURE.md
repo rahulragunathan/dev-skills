@@ -33,9 +33,9 @@ what sits at the bottom changes when someone else ships a new CLI.
 | Unit | Responsibility | Interface | Depends on |
 | --- | --- | --- | --- |
 | `phase-workflow` | Run a phase from plan review to merge | the `phase-workflow` skill | `design-review`, `project-docs`, `external-review`, `gh` |
-| `project-docs` | Keep a project's docs by tense, its roadmap files on request, and the name check | the `project-docs` skill; `roadmap.py`, `name_check.py` | — |
+| `project-docs` | Keep a project's docs by tense, its roadmap files on request, and the name check | the `project-docs` skill; `roadmap.py`, `name_check.py` | `git` |
 | `design-review` | Decide structure at plan time and re-check it at phase end | the `design-review` skill, `plan` or `phase` mode | `drawio` skill |
-| `external-review` | Get a review from other models of a plan, a phase diff or the repo | the `external-review` skill, `plan`, `phase` or `repo` mode | `codex`, `agy` |
+| `external-review` | Get a review from other models of a plan, a phase diff or the repo | the `external-review` skill, `plan`, `phase` or `repo` mode | `project-docs`, `codex`, `agy` |
 
 **Expected change:** a new external reviewer. Adding one edits `external-review`, and today
 also `phase-workflow`, which names the reviewer pair in its skip rules — that second edit is the

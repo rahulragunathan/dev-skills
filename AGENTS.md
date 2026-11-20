@@ -57,8 +57,8 @@ at that same tree, and `git reflog` recovers only what was committed. Per-task c
 draft PR give the same visibility with none of the exposure, and the full diff stays available
 as `git diff "origin/$DEFAULT_BRANCH"...HEAD`.
 
-**External review stops on a rule, not on a pass count.** A fixed number of passes was tried
-and dropped: how many a phase needs depends on what the findings are and which way the count is
+**External review stops on a rule; three passes is when it checks in.** A fixed number of passes
+was tried and dropped: how many a phase needs depends on what the findings are and which way the count is
 moving, neither of which is knowable at the start. Since 2.1.0 the agent runs passes without
 checking in until the stop rule fires or three have run; a fourth is the user's call, shown with
 the trend.

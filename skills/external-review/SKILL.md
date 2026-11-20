@@ -473,7 +473,7 @@ If neither CLI is installed, print the skip line in its place — `External revi
 | F-02 | Token refresh races on concurrent runs | `auth/token.py`, `worker.py:41` | gpt-5.6-sol:max, gemini-3.1-pro-high | Likely | Medium | Confirmed | Filed KI-08 |
 | F-03 | Add a caching layer for lookups | `lookup.py` | gemini-3.1-pro-high | Almost always | Medium | Rejected | Not incorporated |
 
-*The dispositions above are **plan** mode; phase and repo mode use the five buckets further down. The columns are the same in every mode.*
+*The dispositions above are **plan** mode; phase and repo mode use the vocabulary further down. The columns are the same in every mode.*
 
 **F-01** — *When it fires:* `the condition that has to hold` *What happens:* `the observable
 consequence, concretely` *Reviewer's fix:* `the remediation the reviewer proposed, in its own
@@ -564,7 +564,7 @@ One record covers every pass of a phase review. It goes in the PR description an
 
 **This section is canonical for the review loop.** `phase-workflow` §3 step 5 states only what is phase-specific and delegates the rest here.
 
-A first review changes the code, and those changes have been reviewed by no one — so a phase review is a loop, not one shot. `plan` and `repo` modes stay single-pass: a plan already loops through the user's approval, and a `repo` review seeds the backlog rather than gating a hand-off.
+A first review changes the code, and those changes have been reviewed by no one — so a phase review is a loop, not one shot. `plan` and `repo` modes stay single-pass: a plan already loops through the user's approval, and a `repo` review takes stock of the code rather than gating a hand-off.
 
 ### The loop
 

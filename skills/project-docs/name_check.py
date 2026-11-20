@@ -27,7 +27,7 @@ import sys
 import urllib.parse
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from roadmap import FRAGMENT, LINK, _fenced_lines  # noqa: E402
+from roadmap import FILES, FRAGMENT, LINK, fenced_lines  # noqa: E402
 
 Finding = collections.namedtuple("Finding", "path line kind name reason")
 
@@ -36,7 +36,7 @@ Finding = collections.namedtuple("Finding", "path line kind name reason")
 SECRET_NAMES = ("*.env", "*.env.*", "*.pem", "*.key", "*.p12", "*.pfx", "*.crt", "*id_rsa*",
                 "*id_ed25519*", "*credentials*", "*.netrc", "*.npmrc", "*.sqlite", "*.sqlite3")
 INTERPRETERS = {"python3", "python", "bash", "sh", "node"}
-ID = re.compile(r"(KI|ENH|UNK)-\d+")
+ID = re.compile(rf"({'|'.join(FILES)})-\d+")
 FLAG = re.compile(r"(--[A-Za-z0-9][\w-]*)(=\S*)?")
 BARE = re.compile(r"[A-Za-z][\w.+-]*")
 # A trailing line, range, symbol or line-anchor suffix: `x.py:12`, `x.py::test`.
@@ -48,8 +48,7 @@ IGNORE = re.compile(r"<!--\s*name-check:\s*ignore\s+(.+?)\s*-->")
 REFDEF = re.compile(r"^ {0,3}\[[^\]]+\]:\s*<?([^\s>]+)>?")
 HEADING = re.compile(r"^ {0,3}#{1,6}\s+(.*?)\s*#*\s*$")
 HTML_ID = re.compile(r"""\b(?:id|name)=["']([^"']+)["']""")
-ROADMAP_FILES = ("docs/ROADMAP.md", "docs/KNOWN_ISSUES.md", "docs/ENHANCEMENTS.md",
-                 "docs/OPEN_QUESTIONS.md", "CHANGELOG.md")
+ROADMAP_FILES = ("docs/ROADMAP.md", *(f"docs/{name}" for name in FILES.values()), "CHANGELOG.md")
 
 
 class NotARepo(Exception):
@@ -160,7 +159,7 @@ def visible_lines(text: str) -> list[str]:
     the quote markers are stripped before roadmap.py's fence tracker reads them.
     Ignore directives survive."""
     lines = text.splitlines()
-    fenced = _fenced_lines("\n".join(QUOTE.sub("", line) for line in lines))
+    fenced = fenced_lines("\n".join(QUOTE.sub("", line) for line in lines))
     out, comment = [], False
     for line, in_fence in zip(lines, fenced):
         if in_fence:
@@ -229,8 +228,8 @@ def check_doc(repo: Repo, rel: str) -> list[Finding]:
             elif ID.fullmatch(words[0]):
                 if words[0] not in repo.ids:
                     found.append(("id", words[0], ""))
-            elif flag_name(words[0]):
-                lone_flags.append(flag_name(words[0]))
+            elif flag := flag_name(words[0]):
+                lone_flags.append(flag)
             else:
                 path = locate(repo, path_token(words[0]), doc_dir)
                 if path and not repo.inside(path):

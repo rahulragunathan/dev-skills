@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Close a roadmap entry, or check that the roadmap files reconcile.
+"""Set up, close or check the roadmap files.
 
 Closing an entry means deleting it from its detail file and removing its
 pointer row from the index. Done by hand it has destroyed content twice in
@@ -14,6 +14,7 @@ was. Counting is not enough — a count can be right while the content is wrong.
 Usage:
     roadmap.py check [--docs DIR]
     roadmap.py close KI-15 [--docs DIR]
+    roadmap.py init [--docs DIR]
 
 Exit 0 on success, 1 on refusal. Nothing is written unless every check passes.
 """
@@ -215,7 +216,7 @@ def reconcile(docs: pathlib.Path, proposed: dict[str, str] | None = None):
     return ok, problems
 
 
-def _fenced_lines(text: str) -> list[bool]:
+def fenced_lines(text: str) -> list[bool]:
     """Keep nested, shorter fences from hiding the references after a block.
 
     Only the opening character repeated at least as many times, followed by
@@ -225,6 +226,7 @@ def _fenced_lines(text: str) -> list[bool]:
     Second fence tracker, after skills/design-review/tests/write_results.py; only
     this one rejects backtick fences with backticks in their info strings.
     Two stay separate under the rule of three; a third occurrence creates a shared home.
+    name_check.py imports this one rather than adding a third.
     """
     flags, opened = [], None
     for line in text.splitlines():
@@ -318,7 +320,7 @@ def verify_references(docs: pathlib.Path) -> tuple[bool, list[str]]:
             # Keep a boundary where a fence was, rather than joining a field
             # before the example to unrelated text after it.
             lines = ["" if fenced else line
-                     for line, fenced in zip(body.splitlines(), _fenced_lines(body))]
+                     for line, fenced in zip(body.splitlines(), fenced_lines(body))]
             # Line anchors are banned throughout the entry. Parse links only
             # to retain their destination in the diagnostic, not to limit scope.
             text = "\n".join(lines)
