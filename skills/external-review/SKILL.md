@@ -60,30 +60,18 @@ signed-in account, and model generations turn over faster than this file gets ed
 publish what they offer, so read it at run time.
 
 ```bash
-# Codex — priority ascending, then version descending and slug ascending; emit slug:effort.
-codex_ladder() { python3 - "$HOME/.codex/models_cache.json" <<'EOF'
-import json,re,sys
-try: models=json.load(open(sys.argv[1]))["models"]
-except Exception: sys.exit(1)
-vis=[m for m in models if m.get("visibility")=="list" and m.get("priority") is not None]
-def rank(m):
-    v = re.search(r"(\d+)(?:\.(\d+))?", m["slug"])
-    ver = (-int(v.group(1)), -int(v.group(2) or 0)) if v else (0, 0)
-    return (m["priority"], ver, m["slug"])
-efforts = {e:i for i,e in enumerate(("none", "minimal", "low", "medium", "high", "xhigh", "max"))}
-rungs = []
-for m in sorted(vis,key=rank):
-    supported = [e["effort"] for e in m.get("supported_reasoning_levels", []) if e.get("effort") in efforts]
-    if supported:
-        rungs.append(m["slug"] + ":" + max(supported,key=efforts.get))
-print(" ".join(rungs[:3]))
-EOF
-}
+# Codex — codex-ladder.py ranks the cache (see below) and emits slug:effort rungs.
+codex_ladder() { python3 "$CLAUDE_PLUGIN_ROOT/skills/external-review/codex-ladder.py" \
+  "$HOME/.codex/models_cache.json"; }
 
 # Gemini — `agy models` publishes no ranking; gemini-ladder.py ranks it (see below).
 gemini_ladder() { agy models 2>"<scratchpad>/agy-models.err" \
   | python3 "$CLAUDE_PLUGIN_ROOT/skills/external-review/gemini-ladder.py"; }
 ```
+
+**`codex-ladder.py` owns the Codex ranking**, and its docstring states the order; the family order
+is its `FAMILIES`. The cache's `priority` field is OpenAI's default pick, not a capability rank,
+so it is not used. Change the ranking there and verify it with `tests/codex-ladder.bats`.
 
 **`gemini-ladder.py` owns the Gemini ranking**, and its docstring states the order; the family
 order is its `FAMILIES`. It prints an empty line when nothing qualifies. Change the ranking
@@ -102,6 +90,9 @@ handling*.
 **Three is a ceiling on how far you may descend, not a promise that three exist.** Where the
 discovered list is shorter, the floor arrives sooner; never pad it out by relaxing the filter to
 reach a third name.
+
+**Run the discovery block in the same shell as the loops.** The loops read `CODEX_RUNGS` and
+`GEMINI_RUNGS`, and refuse to start when a variable is unset rather than loop zero times.
 
 **An empty ladder is a failure, not an empty loop.** If discovery returns nothing — a missing or
 malformed `models_cache.json`, an `agy models` that did not run — `for m in $(…)` iterates zero
@@ -144,7 +135,7 @@ a different rung or effort from the authoring run, record those separately.
 probes. Pin writes off at the tool level:
 
 ```bash
-for m in $(codex_ladder); do
+for m in ${CODEX_RUNGS:?run the ladder discovery block first}; do
   slug="${m%%:*}"
   case "$m" in *:*) effort="${m#*:}";; *) effort=high;; esac
   OUT="<scratchpad>/codex_<mode>_p<n>_c<chunk>_a<attempt>_${slug}_${effort}.txt"
@@ -176,7 +167,7 @@ done
 **Gemini (`agy -p`) is one-shot print mode — it cannot prompt for tool permissions.** Any prompt asking it to "review this repository" gets its tool calls auto-denied and fails. **Always inline the material in the prompt** and state: *"REVIEW ONLY: do not attempt to use any tools; answer purely from the text below."*
 
 ```bash
-for m in $GEMINI_RUNGS; do
+for m in ${GEMINI_RUNGS:?run the ladder discovery block first}; do
   OUT="<scratchpad>/gemini_<mode>_p<n>_c<chunk>_a<attempt>_$m.txt"
   rm -f "$OUT" "${OUT%.txt}.err"   # never inherit a previous attempt's answer
   agy -p "$(cat "<scratchpad>/gemini_prompt_p<n>.txt")" --model "$m" \
@@ -206,12 +197,12 @@ overwrites it. Check exit status and a non-empty answer first; only then read th
 
 ```bash
 PROBE_MODELS=()
-for m in $(codex_ladder); do
+for m in ${CODEX_RUNGS:?run the ladder discovery block first}; do
   slug="${m%%:*}"
   case "$m" in *:*) effort="${m#*:}";; *) effort=high;; esac
   PROBE_MODELS+=(--codex-model "$slug:$effort")
 done
-for m in $GEMINI_RUNGS; do PROBE_MODELS+=(--gemini-model "$m"); done
+for m in ${GEMINI_RUNGS:?run the ladder discovery block first}; do PROBE_MODELS+=(--gemini-model "$m"); done
 [ "${#PROBE_MODELS[@]}" -gt 0 ] || { echo "No discovered models to probe"; exit 1; }
 bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/preflight.sh" "${PROBE_MODELS[@]}" --timeout 120
 ```

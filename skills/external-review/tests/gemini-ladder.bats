@@ -76,3 +76,9 @@ rank() { printf '%s\n' "$@" | python3 "$LADDER"; }
   run rank gemini-4-neon gemini-4-neon-medium
   [ "$output" = "gemini-4-neon-medium gemini-4-neon" ]
 }
+
+@test "a point release outranks its major version" {
+  # Fails if version tuples compare by length, so 4 sorts above 4.1.
+  run rank gemini-4-neon-high gemini-4.1-neon-high
+  [ "$output" = "gemini-4.1-neon-high gemini-4-neon-high" ]
+}

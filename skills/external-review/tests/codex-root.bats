@@ -29,8 +29,8 @@ write_invoke_script() {   # $1 = ladder output, $2 = destination
 import pathlib,re,sys
 text=pathlib.Path(sys.argv[1]).with_name('SKILL.md').read_text()
 block=next(b for b in re.findall(r'```bash\n(.*?)```',text,re.S)
-           if 'for m in $(codex_ladder)' in b and 'codex exec' in b)
-prelude=('codex_ladder() { echo ' + sys.argv[4] + '; }\n'
+           if 'for m in ${CODEX_RUNGS' in b and 'codex exec' in b)
+prelude=('CODEX_RUNGS=' + sys.argv[4] + '\n'
          'codex() { printf "%s\\n" "$@" > "$ARGS"; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2"; }\n')
 pathlib.Path(sys.argv[2]).write_text(prelude+block.replace('<scratchpad>',sys.argv[3]).replace('<repo-root>','SOURCE-REPO'))
 INVOKE_PY
@@ -203,15 +203,9 @@ PY
 # ---------------------------------------------------------------------------
 # The Codex ladder emits (slug, effort) rungs.
 #
-# codex_ladder() has never run under test: the invocation tests stub it with
-# `codex_ladder() { echo fixture-model; }`, which is why two defects survived.
-#
-#  1. It emits bare slugs, so the real ladder -- Sol-medium, Astra-low,
-#     Astra-max -- cannot be expressed at all, and every rung ran at whatever
-#     effort the caller hardcoded.
-#  2. `gpt-5.6-sol` and `gpt-6-astra` both sit at `priority: 1` in the live
-#     cache, so `sorted(key=priority)` is stable and rung 1 resolves to
-#     whichever appears first in the JSON file, not to rank.
+# These run the documented codex_ladder() function itself, with HOME pointed at
+# a fixture cache, so the wiring from SKILL.md to codex-ladder.py is covered as
+# well as the ranking that tests/codex-ladder.bats pins.
 # ---------------------------------------------------------------------------
 
 ladder_fn() {
@@ -236,7 +230,7 @@ JSON
   # fixture property: the tie is real and file order disagrees with the rule
   [ "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["models"][0]["slug"])' \
         "$TEST_TMP/home/.codex/models_cache.json")" = "gpt-5.6-sol" ] || false
-  run bash -c "$(ladder_fn); HOME='$TEST_TMP/home' codex_ladder"
+  CLAUDE_PLUGIN_ROOT="$(cd "$(dirname "$CAPTURE")/../.." && pwd)" run bash -c "$(ladder_fn); HOME='$TEST_TMP/home' codex_ladder"
   [ "$status" -eq 0 ]
   [ "$(printf '%s\n' "$output" | tr ' ' '\n' | grep -c .)" -eq 2 ] || false
   [ "$(printf '%s\n' "$output" | tr ' ' '\n' | sed -n 1p)" = "gpt-6-astra:max" ]
@@ -252,7 +246,7 @@ JSON
  "supported_reasoning_levels":[{"effort":"max"},{"effort":"ultra"}]}]}
 JSON
   grep -q ultra "$TEST_TMP/home/.codex/models_cache.json" || false
-  run bash -c "$(ladder_fn); HOME='$TEST_TMP/home' codex_ladder"
+  CLAUDE_PLUGIN_ROOT="$(cd "$(dirname "$CAPTURE")/../.." && pwd)" run bash -c "$(ladder_fn); HOME='$TEST_TMP/home' codex_ladder"
   [ "$status" -eq 0 ]
   [ "$output" = "gpt-6-astra:max" ]
 }
