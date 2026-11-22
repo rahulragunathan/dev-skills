@@ -8,10 +8,10 @@ caller treats that as "no Gemini reviewer", never as an empty loop.
 The model class comes first, then the effort: the user's rule. A class is the
 id without its effort suffix (gemini-4-neon for gemini-4-neon-high). Classes
 rank, most significant first:
-  1. version, newest first;
-  2. a full model before a light tier (flash, lite);
-  3. family, by FAMILIES, with an unlisted family after every listed one;
-  4. class name, so the order never depends on how agy printed the list.
+  1. family, by FAMILIES, with an unlisted family (older lines such as flash
+     or lite included) after every listed one;
+  2. version, newest first;
+  3. class name, so the order never depends on how agy printed the list.
 Each class is offered once, at the first of PREFERENCE it has: high, the
 default; then the suffix-less id, which the review loop runs with
 `--effort high`; then xhigh; then medium. Orchestrator models, efforts below
@@ -25,7 +25,6 @@ import sys
 
 # The user's ranking of Gemini families, strongest first.
 FAMILIES = ("carbon", "argon", "neon", "hydrogen")
-LIGHT_TIERS = {"flash", "lite"}
 # Within a class, the variant to run: "" is the suffix-less id.
 PREFERENCE = ("high", "", "xhigh", "medium")
 EFFORTS = {"high", "xhigh", "medium", "low", "minimal", "none", "ultra"}
@@ -49,9 +48,8 @@ def rank(model_class: str) -> tuple:
     version = words.pop(0) if words and VERSION.fullmatch(words[0]) else None
     family = next((FAMILIES.index(w) for w in words if w in FAMILIES), len(FAMILIES))
     return (
-        (0, version_key(version)) if version else (1, ()),
-        1 if LIGHT_TIERS & set(words) else 0,
         family,
+        (0, version_key(version)) if version else (1, ()),
         model_class,
     )
 

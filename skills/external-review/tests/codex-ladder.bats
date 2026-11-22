@@ -27,11 +27,11 @@ json.dump({"models": models}, open(sys.argv[1], "w"))
 PY
 }
 
-@test "today's cache gives 6.2-astra, 6.2-sol, 6.1-sol at high" {
+@test "today's cache gives 6.2-astra, 6-astra, 6.2-sol at high" {
   # Fails if the cache's priority field, OpenAI's default pick, decides the order.
   run python3 "$LADDER" "$FIXTURE"
   [ "$status" -eq 0 ] || false
-  [ "$output" = "gpt-6.2-astra:high gpt-6.2-sol:high gpt-6.1-sol:high" ]
+  [ "$output" = "gpt-6.2-astra:high gpt-6-astra:high gpt-6.2-sol:high" ]
 }
 
 @test "a hidden model never appears" {
@@ -48,11 +48,15 @@ PY
   [ "$output" = "gpt-6-luna:high gpt-6-nova:high" ]
 }
 
-@test "a newer version outranks a stronger family" {
-  # Fails if family is ranked before version.
-  cache gpt-6.2-astra:1 gpt-7-sol:2
+@test "family comes before version" {
+  # Fails if a newer version of a weaker family outranks an older version of a stronger one.
+  cache gpt-7-sol:1 gpt-6.2-astra:2
   run python3 "$LADDER" "$TEST_TMP/cache.json"
-  [ "$output" = "gpt-7-sol:high gpt-6.2-astra:high" ]
+  [ "$output" = "gpt-6.2-astra:high gpt-7-sol:high" ] || false
+  # Within a family, the newest version first.
+  cache gpt-6-sol:1 gpt-6.2-sol:2
+  run python3 "$LADDER" "$TEST_TMP/cache.json"
+  [ "$output" = "gpt-6.2-sol:high gpt-6-sol:high" ]
 }
 
 @test "ultra is never chosen" {

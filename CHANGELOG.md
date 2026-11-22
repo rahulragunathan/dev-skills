@@ -57,14 +57,14 @@ here — the plugin manifest's version is the only record of them.
 ### Fixed
 
 - **The Gemini ladder** put orchestrator models first and `xhigh` last. It now ranks by
-  model class (version, full model before light tier, then family: Carbon > Argon > Neon >
-  Hydrogen), then offers each class once at `high`, or its suffix-less id run with
+  family (Carbon > Argon > Neon > Hydrogen, then any other line such as flash or lite), then
+  version, newest first, and offers each model once at `high`, or its suffix-less id run with
   `--effort high`. Efforts below `medium`, and `ultra`, are never offered.
 - **Gemini calls passed `--effort high`**, which `agy` refuses for any model whose id carries
   another effort, so the ladder could never downshift.
 - **The Codex ladder ranked by the cache's `priority`**, OpenAI's default pick: it put
-  `gpt-6.2-sol` above `gpt-6.2-astra`. It now ranks by version, then family (Astra > Sol >
-  Terra > Luna), at `high` effort where the model supports it. A malformed cache entry is
+  `gpt-6.2-sol` above `gpt-6.2-astra`. It now ranks by family (Astra > Sol > Terra > Luna),
+  then version, newest first, at `high` effort where the model supports it. A malformed cache entry is
   skipped rather than emptying the ladder.
 - **The Codex loop downshifted on a failed run's transcript**: Codex writes the prompt to stderr,
   so any availability phrase in the material under review read as an unavailable model. It now

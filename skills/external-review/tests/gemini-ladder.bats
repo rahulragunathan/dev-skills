@@ -77,12 +77,19 @@ rank() { printf '%s\n' "$@" | python3 "$LADDER"; }
   [ "$output" = "gemini-4-neon-medium gemini-3.9-pro-high" ]
 }
 
-@test "a full model outranks flash and lite at the same version" {
-  # Fails if a light tier is ranked as a full model: its listed family would win.
-  run rank gemini-4-neon-flash-high gemini-4-zinc-high
-  [ "$output" = "gemini-4-zinc-high gemini-4-neon-flash-high" ] || false
-  run rank gemini-4-neon-lite-high gemini-4-zinc-high
-  [ "$output" = "gemini-4-zinc-high gemini-4-neon-lite-high" ]
+@test "family comes before version" {
+  # Fails if a newer version of a weaker family outranks an older version of a stronger one.
+  run rank gemini-4.1-hydrogen-high gemini-4-carbon-high
+  [ "$output" = "gemini-4-carbon-high gemini-4.1-hydrogen-high" ]
+}
+
+@test "flash and lite get no tier rule: they rank as unlisted families, newest first" {
+  # Fails if the old light-tier rule still ranks a flash model below another unlisted one of
+  # the same version; without it, the class name decides.
+  run rank gemini-4-zinc-high gemini-4-flash-high
+  [ "$output" = "gemini-4-flash-high gemini-4-zinc-high" ] || false
+  run rank gemini-3.8-flash-high gemini-4-hydrogen-high
+  [ "$output" = "gemini-4-hydrogen-high gemini-3.8-flash-high" ]
 }
 
 @test "one rung per model class, at high when it has one" {

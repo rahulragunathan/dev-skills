@@ -5,10 +5,10 @@ Prints up to three distinct `slug:effort` rungs, space-separated. Exits 1 with
 no output when the cache is missing, not JSON or has no list of models; the
 caller treats that as "no Codex reviewer". A malformed entry is skipped.
 
-Only models the cache lists as visible are offered. They rank newest version
-first (the number after `gpt`; anything else ranks last), then by family, by
-FAMILIES, with an unlisted family after every listed one, then by slug: the
-model class first, then its effort. The cache's own `priority` is not used: it is OpenAI's
+Only models the cache lists as visible are offered. They rank by family, by
+FAMILIES, with an unlisted family after every listed one; then newest version
+first (the number after `gpt`; anything else ranks last); then by slug. The
+model comes first, then its effort. The cache's own `priority` is not used: it is OpenAI's
 default pick, not a capability rank. Each rung runs at `high`, the user's
 default, or where the model lacks it at the first of EFFORTS it supports.
 Another effort is used only when the user asks for it.
@@ -46,8 +46,8 @@ def rank(slug: str) -> tuple:
     version = words[1] if words[0] == "gpt" and len(words) > 1 and VERSION.fullmatch(words[1]) else None
     family = next((FAMILIES.index(w) for w in words if w in FAMILIES), len(FAMILIES))
     return (
-        (0, version_key(version)) if version else (1, ()),
         family,
+        (0, version_key(version)) if version else (1, ()),
         slug,
     )
 
