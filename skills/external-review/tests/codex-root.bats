@@ -303,3 +303,21 @@ PY
   run bash -e "$TEST_TMP/invoke.sh"
   [ "$(tr '\n' ' ' < "$TEST_TMP/models")" = "first second " ]
 }
+
+# Fails if a quoted ERROR: line about another model, at the very end of a
+# failed run's log, moves the loop to the next rung.
+@test "a quoted ERROR line about another model at the end of the log does not downshift" {
+  write_invoke_script 'first:high second:high' "$TEST_TMP/invoke.sh" \
+    'echo "${8}" >> "$TEST_TMP/models"; { echo "transcript"; echo "ERROR: The gpt-x model is not supported"; } >&2; return 1;'
+  run bash "$TEST_TMP/invoke.sh"
+  [ "$(cat "$TEST_TMP/models")" = "first" ]
+}
+
+# Fails if a real refusal of this rung's own model, followed by more log lines,
+# is missed because only the last lines are read.
+@test "a refusal naming this rung's model downshifts even with lines after it" {
+  write_invoke_script 'first:high second:high' "$TEST_TMP/invoke.sh" \
+    'echo "${8}" >> "$TEST_TMP/models"; if [ "${8}" = first ]; then { echo "ERROR: The '"'"'first'"'"' model is not supported when using Codex with a ChatGPT account."; for i in 1 2 3 4 5 6; do echo "shutdown $i"; done; } >&2; return 1; fi; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2";'
+  run bash "$TEST_TMP/invoke.sh"
+  [ "$(tr '\n' ' ' < "$TEST_TMP/models")" = "first second " ]
+}

@@ -230,37 +230,6 @@ could-not-evaluate. The behaviour predates the overnight QC passes.
 
 ---
 
-<a id="ki-56"></a>
-
-## KI-56 — an entry with no `**Where:**` field passes the reference check
-
-**Severity:** High
-**Likelihood:** Rare
-**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def verify_references(`
-
-### What happens
-
-`verify_references` reports a `**Where:**` field that looks like one and does not parse, such
-as a list item or a `**Where**:` typo. An entry with no Where-like line at all is skipped in
-silence, so a `KI-nn` or `ENH-nn` whose field was deleted is never verified, and `check` still
-says `references verified`.
-
-### Example scenario
-
-Delete the `**Where:**` line from any KNOWN_ISSUES entry and run `roadmap.py check`. It
-passes. Every live entry carries the field today, so nothing is unverified yet.
-
-### Notes for a fix
-
-Require the field on every KNOWN_ISSUES and ENHANCEMENTS entry, with a test that deletes it.
-This was ENH-31; a check that reports success on an unchecked entry is a defect, not an
-enhancement.
-
-**Source:** gemini-3.1-pro-high — phase review, mini phase reference integrity, 2026-09-22 (as ENH-31);
-reclassified by gpt-6.2-astra:max — phase review pass 1, project-docs phase, 2026-11-22.
-
----
-
 <a id="ki-58"></a>
 
 ## KI-58 — `check` misses drift: empty files, fenced anchors, question order, mirrored fields
@@ -286,6 +255,37 @@ questions of different Kinds. `check` passes both.
 
 Validate the empty-roadmap structure, parse anchors and rows outside fences, match displayed
 IDs exactly, compare Effort and titles, and order open questions by the Kind table.
+
+**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
+
+---
+
+<a id="ki-59"></a>
+
+## KI-59 — the reference check has gaps in what it reads and where
+
+**Severity:** High
+**Likelihood:** Rare
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def _where_field(`
+
+### What happens
+
+A `**Where:**` after another field on the same line (`**Priority:** Low · **Where:** …`) is
+not found, so the entry is never checked. An absolute path inside the repository passes. An empty
+field passes. Any file under `docs/` is exempt from the fragment rule, executable source
+included. The cited file is opened without the credential-name screen the name check uses. And
+`project-docs/SKILL.md` says a fragment cannot contain a backtick, while the parser accepts a
+multi-backtick span.
+
+### Example scenario
+
+An entry written as `**Effort:** ~1 hour · **Where:** [x.py](../x.py)` passes with a
+fragment that is not in `x.py`.
+
+### Notes for a fix
+
+Find the field anywhere on an unfenced line, refuse absolute and empty targets, limit the
+`docs/` exemption to Markdown, screen credential names, and make the skill text match the parser.
 
 **Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
 
@@ -557,62 +557,3 @@ Name both agent IDs in the message and say which command brings the log and the 
 in line.
 
 **Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.
-
----
-
-<a id="ki-59"></a>
-
-## KI-59 — the reference check has gaps in what it reads and where
-
-**Severity:** Low
-**Likelihood:** Rare
-**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def _where_field(`
-
-### What happens
-
-A `**Where:**` after another field on the same line (`**Priority:** Low · **Where:** …`) is
-not found, so the entry is never checked. An absolute path inside the repository passes. An empty
-field passes. Any file under `docs/` is exempt from the fragment rule, executable source
-included. The cited file is opened without the credential-name screen the name check uses. And
-`project-docs/SKILL.md` says a fragment cannot contain a backtick, while the parser accepts a
-multi-backtick span.
-
-### Example scenario
-
-An entry written as `**Effort:** ~1 hour · **Where:** [x.py](../x.py)` passes with a
-fragment that is not in `x.py`.
-
-### Notes for a fix
-
-Find the field anywhere on an unfenced line, refuse absolute and empty targets, limit the
-`docs/` exemption to Markdown, screen credential names, and make the skill text match the parser.
-
-**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
-
----
-
-<a id="ki-61"></a>
-
-## KI-61 — the Codex readiness probe runs outside the review root
-
-**Severity:** Low
-**Likelihood:** Rare
-**Where:** [preflight.sh](../skills/external-review/preflight.sh) — `--skip-git-repo-check`
-
-### What happens
-
-`preflight.sh` probes Codex with `--skip-git-repo-check` but no `-C "$ROOT"`, so the probe
-runs in whatever folder the caller is in, not the pruned export the review uses. The failure
-probe's do-not-read instruction also omits `*.p12` and `*.pfx`.
-
-### Example scenario
-
-The probe asks only a readiness question, so nothing is read today. A probe prompt that
-grows would run against the live checkout.
-
-### Notes for a fix
-
-Pass the prepared root to preflight and use the review's credential instruction in every
-Codex call; assert both at the fake CLI boundary.
-
-**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.

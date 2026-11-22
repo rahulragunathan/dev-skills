@@ -63,7 +63,8 @@ def ladder(models: list) -> list[str]:
     supported: dict[str, set] = {}
     for m in filter(usable, models):
         levels = m.get("supported_reasoning_levels")
-        efforts = {e.get("effort") for e in levels if isinstance(e, dict)} if isinstance(levels, list) else set()
+        efforts = ({e["effort"] for e in levels if isinstance(e, dict) and isinstance(e.get("effort"), str)}
+                   if isinstance(levels, list) else set())
         supported.setdefault(m["slug"], set()).update(efforts)
     rungs = []
     for slug, efforts in supported.items():

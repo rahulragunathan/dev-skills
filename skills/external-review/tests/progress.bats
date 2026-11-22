@@ -66,3 +66,12 @@ age() { touch -t "$(date -v-"$2"M +%Y%m%d%H%M.%S)" "$1"; }
   run bash "$PROGRESS" "$TEST_TMP" 2
   [[ "$output" == *"gemini c1: failed"* ]]
 }
+
+@test "a streaming answer past the print timeout is flagged" {
+  # Fails if a .part run never gets the timeout warning, so a killed run reads as running forever.
+  printf '1. half' > "$TEST_TMP/gemini_phase_p2_c1_a1_m.part"
+  : > "$TEST_TMP/gemini_phase_p2_c1_a1_m.err"
+  age "$TEST_TMP/gemini_phase_p2_c1_a1_m.err" 40
+  run bash "$PROGRESS" "$TEST_TMP" 2
+  [[ "$output" == *"gemini c1: running 40m"*"past its timeout"* ]]
+}

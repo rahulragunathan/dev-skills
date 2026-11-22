@@ -44,9 +44,14 @@ git rev-parse --git-dir >/dev/null 2>&1 || { echo "NOT A GIT REPOSITORY"; exit 1
 # and the review bundle. Refuse it, and never print it.
 # Any user part in a URL with a scheme, except a bare user over ssh (ssh://git@host),
 # and any query or fragment, which a remote has no use for.
+# A transport-helper prefix (`http::https://…`) is stripped first, so the URL
+# inside it is checked too.
 has_credentials() {
-  printf '%s' "$1" | grep -qiE '^[a-z][a-z0-9+.-]*://[^/@]*:[^/@]*@|^[a-z][a-z0-9+.-]*://.*[?#]' && return 0
-  printf '%s' "$1" | grep -qiE '^[a-z][a-z0-9+.-]*://[^/]*@' && ! printf '%s' "$1" | grep -qiE '^ssh://'
+  local url
+  url="$(printf '%s' "$1" | sed -E 's/^[A-Za-z][A-Za-z0-9+.-]*:://')"
+  printf '%s' "$url" | grep -qiE '^[a-z][a-z0-9+.-]*://[^/]*:[^/@]*@|^[a-z][a-z0-9+.-]*://.*[?#]' && return 0
+  printf '%s' "$url" | grep -qiE '^[a-z][a-z0-9+.-]*://[^/]*@' \
+    && ! printf '%s' "$url" | grep -qiE '^(ssh|git\+ssh|ssh\+git)://'
 }
 for url in "$WANT_FETCH" "$WANT_PUSH"; do
   if has_credentials "$url"; then

@@ -154,7 +154,7 @@ for m in ${CODEX_RUNGS?run the ladder discovery block first}; do
     -m "$slug" -c model_reasoning_effort="$effort" \
     -o "$OUT" "<prompt>" > "$LOG" 2>&1 < /dev/null || rc=$?
   [ "$rc" = 0 ] && [ -s "$OUT" ] && break                      # it answered; keep this rung
-  if tail -n 5 "$LOG" | grep -E '^ERROR:' | grep -qiE 'not supported|unknown model|is not available|entitle'; then
+  if grep -E '^ERROR:' "$LOG" | grep -F "$slug" | grep -qiE 'not supported|unknown model|is not available|entitle'; then
     echo "unavailable: $slug:$effort — trying the next rung"; continue
   fi
   echo "$slug:$effort failed for a reason that is not availability — classify per Failure handling"; break
@@ -162,11 +162,11 @@ done
 ```
 
 - **`-o` captures the final message and nothing else.** A quota, auth or availability failure never reaches it, so the file is absent or empty and says nothing about why. The `.log` beside it holds stderr; the hand-off quotes its error lines verbatim, and the PR copy of the record does not.
-- **Read the availability verdict from the `ERROR:` lines at the end of the log only.** Codex
-  writes the prompt and its whole transcript to stderr, so a run that fails mid-review leaves a
-  log quoting the material under review, and an availability phrase in that material would move
-  to a weaker model. A model Codex refuses fails at once, so its error is the log's last lines.
-  The status is taken with `|| rc=$?`, so the loop also works under `set -e`.
+- **Downshift only on an `ERROR:` line that names this rung's own model.** Codex writes the
+  prompt and its whole transcript to stderr, so a run that fails mid-review leaves a log quoting
+  the material under review. Codex's refusal names the model it refused
+  (`ERROR: The '<slug>' model is not supported …`); quoted material almost never names the model
+  that is reading it.
 - **Codex can exit zero on a quota failure.** Require the output artifact as specified in
   [Coverage classification](#coverage-classification), and retain the diagnostic log.
 - **Name every invocation uniquely: mode, pass, chunk, attempt, model and effort.**
@@ -191,14 +191,16 @@ for m in ${GEMINI_RUNGS?run the ladder discovery block first}; do
   rc=0
   agy -p "$PROMPT" --model "$m" ${EFFORT[@]+"${EFFORT[@]}"} --print-timeout 25m > "$PART" 2> "$ERR" || rc=$?
   if [ "$rc" = 0 ] && [ -s "$PART" ]; then
-    if ! grep -qi 'print timeout' "$ERR"; then mv "$PART" "$OUT"; break; fi
+    cut=0; grep -q '^\[agy\] print timeout' "$ERR" || cut=$?   # 0 cut off, 1 finished, 2 unreadable
+    if [ "$cut" = 1 ]; then mv "$PART" "$OUT"; break; fi
     mv "$PART" "${OUT%.txt}.partial"   # a cut-off answer is not coverage
-    echo "$m: incomplete answer (print timeout) — the pair is Failed; classify per Failure handling"; break
+    echo "$m: incomplete answer (print timeout or unreadable stderr) — the pair is Failed; classify per Failure handling"; break
   fi
-  if [ -s "$PART" ]; then mv "$PART" "${OUT%.txt}.partial"; else rm -f "$PART"; fi
   if grep -qiE 'not supported|unknown model|is not available|entitle' "$ERR"; then
+    rm -f "$PART"
     echo "unavailable: $m — trying the next rung"; continue
   fi
+  mv "$PART" "${OUT%.txt}.partial"     # kept, even empty, so the failed attempt stays visible
   echo "$m failed for a reason that is not availability — classify per Failure handling"; break
 done
 ```
@@ -237,9 +239,10 @@ interval. Change it in `progress.sh` and verify it with `tests/progress.bats`.
 
 **A machine that sleeps pauses the review.** The reviewers' network connections drop, the
 updates stop, and a log stops changing; after waking, a run can hang rather than resume. Judge it
-from after the wake (`pmset -g log` on macOS shows the sleeps): a run whose process is alive but
-whose log or answer has not changed in the ten minutes since has hung. Stop it and run it again
-as the next attempt.
+from after the wake (`pmset -g log` on macOS shows the sleeps). A run whose log and answer have
+not changed in the ten minutes since is a reason to look, not to kill: check its process. Stop it
+and run it again as the next attempt only when its process is gone, or it is past its deadline
+(Gemini's 25-minute print timeout; for Codex, the same 25 minutes with no log change).
 
 **Probe each reviewer before committing a pass.**
 
@@ -252,7 +255,8 @@ for m in ${CODEX_RUNGS?run the ladder discovery block first}; do
 done
 for m in ${GEMINI_RUNGS?run the ladder discovery block first}; do PROBE_MODELS+=(--gemini-model "$m"); done
 [ "${#PROBE_MODELS[@]}" -gt 0 ] || { echo "No discovered models to probe"; exit 1; }
-bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/preflight.sh" "${PROBE_MODELS[@]}" --timeout 120
+bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/preflight.sh" "${PROBE_MODELS[@]}" --timeout 120 \
+  ${ROOT:+--root "$ROOT"}   # Codex probes in the prepared review root
 ```
 
 The Codex probe splits each `slug:effort` rung and uses the real pass's effort; a bare
@@ -627,17 +631,19 @@ A first review changes the code, and those changes have been reviewed by no one 
 
 Run up to three passes without checking in. Pass 1 is full scope; every later pass is narrow (below). Record the commit each pass reviewed.
 
-**A pass is complete when at least one independent reviewer covered every chunk, and every
-other reviewer was either Missing (preflight found no CLI) or Disqualified (the diff's author).**
-Both are named in each pass's coverage line. A **Failed** pair keeps a pass incomplete: a
+**A pass is complete when every installed, independent reviewer covered every chunk, at least
+one such reviewer exists, and no pair Failed.** A reviewer that was Missing (preflight found no
+CLI) or Disqualified (the diff's author) is named in each pass's coverage line and does not
+count against completion. A **Failed** pair keeps a pass incomplete: a
 timeout, a quota error, a partial answer, an empty ladder, every rung unavailable. With no
 independent reviewer at all, no pass is complete: the review is **Skipped** or **No coverage**,
 and the gate takes the user's recorded decision instead.
 
 1. **Run the pass and triage it.** Verify every finding and give it a disposition. A finding
    that an earlier pass's fix did not work gets a new row in this pass that names the earlier ID
-   (`F-12 — the F-03 fix is partial`), and counts as new at its own severity. Earlier rows and
-   counts never change.
+   (`F-12 — the F-03 fix is partial`), and counts as new at its own severity. Earlier rows keep
+   their pass and finding, and per-pass counts never change. Only a row's Disposition may change
+   later, and only by the user: write it as `<new> — was <old>, the user's call`.
 2. **Apply the stop rule before fixing anything, and only to a complete pass.** Count verified
    findings only; `Rejected` rows do not count. Stop after pass 3. Stop when a pass, from pass 2
    on, has no new Critical or High and fewer findings than the pass before. Stop when a pass
@@ -674,7 +680,7 @@ Every disposition is the user's to change: they can pull a deferred or accepted 
 
 ### What "narrow" means
 
-Scope each follow-up prompt to exactly three things:
+Scope each follow-up prompt to exactly three things, while the reviewed commit is still an ancestor of `HEAD` (otherwise the pass is full scope, with the full-phase prompt and base):
 
 - The diff of the fixes made **since the previous pass** — captured the same way, untracked files included, count reconciled.
 - The finding IDs that pass claimed to resolve, quoted, with *"confirm each of these is actually resolved."*

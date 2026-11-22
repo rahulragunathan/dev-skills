@@ -341,6 +341,9 @@ def verify_references(docs: pathlib.Path) -> tuple[bool, list[str]]:
             if not field:
                 if any(WHERE_LIKE.match(line) for line in lines):
                     findings.append(f"  {eid}: malformed Where field")
+                elif not eid.startswith("UNK"):
+                    # Known issues and enhancements always say where they live (KI-56).
+                    findings.append(f"  {eid}: no Where field")
                 continue
             try:
                 refs = _references(field)
@@ -533,51 +536,72 @@ def cmd_init(docs: pathlib.Path) -> int:
             text = split_entries(text)[0].rstrip("\n") + "\n"
         bodies[name] = text
 
+    fired = []
+
     def interrupted(signum, frame):
-        raise KeyboardInterrupt(f"signal {signum}")
+        # Raise once; a second signal must not interrupt the rollback of the first.
+        if not fired:
+            fired.append(signum)
+            raise KeyboardInterrupt(f"signal {signum}")
 
     made_dirs = []                      # deepest last
-    created: list[tuple[pathlib.Path, int, int]] = []
+    created: list[list] = []            # [path, (dev, ino) or None]
     signals = {signal.SIGINT, signal.SIGTERM}
     previous = {sig: signal.signal(sig, interrupted) for sig in signals}
+
+    def guarded(step):
+        # Signals wait while a folder or file is made and recorded, so nothing
+        # exists on disk that the rollback does not know about. The caller's
+        # own mask is restored afterwards, not cleared.
+        mask = signal.pthread_sigmask(signal.SIG_BLOCK, signals)
+        try:
+            step()
+        finally:
+            signal.pthread_sigmask(signal.SIG_SETMASK, mask)
+
+    def make_folder(folder):
+        try:
+            folder.mkdir()
+            made_dirs.append(folder)
+        except FileExistsError:
+            if not folder.is_dir():
+                raise
+            # Another init made it; it is theirs, so ours to use, not remove.
+
+    def make_file(path, text):
+        # O_EXCL refuses any existing entry, a dangling symlink included, so
+        # nothing that appeared since the check above is replaced.
+        try:
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        except FileExistsError:
+            return
+        entry = [path, None]
+        created.append(entry)
+        try:
+            st = os.fstat(fd)
+            entry[1] = (st.st_dev, st.st_ino)
+            with os.fdopen(fd, "w") as f:
+                fd = None
+                f.write(text)
+        finally:
+            if fd is not None:
+                os.close(fd)
+
     try:
         for folder in [*reversed(docs.parents), docs]:
-            if os.path.lexists(folder):
-                continue
-            # Signals wait while a folder or file is made and recorded, so
-            # nothing exists on disk that the rollback does not know about.
-            signal.pthread_sigmask(signal.SIG_BLOCK, signals)
-            try:
-                folder.mkdir()
-                made_dirs.append(folder)
-            except FileExistsError:
-                if not folder.is_dir():
-                    raise
-                # Another init made it; it is theirs, so ours to use, not remove.
-            finally:
-                signal.pthread_sigmask(signal.SIG_UNBLOCK, signals)
+            if not os.path.lexists(folder):
+                guarded(lambda folder=folder: make_folder(folder))
         for name, text in bodies.items():
-            # Mode "x" refuses any existing entry, a dangling symlink included,
-            # so nothing that appeared since the check above is replaced.
-            signal.pthread_sigmask(signal.SIG_BLOCK, signals)
-            try:
-                f = open(docs / name, "x")
-                st = os.fstat(f.fileno())
-                created.append((docs / name, st.st_dev, st.st_ino))
-            except FileExistsError:
-                continue
-            finally:
-                signal.pthread_sigmask(signal.SIG_UNBLOCK, signals)
-            with f:
-                f.write(text)
+            guarded(lambda name=name, text=text: make_file(docs / name, text))
     except BaseException as exc:
         for sig in previous:
             signal.signal(sig, signal.SIG_IGN)
         left = []
-        for path, dev, ino in created:
+        for path, ident in created:
             try:
                 st = os.lstat(path)
-                if (st.st_dev, st.st_ino) == (dev, ino):
+                # An unknown identity is a file this call made and could not stat.
+                if ident is None or (st.st_dev, st.st_ino) == ident:
                     path.unlink()
             except FileNotFoundError:
                 pass
@@ -594,7 +618,7 @@ def cmd_init(docs: pathlib.Path) -> int:
     finally:
         for sig, handler in previous.items():
             signal.signal(sig, handler)
-    for path, _, _ in created:
+    for path, _ in created:
         print(f"created {path}")
     return 0
 

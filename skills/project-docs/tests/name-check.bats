@@ -449,3 +449,45 @@ print([n for n in ("home/id_ecdsa", "home/id_ecdsa.pub", ".pypirc") if not m.cre
   [ "$status" -eq 1 ] || false
   [[ "$output" == *"missing command ../outside/tool.py — outside the repository"* ]]
 }
+
+@test "a full run with an unreadable tracked doc exits 2 after checking the rest" {
+  # Fails if the run reports success although a doc it should check was never read.
+  put doc.md 'Fine.'
+  put other.md 'See `skills/gone.py`.'
+  put skills/real.py 'x = 1'
+  git -C "$REPO" commit -qm docs
+  rm "$REPO/doc.md"
+  check
+  [ "$status" -eq 2 ] || false
+  [[ "$output" == *"cannot read: doc.md"* ]] || false
+  [[ "$output" == *"missing path skills/gone.py"* ]]
+}
+
+@test "an example directive before a real one on the same line does not lend its names" {
+  # Fails if the names come from the first directive-shaped text, a backticked example.
+  put skills/real.py 'x = 1'
+  put doc.md "$(printf 'Write `<!-- name-check: ignore skills/other.py -->` <!-- name-check: ignore skills/gone.py -->\nSee `skills/gone.py` and `skills/other.py`.')"
+  check
+  [ "$status" -eq 1 ] || false
+  [[ "$output" != *"missing path skills/gone.py"* ]] || false
+  [[ "$output" == *"missing path skills/other.py"* ]]
+}
+
+@test "an anchor in an indented code block declares nothing" {
+  # Fails if an <a id> shown as indented example code is read as an entry declaration.
+  put docs/KNOWN_ISSUES.md "$(printf 'Example:\n\n    <a id="ki-77"></a>\n')"
+  put doc.md 'See `KI-77`.'
+  check
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"missing id KI-77"* ]]
+}
+
+@test "an interpreter followed by a flag keeps the bare-program check" {
+  # Fails if `node --version` loses its program check because node is an interpreter name.
+  mkdir -p "$TEST_TMP/emptybin"
+  put doc.md 'Run `node --version`.'
+  PATH="$TEST_TMP/emptybin:/usr/bin:/bin" run python3 "$NC" --root "$REPO"
+  if command -v node >/dev/null 2>&1 && PATH="$TEST_TMP/emptybin:/usr/bin:/bin" command -v node >/dev/null; then skip "node is on the system PATH"; fi
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"missing command node"* ]]
+}

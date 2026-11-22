@@ -338,27 +338,3 @@ that the injected fault fired, compare whole trees, and fill one entry from each
 test.
 
 **Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
-
----
-
-<a id="enh-35"></a>
-
-## ENH-35 — check the manifest version against the release
-
-**Priority:** Low · **Effort:** ~1 hour
-**Where:** [test_plugin_name.py](../tests/test_plugin_name.py) — `test_marketplace_lists_the_plugin_by_its_manifest_name` · **Regression net:** `tests/test_plugin_name.py`
-
-### What it is
-
-Nothing compares `plugin.json`'s version with the newest CHANGELOG release. A release whose
-manifest kept the old version passes every test, and the installer reads the manifest.
-
-### Why it matters
-
-A missed bump ships a release that installs as the previous version.
-
-### Notes for the work
-
-A unittest that reads both and compares them.
-
-**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.

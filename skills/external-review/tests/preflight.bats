@@ -493,3 +493,62 @@ PY
   run bash "$TEST_TMP/gemini.sh"
   ! grep -qx -- '--effort' "$TEST_TMP/args-gemini-4-neon-xhigh" || false
 }
+
+@test "the documented Gemini loop keeps an answer whose stderr only mentions a print timeout setting" {
+  # Fails if any "print timeout" text, not agy's own cut-off notice, discards a finished answer.
+  printf 'prompt' > "$TEST_TMP/gemini_prompt_p1_c1.txt"
+  gemini_loop 'echo "No findings."; echo "config: print timeout is 25m" >&2; return 0;'
+  run bash "$TEST_TMP/gemini.sh"
+  [ -s "$TEST_TMP/gemini_phase_p1_c1_a1_gemini-4-neon-high.txt" ]
+}
+
+@test "the documented Gemini loop sets aside agy's cut-off answer" {
+  # Fails if agy's own print-timeout notice still lets a partial answer count.
+  printf 'prompt' > "$TEST_TMP/gemini_prompt_p1_c1.txt"
+  gemini_loop 'echo "1. half"; echo "[agy] print timeout after 25m0s with turn in progress; returning partial output" >&2; return 0;'
+  run bash "$TEST_TMP/gemini.sh"
+  [ ! -e "$TEST_TMP/gemini_phase_p1_c1_a1_gemini-4-neon-high.txt" ] || false
+  [ -s "$TEST_TMP/gemini_phase_p1_c1_a1_gemini-4-neon-high.partial" ]
+}
+
+@test "the documented Gemini loop leaves a trace of a failure that wrote nothing" {
+  # Fails if a non-availability failure with no output leaves no file progress.sh can report.
+  printf 'prompt' > "$TEST_TMP/gemini_prompt_p1_c1.txt"
+  gemini_loop 'echo "auth expired" >&2; return 1;'
+  run bash "$TEST_TMP/gemini.sh"
+  [ -e "$TEST_TMP/gemini_phase_p1_c1_a1_gemini-4-neon-high.partial" ]
+}
+
+@test "the documented Gemini loop leaves nothing behind for an unavailable rung" {
+  # Fails if a rung that downshifted on availability leaves a .partial beside the next rung's answer.
+  printf 'prompt' > "$TEST_TMP/gemini_prompt_p1_c1.txt"
+  gemini_loop 'if [ "$4" = gemini-4-neon-high ]; then echo "x"; echo "model is not supported" >&2; return 1; fi; echo "No findings.";'
+  run bash "$TEST_TMP/gemini.sh"
+  [ ! -e "$TEST_TMP/gemini_phase_p1_c1_a1_gemini-4-neon-high.partial" ] || false
+  [ -s "$TEST_TMP/gemini_phase_p1_c1_a1_gemini-4-argon-high.txt" ]
+}
+
+@test "the documented Gemini loop reads chunk 2's prompt for chunk 2" {
+  # Fails if the prompt file is fixed to one chunk rather than following <chunk>.
+  printf 'CHUNK-ONE' > "$TEST_TMP/gemini_prompt_p1_c1.txt"
+  printf 'CHUNK-TWO' > "$TEST_TMP/gemini_prompt_p1_c2.txt"
+  gemini_loop 'printf "%s" "$2" > "$TEST_TMP/seen"; echo "No findings.";'
+  sed -i.bak 's/_c1\([_.]\)/_c2\1/g' "$TEST_TMP/gemini.sh"
+  run bash "$TEST_TMP/gemini.sh"
+  [ "$(cat "$TEST_TMP/seen")" = "CHUNK-TWO" ]
+}
+
+@test "the Codex probe runs in the review root when one is given" {
+  # Fails if preflight probes Codex in the caller's folder instead of the pruned export (KI-61).
+  fake_codex_ready; fake_agy_ready
+  mkdir -p "$TEST_TMP/root"
+  cat > "$BIN/codex" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "$TEST_TMP/codex-args"
+while [ "$1" != -o ]; do shift; done; echo ready > "$2"
+SH
+  chmod +x "$BIN/codex"
+  run bash "$PREFLIGHT" --codex-model m:high --gemini-model g --root "$TEST_TMP/root"
+  grep -qx -- '-C' "$TEST_TMP/codex-args" || false
+  grep -qxF -- "$TEST_TMP/root" "$TEST_TMP/codex-args"
+}

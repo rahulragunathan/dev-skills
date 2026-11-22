@@ -27,6 +27,8 @@ here — the plugin manifest's version is the only record of them.
 - **Review record.** A phase review keeps one findings table across all passes, with a note per
   row, the red and green of each fix, and per-pass counts. It goes in the PR description.
 - **New dispositions:** `Confirmed: accepted, no work planned`, and `Open — no roadmap files`.
+- **A release check**: a test that `plugin.json`'s version matches the newest CHANGELOG release
+  (ENH-35).
 - **`phase-workflow` states when bounded work becomes a phase**, and that anything landing cuts
   a release.
 
@@ -45,9 +47,9 @@ here — the plugin manifest's version is the only record of them.
   checked is a defect, not an enhancement.
 - **`/simplify`** runs at a task's refactor step only when the task added or reshaped code, and
   once on the whole branch diff before review.
-- **Test checks:** each task's commit message carries a `Red:` line per test it adds or materially
-  changes, and phase end
-  checks them. Mutation is kept for a test written after its fix, or one in doubt.
+- **Test checks:** each test a phase adds or materially changes has red evidence: a `Red:` line
+  in its task's commit message, or a mutation result where no red was observed (a test written
+  after its fix, or one in doubt). Phase end checks them.
 - **Docs pass:** the name check runs on the current docs (not history, templates or test
   input); docs naming something the phase changed, and
   docs found wrong, are read in full.
@@ -73,6 +75,10 @@ here — the plugin manifest's version is the only record of them.
 - **Phase start** wrote the phase record before its own clean-tree check, and would have copied a
   token in a remote URL into it; `publish-release.sh --check-origin` now refuses such a URL.
 - **The review bundle** let an `id_ecdsa` key or a `.pypirc` through to the reviewers.
+- **`roadmap.py check` passed an entry with no `**Where:**` field** and said `references
+  verified` (KI-56, formerly ENH-31). A known issue or enhancement without one is now reported.
+- **The Codex readiness probe ran in the caller's folder**, not the pruned review root (KI-61).
+  `preflight.sh` takes `--root`, and the documented probe passes it.
 
 ## [2.0.1] - 2026-11-17
 

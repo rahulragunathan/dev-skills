@@ -163,3 +163,11 @@ PY
   run python3 "$LADDER" "$TEST_TMP/cache.json"
   [ "$output" = "gpt-7-astra:medium gpt-7-sol:high" ]
 }
+
+@test "a malformed effort value is skipped, not fatal" {
+  # Fails if one effort that is a list or object empties the whole ladder.
+  printf '{"models": [{"slug": "gpt-6-sol", "visibility": "list", "supported_reasoning_levels": [{"effort": ["x"]}, {"effort": "high"}]}]}' > "$TEST_TMP/bad.json"
+  run python3 "$LADDER" "$TEST_TMP/bad.json"
+  [ "$status" -eq 0 ] || false
+  [ "$output" = "gpt-6-sol:high" ]
+}

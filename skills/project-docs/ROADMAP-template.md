@@ -27,14 +27,8 @@ reused. Nothing here looks backward — completed phases are CHANGELOG releases.
 
 ## Status
 
-<!-- Two or three sentences: where the project stands, and what the active queue is. -->
-
-### Phases
-
-<!-- Only what is in flight or planned — often nothing. Completed phases are CHANGELOG
-releases, not rows here. -->
-
-<Phase N — name> is in progress. / No phase is in flight, and none is planned.
+<!-- Two or three sentences: where the project stands, and what the active queue is. The
+phase in flight is in docs/PHASE_RECORD.md and is not named here. -->
 
 ## Known Issues
 

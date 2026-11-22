@@ -12,9 +12,9 @@ The roadmap files are optional. A repository has them only when the user asked f
 ## Roadmap file rules (summary — the templates are canonical)
 
 - Fixed vocabulary: **Done** (never "Implemented"), consistent status terms throughout.
-- `docs/ROADMAP.md` is future-tense and index-level only. Exactly these sections: **Status** (prose, plus a short note on the phase in flight or planned — often none), **Known Issues**, **Enhancements**, and **Open Questions** — three pointer tables, no prose. Confidence-check findings land in Open Questions.
+- `docs/ROADMAP.md` is future-tense and index-level only. Exactly these sections: **Status** (prose on where the project stands; the phase in flight is in `docs/PHASE_RECORD.md`, never here), **Known Issues**, **Enhancements**, and **Open Questions** — three pointer tables, no prose. Confidence-check findings land in Open Questions.
 - No `Resolved` section and no `Notes` section. Shipped work belongs in CHANGELOG.md; standing limitations belong in ARCHITECTURE.md or the project AGENTS.md.
-- **No phase ledger.** A phase ends by cutting a CHANGELOG release whose heading names it, so the release history is the phase history. ROADMAP records only what is in flight or planned. Version by what the phase did: minor for additive work, patch for fixes and docs, major for a break.
+- **No phase ledger.** A phase ends by cutting a CHANGELOG release whose heading names it, so the release history is the phase history. ROADMAP records only what is planned; the phase in flight lives in `docs/PHASE_RECORD.md`. Version by what the phase did: minor for additive work, patch for fixes and docs, major for a break.
 - The rating in a ROADMAP row mirrors the supporting file, which is authoritative. The drift check verifies they agree, that ordering is descending, and that every ID appears in both.
 - Completed items are deleted from both files, not annotated in place.
 - **A reference to a repo file carries a greppable fragment, never a line number**, and
@@ -95,8 +95,8 @@ python3 "$CLAUDE_PLUGIN_ROOT/skills/project-docs/name_check.py" --root .
   it never blocks a merge.
 - **It reads, and never runs, what it checks.** A flag is looked up in the source of the repo
   script whose command names it. Flags of external tools are not checked.
-- **What counts.** A backticked path counts when it has a `/`, as in `tools/s.py`, and must
-  exist. A command counts in three shapes: a path-shaped script, which must exist and define
+- **What counts.** A backticked path counts when it has a `/` and starts at `.`, `..`, a folder
+  beside the doc or a top-level entry of the repository; then it must exist. A command counts in three shapes: a path-shaped script, which must exist and define
   any `--flag` it is given; an interpreter followed by such a script; and a bare program
   followed by a `--flag`, which must be on `PATH` or named in the repository's code. A bare
   script name such as `roadmap.py` is not checked. A roadmap ID exists when its own detail

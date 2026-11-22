@@ -35,6 +35,16 @@ rank() { printf '%s\n' "$@" | python3 "$LADDER"; }
   [ -z "$output" ]
 }
 
+@test "the rank key itself orders otherwise tied classes by name" {
+  # Fails if the final class-name key is removed: set order then decides, by hash seed.
+  run python3 -c '
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("g", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+print(m.rank("gemini-4-boron") < m.rank("gemini-4-cobalt"))' "$LADDER"
+  [ "$output" = "True" ]
+}
+
 @test "a tie is broken by model id, not by input order" {
   # Fails if two unlisted families at one grade keep agy's print order.
   for order in "cobalt boron zinc" "zinc cobalt boron" "boron zinc cobalt"; do

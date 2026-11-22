@@ -33,6 +33,7 @@ Preamble that must survive.
 
 **Severity:** High
 **Likelihood:** Rare
+**Where:** [docs](.)
 
 SURVIVOR-ONE
 
@@ -44,6 +45,7 @@ SURVIVOR-ONE
 
 **Severity:** Medium
 **Likelihood:** Likely
+**Where:** [docs](.)
 
 DOOMED-BODY
 
@@ -55,6 +57,7 @@ DOOMED-BODY
 
 **Severity:** Low
 **Likelihood:** Almost always
+**Where:** [docs](.)
 
 SURVIVOR-THREE
 EOF
@@ -69,6 +72,7 @@ EOF
 ## ENH-01 — an enhancement
 
 **Priority:** Low
+**Where:** [docs](.)
 
 SURVIVOR-ENH
 EOF
@@ -419,6 +423,8 @@ put_ref() {
     return 1
   fi
   printf '%s\n' "$1" > "$TEST_TMP/ref.txt"
+  # The entry's own Where field gives way to the one under test.
+  python3 -c 'import pathlib,sys; p=pathlib.Path(sys.argv[1]); p.write_text(p.read_text().replace("**Where:** [docs](.)\n", "", 1))' "$DOCS/KNOWN_ISSUES.md"
   awk -v f="$TEST_TMP/ref.txt" '
     $0 == "SURVIVOR-ONE" { while ((getline l < f) > 0) print l; next }
     { print }
@@ -906,15 +912,17 @@ PY
 import builtins, importlib.util, pathlib, sys
 spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+import os
+REAL = os.open
 for target in sys.argv[2:]:
     created = []
-    def flaky(path, mode='r', *a, **kw):
-        if 'x' in mode:
+    def flaky(path, flags, *a, **kw):
+        if flags & os.O_EXCL:
             created.append(path)
             if len(created) == 2:
                 raise OSError('injected failure on the second file')
-        return builtins.open(path, mode, *a, **kw)
-    m.open = flaky
+        return REAL(path, flags, *a, **kw)
+    m.os.open = flaky
     try:
         m.cmd_init(pathlib.Path(target))
     except SystemExit as e:
@@ -935,16 +943,18 @@ PY
 import builtins, importlib.util, os, pathlib, sys
 spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+import os
+REAL = os.open
 docs = pathlib.Path(sys.argv[2]); opened = []
-def flaky(path, mode='r', *a, **kw):
-    if 'x' in mode:
+def flaky(path, flags, *a, **kw):
+    if flags & os.O_EXCL:
         opened.append(pathlib.Path(path))
         if len(opened) == 2:
             # Another writer replaces the first file, then this init fails.
             os.unlink(opened[0]); opened[0].write_text('THEIRS\n')
             raise OSError('injected failure on the second file')
-    return builtins.open(path, mode, *a, **kw)
-m.open = flaky
+    return REAL(path, flags, *a, **kw)
+m.os.open = flaky
 try:
     m.cmd_init(docs)
 except SystemExit as e:
@@ -962,14 +972,16 @@ PY
 import builtins, importlib.util, pathlib, sys
 spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+import os
+REAL = os.open
 docs = pathlib.Path(sys.argv[2]); seen = []
-def racing(path, mode='r', *a, **kw):
-    if 'x' in mode:
+def racing(path, flags, *a, **kw):
+    if flags & os.O_EXCL:
         seen.append(path)
         if len(seen) == 2:
             builtins.open(path, 'w').write('OTHER INIT\n')
-    return builtins.open(path, mode, *a, **kw)
-m.open = racing
+    return REAL(path, flags, *a, **kw)
+m.os.open = racing
 try:
     print('rc', m.cmd_init(docs))
 except SystemExit as e:
@@ -987,14 +999,16 @@ PY
 import builtins, importlib.util, os, pathlib, signal, sys
 spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+import os
+REAL = os.open
 count = []
-def killed(path, mode='r', *a, **kw):
-    if 'x' in mode:
+def killed(path, flags, *a, **kw):
+    if flags & os.O_EXCL:
         count.append(path)
         if len(count) == 3:
             os.kill(os.getpid(), signal.SIGTERM)
-    return builtins.open(path, mode, *a, **kw)
-m.open = killed
+    return REAL(path, flags, *a, **kw)
+m.os.open = killed
 try:
     m.cmd_init(pathlib.Path(sys.argv[2]))
 except SystemExit as e:
@@ -1080,4 +1094,82 @@ except SystemExit as e:
 PY
   [[ "$output" == *"exit 1"* ]] || false
   [ ! -e "$TEST_TMP/gap" ]
+}
+
+@test "init: the caller's blocked signals stay blocked" {
+  # Fails if init unblocks a signal its caller had deliberately blocked.
+  NEW="$TEST_TMP/mask/docs"
+  run python3 - "$RM" "$NEW" <<'PY'
+import importlib.util, pathlib, signal, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
+m.cmd_init(pathlib.Path(sys.argv[2]))
+print('still blocked', signal.SIGTERM in signal.pthread_sigmask(signal.SIG_BLOCK, set()))
+PY
+  [[ "$output" == *"still blocked True"* ]]
+}
+
+@test "init: a file whose identity cannot be read is still removed on rollback" {
+  # Fails if an fstat failure leaves a just-created file the rollback never knew about.
+  NEW="$TEST_TMP/nofstat/docs"
+  run python3 - "$RM" "$NEW" <<'PY'
+import importlib.util, pathlib, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+calls = []
+def fstat(fd):
+    calls.append(fd)
+    raise OSError('injected fstat failure')
+m.os.fstat = fstat
+try:
+    m.cmd_init(pathlib.Path(sys.argv[2]))
+except SystemExit as e:
+    print('exit', e.code)
+PY
+  [[ "$output" == *"exit 1"* ]] || false
+  [ ! -e "$TEST_TMP/nofstat" ]
+}
+
+@test "init: a removal that fails does not stop the rest of the rollback" {
+  # Fails if one failed unlink leaves later files behind, or the message hides what was left.
+  NEW="$TEST_TMP/partial/docs"
+  run python3 - "$RM" "$NEW" <<'PY'
+import builtins, importlib.util, pathlib, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+real_unlink, seen = pathlib.Path.unlink, []
+def unlink(self, *a, **kw):
+    if self.name == "ROADMAP.md":
+        raise OSError("injected")
+    return real_unlink(self, *a, **kw)
+pathlib.Path.unlink = unlink
+real_open, n = m.os.open, []
+def failing_open(path, *a, **kw):
+    n.append(path)
+    if len(n) == 3:
+        raise OSError("injected failure on the third file")
+    return real_open(path, *a, **kw)
+m.os.open = failing_open
+try:
+    m.cmd_init(pathlib.Path(sys.argv[2]))
+except SystemExit as e:
+    print('exit', e.code)
+print(sorted(p.name for p in pathlib.Path(sys.argv[2]).iterdir()))
+PY
+  [[ "$output" == *"exit 1"* ]] || false
+  [[ "$output" == *"could not remove"*"ROADMAP.md"* ]] || false
+  [[ "$output" == *"['ROADMAP.md']"* ]]
+}
+
+@test "check: a known issue or enhancement with no Where field is a finding (KI-56)" {
+  # Fails if an entry whose Where line was deleted is skipped and "references verified" printed.
+  python3 - "$DOCS/KNOWN_ISSUES.md" <<'PY'
+import pathlib, re, sys
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+p.write_text(re.sub(r"^\*\*Where:\*\*.*\n", "", t, count=1, flags=re.M))
+PY
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"no Where field"* ]]
 }

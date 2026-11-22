@@ -80,9 +80,10 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 
    ```bash
    set -euo pipefail
+   [ "$(git symbolic-ref --quiet --short HEAD)" = "$PHASE_BRANCH" ] || { echo "WRONG BRANCH — stop"; exit 1; }
    git diff --quiet HEAD -- docs/PHASE_RECORD.md \
-     && git log -1 --format=%H "refs/remotes/origin/$DEFAULT_BRANCH"..HEAD -- docs/PHASE_RECORD.md | grep -q . \
-     || { echo "PHASE RECORD NOT COMMITTED ON THE BRANCH — stop"; exit 1; }
+     && git show "$PHASE_BRANCH:docs/PHASE_RECORD.md" 2>/dev/null | grep -qF "| \`PHASE_BRANCH\` | \`$PHASE_BRANCH\` |" \
+     || { echo "PHASE RECORD NOT COMMITTED ON $PHASE_BRANCH — stop"; exit 1; }
    git push -u origin "$PHASE_BRANCH"
    ```
 
@@ -139,7 +140,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    - `high` at the gate — the code is about to merge and ship in a release, so a missed bug costs more than a false one, and step 5's triage already handles uncertain findings. `medium` for mid-phase spot checks, where a short actionable list beats a triage pass. Not `ultra`: it's user-triggered and billed, and step 5 already covers that breadth.
 3. **Red record check.** A test that passes whether or not the bug exists is worse than no test: it is a false green that the CHANGELOG then cites as evidence. Reading a test does not reveal this. The only proof a test discriminates is having watched it fail for the reason you claim.
 
-   **Every test this phase added or materially changed, including any written during step 5, needs a `Red:` line** in a phase commit message — `Red: <test> — <observed failure>`, written when the test went red:
+   **Every test this phase added or materially changed, including any written during step 5, needs its red evidence: a `Red:` line** in a phase commit message, or the mutation result described below — `Red: <test> — <observed failure>`, written when the test went red:
 
    ```bash
    git log --format=%B "origin/$DEFAULT_BRANCH"..HEAD | grep '^Red: '
@@ -291,18 +292,18 @@ what remains expired.
 7. **Present to the user and stop** — the phase gate.
    - **Include the review record** from step 5 in the hand-off, and put it in the PR description (`gh pr edit "$PR" -R "$REPO" --body-file <file>`) — never in a per-phase review file in the repository. It exists so the user can see every finding and pull any deferred or accepted one back into this phase before signing off.
    - **Confirm `docs/PHASE_RECORD.md` is current, and do not take that on trust.** Step 4 brought
-     it current, but steps 5 to 7 and every re-gate come after step 4, so it goes stale again by
-     default. Compare its last commit against `HEAD`:
+     it current, but steps 5 to 7 and every re-gate come after step 4. Check that it names this
+     PR and the release the CHANGELOG prepares:
 
      ```bash
-     LAST_RECORD="$(git log -1 --format=%H -- docs/PHASE_RECORD.md)"
-     BEHIND="$(git rev-list --count "$LAST_RECORD"..HEAD)"
-     [ "$BEHIND" -eq 0 ] || { echo "PHASE RECORD PREDATES $BEHIND LATER COMMITS — re-read it"; exit 1; }
+     VERSION="$(grep -m1 -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md | tr -d '#[] ')"
+     grep -qF "| \`PR\` | $PR |" docs/PHASE_RECORD.md && grep -qF "| Release | v$VERSION |" docs/PHASE_RECORD.md \
+       || { echo "PHASE RECORD DOES NOT NAME PR $PR AND v$VERSION — update it"; exit 1; }
      ```
 
-     Updating it makes it the newest commit again, which is why this is the last edit before
-     presenting. **A phase whose record still describes an earlier task has not reached the
-     gate**, whatever the tests say — §4 reads `MERGE_METHOD` from that file.
+     A later reviewed commit does not make a correct record stale. **A phase whose record names
+     another PR or release has not reached the gate**, whatever the tests say — §4 reads
+     `MERGE_METHOD` from that file.
 
    - **Record the PR number and the release version in `docs/PHASE_RECORD.md` before presenting.**
      §4 loads `MERGE_METHOD` from that file and needs `APPROVED_SHA` too, and a hand-off in chat
@@ -316,14 +317,19 @@ what remains expired.
      convenience. Sign-off binds to that head; an edit afterwards moves it and means re-requesting
      review on the new one.
    - **Do not merge.** The merge is the post-sign-off action; it happens in §4 and nowhere else. Committing and pushing are not — those happened per task, throughout the phase.
-   - **Before marking the PR ready, check what landed after review**, and run the full suite on `HEAD`. Only bookkeeping may follow the last pass: the deferred filings and the phase record (`external-review`'s [loop](../external-review/SKILL.md#the-loop)). List it:
+   - **Before marking the PR ready, check what landed after review**, and run the full suite on `HEAD`. Only bookkeeping may follow the last pass: new roadmap entries with their pointer rows, and the phase record's `PR` and `Release` rows (`external-review`'s [loop](../external-review/SKILL.md#the-loop)). Check the paths first, then read the patch of those files only:
 
      ```bash
-     git merge-base --is-ancestor "<commit the last pass reviewed>" HEAD || { echo "REVIEWED COMMIT REWRITTEN — run a full pass"; exit 1; }
-     git diff "<commit the last pass reviewed>"..HEAD
+     set -euo pipefail
+     REVIEWED="<commit the last pass reviewed>"
+     git merge-base --is-ancestor "$REVIEWED" HEAD || { echo "REVIEWED COMMIT REWRITTEN — run a full pass"; exit 1; }
+     OTHER="$(git --no-pager diff --no-ext-diff --name-only "$REVIEWED"..HEAD \
+       | grep -vxE 'docs/(PHASE_RECORD|ROADMAP|KNOWN_ISSUES|ENHANCEMENTS|OPEN_QUESTIONS)\.md' || true)"
+     [ -z "$OTHER" ] || { printf 'CHANGED AFTER REVIEW — needs a narrow pass:\n%s\n' "$OTHER"; exit 1; }
+     git --no-pager diff --no-ext-diff --no-textconv "$REVIEWED"..HEAD
      ```
 
-     Read the patch, not only the file list: a filing and a fix can share a file. Anything beyond new entries, their pointer rows and the record needs a narrow pass first. Name what landed in the hand-off.
+     Read that patch: a filing and a fix can share a file, and in the record only the `PR` and `Release` rows may change. Anything else needs a narrow pass first. Name what landed in the hand-off.
    - **The gate has two checkable states.** First, **the work is committed, pushed, and on a PR marked ready for review** — every one of those is a fact git or `gh` will answer, none is self-attested:
 
      Load the phase's recorded `ORIGIN_URL`, `ORIGIN_PUSH_URL`, `REPO`, `DEFAULT_BRANCH`, `PHASE_BRANCH` and `MERGE_METHOD`. Preserve the §2 URL values in the hand-off; do not refresh them from the current remote. Set `PR` to this phase's PR number. This workflow uses a same-repository PR.

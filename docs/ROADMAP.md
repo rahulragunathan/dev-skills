@@ -48,8 +48,8 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-60](KNOWN_ISSUES.md#ki-60) | Helper commands need `CLAUDE_PLUGIN_ROOT`, which a Codex install does not set | Almost always | High |
 | [KI-37](KNOWN_ISSUES.md#ki-37) | A replaced evidence slot keeps its old grade | Rare | High |
 | [KI-38](KNOWN_ISSUES.md#ki-38) | An assertion the test expects to fail still grades as did-not-hold | Rare | High |
-| [KI-56](KNOWN_ISSUES.md#ki-56) | An entry with no `**Where:**` field passes the reference check | Rare | High |
 | [KI-58](KNOWN_ISSUES.md#ki-58) | `check` misses drift: empty files, fenced anchors, question order, mirrored fields | Rare | High |
+| [KI-59](KNOWN_ISSUES.md#ki-59) | The reference check has gaps in what it reads and where | Rare | High |
 | [KI-49](KNOWN_ISSUES.md#ki-49) | The headline tally mixes two skills | Almost always | Medium |
 | [KI-50](KNOWN_ISSUES.md#ki-50) | S05's fixture contradicts itself | Almost always | Medium |
 | [KI-36](KNOWN_ISSUES.md#ki-36) | A grader quote of a table cell that holds a pipe is refused | Likely | Medium |
@@ -59,8 +59,6 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-41](KNOWN_ISSUES.md#ki-41) | Converting a large sequence to text has no size bound | Rare | Medium |
 | [KI-43](KNOWN_ISSUES.md#ki-43) | A ready reviewer probe reads as TIMEOUT when stderr mentions a timeout | Rare | Medium |
 | [KI-44](KNOWN_ISSUES.md#ki-44) | A stale dispatch log gives a misleading replacement message | Rare | Low |
-| [KI-59](KNOWN_ISSUES.md#ki-59) | The reference check has gaps in what it reads and where | Rare | Low |
-| [KI-61](KNOWN_ISSUES.md#ki-61) | The Codex readiness probe runs outside the review root | Rare | Low |
 
 ## Enhancements
 
@@ -81,7 +79,6 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 | [ENH-32](ENHANCEMENTS.md#enh-32) | Drop explanations of standard tool behaviour from the skills | Low | ~2 hours |
 | [ENH-33](ENHANCEMENTS.md#enh-33) | Check more command spellings in the name check | Low | ~2 hours |
 | [ENH-34](ENHANCEMENTS.md#enh-34) | Tighten the roadmap close tests and template examples | Low | ~2 hours |
-| [ENH-35](ENHANCEMENTS.md#enh-35) | Check the manifest version against the release | Low | ~1 hour |
 
 ## Open Questions
 
