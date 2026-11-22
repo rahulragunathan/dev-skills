@@ -38,6 +38,7 @@ here — the plugin manifest's version is the only record of them.
   templates' scale tables, in row order, and refuses an unknown `Kind`.
 - **External review** runs up to three passes without checking in. Its stop rule applies
   before any fix, so no fix reaches the gate unreviewed. A fourth pass is the user's call.
+- **External reviews run at `high` effort by default**, for Codex and Gemini alike.
 - **`/simplify`** runs at a task's refactor step only when the task added or reshaped code, and
   once on the whole branch diff before review.
 - **Test checks:** each task's commit message carries a `Red:` line per new test, and phase end
@@ -50,14 +51,14 @@ here — the plugin manifest's version is the only record of them.
 ### Fixed
 
 - **The Gemini ladder** put orchestrator models first and `xhigh` last. It now ranks by
-  version, full model before light tier, review grade before `medium`, then family (Carbon >
-  Argon > Neon > Hydrogen).
+  version, full model before light tier, effort (`high`, then `xhigh`, then `medium`), then
+  family (Carbon > Argon > Neon > Hydrogen). Efforts below `medium` are never offered.
 - **Gemini calls passed `--effort high`**, which `agy` refuses for any model whose id carries
   another effort, so the ladder could never downshift.
 - **The Codex ladder ranked by the cache's `priority`**, OpenAI's default pick: it put
   `gpt-6.2-sol` above `gpt-6.2-astra`. It now ranks by version, then family (Astra > Sol >
-  Terra > Luna).
-- **Both ladders sorted version 4 above 4.1.**
+  Terra > Luna), at `high` effort where the model supports it. A malformed cache entry is
+  skipped rather than emptying the ladder.
 
 ## [2.0.1] - 2026-11-17
 

@@ -12,11 +12,38 @@ setup() {
 # rank <model id>...: the ladder for a list of ids, one per line.
 rank() { printf '%s\n' "$@" | python3 "$LADDER"; }
 
-@test "today's list gives argon-high, neon-xhigh, neon-high" {
+@test "today's list gives argon-high, neon-high, hydrogen-high" {
   # Fails if orchestrators, effort or family are ranked wrongly on the real 2026-11-20 list.
   run python3 "$LADDER" < "$FIXTURE"
   [ "$status" -eq 0 ] || false
-  [ "$output" = "gemini-4-argon-high gemini-4-neon-xhigh gemini-4-neon-high" ]
+  [ "$output" = "gemini-4-argon-high gemini-4-neon-high gemini-4-hydrogen-high" ]
+}
+
+@test "high, the default effort, outranks xhigh across families" {
+  # Fails if xhigh ranks with high, so a stronger family's xhigh comes first.
+  run rank gemini-4-carbon-xhigh gemini-4-hydrogen-high
+  [ "$output" = "gemini-4-hydrogen-high gemini-4-carbon-xhigh" ] || false
+  run rank gemini-4-neon-xhigh gemini-4-neon-medium
+  [ "$output" = "gemini-4-neon-xhigh gemini-4-neon-medium" ]
+}
+
+@test "low, minimal and none are never offered" {
+  # Fails if an effort below medium reaches the ladder.
+  run rank gemini-4-neon-low gemini-4-neon-minimal gemini-4-neon-none
+  [ "$status" -eq 0 ] || false
+  [ -z "$output" ]
+}
+
+@test "a tie is broken by model id, not by input order" {
+  # Fails if two unlisted families at one grade keep agy's print order.
+  run rank gemini-4-cobalt-high gemini-4-boron-high
+  [ "$output" = "gemini-4-boron-high gemini-4-cobalt-high" ]
+}
+
+@test "a repeated id takes one rung" {
+  # Fails if duplicates are cut to three before they are made distinct.
+  run rank gemini-4-neon-high gemini-4-neon-high gemini-4-neon-high gemini-4-hydrogen-high
+  [ "$output" = "gemini-4-neon-high gemini-4-hydrogen-high" ]
 }
 
 @test "only orchestrators gives an empty ladder" {
@@ -46,10 +73,12 @@ rank() { printf '%s\n' "$@" | python3 "$LADDER"; }
   [ "$output" = "gemini-4-neon-medium gemini-3.9-pro-high" ]
 }
 
-@test "a full model outranks flash at the same version" {
-  # Fails if a light tier is ranked as a full model.
-  run rank gemini-4-flash-xhigh gemini-4-neon-high
-  [ "$output" = "gemini-4-neon-high gemini-4-flash-xhigh" ]
+@test "a full model outranks flash and lite at the same version" {
+  # Fails if a light tier is ranked as a full model: its listed family would win.
+  run rank gemini-4-neon-flash-high gemini-4-zinc-high
+  [ "$output" = "gemini-4-zinc-high gemini-4-neon-flash-high" ] || false
+  run rank gemini-4-neon-lite-high gemini-4-zinc-high
+  [ "$output" = "gemini-4-zinc-high gemini-4-neon-lite-high" ]
 }
 
 @test "medium ranks below every review-grade rung of the same version and tier" {
@@ -60,8 +89,8 @@ rank() { printf '%s\n' "$@" | python3 "$LADDER"; }
 
 @test "an unknown suffix ranks below medium" {
   # Fails if an unrecognised effort suffix is treated as review grade.
-  run rank gemini-4-neon-minimal gemini-4-neon-medium
-  [ "$output" = "gemini-4-neon-medium gemini-4-neon-minimal" ]
+  run rank gemini-4-neon-preview gemini-4-neon-medium
+  [ "$output" = "gemini-4-neon-medium gemini-4-neon-preview" ]
 }
 
 @test "an unparsable version does not crash" {

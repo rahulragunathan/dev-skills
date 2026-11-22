@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """Rank the Codex models in Codex's model cache, best reviewer first.
 
-Prints up to three `slug:effort` rungs, space-separated. Exits 1 with no output
-when the cache is missing or not JSON; the caller treats that as "no Codex
-reviewer".
+Prints up to three distinct `slug:effort` rungs, space-separated. Exits 1 with
+no output when the cache is missing, not JSON or has no list of models; the
+caller treats that as "no Codex reviewer". A malformed entry is skipped.
 
 Only models the cache lists as visible are offered. They rank newest version
 first, then by family, by FAMILIES, with an unlisted family after every listed
 one, then by slug. The cache's own `priority` is not used: it is OpenAI's
-default pick, not a capability rank. Each rung takes the model's highest
-supported effort other than `ultra`, which delegates work to other models.
+default pick, not a capability rank. Each rung runs at `high`, the user's
+default, or where the model lacks it at the first of EFFORTS it supports.
 
 Usage:
     codex-ladder.py [CACHE]    (default ~/.codex/models_cache.json)
@@ -23,8 +23,10 @@ import sys
 
 # The user's ranking of OpenAI families, strongest first.
 FAMILIES = ("astra", "sol", "terra", "luna")
-# Lowest to highest. `ultra` is left out on purpose: it delegates the work.
-EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
+# The effort each rung runs at: the first of these the model supports. High is
+# the user's default. Nothing below medium is a review, and `ultra` is left out
+# on purpose: it delegates the work to other models.
+EFFORTS = ("high", "xhigh", "max", "medium")
 VERSION = re.compile(r"\d+(?:\.\d+)*")
 
 
@@ -36,7 +38,9 @@ def version_key(version: str) -> tuple[int, ...]:
 
 def rank(slug: str) -> tuple:
     words = slug.split("-")
-    version = next((w for w in words if VERSION.fullmatch(w)), None)
+    # The version is the word after the name (gpt-6.2-sol), never a later one:
+    # in o4-mini-2025-04-16 the numbers are a date.
+    version = words[1] if len(words) > 1 and VERSION.fullmatch(words[1]) else None
     family = next((FAMILIES.index(w) for w in words if w in FAMILIES), len(FAMILIES))
     return (
         (0, version_key(version)) if version else (1, ()),
@@ -45,22 +49,32 @@ def rank(slug: str) -> tuple:
     )
 
 
-def ladder(models: list[dict]) -> list[str]:
+def usable(m) -> bool:
+    """A listed model entry with a slug; anything malformed is skipped, not fatal."""
+    return isinstance(m, dict) and m.get("visibility") == "list" and isinstance(m.get("slug"), str)
+
+
+def ladder(models: list) -> list[str]:
     rungs = []
-    for m in sorted((m for m in models if m.get("visibility") == "list"), key=lambda m: rank(m["slug"])):
-        supported = [e.get("effort") for e in m.get("supported_reasoning_levels", [])]
-        efforts = [e for e in EFFORTS if e in supported]
-        if efforts:
-            rungs.append(f"{m['slug']}:{efforts[-1]}")
+    for m in sorted(filter(usable, models), key=lambda m: rank(m["slug"])):
+        levels = m.get("supported_reasoning_levels")
+        supported = [e.get("effort") for e in levels if isinstance(e, dict)] if isinstance(levels, list) else []
+        effort = next((e for e in EFFORTS if e in supported), None)
+        rung = f"{m['slug']}:{effort}"
+        if effort and rung not in rungs:
+            rungs.append(rung)
     return rungs[:3]
 
 
 def main() -> int:
     path = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "~/.codex/models_cache.json").expanduser()
     try:
-        rungs = ladder(json.loads(path.read_text())["models"])
-    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        models = json.loads(path.read_text())["models"]
+    except (OSError, ValueError, KeyError, TypeError):
         return 1
+    if not isinstance(models, list):
+        return 1
+    rungs = ladder(models)
     print(" ".join(rungs))
     return 0
 

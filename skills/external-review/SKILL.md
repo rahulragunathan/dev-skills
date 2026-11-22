@@ -113,13 +113,15 @@ from the weakest tier available is worse than no review: it arrives with the sam
 real one and the coverage line cannot carry the difference. Report it exactly as you would a
 missing CLI for that reviewer — no output from it, named, with the reason. Whether the pass is partial or no coverage depends on what the *other* reviewer did.
 
-**Set reasoning effort explicitly; `-m` alone does not.** Each Codex rung is `slug:effort`,
-using the highest supported effort other than `ultra`. `ultra` delegates tasks automatically,
-so the work may not come from the recorded model. Models without a recognized supported effort
-other than `ultra` contribute no rung. Split the pair and pass `-m "$slug"` with
-`-c model_reasoning_effort="$effort"`; the cache's default effort does not select the rung.
-Bare slugs retain the explicit `high` fallback. Record the effort beside the slug — a `low`
-run and a `max` run from one slug are different review configurations.
+**Reviews run at `high` effort by default, for both reviewers.** Each Codex rung is
+`slug:effort`, at `high` where the model supports it; `codex-ladder.py`'s `EFFORTS` gives the
+fallback order. Nothing below `medium` is a review, and `ultra` is never chosen: it delegates
+tasks automatically, so the work may not come from the recorded model. A Gemini id carries its
+effort, and `gemini-ladder.py` ranks `-high` ids first. Set the effort explicitly, since `-m`
+alone does not: split the pair and pass `-m "$slug"` with `-c model_reasoning_effort="$effort"`;
+the cache's default effort does not select the rung. Bare slugs keep the explicit `high`
+fallback. Record the effort beside the slug — a `high` run and a `max` run from one slug are
+different review configurations.
 
 **Record which model and effort actually ran**, using `slug:effort` for Codex in the coverage
 line and the findings table's Model column.
@@ -470,10 +472,10 @@ line.
 Open with a coverage line so the count is unambiguous:
 
 ```text
-Codex gpt-5.6-sol:max 7 · Gemini gemini-3.1-pro-high 4 · 3 overlapping → 8 unique findings
+Codex gpt-5.6-sol:high 7 · Gemini gemini-3.1-pro-high 4 · 3 overlapping → 8 unique findings
 ```
 
-Name the **exact model and effort that ran**, not the CLI — the ladder is discovered at run time and downshifts on availability, so "Codex" alone hides whether the findings came from the top tier or a lighter rung. If a downshift happened, say so here too: `Codex gpt-5.6-terra:max 5 (gpt-5.6-sol:max unavailable) · …`.
+Name the **exact model and effort that ran**, not the CLI — the ladder is discovered at run time and downshifts on availability, so "Codex" alone hides whether the findings came from the top tier or a lighter rung. If a downshift happened, say so here too: `Codex gpt-5.6-terra:high 5 (gpt-5.6-sol:high unavailable) · …`.
 
 If neither CLI is installed, print the skip line in its place — `External review skipped — neither codex nor agy is installed` — so a missing table is never mistaken for a clean review.
 
@@ -481,8 +483,8 @@ If neither CLI is installed, print the skip line in its place — `External revi
 
 | # | Finding | Files | Model | Likelihood | Severity | Verdict | Disposition |
 | --- | --------- | ------- | ------- | ---------- | ---------- | --------- | ------------- |
-| F-01 | No rollback if the migration half-applies | `migrate.py:88-140` | gpt-5.6-sol:max | Rare | Critical | Confirmed | Incorporated — new step 6 |
-| F-02 | Token refresh races on concurrent runs | `auth/token.py`, `worker.py:41` | gpt-5.6-sol:max, gemini-3.1-pro-high | Likely | Medium | Confirmed | Filed KI-08 |
+| F-01 | No rollback if the migration half-applies | `migrate.py:88-140` | gpt-5.6-sol:high | Rare | Critical | Confirmed | Incorporated — new step 6 |
+| F-02 | Token refresh races on concurrent runs | `auth/token.py`, `worker.py:41` | gpt-5.6-sol:high, gemini-3.1-pro-high | Likely | Medium | Confirmed | Filed KI-08 |
 | F-03 | Add a caching layer for lookups | `lookup.py` | gemini-3.1-pro-high | Almost always | Medium | Rejected | Not incorporated |
 
 *The dispositions above are **plan** mode; phase and repo mode use the vocabulary further down. The columns are the same in every mode.*
@@ -510,7 +512,7 @@ Column rules:
 - **#** — `F-01`, `F-02`, … Stable within this review only; they exist so the user can say "also fix F-03" without quoting titles.
 - **Finding** — one short line. Not a summary of the explanation.
 - **Files** — where the finding lives, as `path` or `path:start-end`, comma-separated when it spans more than one. **Take the reviewer's own reference and verify it against the repo during triage** — a wrong path is itself a signal the finding was not verified. Two or three paths is the cap; a finding touching more than that is really a finding about the design, so name the area (`skills/*/SKILL.md — every skill`) rather than listing every file. Use `—` only where the finding genuinely has no location, such as a missing file or an absent test. This column is what makes a filed `KI-nn`/`ENH-nn` entry actionable from cold, since the roadmap entry inherits it.
-- **Model** — the **model id that produced the finding, with Codex's effort**, not the CLI that ran it: `gpt-5.6-sol:max`, `gemini-3.1-pro-high`. Which rung of the ladder actually answered changes how much weight a finding deserves, and that is per-run state the CLI name cannot carry. When both reviewers found the same thing, **list both ids, retaining the effort** — `gpt-5.6-sol:max, gemini-3.1-pro-high` — never `Both`: a row can outlive this table by being filed as a `KI-nn`/`ENH-nn`/`UNK-nn` entry, and `Both` resolves only against one pass's coverage line. Two ids in one cell is also the agreement signal, stated so it survives the move. Never write `Codex` or `Gemini` alone in this column.
+- **Model** — the **model id that produced the finding, with Codex's effort**, not the CLI that ran it: `gpt-5.6-sol:high`, `gemini-3.1-pro-high`. Which rung of the ladder actually answered changes how much weight a finding deserves, and that is per-run state the CLI name cannot carry. When both reviewers found the same thing, **list both ids, retaining the effort** — `gpt-5.6-sol:high, gemini-3.1-pro-high` — never `Both`: a row can outlive this table by being filed as a `KI-nn`/`ENH-nn`/`UNK-nn` entry, and `Both` resolves only against one pass's coverage line. Two ids in one cell is also the agreement signal, stated so it survives the move. Never write `Codex` or `Gemini` alone in this column.
 - **Likelihood** — `Rare` | `Likely` | `Almost always`. **How often a user following the
   documented workflow actually hits the harm**, not how often the code path runs. The two come
   apart: a bad count computed on every run is `Rare` if it only misleads when something else has
@@ -521,11 +523,11 @@ Column rules:
   and the commentary says so.
 - **Severity** — **the consequence if it does fire, and nothing about how often.** Take the
   reviewer's own rating verbatim, attributed by **model id with Codex's effort** and never by CLI name:
-  `High (gpt-5.6-sol:max)`. **Two columns, because one number cannot carry both.** A rare defect
+  `High (gpt-5.6-sol:high)`. **Two columns, because one number cannot carry both.** A rare defect
   that exfiltrates source is `Rare · Critical`; friction on every run is
   `Almost always · Low`. Both get fixed, for different reasons, and a single rating hides
   which reason. Where a reviewer's rating obviously folded in likelihood, keep their word in
-  the cell and say so in the commentary rather than silently re-rating it. Never renormalize it: the same pass decides disposition, so quietly downgrading an inconvenient Critical would hide the decision. **When the two reviewers disagree, record both and order by the higher** — `High (gpt-5.6-sol:max) / Medium (gemini-3.1-pro-high)`. If you disagree with a rating yourself, say so in the commentary, where the user can see the disagreement.
+  the cell and say so in the commentary rather than silently re-rating it. Never renormalize it: the same pass decides disposition, so quietly downgrading an inconvenient Critical would hide the decision. **When the two reviewers disagree, record both and order by the higher** — `High (gpt-5.6-sol:high) / Medium (gemini-3.1-pro-high)`. If you disagree with a rating yourself, say so in the commentary, where the user can see the disagreement.
 - **Verdict** — `Confirmed` | `Partly` | `Rejected`, from step 1. Separate from Disposition on purpose: *valid but deferred* and *invalid so dropped* are different states, and one column cannot carry both.
 - **Disposition** — what actually happened; vocabulary differs by mode (below).
 
@@ -549,7 +551,7 @@ A valid finding that is out of scope for this phase is **kept, not dropped**. Wh
 - `Open — no roadmap files` — valid and deferred in a repository without roadmap files. The review record is where it stays.
 - `Rejected` — failed verification. It is a real disposition, not a gap: it produces no artifact, and forcing it into the roadmap would pollute it.
 
-Give each filed entry a provenance line carrying the same model ids and Codex effort as the Model column — `Source: gpt-5.6-sol:max, gemini-3.1-pro-high — phase review, phase 4` — so the attribution survives the move into a durable doc. Do not write a per-phase review file under `docs/`: it would be a backward-looking doc outside CHANGELOG, breaking the tense split.
+Give each filed entry a provenance line carrying the same model ids and Codex effort as the Model column — `Source: gpt-5.6-sol:high, gemini-3.1-pro-high — phase review, phase 4` — so the attribution survives the move into a durable doc. Do not write a per-phase review file under `docs/`: it would be a backward-looking doc outside CHANGELOG, breaking the tense split.
 
 ### The phase review record
 
@@ -559,9 +561,9 @@ One record covers every pass of a phase review. It goes in the PR description an
 
 | ID | Pass | Found by | Severity | Finding | Disposition | Commit |
 | --- | --- | --- | --- | --- | --- | --- |
-| F-01 | 1 | gpt-5.6-sol:max, gemini-3.1-pro-high | High | Token refresh races on concurrent runs | Fixed in phase | `a1b2c3d` |
+| F-01 | 1 | gpt-5.6-sol:high, gemini-3.1-pro-high | High | Token refresh races on concurrent runs | Fixed in phase | `a1b2c3d` |
 | F-02 | 1 | gemini-3.1-pro-high | Low | README names a removed flag | Confirmed: accepted, no work planned | — |
-| F-03 | 2 | gpt-5.6-sol:max | Medium | The F-01 fix drops the retry count | Fixed in phase | `d4e5f6a` |
+| F-03 | 2 | gpt-5.6-sol:high | Medium | The F-01 fix drops the retry count | Fixed in phase | `d4e5f6a` |
 
 `Found by` follows the Model column rules above: exact model ids, with Codex's effort. `Severity` follows the Severity column rules. `Commit` is the fix commit, or `—`.
 
