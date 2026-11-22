@@ -94,7 +94,7 @@ python3 "$CLAUDE_PLUGIN_ROOT/skills/project-docs/name_check.py" --root .
   it never blocks a merge.
 - **It reads, and never runs, what it checks.** A flag is looked up in the source of the repo
   script whose command names it. Flags of external tools are not checked.
-- **What counts.** A path or command counts only when it has a `/` (`tools/s.py`, `./run.sh`),
+- **What counts.** A path or command counts only when it has a `/`, as in `tools/s.py`,
   so a bare script name such as `roadmap.py` is not checked. A roadmap ID exists when a detail
   file has its entry's anchor, or `CHANGELOG.md` names it; a mention elsewhere does not count.
 - **It skips history and test input:** `CHANGELOG.md`, dated plans and specs, the templates, and

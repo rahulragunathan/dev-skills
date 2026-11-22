@@ -14,8 +14,8 @@ nothing. IDs are never reused.
 
 ## Kind
 
-`roadmap.py check` reads these levels, in row order, from the copy of this template bundled with
-`project-docs`. In a project's own copy this table is for reading: editing it changes nothing.
+`roadmap.py check` reads these levels from the template bundled with `project-docs`, and
+refuses any other Kind. It does not check the order of open questions. In a project's own copy this table is for reading: editing it changes nothing.
 
 | Kind | Means |
 | ------ | ------- |

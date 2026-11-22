@@ -12,7 +12,7 @@ Entries for skills that left this repo in v2.0.0 moved with them, keeping their 
 
 ## Severity
 
-`roadmap.py check` reads these levels, in row order, from the copy of this template bundled with
+`roadmap.py check` reads these levels, in row order, from the template bundled with
 `project-docs`. In a project's own copy this table is for reading: editing it changes nothing.
 
 | Level | Means |
@@ -26,7 +26,7 @@ Entries for skills that left this repo in v2.0.0 moved with them, keeping their 
 
 ## Likelihood
 
-`roadmap.py check` reads these levels, in row order, from the copy of this template bundled with
+`roadmap.py check` reads these levels, in row order, from the template bundled with
 `project-docs`. In a project's own copy this table is for reading: editing it changes nothing.
 
 | Level | Means |
@@ -106,6 +106,36 @@ scenario that grades an example the skill contains cannot distinguish transfer f
 
 **Source:** gpt-6-astra — review of round-9 evidence and grading, 2026-09-16; both locations
 verified by claude-opus-5.
+
+---
+
+<a id="ki-60"></a>
+
+## KI-60 — helper commands need `CLAUDE_PLUGIN_ROOT`, which a Codex install does not set
+
+**Severity:** High
+**Likelihood:** Almost always
+**Where:** [README.md](../README.md) — `reads skills as plain folders`
+
+### What happens
+
+Every bundled helper is called as `$CLAUDE_PLUGIN_ROOT/skills/...`. Claude Code sets the
+variable; the README's Codex install, linking each skill folder, does not. Under Codex the
+commands resolve to `/skills/...` and fail. The PR body template also credits Claude Code
+whoever wrote the phase.
+
+### Example scenario
+
+In Codex, follow `project-docs`' set-up step: `python3 "$CLAUDE_PLUGIN_ROOT/skills/project-docs/roadmap.py" init`
+runs `/skills/project-docs/roadmap.py` and fails.
+
+### Notes for a fix
+
+Belongs to the Codex parity step of the setup programme: resolve helpers from the installed
+skill's own folder, test the plain-folder layout with the variable unset, and name the actual
+author in the PR body.
+
+**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
 
 ---
 
@@ -202,7 +232,7 @@ Report per-skill subtotals, and never a combined figure without naming which ski
 ## KI-50 — S05's fixture contradicts itself
 
 **Severity:** Medium
-**Likelihood:** Likely
+**Likelihood:** Almost always
 **Where:** [s05-report-form.md](../skills/design-review/tests/s05-report-form.md) — `Reporting an extraction contradicts the final decision and fails.`, Final decisions
 
 ### What happens
@@ -411,6 +441,96 @@ classification order; not reproduced with a real CLI.
 
 ---
 
+<a id="ki-56"></a>
+
+## KI-56 — an entry with no `**Where:**` field passes the reference check
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def verify_references(`
+
+### What happens
+
+`verify_references` reports a `**Where:**` field that looks like one and does not parse, such
+as a list item or a `**Where**:` typo. An entry with no Where-like line at all is skipped in
+silence, so a `KI-nn` or `ENH-nn` whose field was deleted is never verified, and `check` still
+says `references verified`.
+
+### Example scenario
+
+Delete the `**Where:**` line from any KNOWN_ISSUES entry and run `roadmap.py check`. It
+passes. Every live entry carries the field today, so nothing is unverified yet.
+
+### Notes for a fix
+
+Require the field on every KNOWN_ISSUES and ENHANCEMENTS entry, with a test that deletes it.
+This was ENH-31; a check that reports success on an unchecked entry is a defect, not an
+enhancement.
+
+**Source:** gpt-6.2-astra:max — reclassified from ENH-31 in phase review pass 1, project-docs phase, 2026-11-22.
+
+---
+
+<a id="ki-57"></a>
+
+## KI-57 — `roadmap.py close` can lose a concurrent edit and rewrites line endings
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def install_documents(`
+
+### What happens
+
+`close` builds both new documents from one read, then installs them without checking the
+files are still what it read. An entry added in between disappears from both files, and `close`
+reports success. It also reads in text mode and rebuilds line boundaries, so closing one entry
+can turn CRLF into LF throughout both files, and the byte-identity check compares survivors after
+`.strip()`.
+
+### Example scenario
+
+An editor saves a new KNOWN_ISSUES entry while `close KI-07` runs. The new entry is gone
+after the close, from the detail file and the index.
+
+### Notes for a fix
+
+Compare each file with what was read just before replacing it, or hold a lock from load to
+install. Preserve the newline style, and compare surviving slices without stripping them.
+
+**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
+
+---
+
+<a id="ki-58"></a>
+
+## KI-58 — `check` misses drift: empty files, fenced anchors, question order, mirrored fields
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def reconcile(`
+
+### What happens
+
+Four blank files pass `check`, since no heading or pointer table is required. A fenced
+example holding a real entry's anchor is read as a duplicate. Open questions are never checked
+for order, though the templates order them by Kind. A displayed label such as `KI-01-extra` is
+read as `KI-01`, and an enhancement's Effort and every title are never compared between the
+index and the detail file.
+
+### Example scenario
+
+Change an enhancement's Effort in ROADMAP from `~1 day` to `~80 days`, or swap two open
+questions of different Kinds. `check` passes both.
+
+### Notes for a fix
+
+Validate the empty-roadmap structure, parse anchors and rows outside fences, match displayed
+IDs exactly, compare Effort and titles, and order open questions by the Kind table.
+
+**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
+
+---
+
 <a id="ki-44"></a>
 
 ## KI-44 — a stale dispatch log gives a misleading replacement message
@@ -436,3 +556,62 @@ Name both agent IDs in the message and say which command brings the log and the 
 in line.
 
 **Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.
+
+---
+
+<a id="ki-59"></a>
+
+## KI-59 — the reference check has gaps in what it reads and where
+
+**Severity:** Low
+**Likelihood:** Rare
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def _where_field(`
+
+### What happens
+
+A `**Where:**` after another field on the same line (`**Priority:** Low · **Where:** …`) is
+not found, so the entry is never checked. An absolute path inside the repository passes. An empty
+field passes. Any file under `docs/` is exempt from the fragment rule, executable source
+included. The cited file is opened without the credential-name screen the name check uses. And
+`project-docs/SKILL.md` says a fragment cannot contain a backtick, while the parser accepts a
+multi-backtick span.
+
+### Example scenario
+
+An entry written as `**Effort:** ~1 hour · **Where:** [x.py](../x.py)` passes with a
+fragment that is not in `x.py`.
+
+### Notes for a fix
+
+Find the field anywhere on an unfenced line, refuse absolute and empty targets, limit the
+`docs/` exemption to Markdown, screen credential names, and make the skill text match the parser.
+
+**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
+
+---
+
+<a id="ki-61"></a>
+
+## KI-61 — the Codex readiness probe runs outside the review root
+
+**Severity:** Low
+**Likelihood:** Rare
+**Where:** [preflight.sh](../skills/external-review/preflight.sh) — `--skip-git-repo-check`
+
+### What happens
+
+`preflight.sh` probes Codex with `--skip-git-repo-check` but no `-C "$ROOT"`, so the probe
+runs in whatever folder the caller is in, not the pruned export the review uses. The failure
+probe's do-not-read instruction also omits `*.p12` and `*.pfx`.
+
+### Example scenario
+
+The probe asks only a readiness question, so nothing is read today. A probe prompt that
+grows would run against the live checkout.
+
+### Notes for a fix
+
+Pass the prepared root to preflight and use the review's credential instruction in every
+Codex call; assert both at the fake CLI boundary.
+
+**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.

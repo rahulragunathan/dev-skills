@@ -58,12 +58,16 @@ re-grading against it.
 ## UNK-05 — what drives repeat review findings?
 
 **Kind:** Verification
-**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `how many were in code an earlier fix of this review wrote`
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `in code an earlier fix of this review wrote`
 
 External review often needs several passes, and later passes keep finding problems. It is not
-known how many of those are in code the previous pass's fixes wrote, how many are fresh finds
-in untouched code, and how many are documentation drift.
+known how many of the findings in a narrow pass are in code the previous pass's fixes wrote, and
+how many are documentation drift those fixes caused.
 
 **What settles it:** the per-pass counts the review record now keeps, read across a few phases.
-If most repeat findings sit in fix code, the fix step needs more care; if they are fresh finds,
-the first pass needs a wider brief.
+If most later findings sit in fix code, the fix step needs more care. A narrow pass never reviews
+untouched code, so these counts cannot say what a first pass missed; that would need a separate
+full-scope sample.
+
+**Source:** gpt-6.2-sol:max, gpt-6.2-astra:max — plan review, project-docs phase, 2026-11-20;
+narrowed after gpt-6.2-astra:max — phase review pass 1, 2026-11-22.

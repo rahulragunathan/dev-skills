@@ -222,42 +222,6 @@ keep the retain rule: nothing is deleted that was not proven safe.
 
 ---
 
-<a id="enh-31"></a>
-
-## ENH-31 — report an entry that omits its `**Where:**` field entirely
-
-**Priority:** Low · **Effort:** ~1 hour
-**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def verify_references(` · **Regression net:** `skills/project-docs/tests/roadmap.bats`
-
-### What it is
-
-`verify_references` reports a `**Where:**` field that looks like one and does not parse — a list
-item, a `**Where**:` typo. An entry with no Where-ish line at all is skipped in silence, so a
-`KI-nn` or `ENH-nn` whose field was deleted is never verified and the gate still says
-`references verified`.
-
-### Why it matters
-
-Every live KNOWN_ISSUES and ENHANCEMENTS entry carries the field, so nothing is unverified today.
-But the templates mandate it, the check now enforces its contents, and the one way to escape that
-enforcement entirely is to remove the field — which is exactly the shape of change nobody reviews
-closely.
-
-### Notes for the work
-
-**The obvious fix breaks the tests, and that is the whole difficulty.** Requiring the field for
-`KI-`/`ENH-` entries reds `roadmap.bats`'s baseline and several controls, because the scratch
-fixture in `setup()` builds KI-01 to KI-03 and ENH-01 with no Where fields. `gpt-6-astra` refused
-this exact change during the reference-integrity phase for that reason and was right to.
-
-So the work is fixture-first: give the scratch entries a Where field and a seeded source tree in
-`setup()`, confirm the twenty-odd unrelated tests still pass, and only then enforce the rule.
-`UNK-nn` entries must stay exempt — open questions legitimately have no Where field.
-
-**Source:** gemini-3.1-pro-high — phase review, mini phase reference integrity, 2026-09-22.
-
----
-
 <a id="enh-29"></a>
 
 ## ENH-29 — evaluate every gone branch before reporting
@@ -292,14 +256,16 @@ present before it.
 ## ENH-32 — drop explanations of standard tool behaviour from the skills
 
 **Priority:** Low · **Effort:** ~2 hours
-**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `Three dots, not two` · **Regression net:** none (prose)
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `Three dots, not two`, [external-review/SKILL.md](../skills/external-review/SKILL.md) — `Run the discovery block in the same shell as the loops` · **Regression net:** none (prose)
 
 ### What it is
 
 Several passages explain how Git works rather than stating this project's policy: why a
 three-dot diff differs from a two-dot one, what `git mv` tracks, and how `git stash` treats
-untracked files. `external-review` repeats the diff explanation in its capture section. Keep the
-policy and the commands; drop the tutorial.
+untracked files. `external-review` repeats the diff explanation in its capture section, explains
+shell-variable lifetime beside the ladder discovery, and explains why a diff omits untracked
+files. `phase-workflow` explains why a commit cannot contain its own hash, and `AGENTS.md` how
+the reflog recovers committed work. Keep the policy and the commands; drop the tutorial.
 
 ### Why it matters
 
@@ -311,4 +277,85 @@ every invocation and drift from the tools they describe.
 Belongs with the fresh look at this plugin that follows the deep cut of the standards. Keep the
 nuances people get wrong, such as which diff a review must use.
 
-**Source:** gpt-6.2-sol:max, gpt-6.2-astra:max — plan review, project-docs phase, 2026-11-20.
+**Source:** gpt-6.2-sol:max, gpt-6.2-astra:max — plan review, project-docs phase, 2026-11-20; more sites from gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, 2026-11-22.
+
+---
+
+<a id="enh-33"></a>
+
+## ENH-33 — check more command spellings in the name check
+
+**Priority:** Low · **Effort:** ~2 hours
+**Where:** [name_check.py](../skills/project-docs/name_check.py) — `def check_command(` · **Regression net:** `skills/project-docs/tests/name-check.bats`
+
+### What it is
+
+The name check reads a command only when it is path-shaped. It does not check
+`python3 roadmap.py` (an interpreter and a bare script name), a bare script in its own code span
+beside a flag, a `"$CLAUDE_PLUGIN_ROOT/..."` path, or a missing program followed by a
+subcommand rather than a flag. A reference-style link whose definition was deleted is not
+reported either.
+
+### Why it matters
+
+These are the spellings the skills themselves use most, so a renamed helper can pass.
+
+### Notes for the work
+
+Resolve bare script names against tracked basenames, strip the plugin-root prefix, and resolve
+reference uses against definitions. Keep the false-positive test on real skill prose green.
+
+**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
+
+---
+
+<a id="enh-34"></a>
+
+## ENH-34 — tighten the roadmap close tests and template examples
+
+**Priority:** Low · **Effort:** ~2 hours
+**Where:** [roadmap.bats](../skills/project-docs/tests/roadmap.bats) — `close: works on enhancements too` · **Regression net:** `skills/project-docs/tests/roadmap.bats`
+
+### What it is
+
+Several close tests pass when `close` does nothing: their inverted `grep` assertions are not
+the last command, and they check survivors that were there before. The rollback tests accept a
+broad exception or a printed `exit 1`, so an earlier refusal can stand in for the restore they
+claim. The templates show a link without a fragment, lowercase likelihoods and backticked
+rating placeholders, which fail `check` when filled in literally.
+
+### Why it matters
+
+A test that cannot fail is false evidence for the behaviour CHANGELOG cites it for.
+
+### Notes for the work
+
+Assert each absence by status, prove the entry and pointer left before inducing drift, record
+that the injected fault fired, compare whole trees, and fill one entry from each template in a
+test.
+
+**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
+
+---
+
+<a id="enh-35"></a>
+
+## ENH-35 — check the manifest version against the release
+
+**Priority:** Low · **Effort:** ~1 hour
+**Where:** [test_plugin_name.py](../tests/test_plugin_name.py) — `test_marketplace_lists_the_plugin_by_its_manifest_name` · **Regression net:** `tests/test_plugin_name.py`
+
+### What it is
+
+Nothing compares `plugin.json`'s version with the newest CHANGELOG release. A release whose
+manifest kept the old version passes every test, and the installer reads the manifest.
+
+### Why it matters
+
+A missed bump ships a release that installs as the previous version.
+
+### Notes for the work
+
+A unittest that reads both and compares them.
+
+**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.

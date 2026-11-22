@@ -41,8 +41,10 @@ what sits at the bottom changes when someone else ships a new CLI.
 also `phase-workflow`, which names the reviewer pair in its skip rules — that second edit is the
 coupling to remove if this expectation is to hold.
 
-**Shared state:** none inside the plugin. The skills write only to the repository they run in
-and to temporary directories.
+**Shared state:** none inside the plugin. The skills write to the repository they run in and
+to temporary directories. The one exception is the docs pass, which also updates docs about the
+project kept in the folder that holds the repository; the hand-off names each such edit, since
+the phase diff cannot show it.
 
 ## How the four fit together
 
@@ -57,7 +59,7 @@ suggests.
 Machine setup — permissions, the global standards, backups, local model backends and project
 environments — lives outside this plugin, so these skills assume nothing it installs.
 
-## External tools are all optional
+## External tools
 
 `codex`, `agy` and the `drawio` skill are each invoked by exactly one skill, and a missing one
 degrades that step rather than blocking the workflow. `external-review` reports its

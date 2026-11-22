@@ -653,6 +653,20 @@ edge(
     label_bg="#f3f0fb",
 )
 
+# external-review files deferred findings through project-docs — y=455 lane,
+# under the two boxes and above the drawio lane.
+edge(
+    review,
+    docs,
+    color=PROCESS,
+    label="File Findings",
+    waypoints=[(555, 455), (360, 455)],
+    exitX=0.5,
+    exitY=1,
+    entryX=0.5,
+    entryY=1,
+)
+
 # external-review out to the reviewer CLIs — x=700 and x=690 channels.
 edge(
     review,

@@ -39,6 +39,8 @@ here — the plugin manifest's version is the only record of them.
 - **External review** runs up to three passes without checking in. Its stop rule applies
   before any fix, so no fix reaches the gate unreviewed. A fourth pass is the user's call.
 - **External reviews run at `high` effort by default**, for Codex and Gemini alike.
+- **ENH-31 is now KI-56**: a check that says `references verified` for an entry it never
+  checked is a defect, not an enhancement.
 - **`/simplify`** runs at a task's refactor step only when the task added or reshaped code, and
   once on the whole branch diff before review.
 - **Test checks:** each task's commit message carries a `Red:` line per new test, and phase end
@@ -59,6 +61,13 @@ here — the plugin manifest's version is the only record of them.
   `gpt-6.2-sol` above `gpt-6.2-astra`. It now ranks by version, then family (Astra > Sol >
   Terra > Luna), at `high` effort where the model supports it. A malformed cache entry is
   skipped rather than emptying the ladder.
+- **The Codex loop downshifted on a failed run's transcript**: Codex writes the prompt to stderr,
+  so any availability phrase in the material under review read as an unavailable model. It now
+  reads `ERROR:` lines only.
+- **A Gemini answer cut off by its print timeout counted as coverage.** It is now set aside.
+- **Phase start** wrote the phase record before its own clean-tree check, and would have copied a
+  token in a remote URL into it; `publish-release.sh --check-origin` now refuses such a URL.
+- **The review bundle** let an `id_ecdsa` key or a `.pypirc` through to the reviewers.
 
 ## [2.0.1] - 2026-11-17
 

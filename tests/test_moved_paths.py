@@ -16,7 +16,7 @@ MOVED = [OLD + name for name in (
     "tests/roadmap.bats",
 )]
 # CHANGELOG and dated plans and specs record history, which keeps the old names.
-HISTORY = ("CHANGELOG.md", "docs/superpowers/plans/", "docs/superpowers/specs/")
+HISTORY_DIRS = ("docs/superpowers/plans/", "docs/superpowers/specs/")
 
 
 def offending():
@@ -26,7 +26,7 @@ def offending():
     ).stdout.split("\0")
     hits = []
     for rel in filter(None, tracked):
-        if rel.startswith(HISTORY):
+        if rel == "CHANGELOG.md" or rel.startswith(HISTORY_DIRS):
             continue
         try:
             text = (ROOT / rel).read_text()
@@ -39,6 +39,12 @@ def offending():
 class MovedPathsTest(unittest.TestCase):
     def test_no_old_roadmap_paths(self):
         self.assertEqual(offending(), [])
+
+    def test_the_files_are_at_their_new_paths_only(self):
+        # Fails if a file moves back, which the reference scan above cannot see.
+        new = [p.replace(OLD, "project-docs/") for p in MOVED]
+        self.assertEqual([p for p in MOVED if (ROOT / "skills" / p).exists()], [])
+        self.assertEqual([p for p in new if not (ROOT / "skills" / p).exists()], [])
 
 
 if __name__ == "__main__":
