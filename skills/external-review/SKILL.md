@@ -286,7 +286,7 @@ Prompt drift between the two reviewers corrupts the agree/disagree triage. Compo
 4. **Test-discrimination question** (*phase / repo* only): *"For each test in the material below, say whether it would still pass with the change it covers reverted. Name any test that asserts on a mock, on a constant, or on something true before the change."* This is a backstop — phase-workflow §3 step 3 already checks that every new test has a recorded red, and **mutates** the named behaviour of a test written after its fix, which a reviewer cannot do. Ask anyway: a reviewer reading the assertion catches a different class than a mutation catches.
 5. **Do-not-read instruction (mandatory, both reviewers):**
 
-   > Do not open `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `credentials*`, `.netrc`, `.npmrc`, `id_rsa*`, `id_ed25519*`, or anything else shaped like a secret. If a finding depends on one, name the file and say what you would need rather than reading it.
+   > Do not open `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `credentials*`, `.netrc`, `.npmrc`, `.pypirc`, `id_rsa*`, `id_ed25519*`, `id_ecdsa*`, or anything else shaped like a secret. If a finding depends on one, name the file and say what you would need rather than reading it.
 
 6. **Don't explain the tools:**
 
