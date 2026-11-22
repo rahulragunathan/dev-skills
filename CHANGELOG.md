@@ -32,10 +32,11 @@ here — the plugin manifest's version is the only record of them.
 
 ### Changed
 
-- **Roadmap files are optional.** Filing goes through `project-docs` only where
-  `docs/ROADMAP.md` exists, and phase start no longer seeds the files.
+- **Roadmap files are optional.** Filing goes through `project-docs` only where the repository
+  has all four roadmap files, and phase start no longer seeds them.
 - **The rating scales have one source** (ENH-17): `roadmap.py` reads the levels from the
-  templates' scale tables, in row order, and refuses an unknown `Kind`.
+  templates' scale tables, ranks Severity, Likelihood and Priority in row order, and refuses an
+  unknown `Kind`.
 - **External review** runs up to three passes without checking in. Its stop rule applies
   before any fix, so no fix reaches the gate unreviewed. A fourth pass is the user's call.
 - **External reviews run at `high` effort by default**, for Codex and Gemini alike.
@@ -43,9 +44,11 @@ here — the plugin manifest's version is the only record of them.
   checked is a defect, not an enhancement.
 - **`/simplify`** runs at a task's refactor step only when the task added or reshaped code, and
   once on the whole branch diff before review.
-- **Test checks:** each task's commit message carries a `Red:` line per new test, and phase end
+- **Test checks:** each task's commit message carries a `Red:` line per test it adds or materially
+  changes, and phase end
   checks them. Mutation is kept for a test written after its fix, or one in doubt.
-- **Docs pass:** the name check runs on every doc; docs naming something the phase changed, and
+- **Docs pass:** the name check runs on the current docs (not history, templates or test
+  input); docs naming something the phase changed, and
   docs found wrong, are read in full.
 - **The skills state the rules they rely on** instead of pointing at one user's global
   standards. Where the user's or the project's standards differ, theirs win.

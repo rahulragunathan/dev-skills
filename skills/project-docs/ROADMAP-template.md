@@ -18,7 +18,8 @@ The tables below are **pointers, not summaries** — ID, title, rating, link. No
 described twice.
 
 An item's whole life is a move: it enters here and its supporting file together, and on
-completion is deleted from both, with the record written into CHANGELOG `[Unreleased]`. An
+completion is deleted from both, with the record written into the CHANGELOG release being
+prepared, or `[Unreleased]` where none is. An
 item dropped rather than built moves to "Decisions taken and not taken". IDs are never
 reused. Nothing here looks backward — completed phases are CHANGELOG releases.
 

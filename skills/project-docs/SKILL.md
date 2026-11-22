@@ -58,7 +58,8 @@ Each fact lives in one place, and the tense decides which:
 - **The future:** the roadmap files, where the repository has them.
 
 An item moves between them and is never copied: it enters ROADMAP and its supporting file
-together, and on completion is deleted from both and written into CHANGELOG `[Unreleased]`. Two
+together, and on completion is deleted from both and written into the CHANGELOG release being
+prepared, or `[Unreleased]` where none is. Two
 exceptions are stated, not accidental: the instructions file keeps "Decisions taken and not
 taken", so a dropped idea is not proposed again, and a ROADMAP row mirrors its entry's rating.
 Where the user's or the project's own standards say something different, theirs win; otherwise both apply.
@@ -94,9 +95,12 @@ python3 "$CLAUDE_PLUGIN_ROOT/skills/project-docs/name_check.py" --root .
   it never blocks a merge.
 - **It reads, and never runs, what it checks.** A flag is looked up in the source of the repo
   script whose command names it. Flags of external tools are not checked.
-- **What counts.** A path or command counts only when it has a `/`, as in `tools/s.py`,
-  so a bare script name such as `roadmap.py` is not checked. A roadmap ID exists when a detail
-  file has its entry's anchor, or `CHANGELOG.md` names it; a mention elsewhere does not count.
+- **What counts.** A backticked path counts when it has a `/`, as in `tools/s.py`, and must
+  exist. A command counts in three shapes: a path-shaped script, which must exist and define
+  any `--flag` it is given; an interpreter followed by such a script; and a bare program
+  followed by a `--flag`, which must be on `PATH` or named in the repository's code. A bare
+  script name such as `roadmap.py` is not checked. A roadmap ID exists when its own detail
+  file has the entry's anchor, or `CHANGELOG.md` names it; a mention elsewhere does not count.
 - **It skips history and test input:** `CHANGELOG.md`, dated plans and specs, the templates, and
   Markdown under a `tests/` folder other than its README.
 - **It cannot catch a false claim.** A doc can name only real things and still be wrong. That is

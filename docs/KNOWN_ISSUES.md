@@ -46,6 +46,36 @@ rating hides which you are looking at. Both still get fixed.
 
 ---
 
+<a id="ki-57"></a>
+
+## KI-57 — `roadmap.py close` can lose a concurrent edit and rewrites line endings
+
+**Severity:** Critical
+**Likelihood:** Rare
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def install_documents(`
+
+### What happens
+
+`close` builds both new documents from one read, then installs them without checking the
+files are still what it read. An entry added in between disappears from both files, and `close`
+reports success. It also reads in text mode and rebuilds line boundaries, so closing one entry
+can turn CRLF into LF throughout both files, and the byte-identity check compares survivors after
+`.strip()`.
+
+### Example scenario
+
+An editor saves a new KNOWN_ISSUES entry while `close KI-07` runs. The new entry is gone
+after the close, from the detail file and the index.
+
+### Notes for a fix
+
+Compare each file with what was read just before replacing it, or hold a lock from load to
+install. Preserve the newline style, and compare surviving slices without stripping them.
+
+**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
+
+---
+
 <a id="ki-47"></a>
 
 ## KI-47 — grading packets omit information their conditions require
@@ -197,6 +227,67 @@ Treat a guard whose failure is expected by the enclosing context manager or hand
 could-not-evaluate. The behaviour predates the overnight QC passes.
 
 **Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.
+
+---
+
+<a id="ki-56"></a>
+
+## KI-56 — an entry with no `**Where:**` field passes the reference check
+
+**Severity:** High
+**Likelihood:** Rare
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def verify_references(`
+
+### What happens
+
+`verify_references` reports a `**Where:**` field that looks like one and does not parse, such
+as a list item or a `**Where**:` typo. An entry with no Where-like line at all is skipped in
+silence, so a `KI-nn` or `ENH-nn` whose field was deleted is never verified, and `check` still
+says `references verified`.
+
+### Example scenario
+
+Delete the `**Where:**` line from any KNOWN_ISSUES entry and run `roadmap.py check`. It
+passes. Every live entry carries the field today, so nothing is unverified yet.
+
+### Notes for a fix
+
+Require the field on every KNOWN_ISSUES and ENHANCEMENTS entry, with a test that deletes it.
+This was ENH-31; a check that reports success on an unchecked entry is a defect, not an
+enhancement.
+
+**Source:** gemini-3.1-pro-high — phase review, mini phase reference integrity, 2026-09-22 (as ENH-31);
+reclassified by gpt-6.2-astra:max — phase review pass 1, project-docs phase, 2026-11-22.
+
+---
+
+<a id="ki-58"></a>
+
+## KI-58 — `check` misses drift: empty files, fenced anchors, question order, mirrored fields
+
+**Severity:** High
+**Likelihood:** Rare
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def reconcile(`
+
+### What happens
+
+Four blank files pass `check`, since no heading or pointer table is required. A fenced
+example holding a real entry's anchor is read as a duplicate. Open questions are never checked
+for order, though the templates order them by Kind. A displayed label such as `KI-01-extra` is
+read as `KI-01`, and an enhancement's Effort and every title are never compared between the
+index and the detail file.
+
+### Example scenario
+
+Change an enhancement's Effort in ROADMAP from `~1 day` to `~80 days`, or swap two open
+questions of different Kinds. `check` passes both.
+
+### Notes for a fix
+
+Validate the empty-roadmap structure, parse anchors and rows outside fences, match displayed
+IDs exactly, compare Effort and titles, and order open questions by the Kind table.
+
+**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
 
 ---
 
@@ -438,96 +529,6 @@ Classify exit 0 with the answer `ready` first, then timeouts. Found by reading t
 classification order; not reproduced with a real CLI.
 
 **Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.
-
----
-
-<a id="ki-56"></a>
-
-## KI-56 — an entry with no `**Where:**` field passes the reference check
-
-**Severity:** Medium
-**Likelihood:** Rare
-**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def verify_references(`
-
-### What happens
-
-`verify_references` reports a `**Where:**` field that looks like one and does not parse, such
-as a list item or a `**Where**:` typo. An entry with no Where-like line at all is skipped in
-silence, so a `KI-nn` or `ENH-nn` whose field was deleted is never verified, and `check` still
-says `references verified`.
-
-### Example scenario
-
-Delete the `**Where:**` line from any KNOWN_ISSUES entry and run `roadmap.py check`. It
-passes. Every live entry carries the field today, so nothing is unverified yet.
-
-### Notes for a fix
-
-Require the field on every KNOWN_ISSUES and ENHANCEMENTS entry, with a test that deletes it.
-This was ENH-31; a check that reports success on an unchecked entry is a defect, not an
-enhancement.
-
-**Source:** gpt-6.2-astra:max — reclassified from ENH-31 in phase review pass 1, project-docs phase, 2026-11-22.
-
----
-
-<a id="ki-57"></a>
-
-## KI-57 — `roadmap.py close` can lose a concurrent edit and rewrites line endings
-
-**Severity:** Medium
-**Likelihood:** Rare
-**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def install_documents(`
-
-### What happens
-
-`close` builds both new documents from one read, then installs them without checking the
-files are still what it read. An entry added in between disappears from both files, and `close`
-reports success. It also reads in text mode and rebuilds line boundaries, so closing one entry
-can turn CRLF into LF throughout both files, and the byte-identity check compares survivors after
-`.strip()`.
-
-### Example scenario
-
-An editor saves a new KNOWN_ISSUES entry while `close KI-07` runs. The new entry is gone
-after the close, from the detail file and the index.
-
-### Notes for a fix
-
-Compare each file with what was read just before replacing it, or hold a lock from load to
-install. Preserve the newline style, and compare surviving slices without stripping them.
-
-**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
-
----
-
-<a id="ki-58"></a>
-
-## KI-58 — `check` misses drift: empty files, fenced anchors, question order, mirrored fields
-
-**Severity:** Medium
-**Likelihood:** Rare
-**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def reconcile(`
-
-### What happens
-
-Four blank files pass `check`, since no heading or pointer table is required. A fenced
-example holding a real entry's anchor is read as a duplicate. Open questions are never checked
-for order, though the templates order them by Kind. A displayed label such as `KI-01-extra` is
-read as `KI-01`, and an enhancement's Effort and every title are never compared between the
-index and the detail file.
-
-### Example scenario
-
-Change an enhancement's Effort in ROADMAP from `~1 day` to `~80 days`, or swap two open
-questions of different Kinds. `check` passes both.
-
-### Notes for a fix
-
-Validate the empty-roadmap structure, parse anchors and rows outside fences, match displayed
-IDs exactly, compare Effort and titles, and order open questions by the Kind table.
-
-**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
 
 ---
 
