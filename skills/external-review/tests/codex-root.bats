@@ -24,14 +24,15 @@ setup() {
 # Build a runnable copy of the documented Codex invocation loop, with the
 # ladder stubbed to emit $1. Both invocation tests need this; the copies
 # differed only in the stub's output.
-write_invoke_script() {   # $1 = ladder output, $2 = destination
-  python3 - "$CODEX_ROOT" "$2" "$TEST_TMP" "$1" <<'INVOKE_PY'
+write_invoke_script() {   # $1 = ladder output, $2 = destination, $3 = optional codex() body
+  python3 - "$CODEX_ROOT" "$2" "$TEST_TMP" "$1" "${3:-}" <<'INVOKE_PY'
 import pathlib,re,sys
 text=pathlib.Path(sys.argv[1]).with_name('SKILL.md').read_text()
 block=next(b for b in re.findall(r'```bash\n(.*?)```',text,re.S)
            if 'for m in ${CODEX_RUNGS' in b and 'codex exec' in b)
-prelude=('CODEX_RUNGS=' + sys.argv[4] + '\n'
-         'codex() { printf "%s\\n" "$@" > "$ARGS"; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2"; }\n')
+body=sys.argv[5] or 'printf "%s\\n" "$@" > "$ARGS"; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2";'
+prelude=('CODEX_RUNGS="' + sys.argv[4] + '"\n'
+         'codex() { ' + body + ' }\n')
 pathlib.Path(sys.argv[2]).write_text(prelude+block.replace('<scratchpad>',sys.argv[3]).replace('<repo-root>','SOURCE-REPO'))
 INVOKE_PY
 }
@@ -269,4 +270,24 @@ assert 'fixture-model:medium' not in args, args
 assert 'model_reasoning_effort=medium' in args, args
 assert 'model_reasoning_effort=high' not in args, args
 PY
+}
+
+# Fails if the loop reads its availability verdict from the whole log. Codex
+# writes the prompt and its transcript to stderr, so a run killed mid-review
+# whose material quotes "not supported" or "entitle" was taken for an
+# unavailable model and the next rung started (pass 1 of 2.1.0's review).
+@test "a failed run whose transcript quotes an availability phrase does not downshift" {
+  write_invoke_script 'first:high second:high' "$TEST_TMP/invoke.sh" \
+    'echo "${8}" >> "$TEST_TMP/models"; echo "user"; echo "quoted: model is not supported, entitlement error" >&2; return 143;'
+  run bash "$TEST_TMP/invoke.sh"
+  [ "$(cat "$TEST_TMP/models")" = "first" ] || false
+  [[ "$output" == *"not availability"* ]]
+}
+
+# Fails if a real availability error, an ERROR: line, stops downshifting.
+@test "an ERROR line naming an unsupported model moves to the next rung" {
+  write_invoke_script 'first:high second:high' "$TEST_TMP/invoke.sh" \
+    'echo "${8}" >> "$TEST_TMP/models"; if [ "${8}" = first ]; then echo "ERROR: The '"'"'first'"'"' model is not supported when using Codex with a ChatGPT account." >&2; return 1; fi; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2";'
+  run bash "$TEST_TMP/invoke.sh"
+  [ "$(tr '\n' ' ' < "$TEST_TMP/models")" = "first second " ]
 }

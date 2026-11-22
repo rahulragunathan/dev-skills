@@ -96,15 +96,16 @@ reach a third name.
 empty ladder, which discovery has already reported, leaves the other reviewer running.
 
 **An empty ladder is a failure, not an empty loop.** If discovery returns nothing — a missing or
-malformed `models_cache.json`, an `agy models` that did not run — `for m in $(…)` iterates zero
-times and the reviewer silently produces no output, which reads downstream as a clean review.
-Check the first `slug:effort` pair before running, and record that reviewer as having produced no output:
+malformed `models_cache.json`, an `agy models` that did not run — a loop over the rungs runs
+zero times and the reviewer silently produces no output, which reads downstream as a clean
+review. A failed discovery leaves its list empty, so the other reviewer still runs. Check the
+first `slug:effort` pair before running, and record that reviewer as having produced no output:
 
 ```bash
-CODEX_RUNGS="$(codex_ladder)"
+CODEX_RUNGS="$(codex_ladder)" || CODEX_RUNGS=""
 IFS=: read -r slug effort <<< "${CODEX_RUNGS%% *}"
-[ -n "$slug" ] && [ -n "$effort" ] || echo "Codex ladder discovery returned nothing — record no output for Codex, do not run"
-GEMINI_RUNGS="$(gemini_ladder)"
+[ -n "$slug" ] && [ -n "$effort" ] || { CODEX_RUNGS=""; echo "Codex ladder discovery returned nothing — record no output for Codex, do not run"; }
+GEMINI_RUNGS="$(set -o pipefail; gemini_ladder)" || GEMINI_RUNGS=""
 [ -n "$GEMINI_RUNGS" ] || echo "Gemini ladder discovery returned nothing — record no output for Gemini, do not run; agy-models.err says why"
 ```
 
@@ -149,7 +150,7 @@ for m in ${CODEX_RUNGS?run the ladder discovery block first}; do
     -o "$OUT" "<prompt>" > "$LOG" 2>&1 < /dev/null
   rc=$?
   [ "$rc" = 0 ] && [ -s "$OUT" ] && break                      # it answered; keep this rung
-  if grep -qiE 'not supported|unknown model|is not available|entitle' "$LOG"; then
+  if grep -E '^ERROR:' "$LOG" | grep -qiE 'not supported|unknown model|is not available|entitle'; then
     echo "unavailable: $slug:$effort — trying the next rung"; continue
   fi
   echo "$slug:$effort failed for a reason that is not availability — classify per Failure handling"; break
@@ -157,6 +158,9 @@ done
 ```
 
 - **`-o` captures the final message and nothing else.** A quota, auth or availability failure never reaches it, so the file is absent or empty and says nothing about why. The `.log` beside it holds stderr, and it is what the coverage line quotes verbatim.
+- **Read the availability verdict from `ERROR:` lines only.** Codex writes the prompt and its
+  whole transcript to stderr, so a run that fails mid-review leaves a log quoting the material
+  under review, and an availability phrase in that material would move to a weaker model.
 - **Codex can exit zero on a quota failure.** Require the output artifact as specified in
   [Coverage classification](#coverage-classification), and retain the diagnostic log.
 - **Name every invocation uniquely: mode, pass, chunk, attempt, model and effort.**
@@ -173,10 +177,14 @@ done
 for m in ${GEMINI_RUNGS?run the ladder discovery block first}; do
   OUT="<scratchpad>/gemini_<mode>_p<n>_c<chunk>_a<attempt>_$m.txt"
   rm -f "$OUT" "${OUT%.txt}.err"   # never inherit a previous attempt's answer
-  agy -p "$(cat "<scratchpad>/gemini_prompt_p<n>.txt")" --model "$m" \
+  agy -p "$(cat "<scratchpad>/gemini_prompt_p<n>_c<chunk>.txt")" --model "$m" \
       --print-timeout 25m > "$OUT" 2> "${OUT%.txt}.err"
   rc=$?
-  [ "$rc" = 0 ] && [ -s "$OUT" ] && break
+  if [ "$rc" = 0 ] && [ -s "$OUT" ]; then
+    grep -qiE 'print timeout|timed out|turn in progress' "${OUT%.txt}.err" || break
+    mv "$OUT" "${OUT%.txt}.partial"   # a cut-off answer is not coverage
+    echo "$m: incomplete answer (timeout on stderr) — the pair is Failed; classify per Failure handling"; break
+  fi
   if grep -qiE 'not supported|unknown model|is not available|entitle' \
        "${OUT%.txt}.err"; then
     echo "unavailable: $m — trying the next rung"; continue
@@ -185,7 +193,12 @@ for m in ${GEMINI_RUNGS?run the ladder discovery block first}; do
 done
 ```
 
-- Build the prompt in a file (rubric + inlined material). Use the print timeout in the invocation above.
+- Build each chunk's prompt in its own file (rubric + inlined material), named by pass and
+  chunk, so a retry or a parallel run cannot answer another chunk's material. Use the print
+  timeout in the invocation above.
+- **Exit 0 with an answer is not enough.** On a print timeout `agy` exits 0 and returns the
+  partial answer, saying so only on stderr. The loop moves that answer aside as `.partial`, so
+  the pair stays uncovered.
 - **Pass no `--effort`.** The model id carries its effort (`gemini-4-neon-xhigh`), and `agy`
   refuses a second one: `--model gemini-4-neon-xhigh conflicts with --effort=high`.
 
