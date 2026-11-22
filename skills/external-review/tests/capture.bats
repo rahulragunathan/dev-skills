@@ -51,6 +51,19 @@ teardown() { teardown_capture_env; }
   refute_canary
 }
 
+@test "repo: an ECDSA key and a .pypirc never reach the bundle" {
+  # Red while the exclusion list names id_rsa and id_ed25519 but not id_ecdsa,
+  # and .netrc and .npmrc but not .pypirc.
+  mkdir -p keys
+  printf 'SECRET-CANARY\n' > keys/id_ecdsa
+  printf 'password = SECRET-CANARY\n' > .pypirc
+  git add -A && git commit -qm creds
+
+  run bash "$CAPTURE" repo "$OUT"
+  [ "$status" -eq 0 ]
+  refute_canary
+}
+
 # --- completeness ----------------------------------------------------------
 
 @test "repo: a tracked file missing from the tree is withheld, not skipped" {

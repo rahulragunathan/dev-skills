@@ -79,12 +79,16 @@ check() { run python3 "$NC" --root "$REPO" "$@"; }
 }
 
 @test "refuses a link outside the root without reading it" {
-  # Fails if a link that leaves the repository is followed.
-  put doc.md '[x](../../outside.md)'
+  # Fails if a link that leaves the repository is followed: the file exists and
+  # has the anchor, so following it would pass, and it is unreadable, so
+  # reading it would crash.
+  put doc.md '[x](../outside.md#outside)'
   printf '# Outside\n' > "$TEST_TMP/outside.md"
+  chmod 000 "$TEST_TMP/outside.md"
   check
+  chmod 644 "$TEST_TMP/outside.md"
   [ "$status" -eq 1 ] || false
-  [[ "$output" == *"missing link ../../outside.md — outside the repository"* ]]
+  [[ "$output" == *"missing link ../outside.md#outside — outside the repository"* ]]
 }
 
 @test "checks a flag against the repo script its command names" {
@@ -168,17 +172,35 @@ check() { run python3 "$NC" --root "$REPO" "$@"; }
   # Fails if the check executes a command it finds in Markdown.
   put trap.sh "$(printf '#!/bin/sh\ntouch "%s/RAN"' "$TEST_TMP")"
   chmod +x "$REPO/trap.sh"
-  put doc.md 'Run `./trap.sh --x` and `bash trap.sh --x`.'
+  put gone/keep.md 'k'
+  put doc.md 'Run `./trap.sh --x`, `bash ./trap.sh --x` and see `gone/x.md`.'
   check
+  # The check ran to the end: it reported the name after the commands.
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"missing path gone/x.md"* ]] || false
   [ ! -e "$TEST_TMP/RAN" ]
+}
+
+@test "never runs a git hook while listing files" {
+  # Fails if git ls-files runs a filesystem monitor the repository configures.
+  printf '#!/bin/sh\ntouch "%s/HOOK"\n' "$TEST_TMP" > "$TEST_TMP/monitor.sh"
+  chmod +x "$TEST_TMP/monitor.sh"
+  put doc.md 'Plain text.'
+  # Set last: the fixture's own git add would run the monitor too.
+  git -C "$REPO" config core.fsmonitor "$TEST_TMP/monitor.sh"
+  check
+  [ "$status" -eq 0 ] || false
+  [ ! -e "$TEST_TMP/HOOK" ]
 }
 
 @test "real skill prose gives no false positives" {
   # Fails if ordinary prose in the shipped skills is reported as a missing name.
-  run python3 "$NC" --root "$PLUGIN" skills/design-review/SKILL.md skills/external-review/SKILL.md
-  for name in billing.py mailer.py N/A auth/token.py bundle.txt origin/main; do
-    [[ "$output" != *" $name"* ]] || false
-  done
+  # The one line expected is a target-project example in design-review, which
+  # cannot take an ignore comment: its pressure-test evidence records its hash.
+  run python3 "$NC" --root "$PLUGIN" skills/design-review/SKILL.md skills/external-review/SKILL.md \
+    skills/phase-workflow/SKILL.md skills/project-docs/SKILL.md
+  [ "$status" -eq 1 ] || false
+  [ "$output" = "skills/design-review/SKILL.md:215: missing path docs/build_system.py" ]
 }
 
 @test "accepts a path relative to the doc folder without a ./ prefix" {
@@ -211,8 +233,8 @@ check() { run python3 "$NC" --root "$REPO" "$@"; }
 
 @test "skips a file under a credential-shaped folder" {
   # Fails if only the file's own name is tested against the credential names.
-  put tools/credentials/s.sh 'echo --hidden'
-  put doc.md 'Run `tools/credentials/s.sh --hidden`.'
+  put tools/keys.env/s.sh 'echo --hidden'
+  put doc.md 'Run `tools/keys.env/s.sh --hidden`.'
   check
   [ "$status" -eq 1 ] || false
   [[ "$output" == *"missing flag --hidden"* ]]
@@ -298,4 +320,90 @@ PY
   put sub/doc.md '[a](../docs/x.md?plain=1) and [b](/docs/x.md)'
   check
   [ "$status" -eq 0 ]
+}
+
+@test "never reads through a symlinked folder to a credential-shaped one" {
+  # Fails if only the spelled path is tested: lib looks harmless, but it is
+  # tools/keys.env inside the repository.
+  put tools/keys.env/s.sh 'echo --hidden'
+  ln -s tools/keys.env "$REPO/lib"; git -C "$REPO" add lib
+  put doc.md 'Run `lib/s.sh --hidden`.'
+  check
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"missing flag --hidden"* ]]
+}
+
+@test "an ECDSA key and a .pypirc are credential-shaped" {
+  # Fails if the name list misses id_ecdsa or .pypirc, so the check would open them.
+  run python3 -c '
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("name_check", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+print([n for n in ("home/id_ecdsa", "home/id_ecdsa.pub", ".pypirc") if not m.credential_shaped(n)])
+' "$NC"
+  [ "$output" = "[]" ]
+}
+
+@test "a flag is matched whole, not as part of a longer one" {
+  # Fails if --format passes because the script defines --format-long.
+  put tools/s.py "p.add_argument('--format-long')"
+  put doc.md 'Run `python3 tools/s.py --format`.'
+  check
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"missing flag --format"* ]]
+}
+
+@test "an ID mentioned only in ROADMAP prose does not vouch for itself" {
+  # Fails if every ID-shaped string in the roadmap files counts as declared.
+  put docs/ROADMAP.md 'See `KI-07` for the history.'
+  put docs/KNOWN_ISSUES.md '<a id="ki-01"></a>'
+  put doc.md 'Fixed in `KI-07`; still open: `KI-01`.'
+  check
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"doc.md:1: missing id KI-07"* ]] || false
+  [[ "$output" != *"missing id KI-01"* ]]
+}
+
+@test "a backticked ignore directive is an example, not a directive" {
+  # Fails if a directive shown in a code span suppresses the next line.
+  put skills/real.py 'x = 1'
+  put doc.md "$(printf 'Write `<!-- name-check: ignore skills/gone.py -->` above it.\nSee `skills/gone.py`.')"
+  check
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"doc.md:2: missing path skills/gone.py"* ]]
+}
+
+@test "an id shown in a code span is not an anchor" {
+  # Fails if a backticked <a id> example counts as a real anchor.
+  put a.md 'Write `<a id="ki-09"></a>` before the heading.'
+  put doc.md '[x](a.md#ki-09)'
+  check
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"missing anchor a.md#ki-09"* ]]
+}
+
+@test "a named doc deleted from the work tree is a usage error" {
+  # Fails if a tracked doc that cannot be read is checked as empty and passes.
+  put doc.md 'See `gone.md`.'
+  git -C "$REPO" commit -qm doc
+  rm "$REPO/doc.md"
+  check doc.md
+  [ "$status" -eq 2 ]
+}
+
+@test "a line anchor suffix and a dated spec are handled" {
+  # Fails if #L12 is kept on the path, or a dated spec is checked as a current doc.
+  put skills/x.py 'x = 1'
+  put doc.md 'See `skills/x.py#L12`.'
+  put docs/superpowers/specs/2026-01-01-x.md '`skills/gone.py`'
+  check
+  [ "$status" -eq 0 ]
+}
+
+@test "a missing command outside the repository says so" {
+  # Fails if a command path that leaves the root is reported without the reason.
+  put doc.md 'Run `../outside/tool.sh --flag`.'
+  check
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"missing command ../outside/tool.sh — outside the repository"* ]]
 }

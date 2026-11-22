@@ -34,7 +34,7 @@ The roadmap files are optional. A repository has them only when the user asked f
   fragment is judgement — prefer a function name or a guard's condition to a whole line, and
   never a token that occurs everywhere. The four-character floor in the gate catches only the
   degenerate cases.
-- An entry filed from an external review carries a provenance line naming the model ids that found it — `Source: gpt-5.6-sol, gemini-3.1-pro-high — phase review, phase 4` — never the CLI name, so the attribution survives without a separate review store.
+- An entry filed from an external review carries a provenance line naming the model ids, with Codex's effort, that found it — `Source: gpt-5.6-sol:high, gemini-3.1-pro-high — phase review, phase 4` — never the CLI name, so the attribution survives without a separate review store.
 
 Close completed entries with the bundled helper from the repository root. It removes the
 named detail entry and pointer together, preserving the surviving entries. After any roadmap
@@ -94,6 +94,9 @@ python3 "$CLAUDE_PLUGIN_ROOT/skills/project-docs/name_check.py" --root .
   it never blocks a merge.
 - **It reads, and never runs, what it checks.** A flag is looked up in the source of the repo
   script whose command names it. Flags of external tools are not checked.
+- **What counts.** A path or command counts only when it has a `/` (`tools/s.py`, `./run.sh`),
+  so a bare script name such as `roadmap.py` is not checked. A roadmap ID exists when a detail
+  file has its entry's anchor, or `CHANGELOG.md` names it; a mention elsewhere does not count.
 - **It skips history and test input:** `CHANGELOG.md`, dated plans and specs, the templates, and
   Markdown under a `tests/` folder other than its README.
 - **It cannot catch a false claim.** A doc can name only real things and still be wrong. That is

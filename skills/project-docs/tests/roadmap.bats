@@ -840,7 +840,7 @@ PY
   # Fails if a broken scale table is silently ignored instead of refused.
   skill_copy
   cp "$SKILL/KNOWN_ISSUES-template.md" "$TEST_TMP/ki.orig"
-  for broken in missing empty repeated; do
+  for broken in missing tableless empty repeated; do
     cp "$TEST_TMP/ki.orig" "$SKILL/KNOWN_ISSUES-template.md"
     python3 - "$SKILL/KNOWN_ISSUES-template.md" "$broken" <<'PY'
 import pathlib, re, sys
@@ -848,6 +848,9 @@ p = pathlib.Path(sys.argv[1]); t = p.read_text(); how = sys.argv[2]
 rows = re.compile(r'^\| \*\*(Critical|High|Medium|Low)\*\* \|.*\n', re.M)
 if how == 'missing':
     t = t.replace('## Severity', '## Seriousness', 1)
+elif how == 'tableless':
+    # The heading stays; its table goes, so the next section's table is nearest.
+    t = re.sub(r'(## Severity\n)(?:.*\n)*?(?=## )', r'\1\nNo table.\n\n', t, count=1)
 elif how == 'empty':
     t = rows.sub('', t)
 else:
@@ -920,7 +923,103 @@ PY
   [[ "$output" == *"exit 1"*"exit 1"* ]] || false
   [ "$(cat "$NEW/ENHANCEMENTS.md")" = "KEEP" ] || false
   [ "$(ls -A "$NEW")" = "ENHANCEMENTS.md" ] || false
-  [ ! -e "$FRESH" ]
+  [ ! -e "$FRESH" ] || false
+  # The parent init made for docs/ goes too.
+  [ ! -e "$TEST_TMP/fresh-broken" ]
+}
+
+@test "init: a file replaced by someone else during set-up survives the rollback" {
+  # Fails if rollback unlinks by name, deleting a file another writer put in place.
+  NEW="$TEST_TMP/race/docs"
+  run python3 - "$RM" "$NEW" <<'PY'
+import builtins, importlib.util, os, pathlib, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+docs = pathlib.Path(sys.argv[2]); opened = []
+def flaky(path, mode='r', *a, **kw):
+    if 'x' in mode:
+        opened.append(pathlib.Path(path))
+        if len(opened) == 2:
+            # Another writer replaces the first file, then this init fails.
+            os.unlink(opened[0]); opened[0].write_text('THEIRS\n')
+            raise OSError('injected failure on the second file')
+    return builtins.open(path, mode, *a, **kw)
+m.open = flaky
+try:
+    m.cmd_init(docs)
+except SystemExit as e:
+    print('exit', e.code)
+print('first:', opened[0].read_text().strip() if opened[0].exists() else 'GONE')
+PY
+  [[ "$output" == *"exit 1"* ]] || false
+  [[ "$output" == *"first: THEIRS"* ]]
+}
+
+@test "init: a file another init created meanwhile is left in place, not a failure" {
+  # Fails if a concurrent init's file makes this one roll back, leaving the set incomplete.
+  NEW="$TEST_TMP/twin/docs"
+  run python3 - "$RM" "$NEW" <<'PY'
+import builtins, importlib.util, pathlib, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+docs = pathlib.Path(sys.argv[2]); seen = []
+def racing(path, mode='r', *a, **kw):
+    if 'x' in mode:
+        seen.append(path)
+        if len(seen) == 2:
+            builtins.open(path, 'w').write('OTHER INIT\n')
+    return builtins.open(path, mode, *a, **kw)
+m.open = racing
+try:
+    print('rc', m.cmd_init(docs))
+except SystemExit as e:
+    print('exit', e.code)
+print(sorted(p.name for p in docs.iterdir()))
+PY
+  [[ "$output" == *"rc 0"* ]] || false
+  [[ "$output" == *"['ENHANCEMENTS.md', 'KNOWN_ISSUES.md', 'OPEN_QUESTIONS.md', 'ROADMAP.md']"* ]]
+}
+
+@test "init: a termination signal mid-set-up rolls back" {
+  # Fails if SIGTERM kills init with a partial set on disk.
+  NEW="$TEST_TMP/term/docs"
+  run python3 - "$RM" "$NEW" <<'PY'
+import builtins, importlib.util, os, pathlib, signal, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+count = []
+def killed(path, mode='r', *a, **kw):
+    if 'x' in mode:
+        count.append(path)
+        if len(count) == 3:
+            os.kill(os.getpid(), signal.SIGTERM)
+    return builtins.open(path, mode, *a, **kw)
+m.open = killed
+try:
+    m.cmd_init(pathlib.Path(sys.argv[2]))
+except SystemExit as e:
+    print('exit', e.code)
+PY
+  [[ "$output" == *"exit 1"* ]] || false
+  [ ! -e "$TEST_TMP/term" ]
+}
+
+@test "init: a docs path that is a file is refused cleanly" {
+  # Fails if init crashes with a traceback when --docs names a file.
+  printf 'x\n' > "$TEST_TMP/afile"
+  run python3 "$RM" init --docs "$TEST_TMP/afile"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" != *Traceback* ]] || false
+  [ "$(cat "$TEST_TMP/afile")" = "x" ]
+}
+
+@test "init and check refuse a stray entry id" {
+  # Fails if `init KI-01` is read as `init`, setting up files the user did not mean to create.
+  run python3 "$RM" init KI-01 --docs "$TEST_TMP/stray/docs"
+  [ "$status" -ne 0 ] || false
+  [ ! -e "$TEST_TMP/stray" ] || false
+  run python3 "$RM" check KI-01 --docs "$DOCS"
+  [ "$status" -ne 0 ]
 }
 
 @test "init: keeps each template's header and scales" {

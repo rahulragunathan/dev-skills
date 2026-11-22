@@ -147,6 +147,9 @@ def load_scales(template_dir: pathlib.Path) -> dict[str, dict[str, list[str]]]:
                 fail(f"refusing: no {field} scale in {name}")
             rows, in_table = [], False
             for line in lines[start + 1:]:
+                # The table belongs to this section: never take the next one's.
+                if line.startswith("## "):
+                    break
                 if line.startswith("|"):
                     in_table = True
                     rows.append(line)
@@ -507,8 +510,13 @@ def install_documents(docs: pathlib.Path, proposed: dict[str, str]) -> None:
 def cmd_init(docs: pathlib.Path) -> int:
     """Create whichever roadmap files are missing, from the templates without
     their example entries, so a fresh set-up passes `check`. An existing file,
-    or a symlink in its place, is never touched."""
+    or a symlink in its place, is never touched, and a file that appears while
+    this runs is left to whoever made it. On failure, or on SIGINT or SIGTERM,
+    it removes what it made and only that: each file it still owns, by inode,
+    and each folder it created."""
     names = ["ROADMAP.md", *FILES.values()]
+    if os.path.lexists(docs) and not docs.is_dir():
+        fail(f"refusing: {docs} exists and is not a folder")
     missing = [n for n in names if not os.path.lexists(docs / n)]
     if not missing:
         print("nothing to set up")
@@ -524,39 +532,66 @@ def cmd_init(docs: pathlib.Path) -> int:
         else:
             text = split_entries(text)[0].rstrip("\n") + "\n"
         bodies[name] = text
-    made_docs = not docs.exists()
-    docs.mkdir(parents=True, exist_ok=True)
-    created = []
+
+    def interrupted(signum, frame):
+        raise KeyboardInterrupt(f"signal {signum}")
+
+    made_dirs = []                      # deepest last
+    created: list[tuple[pathlib.Path, int, int]] = []
+    previous = {sig: signal.signal(sig, interrupted) for sig in (signal.SIGINT, signal.SIGTERM)}
     try:
+        for folder in [*reversed(docs.parents), docs]:
+            if not os.path.lexists(folder):
+                folder.mkdir()
+                made_dirs.append(folder)
         for name, text in bodies.items():
             # Mode "x" refuses any existing entry, a dangling symlink included,
             # so nothing that appeared since the check above is replaced.
-            with open(docs / name, "x") as f:
-                created.append(docs / name)
+            try:
+                f = open(docs / name, "x")
+            except FileExistsError:
+                continue
+            with f:
+                st = os.fstat(f.fileno())
+                created.append((docs / name, st.st_dev, st.st_ino))
                 f.write(text)
     except BaseException as exc:
-        for path in created:
-            path.unlink(missing_ok=True)
-        if made_docs:
-            docs.rmdir()
-        fail(f"refusing: set-up failed, nothing left behind: {exc}")
-    for path in created:
+        for sig in previous:
+            signal.signal(sig, signal.SIG_IGN)
+        for path, dev, ino in created:
+            try:
+                st = os.lstat(path)
+            except FileNotFoundError:
+                continue
+            if (st.st_dev, st.st_ino) == (dev, ino):
+                path.unlink()
+        for folder in reversed(made_dirs):
+            try:
+                folder.rmdir()
+            except OSError:
+                break                   # someone else's file is in it now
+        fail(f"refusing: set-up failed, nothing of ours left behind: {exc}")
+    finally:
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
+    for path, _, _ in created:
         print(f"created {path}")
     return 0
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("command", choices=["check", "close", "init"])
-    ap.add_argument("id", nargs="?")
-    ap.add_argument("--docs", type=pathlib.Path, default=pathlib.Path("docs"))
+    commands = ap.add_subparsers(dest="command", required=True)
+    for name in ("check", "close", "init"):
+        sub = commands.add_parser(name)
+        if name == "close":
+            sub.add_argument("id", help="the entry to close, e.g. KI-15")
+        sub.add_argument("--docs", type=pathlib.Path, default=pathlib.Path("docs"))
     args = ap.parse_args()
     if args.command == "check":
         return cmd_check(args.docs)
     if args.command == "init":
         return cmd_init(args.docs)
-    if not args.id:
-        fail("close needs an entry id, e.g. roadmap.py close KI-15")
     return cmd_close(args.docs, args.id.upper())
 
 

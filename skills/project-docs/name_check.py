@@ -34,9 +34,13 @@ Finding = collections.namedtuple("Finding", "path line kind name reason")
 # The credential-shaped names external-review's capture.sh withholds; a test
 # keeps the two lists equal.
 SECRET_NAMES = ("*.env", "*.env.*", "*.pem", "*.key", "*.p12", "*.pfx", "*.crt", "*id_rsa*",
-                "*id_ed25519*", "*credentials*", "*.netrc", "*.npmrc", "*.sqlite", "*.sqlite3")
+                "*id_ed25519*", "*id_ecdsa*", "*.pypirc", "*credentials*", "*.netrc", "*.npmrc",
+                "*.sqlite", "*.sqlite3")
 INTERPRETERS = {"python3", "python", "bash", "sh", "node"}
 ID = re.compile(rf"({'|'.join(FILES)})-\d+")
+# An ID is declared by its entry's anchor in a detail file, or named in CHANGELOG.
+ID_ANCHOR = re.compile(rf"""<a\s+id=["']((?:{'|'.join(FILES).lower()})-\d+)["']""")
+ID_WORD = re.compile(rf"(?<![\w-])(?:{'|'.join(FILES)})-\d+(?![\w-])")
 FLAG = re.compile(r"(--[A-Za-z0-9][\w-]*)(=\S*)?")
 BARE = re.compile(r"[A-Za-z][\w.+-]*")
 # A trailing line, range, symbol or line-anchor suffix: `x.py:12`, `x.py::test`.
@@ -48,7 +52,7 @@ IGNORE = re.compile(r"<!--\s*name-check:\s*ignore\s+(.+?)\s*-->")
 REFDEF = re.compile(r"^ {0,3}\[[^\]]+\]:\s*<?([^\s>]+)>?")
 HEADING = re.compile(r"^ {0,3}#{1,6}\s+(.*?)\s*#*\s*$")
 HTML_ID = re.compile(r"""\b(?:id|name)=["']([^"']+)["']""")
-ROADMAP_FILES = ("docs/ROADMAP.md", *(f"docs/{name}" for name in FILES.values()), "CHANGELOG.md")
+DETAIL_FILES = tuple(f"docs/{name}" for name in FILES.values())
 
 
 class NotARepo(Exception):
@@ -84,8 +88,9 @@ def flag_name(word: str) -> str | None:
 class Repo:
     def __init__(self, root: pathlib.Path):
         self.root = root.resolve()
-        out = subprocess.run(["git", "-C", str(self.root), "ls-files", "-z"],
-                             capture_output=True, text=True)
+        # core.fsmonitor names a program git would run while reading the index.
+        out = subprocess.run(["git", "-c", "core.fsmonitor=false", "-C", str(self.root),
+                              "ls-files", "-z"], capture_output=True, text=True)
         if out.returncode != 0:
             raise NotARepo(f"not a git repository: {root}")
         self.tracked = [p for p in out.stdout.split("\0") if p]
@@ -94,7 +99,8 @@ class Repo:
         self._text: dict[str, str | None] = {}
         self._anchors: dict[str, set[str]] = {}
         self._code: str | None = None
-        self.ids = {m[0] for f in ROADMAP_FILES for m in ID.finditer(self.text(f) or "")}
+        self.ids = {m[1].upper() for f in DETAIL_FILES for m in ID_ANCHOR.finditer(self.text(f) or "")}
+        self.ids |= set(ID_WORD.findall(self.text("CHANGELOG.md") or ""))
 
     def inside(self, rel: str) -> bool:
         """True when the path, with every symlink on the way resolved, is in the root.
@@ -116,8 +122,10 @@ class Repo:
 
     def _read(self, rel: str) -> str | None:
         path = self.root / rel
+        # Any symlink on the way, not only the last one, could lead to a
+        # credential-shaped folder under a harmless name.
         if (not self.inside(rel) or credential_shaped(rel)
-                or path.is_symlink() or not path.is_file()):
+                or os.path.realpath(path) != os.path.abspath(path) or not path.is_file()):
             return None
         data = path.read_bytes()
         if b"\0" in data[:8192]:
@@ -141,9 +149,15 @@ class Repo:
                     slug = slugify(m[1])
                     found.add(f"{slug}-{seen[slug]}" if seen[slug] else slug)
                     seen[slug] += 1
-                found.update(HTML_ID.findall(line))
+                found.update(HTML_ID.findall(blank_spans(line)))
             self._anchors[rel] = found
         return self._anchors[rel]
+
+
+def blank_spans(line: str) -> str:
+    """The line with code spans blanked, so an example is not read as markup
+    and the columns of everything else stay where they were."""
+    return FRAGMENT.sub(lambda m: " " * len(m[0]), line)
 
 
 def slugify(heading: str) -> str:
@@ -167,14 +181,14 @@ def visible_lines(text: str) -> list[str]:
             continue
         # Comment markers are found with code spans blanked out, so a
         # backticked `<!--` is text, not the start of a comment.
-        masked = FRAGMENT.sub(lambda m: " " * len(m[0]), line)
+        masked = blank_spans(line)
         if comment:
             end = masked.find("-->")
             if end < 0:
                 out.append("")
                 continue
             comment, line, masked = False, line[end + 3:], masked[end + 3:]
-        if not IGNORE.search(line):
+        if not IGNORE.search(masked):
             while (start := masked.find("<!--")) >= 0:
                 end = masked.find("-->", start + 4)
                 if end < 0:
@@ -218,7 +232,7 @@ def check_doc(repo: Repo, rel: str) -> list[Finding]:
     ignored: set[str] = set()
     for number, line in enumerate(visible_lines(repo.text(rel) or ""), 1):
         here, ignored = ignored, set()
-        directive = IGNORE.search(line)
+        directive = IGNORE.search(blank_spans(line))
         if directive:
             ignored = set(directive[1].split())
             continue
@@ -245,10 +259,10 @@ def check_doc(repo: Repo, rel: str) -> list[Finding]:
                     found.append(("path", words[0], ""))
         # A lone flag is checked only against a repo script named on the same line.
         for flag in lone_flags:
-            if scripts and not any(flag in (repo.text(s) or "") for s in scripts):
+            if scripts and not any(defines(repo.text(s), flag) for s in scripts):
                 found.append(("flag", flag, ""))
 
-        prose = FRAGMENT.sub("", line)
+        prose = blank_spans(line)
         targets = [m[1] or m[2] for m in LINK.finditer(prose)]
         ref = REFDEF.match(prose)
         if ref:
@@ -274,15 +288,23 @@ def check_command(repo, words, doc_dir, found) -> str | None:
                 and not re.search(rf"(?<![\w-]){re.escape(first)}(?![\w-])", repo.code())):
             found.append(("command", first, ""))
         return None
+    if not repo.inside(script):
+        found.append(("command", first, "outside the repository"))
+        return None
     if not repo.present(script):
         found.append(("command", script, ""))
         return None
-    source = repo.text(script) or ""
+    source = repo.text(script)
     for word in args:
         flag = flag_name(word)
-        if flag and flag not in source:
+        if flag and not defines(source, flag):
             found.append(("flag", flag, ""))
     return script
+
+
+def defines(source: str | None, flag: str) -> bool:
+    """The flag appears whole in the script: --format is not --format-long."""
+    return bool(source) and re.search(rf"(?<![\w-]){re.escape(flag)}(?![\w-])", source) is not None
 
 
 def check_link(repo, target, rel, doc_dir) -> list[tuple]:
@@ -316,6 +338,10 @@ def main() -> int:
     unknown = [f for f in named if f not in repo.tracked or not f.endswith(".md")]
     if unknown:
         print(f"not a tracked Markdown file: {', '.join(unknown)}", file=sys.stderr)
+        return 2
+    unreadable = [f for f in named if repo.text(f) is None]
+    if unreadable:
+        print(f"cannot read: {', '.join(unreadable)}", file=sys.stderr)
         return 2
     docs = [f for f in (named or repo.tracked) if in_scope(f)]
     findings = [f for rel in docs for f in check_doc(repo, rel)]

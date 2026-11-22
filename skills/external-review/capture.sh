@@ -79,6 +79,7 @@ WITHHELD="$OUT/withheld.txt"
 EXCL=(':(top,exclude,icase)*.env' ':(top,exclude,icase)*.env.*' ':(top,exclude,icase)*.pem'
       ':(top,exclude,icase)*.key' ':(top,exclude,icase)*.p12' ':(top,exclude,icase)*.pfx'
       ':(top,exclude,icase)*.crt' ':(top,exclude,icase)*id_rsa*' ':(top,exclude,icase)*id_ed25519*'
+      ':(top,exclude,icase)*id_ecdsa*' ':(top,exclude,icase)*.pypirc'
       ':(top,exclude,icase)*credentials*' ':(top,exclude,icase)*.netrc' ':(top,exclude,icase)*.npmrc'
       ':(top,exclude,icase)*.sqlite' ':(top,exclude,icase)*.sqlite3')
 if [ "${#EXTRA_EXCL[@]}" -gt 0 ]; then
