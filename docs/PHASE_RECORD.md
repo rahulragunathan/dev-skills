@@ -22,11 +22,21 @@ in flight the body is the single line `No phase in flight.`
 | `MERGE_METHOD` | `squash` |
 | Branched from | `origin/main` at `d42d5e0` |
 | Started | 2026-11-20 |
-| `PR` | recorded at the gate |
+| `PR` | 9 |
 | Release | v2.1.0 |
 
 All three merge methods are enabled on the repository; `squash` is selected because the preflight
 takes the first allowed method in the order squash, rebase, merge.
 
-The dev-setup standards change lands in a second PR in that repository, signed off at the same
-gate and merged after this one.
+The dev-setup standards change lands in a second PR, signed off at the same gate and merged
+after this one:
+
+| Key | Value |
+| --- | --- |
+| `REPO` | `rahulragunathan/dev-setup` |
+| `PHASE_BRANCH` | `feature/standards-project-docs` |
+| `MERGE_METHOD` | `squash` |
+| `PR` | 5 |
+| Release | v1.1.0 |
+
+Sign-off names the head of each PR; the hand-off gives both.
