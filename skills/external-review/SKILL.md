@@ -221,6 +221,11 @@ when its log last changed, and flags a run past the 30-minute print timeout. In 
 a Monitor that runs it every 300 seconds until no invocation is running; elsewhere, check at that
 interval. Change it in `progress.sh` and verify it with `tests/progress.bats`.
 
+**A machine that sleeps pauses the review.** The reviewers' network connections drop, the
+updates stop, and a log stops changing; after waking, a run can hang rather than resume. If a
+log has not changed for longer than the machine was asleep (`pmset -g log` on macOS shows the
+sleeps), stop that invocation and run it again as the next attempt.
+
 **Probe each reviewer before committing a pass.**
 
 ```bash
@@ -277,7 +282,7 @@ Prompt drift between the two reviewers corrupts the agree/disagree triage. Compo
    **Keep an excluded area out of the bundle as well as out of the preamble.** A reviewer reads what it is given, and an instruction not to report on a skill whose files sit in front of it does not hold — that was measured, not assumed. Pass `--exclude <path>` to `capture.sh` once per excluded area, and keep the preamble sentence too, so a reviewer meeting a reference to the area elsewhere can still say so in one line. The excluded files leave the manifest and appear in the excluded count, so the reconciliation still names them. `--exclude` is refused in `plan` mode, which captures a single named file.
 3. **Focus list** by mode:
    - *plan*: gaps and missing steps, risks and failure modes, sequencing problems, simpler approaches missed, anything underspecified.
-   - *phase / repo*: real bugs (report everything, do not self-filter for severity), silent failures, security issues, design choices that will not hold up, code duplication/consolidation opportunities, genuinely missing test coverage; plus doc-vs-code contradictions (README, ARCHITECTURE, CLAUDE.md, ROADMAP + KNOWN_ISSUES/ENHANCEMENTS/OPEN_QUESTIONS, CHANGELOG).
+   - *phase / repo*: real bugs (report everything, do not self-filter for severity), silent failures, security issues, design choices that will not hold up, code duplication/consolidation opportunities, genuinely missing test coverage; plus doc-vs-code contradictions (README, ARCHITECTURE, AGENTS.md or CLAUDE.md, the roadmap files where the repo has them, CHANGELOG).
 4. **Test-discrimination question** (*phase / repo* only): *"For each test in the material below, say whether it would still pass with the change it covers reverted. Name any test that asserts on a mock, on a constant, or on something true before the change."* This is a backstop — phase-workflow §3 step 3 already checks that every new test has a recorded red, and **mutates** the named behaviour of a test written after its fix, which a reviewer cannot do. Ask anyway: a reviewer reading the assertion catches a different class than a mutation catches.
 5. **Do-not-read instruction (mandatory, both reviewers):**
 
@@ -439,7 +444,7 @@ and use the timeout in the Gemini invocation above. A timeout can leave no answe
 wc -c "$BUNDLE"    # split by directory or concern if this is over ~120000
 ```
 
-**Split on a seam, and repeat the shared context in every chunk.** Cross-file contradiction is the main thing a review of prose is for, and chunking is exactly what hides it — so the files every other file must agree with (the repo `CLAUDE.md`, `README.md`, `docs/ARCHITECTURE.md`) go into *each* chunk, and each prompt says which chunk it is and that the others cover the rest, so nothing is reported missing merely because it is elsewhere.
+**Split on a seam, and repeat the shared context in every chunk.** Cross-file contradiction is the main thing a review of prose is for, and chunking is exactly what hides it — so the files every other file must agree with (the project instructions file, `AGENTS.md` or `CLAUDE.md`, then `README.md` and `docs/ARCHITECTURE.md`) go into *each* chunk, and each prompt says which chunk it is and that the others cover the rest, so nothing is reported missing merely because it is elsewhere.
 
 State exactly what each invocation covered. Reconcile the chunks against the file count and
 apply [Coverage classification](#coverage-classification) to every required pair.
@@ -471,7 +476,7 @@ model downshift. The probe must carry the same do-not-read instruction as the re
 2. **Deduplicate across reviewers.** One row per distinct finding. Two reviewers reporting the same thing is signal, not noise — merge them into one row listing **both model ids, including Codex's effort**, per the Model column rule below. Never `Both`: a row can outlive this table by being filed as a roadmap entry, and `Both` resolves only against one pass's coverage line.
 3. **Give every finding a disposition** and present them in the findings table below. *plan* mode: the table goes in the plan. *phase* mode: the [review record](#the-phase-review-record) goes in the PR description and the hand-off. *repo* mode: the table goes in the hand-off.
 
-## The findings table (canonical format — both modes)
+## The findings table (canonical format — every mode)
 
 **One table, both reviewers.** Each reviewer returns its own list; you merge them into the single table below, dedupe across them, and present that. Never hand the user two tables to reconcile.
 
@@ -500,7 +505,7 @@ If neither CLI is installed, print the skip line in its place — `External revi
 | F-02 | Token refresh races on concurrent runs | `auth/token.py`, `worker.py:41` | gpt-5.6-sol:high, gemini-3.1-pro-high | Likely | Medium | Confirmed | Filed KI-08 |
 | F-03 | Add a caching layer for lookups | `lookup.py` | gemini-3.1-pro-high | Almost always | Medium | Rejected | Not incorporated |
 
-*The dispositions above are **plan** mode; phase and repo mode use the vocabulary further down. The columns are the same in every mode.*
+*The dispositions above are **plan** mode; phase and repo mode use the vocabulary further down. A phase review adds `Pass` and `Commit` columns; see [the phase review record](#the-phase-review-record).*
 
 **F-01** — *When it fires:* `the condition that has to hold` *What happens:* `the observable
 consequence, concretely` *Reviewer's fix:* `the remediation the reviewer proposed, in its own
@@ -550,42 +555,52 @@ Column rules:
 
 `Incorporated — <where>` | `Already covered — <where>` | `Filed KI-nn / ENH-nn / UNK-nn` | `Open — no roadmap files` | `Not incorporated` (Verdict `Rejected`).
 
-A valid finding that is out of scope for this phase is **kept, not dropped**. Where the repository has `docs/ROADMAP.md`, it is filed through `project-docs` as a `KI-nn`, `ENH-nn` or `UNK-nn` entry with its ROADMAP pointer row. Where it does not, the row stays in this table as `Open — no roadmap files`; nothing creates roadmap files unless the user asks. **A reviewer reading a plan often finds a real defect in the existing code; that is a `KI-nn`.** Use `UNK-nn` only for unsettled questions, per the `OPEN_QUESTIONS` template. Present the whole table in one pass regardless of severity: a confirmed Critical does not block the plan reaching the user, who is in plan mode and can send it back.
+A valid finding that is out of scope for this phase is **kept, not dropped**. Where the repository has the four roadmap files, and `roadmap.py check` passes on them, it is filed through `project-docs` as a `KI-nn`, `ENH-nn` or `UNK-nn` entry with its ROADMAP pointer row. Where it does not, the row stays in this table as `Open — no roadmap files`; nothing creates roadmap files unless the user asks. **A reviewer reading a plan often finds a real defect in the existing code; that is a `KI-nn`.** Use `UNK-nn` only for unsettled questions, per the `OPEN_QUESTIONS` template. Present the whole table in one pass regardless of severity: a confirmed Critical does not block the plan reaching the user, who is in plan mode and can send it back.
 
 ### Disposition vocabulary — *phase / repo* mode
 
-`Fixed in phase` | `Filed KI-nn` | `Filed ENH-nn` | `Filed UNK-nn` | `Confirmed: accepted, no work planned` | `Open — no roadmap files` | `Rejected`.
+`Fixed in phase` | `Proposed: fixed in phase` | `Filed KI-nn` | `Filed ENH-nn` | `Filed UNK-nn` | `Confirmed: accepted, no work planned` | `Open — no roadmap files` | `Rejected`.
 
 **Every row lands in exactly one** — that is what guarantees nothing is quietly lost.
 
-- `Fixed in phase` — fixed on the branch, with a failing test written first. Regressions this phase introduced always land here.
-- `Filed …` — valid and deferred, filed through `project-docs` as a rated entry with its ROADMAP pointer row. Only where `docs/ROADMAP.md` exists.
+- `Fixed in phase` — fixed on the branch, with a failing test written first. Regressions this phase introduced always land here, unless the loop stopped on the pass that found them.
+- `Proposed: fixed in phase` — *not yet fixed.* A row from the pass the loop stopped on that would need a fix. It goes to the gate unfixed, and the user decides; a fix they ask for needs another pass.
+- `Filed …` — valid and deferred, filed through `project-docs` as a rated entry with its ROADMAP pointer row. Only where the repository has all four roadmap files (`roadmap.py check` passes on them); a `docs/ROADMAP.md` of another shape is the project's own document, not consent to file.
 - `Confirmed: accepted, no work planned` — valid, and accepted as it is: nothing will be built and nothing is filed. Its note says why.
-- `Open — no roadmap files` — valid and deferred in a repository without roadmap files. The review record is where it stays.
+- `Open — no roadmap files` — valid and deferred in a repository without the four roadmap files. The review record is where it stays.
 - `Rejected` — failed verification. It is a real disposition, not a gap: it produces no artifact, and forcing it into the roadmap would pollute it.
 
 Give each filed entry a provenance line carrying the same model ids and Codex effort as the Model column — `Source: gpt-5.6-sol:high, gemini-3.1-pro-high — phase review, phase 4` — so the attribution survives the move into a durable doc. Do not write a per-phase review file under `docs/`: it would be a backward-looking doc outside CHANGELOG, breaking the tense split.
 
 ### The phase review record
 
-One record covers every pass of a phase review. It goes in the PR description and the hand-off, and it has no times in it.
+One record covers every pass of a phase review. It goes in the PR description (`gh pr edit
+--body-file`) and the hand-off, and it has no times in it.
 
-**One table across all passes**, in finding-ID order:
+**One table across all passes**: the findings table's columns, plus `Pass` and `Commit`, in the
+same severity order:
 
-| ID | Pass | Found by | Severity | Finding | Disposition | Commit |
-| --- | --- | --- | --- | --- | --- | --- |
-| F-01 | 1 | gpt-5.6-sol:high, gemini-3.1-pro-high | High | Token refresh races on concurrent runs | Fixed in phase | `a1b2c3d` |
-| F-02 | 1 | gemini-3.1-pro-high | Low | README names a removed flag | Confirmed: accepted, no work planned | — |
-| F-03 | 2 | gpt-5.6-sol:high | Medium | The F-01 fix drops the retry count | Fixed in phase | `d4e5f6a` |
+| # | Pass | Finding | Files | Model | Likelihood | Severity | Verdict | Disposition | Commit |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| F-01 | 1 | Token refresh races on concurrent runs | `auth/token.py` | gpt-5.6-sol:high, gemini-3.1-pro-high | Likely | High | Confirmed | Fixed in phase | `a1b2c3d` |
+| F-03 | 2 | The F-01 fix drops the retry count | `auth/token.py:40-52` | gpt-5.6-sol:high | Almost always | Medium | Confirmed | Fixed in phase | `d4e5f6a` |
+| F-02 | 1 | README names a removed flag | `README.md` | gemini-3.1-pro-high | Almost always | Low | Confirmed | Confirmed: accepted, no work planned | — |
 
-`Found by` follows the Model column rules above: exact model ids, with Codex's effort. `Severity` follows the Severity column rules. `Commit` is the fix commit, or `—`.
+The column rules above apply. `Commit` is the fix commit, or `—`. A finding from the phase's own
+checks rather than an external reviewer (`/code-review high`, `design-review`) names that check
+in the Model column and `—` in Pass.
 
 **Under the table, a keyed note for every row** — *When it fires*, *What happens*, *Reviewer's fix* and *Commentary*, as above. A fixed row adds:
 
 - *Fix:* the change, in one line.
 - *Scenarios:* each scenario the failing test covered, with the red you observed before the fix and the green after.
 
-**Then a short block per pass:** its coverage line with each invocation's output path and byte count; its findings counted by severity; how many were in code an earlier fix of this review wrote; and how many were accepted without work.
+**Then a short block per pass:** the commit it reviewed; its coverage line with each
+invocation's output file name and byte count; its findings counted by severity; how many were
+in code an earlier fix of this review wrote; how many were documentation drift; and how many
+were accepted without work. The PR copy names output files by name only: full scratchpad
+paths, and raw error text, stay in the hand-off, since they show local account and folder
+names to anyone who can read the PR.
 
 ## Follow-up passes — *phase* mode only
 
@@ -597,10 +612,34 @@ A first review changes the code, and those changes have been reviewed by no one 
 
 Run up to three passes without checking in. Pass 1 is full scope; every later pass is narrow (below). Record the commit each pass reviewed.
 
-1. **Run the pass and triage it.** Verify every finding and give it a disposition.
-2. **Apply the stop rule before fixing anything, and only to a pass with full coverage.** Stop after pass 3. Stop when a pass, from pass 2 on, has no new Critical or High and fewer findings than the pass before. Stop when a pass finds nothing. **A failed or partial pass triggers neither rule**: re-run it once its reviewer can answer, or take it to the user. It never ends the loop on its own — see [Coverage classification](#coverage-classification).
-3. **If the loop continues:** fix the `Fixed in phase` rows, each with a failing test first, and commit. File the deferred rows. The next pass reviews only `<commit the last pass reviewed>..HEAD`.
-4. **If it stops:** that pass's findings are not fixed. Deferred rows are filed before the gate; rows that would need a fix go to the gate marked `Proposed: fixed in phase`, so no fix reaches the gate unreviewed. A fix the user then asks for needs another pass, and so does any pass past three: both are the user's call.
+**A pass is complete when every pair that could answer did:** each installed, independent
+reviewer covered every chunk. A reviewer that preflight found missing, or one disqualified as
+the diff's author, is named in each pass's coverage line, and does not stop a pass from being
+complete. A **Failed** pair does: a timeout, a quota error, a partial answer.
+
+1. **Run the pass and triage it.** Verify every finding and give it a disposition. A finding
+   that an earlier pass's fix did not work reopens that row, and counts as new at its own
+   severity.
+2. **Apply the stop rule before fixing anything, and only to a complete pass.** Count verified
+   findings only; `Rejected` rows do not count. Stop after pass 3. Stop when a pass, from pass 2
+   on, has no new Critical or High and fewer findings than the pass before. Stop when a pass
+   finds nothing that needs a fix (no row would be `Fixed in phase`), since the next pass would
+   review an empty diff. **An incomplete pass triggers none of these**: re-run its failed pairs
+   once their reviewer can answer, or take it to the user, and keep the reviewed commit where it
+   was. It never ends the loop on its own — see
+   [Coverage classification](#coverage-classification).
+3. **If the loop continues:** fix the `Fixed in phase` rows, each with a failing test first,
+   file the deferred rows, run the full suite, and commit. The next pass reviews only
+   `<commit the last pass reviewed>..HEAD`. If that commit is no longer an ancestor of `HEAD`
+   (an amend or a rebase), the next pass is full scope.
+4. **If it stops:** that pass's findings are not fixed. Deferred rows are filed before the gate;
+   rows that would need a fix go to the gate as `Proposed: fixed in phase`. A fix the user then
+   asks for needs another pass, and so does any pass past three: both are the user's call.
+
+**After the last pass, only bookkeeping lands:** filing the deferred rows, and the phase record.
+Anything else, such as a doc fix from the post-fix re-check or a regenerated diagram, needs a
+narrow pass of its own. At the gate, `git diff --stat <commit the last pass reviewed>..HEAD`
+shows what landed after review, and the hand-off names it.
 
 ### What the user sees at the gate
 

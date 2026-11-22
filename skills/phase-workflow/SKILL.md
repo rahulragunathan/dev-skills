@@ -15,7 +15,7 @@ The rules below are this skill's defaults. Where the user's or the project's own
 
 **Anything that lands cuts a release, numbered by semver.** Version by what changed, never by how the work was classified: a fix is a patch, a new flag a minor, a break major. A phase release names the phase in its CHANGELOG heading.
 
-**Roadmap files are optional.** A repository has `docs/ROADMAP.md` and its three supporting files only when the user asked for them, and `project-docs` owns them. Wherever this skill says to file a finding, file it through `project-docs` if `docs/ROADMAP.md` exists; otherwise the finding stays in that review's own table as `Open — no roadmap files`. Never create roadmap files to have somewhere to file.
+**Roadmap files are optional.** A repository has `docs/ROADMAP.md` and its three supporting files only when the user asked for them, and `project-docs` owns them. Wherever this skill says to file a finding, file it through `project-docs` if the repository has all four files and `roadmap.py check` passes on them; otherwise the finding stays in that review's own table as `Open — no roadmap files`, and the hand-off says why. A `docs/ROADMAP.md` of another shape is the project's own document. Never create roadmap files to have somewhere to file.
 
 **Run the external review checkpoint.** Follow `external-review`'s
 [coverage classification](../external-review/SKILL.md#coverage-classification) for missing CLIs,
@@ -66,7 +66,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    git rev-parse --verify "refs/remotes/origin/$DEFAULT_BRANCH^{commit}"
    ```
 
-   **One-time branch creation.** Record the selected method as step 3 requires before running this block. Never re-create the branch on resume. If publication fails, inspect the existing local branch and retry only its push.
+   **One-time branch creation.** Create the branch, then write and commit the phase record on it (step 3), then publish it. The record is written after the clean-tree check, so it never trips it. Never re-create the branch on resume. If publication fails, inspect the existing local branch and retry only its push.
 
    ```bash
    set -euo pipefail
@@ -74,6 +74,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    TREE_STATE="$(git status --porcelain=v1 --untracked-files=all)"
    [ -z "$TREE_STATE" ] || { echo "TREE DIRTY — save the work before starting"; exit 1; }
    git switch -c "$PHASE_BRANCH" --no-track "refs/remotes/origin/$DEFAULT_BRANCH"
+   # Write docs/PHASE_RECORD.md (step 3) and commit it here, then:
    git push -u origin "$PHASE_BRANCH"
    ```
 
@@ -87,7 +88,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 
    Body ends with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
 
-3. **Record exactly one allowed merge method at phase start.** The preflight selects `squash`, then `rebase`, then `merge`, taking the first allowed method. Persist `ORIGIN_URL`, `ORIGIN_PUSH_URL`, `REPO`, `DEFAULT_BRANCH`, `PHASE_BRANCH` and that selection in **`docs/PHASE_RECORD.md`** before publishing the branch — that file is the phase record, linked from `ROADMAP.md` where the repository has one, and it holds the phase in flight only. Overwrite it at each phase start rather than appending: one record per phase accumulating is the phase ledger the roadmap rules forbid. When no phase is in flight its body is the single line `No phase in flight.`, so the pointer never dangles and §4 always has somewhere to read. Preserve that record across sessions. If the user specifies another method, verify it is allowed before selecting it. Later checks do not replace this record. At the gate and merge, load the recorded method into `MERGE_METHOD`. A disabled method ends the merge attempt; do not silently substitute one. Repo rules and required reviews still apply.
+3. **Record exactly one allowed merge method at phase start.** The preflight selects `squash`, then `rebase`, then `merge`, taking the first allowed method. Persist `ORIGIN_URL`, `ORIGIN_PUSH_URL`, `REPO`, `DEFAULT_BRANCH`, `PHASE_BRANCH` and that selection in **`docs/PHASE_RECORD.md`**, committed on the new branch before its first push — that file is the phase record, linked from `ROADMAP.md` where the repository has one, and it holds the phase in flight only. Overwrite it at each phase start rather than appending: one record per phase accumulating is the phase ledger the roadmap rules forbid. When no phase is in flight its body is the single line `No phase in flight.`, so the pointer never dangles and §4 always has somewhere to read. Preserve that record across sessions. If the user specifies another method, verify it is allowed before selecting it. Later checks do not replace this record. At the gate and merge, load the recorded method into `MERGE_METHOD`. A disabled method ends the merge attempt; do not silently substitute one. Repo rules and required reviews still apply.
 
 4. **Land the plan's diagram generators.** `design-review` builds them into the scratchpad at §1, because §1 runs before this branch exists, and the plan's front matter records their filenames. Copy **every** generator the plan recorded into `docs/` as this phase's first task **and commit it**. That commit is the baseline `design-review phase` compares against at §3 step 2. Skip this step entirely when the plan recorded none, which is the no-`drawio` path.
 5. **Roadmap files are not seeded.** If the user asks for them, `project-docs` sets them up with `roadmap.py init`.
@@ -96,13 +97,13 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 
 ## 3. Phase end — retrospective (before hand-off)
 
-**Seven steps, in this order, every one of them.** The retrospective starts once the phase's last task is done and the suite is green — that is its trigger, not a request from the user. Each step produces an artifact, and you do not reach the gate at step 7 without all of them. Findings from every step land in the roadmap files through `project-docs` where `docs/ROADMAP.md` exists, and in the PR's review record where it does not — never in chat alone.
+**Seven steps, in this order, every one of them.** The retrospective starts once the phase's last task is done and the suite is green — that is its trigger, not a request from the user. Each step produces an artifact, and you do not reach the gate at step 7 without all of them. Findings from every step land in the roadmap files through `project-docs` where the repository has them (the rule above), and in the PR's review record where it does not — never in chat alone.
 
 | Step | Artifact it must produce |
 | --- | --- |
 | 1. Confidence check | a written answer, and the extra tests it directed |
 | 2. `design-review phase` → `/simplify` on the branch diff → `/code-review high` | the module table plus whatever fired, or the line saying nothing did; and a re-run green suite |
-| 3. Red record check | a `Red:` line for every test added this phase, and a mutation result for each test written after its fix or in doubt |
+| 3. Red record check | a `Red:` line for every test added or changed this phase, or a mutation result for each one without a line, written after its fix, or in doubt |
 | 4. Documentation pass | the doc diffs, the name-check output, and the list of docs read in full |
 | 5. External review loop | the review record: one findings table across all passes, its notes, and a coverage line per pass |
 | 6. Post-fix drift re-check | confirmation that every filing has its ROADMAP row, where the roadmap files exist |
@@ -130,19 +131,19 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    - `high` at the gate — the code is about to merge and ship in a release, so a missed bug costs more than a false one, and step 5's triage already handles uncertain findings. `medium` for mid-phase spot checks, where a short actionable list beats a triage pass. Not `ultra`: it's user-triggered and billed, and step 5 already covers that breadth.
 3. **Red record check.** A test that passes whether or not the bug exists is worse than no test: it is a false green that the CHANGELOG then cites as evidence. Reading a test does not reveal this. The only proof a test discriminates is having watched it fail for the reason you claim.
 
-   **Every test this phase added, including any written during step 5, needs a `Red:` line** in a phase commit message — `Red: <test> — <observed failure>`, written when the test went red:
+   **Every test this phase added or materially changed, including any written during step 5, needs a `Red:` line** in a phase commit message — `Red: <test> — <observed failure>`, written when the test went red:
 
    ```bash
    git log --format=%B "origin/$DEFAULT_BRANCH"..HEAD | grep '^Red: '
    ```
 
-   List the tests the phase diff adds and match each to a line. The red each line records must meet the same three rules that make any red count:
+   List the tests the phase diff adds or changes (an edited assertion, fixture or name) and match each to a line. The red each line records must meet the same three rules that make any red count:
 
    - **A stated failure condition** — what, specifically, would make this test fail. Not "it tests the parser": *"it fails if a `<script>` survives sanitization"*. Where the test closes a tracked issue it carries the ID (`test_ki_07_...`, or a `# KI-07` docstring line). **Most tests have no ID**, and that is fine; the stated failure condition is the requirement, always.
    - **A fixture that carries the property under test.** Assert this *before* asserting on the outcome. No amount of breaking production code will fail a test whose input never had the property: a quote-escaping test needs a quote in its input, a timezone test needs a non-UTC account.
    - **The named failure, not a harness error** (see below).
 
-   **A mutation check is needed only for a test written after its fix, a test with no `Red:` line, or one whose recorded red is in doubt.** Run it now, as follows.
+   **A mutation check is needed only for a test written after its fix, a test with no `Red:` line, or one whose recorded red is in doubt.** Run it now, as follows. Its result is that test's evidence in place of a `Red:` line, and the hand-off lists it as a mutation, not as an observed red.
 
    **Mutate, don't revert.** Break the specific behaviour the test names, in place, and confirm the test fails on the named assertion. Reverting the whole fix is coarser and has a hole: `git stash push` without `-u` leaves a newly added file in the tree, so the "reverted" code is still there and the test is falsely certified.
 
@@ -230,7 +231,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 
    A test with no valid red is fixed or deleted — never carried — and any issue it claimed to close does not move to CHANGELOG until a test that does discriminate exists. Report the tests without a `Red:` line and the result of each mutation; a phase where every new test has its line says so.
 4. **Documentation pass — holistic, not delta.** Check every doc against the code *as it now stands*, fixing drift from earlier phases too:
-   - **Run `project-docs`' name check on every doc** (`python3 "$CLAUDE_PLUGIN_ROOT/skills/project-docs/name_check.py" --root .`). It is advisory: fix each item it lists or mark it with an ignore comment. It cannot catch a false claim.
+   - **Run `project-docs`' name check** (`python3 "$CLAUDE_PLUGIN_ROOT/skills/project-docs/name_check.py" --root .`). It reads the tracked Markdown except history (CHANGELOG, dated plans and specs), templates and test input; the reads below cover the rest. It is advisory: fix each item it lists or mark it with an ignore comment. It cannot catch a false claim.
    - **Read in full every doc that names something this phase added, changed, renamed or removed.** The diff gives the list: grep the docs for each changed name. Also read in full any doc found wrong during the phase, whatever the reason.
    - **README.md** — setup and usage; rewrite clean-slate when stale.
    - **docs/ARCHITECTURE.md** — **records and explains every diagram the project has**, one short section each saying what it depicts and when to regenerate it, not a bare embed. Regenerate each one with the `drawio` skill and compare against the generator committed at §2 (commit the `.drawio` source, generator script, and rendered PNG). **Drift-check the generator, not the PNG** — its box and edge labels are string literals naming modules and files, so they drop into the identifier check below, while a PNG is opaque to it. Catch a stale render mechanically: regenerate, then `git status`; if the PNG changes it was already out of date with its own source.
@@ -251,7 +252,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    - **Code comments** — read the comments in every file this phase touched. Delete comments describing removed behavior, fix ones the code outgrew, add a why-comment where the logic is non-obvious. Comments say *why*, not *what*.
    - **Drift check, beyond the name check** — config keys, code comments and diagram labels, which the name check does not read, and **one fact stated in several places**, which it cannot see. Report what you found, not only what you fixed.
    - **Style** — plain, familiar words; short sentences in the active voice; one idea at a time; no needless words, but no lost detail. Rewrite bloated prose you pass through, including text from earlier phases. Where the user's or the project's own standards say something different, theirs win; otherwise both apply.
-   - **docs/ROADMAP.md + the three supporting files**, where the repository has them — follow the `project-docs` templates' vocabulary and sections exactly (say **"Done"**, never "Implemented"). ROADMAP rows stay pointers; detail belongs in the supporting file. Verify every ID appears in both, that the ratings agree, and that both files are ordered by rating descending. At hand-off, ROADMAP names the phase as awaiting merge. Clear that note in the next phase's normal documentation task; do not add an unreviewed post-sign-off commit.
+   - **docs/ROADMAP.md + the three supporting files**, where the repository has them — follow the `project-docs` templates' vocabulary and sections exactly (say **"Done"**, never "Implemented"). ROADMAP rows stay pointers; detail belongs in the supporting file. Verify every ID appears in both, that the ratings agree, and that both files are ordered by rating descending: `project-docs`' `roadmap.py check` does this, and `roadmap.py close <ID>` removes a done item from both. At hand-off, ROADMAP names the phase as awaiting merge. Clear that note in the next phase's normal documentation task; do not add an unreviewed post-sign-off commit.
 **Re-gather derived evidence before this step, not after.** Some phases produce evidence by
 *running* something rather than by reasoning: subagent scenario runs, eval scores, benchmark
 numbers, generated diagrams. That evidence is only valid for the thing it was gathered against,
@@ -274,13 +275,13 @@ because that cost is exactly what tempts a skip. Say in the hand-off what was re
 what remains expired.
 
 5. **External review loop:** `external-review` in `phase` mode (Codex + Gemini). [Its loop](../external-review/SKILL.md#the-loop) runs up to three passes without checking in, with its stop rule applied before any fix, and builds one [review record](../external-review/SKILL.md#the-phase-review-record) across them. Past three passes, or a fix after the loop stopped, is the user's call.
-   - **It runs after the docs pass**, including release preparation. Fold later phase fixes into that unpublished release and commit them before the next pass or gate.
+   - **It runs after the docs pass**, including release preparation. Fold later phase fixes into that unpublished release and commit them before the next pass or gate. Each commit a pass reviews has a green full suite.
    - Build the record using `external-review`'s output contract and
      [coverage classification](../external-review/SKILL.md#coverage-classification).
    - Every finding fixed here gets a failing test first, with its `Red:` line. Run step 3's check on those tests before the next pass, and again before the gate.
 6. **Post-fix drift re-check — narrow, not another holistic pass.** If step 5's fixes moved a module, the diagrams are back in scope: regenerate and compare. Step 5 changed code after step 4 declared the docs true. Re-check only what those fixes touched: the docs and code comments the changed files invalidate, and the CHANGELOG entries whose claims moved. Then, where the roadmap files exist, confirm every filing from every pass has both its full entry and its ROADMAP pointer row, with ratings that agree. Report what you found, not only what you fixed.
 7. **Present to the user and stop** — the phase gate.
-   - **Include the review record** from step 5 in the hand-off, and put it in the PR description — never in a per-phase review file in the repository. It exists so the user can see every finding and pull any deferred or accepted one back into this phase before signing off.
+   - **Include the review record** from step 5 in the hand-off, and put it in the PR description (`gh pr edit "$PR" -R "$REPO" --body-file <file>`) — never in a per-phase review file in the repository. It exists so the user can see every finding and pull any deferred or accepted one back into this phase before signing off.
    - **Confirm `docs/PHASE_RECORD.md` is current, and do not take that on trust.** Step 4 brought
      it current, but steps 5 to 7 and every re-gate come after step 4, so it goes stale again by
      default. Compare its last commit against `HEAD`:
@@ -307,6 +308,13 @@ what remains expired.
      convenience. Sign-off binds to that head; an edit afterwards moves it and means re-requesting
      review on the new one.
    - **Do not merge.** The merge is the post-sign-off action; it happens in §4 and nowhere else. Committing and pushing are not — those happened per task, throughout the phase.
+   - **Before marking the PR ready, check what landed after review**, and run the full suite on `HEAD`. Only bookkeeping may follow the last pass: the deferred filings and the phase record (`external-review`'s [loop](../external-review/SKILL.md#the-loop)). List it:
+
+     ```bash
+     git diff --stat "<commit the last pass reviewed>"..HEAD
+     ```
+
+     Anything else in that list needs a narrow pass first. Name the list in the hand-off.
    - **The gate has two checkable states.** First, **the work is committed, pushed, and on a PR marked ready for review** — every one of those is a fact git or `gh` will answer, none is self-attested:
 
      Load the phase's recorded `ORIGIN_URL`, `ORIGIN_PUSH_URL`, `REPO`, `DEFAULT_BRANCH`, `PHASE_BRANCH` and `MERGE_METHOD`. Preserve the §2 URL values in the hand-off; do not refresh them from the current remote. Set `PR` to this phase's PR number. This workflow uses a same-repository PR.
@@ -349,10 +357,11 @@ what remains expired.
 
      Second, **the reviewer artifacts exist on disk**. Apply
      `external-review`'s [coverage classification](../external-review/SKILL.md#coverage-classification)
-     to every required chunk of every pass. Include each pass's coverage line and combined
-     findings table. Cite each invocation's exact model ID, output path and byte count, plus
-     the error log for a failed invocation. For no coverage, re-run when a reviewer is available
-     or record the user's decision to land without external review. Account for skipped reviews
+     to every required chunk of every pass. Include the review record with each pass's coverage
+     line. Cite each invocation's exact model ID, output path and byte count, plus
+     the error log for a failed invocation. For any Failed pair in the last pass, and for no
+     coverage, re-run when a reviewer is available or record the user's decision to land
+     without that review. Account for skipped reviews
      explicitly. No coverage line means step 5 has not been accounted for.
 
    - **Name the single merge method** recorded at §2 step 3.

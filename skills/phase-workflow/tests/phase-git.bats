@@ -190,6 +190,23 @@ teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/nul
   [ "$(git show-ref)" = "$before" ]
 }
 
+# Fails if a remote URL that carries credentials passes the check, which would
+# let phase start copy the token into the committed docs/PHASE_RECORD.md.
+@test "origin check: refuses a URL carrying credentials, without printing it" {
+  for url in "https://someone:notasecret@example.invalid/r.git" "https://notasecret@example.invalid/r.git"; do
+    git remote set-url origin "$url"
+    git remote set-url --push origin "$url"
+    run bash "$PUBLISH" --check-origin "$url" "$url"
+    [ "$status" -eq 1 ] || false
+    [[ "$output" == *"CREDENTIALS IN ORIGIN URL"* ]] || false
+    [[ "$output" != *notasecret* ]] || false
+  done
+  git remote set-url origin "ssh://git@example.invalid/r.git"
+  git remote set-url --push origin "ssh://git@example.invalid/r.git"
+  run bash "$PUBLISH" --check-origin "ssh://git@example.invalid/r.git" "ssh://git@example.invalid/r.git"
+  [ "$status" -eq 0 ]
+}
+
 @test "origin check: rejects a changed fetch URL" {
   git remote set-url origin "$TEST_TMP/other.git"
   run bash "$PUBLISH" --check-origin "$FETCH_URL" "$PUSH_URL"

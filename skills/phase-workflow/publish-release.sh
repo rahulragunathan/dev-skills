@@ -40,6 +40,16 @@ fi
 
 git rev-parse --git-dir >/dev/null 2>&1 || { echo "NOT A GIT REPOSITORY"; exit 1; }
 
+# A URL carrying credentials would be copied into the committed phase record
+# and the review bundle. Refuse it, and never print it.
+has_credentials() { printf '%s' "$1" | grep -qE '^[A-Za-z][A-Za-z0-9+.-]*://[^/@]*:[^/@]*@|^https?://[^/]*@'; }
+for url in "$WANT_FETCH" "$WANT_PUSH"; do
+  if has_credentials "$url"; then
+    echo "CREDENTIALS IN ORIGIN URL — refusing; use SSH or a credential helper, and do not record the URL"
+    exit 1
+  fi
+done
+
 # The remote must still be the one that was approved — both URLs. Git keeps them
 # separately, so a remote can fetch from the approved repository and push to a
 # fork, which would satisfy every SHA check and then receive the tag.
