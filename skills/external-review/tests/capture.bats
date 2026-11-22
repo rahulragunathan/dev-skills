@@ -473,3 +473,15 @@ SH
   [ "$status" -eq 1 ]
   [[ "$output" == *"A FILE FAILED TO READ"* ]]
 }
+
+@test "plan: an ECDSA key or a .pypirc named as the plan is withheld" {
+  # Red while plan mode's own credential list, separate from EXCL, lacks id_ecdsa and .pypirc.
+  for name in id_ecdsa .pypirc; do
+    printf 'SECRET-CANARY\n' > "$OUTSIDE/$name"
+    rm -rf "$OUT"
+    run bash "$CAPTURE" plan "$OUT" "$OUTSIDE/$name"
+    [ "$status" -eq 0 ] || false
+    refute_canary
+    withheld_for "$name" "credential"
+  done
+}

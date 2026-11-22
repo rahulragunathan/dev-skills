@@ -95,11 +95,10 @@ reach a third name.
 `GEMINI_RUNGS`, and refuse to start when a variable is unset rather than loop zero times. An
 empty ladder, which discovery has already reported, leaves the other reviewer running.
 
-**An empty ladder is a failure, not an empty loop.** If discovery returns nothing — a missing or
-malformed `models_cache.json`, an `agy models` that did not run — a loop over the rungs runs
-zero times and the reviewer silently produces no output, which reads downstream as a clean
-review. A failed discovery leaves its list empty, so the other reviewer still runs. Check the
-first `slug:effort` pair before running, and record that reviewer as having produced no output:
+**An empty ladder is a failure, not a clean review.** If discovery returns nothing — a missing
+or malformed `models_cache.json`, an `agy models` that did not run — record that reviewer as
+**Failed** with the reason, and run the other. Check the first `slug:effort` pair before
+running:
 
 ```bash
 CODEX_RUNGS="$(codex_ladder)" || CODEX_RUNGS=""
@@ -111,14 +110,16 @@ GEMINI_RUNGS="$(set -o pipefail; gemini_ladder)" || GEMINI_RUNGS=""
 
 **If all three rungs fail, that reviewer produces nothing. Never reach past the floor.** A review
 from the weakest tier available is worse than no review: it arrives with the same authority as a
-real one and the coverage line cannot carry the difference. Report it exactly as you would a
-missing CLI for that reviewer — no output from it, named, with the reason. Whether the pass is partial or no coverage depends on what the *other* reviewer did.
+real one and the coverage line cannot carry the difference. Record the reviewer as **Failed**,
+with the reason: it is installed, so it is not a missing CLI. Whether the pass is partial or no
+coverage depends on what the *other* reviewer did.
 
 **Reviews run at `high` effort by default, for both reviewers.** Each Codex rung is
 `slug:effort`, at `high` where the model supports it; `codex-ladder.py`'s `EFFORTS` gives the
-fallback order. Nothing below `medium` is a review, and `ultra` is never chosen: it delegates
-tasks automatically, so the work may not come from the recorded model. A Gemini id carries its
-effort, and `gemini-ladder.py` ranks `-high` ids first. Set the effort explicitly, since `-m`
+fallback order, and nothing below `medium` is offered. `ultra` is never chosen for either
+reviewer: it delegates tasks automatically, so the work may not come from the recorded model.
+A Gemini id carries its effort. `gemini-ladder.py` ranks `-high` ids first within a version and
+tier, and offers no id below `medium`; an id with an unknown suffix or none ranks last. Set the effort explicitly, since `-m`
 alone does not: split the pair and pass `-m "$slug"` with `-c model_reasoning_effort="$effort"`;
 the cache's default effort does not select the rung. Bare slugs keep the explicit `high`
 fallback. Record the effort beside the slug — a `high` run and a `max` run from one slug are
@@ -145,22 +146,24 @@ for m in ${CODEX_RUNGS?run the ladder discovery block first}; do
   OUT="<scratchpad>/codex_<mode>_p<n>_c<chunk>_a<attempt>_${slug}_${effort}.txt"
   LOG="${OUT%.txt}.log"
   rm -f "$OUT" "$LOG"          # never inherit a previous attempt's answer
+  rc=0
   codex exec -C "$ROOT" --sandbox read-only --skip-git-repo-check \
     -m "$slug" -c model_reasoning_effort="$effort" \
-    -o "$OUT" "<prompt>" > "$LOG" 2>&1 < /dev/null
-  rc=$?
+    -o "$OUT" "<prompt>" > "$LOG" 2>&1 < /dev/null || rc=$?
   [ "$rc" = 0 ] && [ -s "$OUT" ] && break                      # it answered; keep this rung
-  if grep -E '^ERROR:' "$LOG" | grep -qiE 'not supported|unknown model|is not available|entitle'; then
+  if tail -n 5 "$LOG" | grep -E '^ERROR:' | grep -qiE 'not supported|unknown model|is not available|entitle'; then
     echo "unavailable: $slug:$effort — trying the next rung"; continue
   fi
   echo "$slug:$effort failed for a reason that is not availability — classify per Failure handling"; break
 done
 ```
 
-- **`-o` captures the final message and nothing else.** A quota, auth or availability failure never reaches it, so the file is absent or empty and says nothing about why. The `.log` beside it holds stderr, and it is what the coverage line quotes verbatim.
-- **Read the availability verdict from `ERROR:` lines only.** Codex writes the prompt and its
-  whole transcript to stderr, so a run that fails mid-review leaves a log quoting the material
-  under review, and an availability phrase in that material would move to a weaker model.
+- **`-o` captures the final message and nothing else.** A quota, auth or availability failure never reaches it, so the file is absent or empty and says nothing about why. The `.log` beside it holds stderr; the hand-off quotes its error lines verbatim, and the PR copy of the record does not.
+- **Read the availability verdict from the `ERROR:` lines at the end of the log only.** Codex
+  writes the prompt and its whole transcript to stderr, so a run that fails mid-review leaves a
+  log quoting the material under review, and an availability phrase in that material would move
+  to a weaker model. A model Codex refuses fails at once, so its error is the log's last lines.
+  The status is taken with `|| rc=$?`, so the loop also works under `set -e`.
 - **Codex can exit zero on a quota failure.** Require the output artifact as specified in
   [Coverage classification](#coverage-classification), and retain the diagnostic log.
 - **Name every invocation uniquely: mode, pass, chunk, attempt, model and effort.**
@@ -176,17 +179,19 @@ done
 ```bash
 for m in ${GEMINI_RUNGS?run the ladder discovery block first}; do
   OUT="<scratchpad>/gemini_<mode>_p<n>_c<chunk>_a<attempt>_$m.txt"
-  rm -f "$OUT" "${OUT%.txt}.err"   # never inherit a previous attempt's answer
-  agy -p "$(cat "<scratchpad>/gemini_prompt_p<n>_c<chunk>.txt")" --model "$m" \
-      --print-timeout 25m > "$OUT" 2> "${OUT%.txt}.err"
-  rc=$?
-  if [ "$rc" = 0 ] && [ -s "$OUT" ]; then
-    grep -qiE 'print timeout|timed out|turn in progress' "${OUT%.txt}.err" || break
-    mv "$OUT" "${OUT%.txt}.partial"   # a cut-off answer is not coverage
-    echo "$m: incomplete answer (timeout on stderr) — the pair is Failed; classify per Failure handling"; break
+  PART="${OUT%.txt}.part"; ERR="${OUT%.txt}.err"
+  rm -f "$OUT" "$PART" "${OUT%.txt}.partial" "$ERR"   # never inherit a previous attempt
+  PROMPT="$(cat "<scratchpad>/gemini_prompt_p<n>_c<chunk>.txt")" && [ -n "$PROMPT" ] \
+    || { echo "no prompt for this chunk — not run"; break; }
+  rc=0
+  agy -p "$PROMPT" --model "$m" --print-timeout 25m > "$PART" 2> "$ERR" || rc=$?
+  if [ "$rc" = 0 ] && [ -s "$PART" ]; then
+    if ! grep -qi 'print timeout' "$ERR"; then mv "$PART" "$OUT"; break; fi
+    mv "$PART" "${OUT%.txt}.partial"   # a cut-off answer is not coverage
+    echo "$m: incomplete answer (print timeout) — the pair is Failed; classify per Failure handling"; break
   fi
-  if grep -qiE 'not supported|unknown model|is not available|entitle' \
-       "${OUT%.txt}.err"; then
+  if [ -s "$PART" ]; then mv "$PART" "${OUT%.txt}.partial"; else rm -f "$PART"; fi
+  if grep -qiE 'not supported|unknown model|is not available|entitle' "$ERR"; then
     echo "unavailable: $m — trying the next rung"; continue
   fi
   echo "$m failed for a reason that is not availability — classify per Failure handling"; break
@@ -196,9 +201,11 @@ done
 - Build each chunk's prompt in its own file (rubric + inlined material), named by pass and
   chunk, so a retry or a parallel run cannot answer another chunk's material. Use the print
   timeout in the invocation above.
-- **Exit 0 with an answer is not enough.** On a print timeout `agy` exits 0 and returns the
-  partial answer, saying so only on stderr. The loop moves that answer aside as `.partial`, so
-  the pair stays uncovered.
+- **Only a finished answer gets the output name.** `agy` streams its answer, so the loop writes
+  to `.part` and renames it when the run ends well; until then `progress.sh` reports the run as
+  running. On a print timeout `agy` exits 0 and returns the partial answer, saying so only on
+  stderr; that answer, and any answer from a failed run, is set aside as `.partial`, so the
+  pair stays uncovered.
 - **Pass no `--effort`.** The model id carries its effort (`gemini-4-neon-xhigh`), and `agy`
   refuses a second one: `--model gemini-4-neon-xhigh conflicts with --effort=high`.
 
@@ -222,9 +229,10 @@ a Monitor that runs it every 300 seconds until no invocation is running; elsewhe
 interval. Change it in `progress.sh` and verify it with `tests/progress.bats`.
 
 **A machine that sleeps pauses the review.** The reviewers' network connections drop, the
-updates stop, and a log stops changing; after waking, a run can hang rather than resume. If a
-log has not changed for longer than the machine was asleep (`pmset -g log` on macOS shows the
-sleeps), stop that invocation and run it again as the next attempt.
+updates stop, and a log stops changing; after waking, a run can hang rather than resume. Judge it
+from after the wake (`pmset -g log` on macOS shows the sleeps): a run whose process is alive but
+whose log or answer has not changed in the ten minutes since has hung. Stop it and run it again
+as the next attempt.
 
 **Probe each reviewer before committing a pass.**
 
@@ -459,7 +467,7 @@ slug="${m%%:*}"
 case "$m" in *:*) effort="${m#*:}";; *) effort=high;; esac
 codex exec -C "$ROOT" --sandbox read-only --skip-git-repo-check -m "$slug" \
   -c model_reasoning_effort="$effort" \
-  "Do not open .env, .env.*, *.pem, *.key, credentials*, .netrc, .npmrc, id_rsa*, id_ed25519*, or anything else shaped like a secret. List the three most obvious code-quality issues in this repository. Be brief."   # or the agy equivalent with inline text
+  "Do not open .env, .env.*, *.pem, *.key, *.p12, *.pfx, credentials*, .netrc, .npmrc, .pypirc, id_rsa*, id_ed25519*, id_ecdsa*, or anything else shaped like a secret. List the three most obvious code-quality issues in this repository. Be brief."   # or the agy equivalent with inline text
 ```
 
 **Probe availability on the same model and effort as the real run.** A quota error needs no probe or
@@ -555,7 +563,7 @@ Column rules:
 
 `Incorporated — <where>` | `Already covered — <where>` | `Filed KI-nn / ENH-nn / UNK-nn` | `Open — no roadmap files` | `Not incorporated` (Verdict `Rejected`).
 
-A valid finding that is out of scope for this phase is **kept, not dropped**. Where the repository has the four roadmap files, and `roadmap.py check` passes on them, it is filed through `project-docs` as a `KI-nn`, `ENH-nn` or `UNK-nn` entry with its ROADMAP pointer row. Where it does not, the row stays in this table as `Open — no roadmap files`; nothing creates roadmap files unless the user asks. **A reviewer reading a plan often finds a real defect in the existing code; that is a `KI-nn`.** Use `UNK-nn` only for unsettled questions, per the `OPEN_QUESTIONS` template. Present the whole table in one pass regardless of severity: a confirmed Critical does not block the plan reaching the user, who is in plan mode and can send it back.
+A valid finding that is out of scope for this phase is **kept, not dropped**. Where the repository has the four roadmap files, it is filed through `project-docs` as a `KI-nn`, `ENH-nn` or `UNK-nn` entry with its ROADMAP pointer row. Where it does not, the row stays in this table as `Open — no roadmap files`; nothing creates roadmap files unless the user asks. **A reviewer reading a plan often finds a real defect in the existing code; that is a `KI-nn`.** Use `UNK-nn` only for unsettled questions, per the `OPEN_QUESTIONS` template. Present the whole table in one pass regardless of severity: a confirmed Critical does not block the plan reaching the user, who is in plan mode and can send it back.
 
 ### Disposition vocabulary — *phase / repo* mode
 
@@ -565,7 +573,7 @@ A valid finding that is out of scope for this phase is **kept, not dropped**. Wh
 
 - `Fixed in phase` — fixed on the branch, with a failing test written first. Regressions this phase introduced always land here, unless the loop stopped on the pass that found them.
 - `Proposed: fixed in phase` — *not yet fixed.* A row from the pass the loop stopped on that would need a fix. It goes to the gate unfixed, and the user decides; a fix they ask for needs another pass.
-- `Filed …` — valid and deferred, filed through `project-docs` as a rated entry with its ROADMAP pointer row. Only where the repository has all four roadmap files (`roadmap.py check` passes on them); a `docs/ROADMAP.md` of another shape is the project's own document, not consent to file.
+- `Filed …` — valid and deferred, filed through `project-docs` as a rated entry with its ROADMAP pointer row. Only where the repository has all four roadmap files; run `roadmap.py check` after filing, and fix any drift it reports. A `docs/ROADMAP.md` of another shape is the project's own document, not consent to file.
 - `Confirmed: accepted, no work planned` — valid, and accepted as it is: nothing will be built and nothing is filed. Its note says why.
 - `Open — no roadmap files` — valid and deferred in a repository without the four roadmap files. The review record is where it stays.
 - `Rejected` — failed verification. It is a real disposition, not a gap: it produces no artifact, and forcing it into the roadmap would pollute it.
@@ -612,14 +620,17 @@ A first review changes the code, and those changes have been reviewed by no one 
 
 Run up to three passes without checking in. Pass 1 is full scope; every later pass is narrow (below). Record the commit each pass reviewed.
 
-**A pass is complete when every pair that could answer did:** each installed, independent
-reviewer covered every chunk. A reviewer that preflight found missing, or one disqualified as
-the diff's author, is named in each pass's coverage line, and does not stop a pass from being
-complete. A **Failed** pair does: a timeout, a quota error, a partial answer.
+**A pass is complete when at least one independent reviewer covered every chunk, and every
+other reviewer was either Missing (preflight found no CLI) or Disqualified (the diff's author).**
+Both are named in each pass's coverage line. A **Failed** pair keeps a pass incomplete: a
+timeout, a quota error, a partial answer, an empty ladder, every rung unavailable. With no
+independent reviewer at all, no pass is complete: the review is **Skipped** or **No coverage**,
+and the gate takes the user's recorded decision instead.
 
 1. **Run the pass and triage it.** Verify every finding and give it a disposition. A finding
-   that an earlier pass's fix did not work reopens that row, and counts as new at its own
-   severity.
+   that an earlier pass's fix did not work gets a new row in this pass that names the earlier ID
+   (`F-12 — the F-03 fix is partial`), and counts as new at its own severity. Earlier rows and
+   counts never change.
 2. **Apply the stop rule before fixing anything, and only to a complete pass.** Count verified
    findings only; `Rejected` rows do not count. Stop after pass 3. Stop when a pass, from pass 2
    on, has no new Critical or High and fewer findings than the pass before. Stop when a pass
@@ -629,17 +640,20 @@ complete. A **Failed** pair does: a timeout, a quota error, a partial answer.
    was. It never ends the loop on its own — see
    [Coverage classification](#coverage-classification).
 3. **If the loop continues:** fix the `Fixed in phase` rows, each with a failing test first,
-   file the deferred rows, run the full suite, and commit. The next pass reviews only
+   re-check the docs those fixes touch (`phase-workflow` §3 step 6), file the deferred rows, run the full suite, and commit. The next pass reviews only
    `<commit the last pass reviewed>..HEAD`. If that commit is no longer an ancestor of `HEAD`
-   (an amend or a rebase), the next pass is full scope.
+   (an amend or a rebase), the next pass is full scope: the one case a follow-up widens.
 4. **If it stops:** that pass's findings are not fixed. Deferred rows are filed before the gate;
    rows that would need a fix go to the gate as `Proposed: fixed in phase`. A fix the user then
    asks for needs another pass, and so does any pass past three: both are the user's call.
 
-**After the last pass, only bookkeeping lands:** filing the deferred rows, and the phase record.
-Anything else, such as a doc fix from the post-fix re-check or a regenerated diagram, needs a
-narrow pass of its own. At the gate, `git diff --stat <commit the last pass reviewed>..HEAD`
-shows what landed after review, and the hand-off names it.
+**After the last pass, only bookkeeping lands:** new roadmap entries and pointer rows for the
+deferred rows, and the phase record's PR number and release version. Anything else, such as an
+edit to an existing entry, a doc fix or a regenerated diagram, needs a narrow pass of its own. At
+the gate, check that the reviewed commit is an ancestor of `HEAD`
+(`git merge-base --is-ancestor`), then read the patch since it
+(`git diff <commit the last pass reviewed>..HEAD`), not only its file list: a filing and a fix
+can share one file. The hand-off names what landed.
 
 ### What the user sees at the gate
 
@@ -682,7 +696,7 @@ Finding IDs run in **one sequence for the whole phase** — pass 1 ends at `F-08
   - *plan*: the agent revises the plan itself, then presents the revision and the findings table together. This is deliberate: phase-workflow §1 says the plan the user sees is the revised one, so waiting for a disposition first would defeat the checkpoint.
   - *phase*: the agent dispositions and fixes within [the loop](#the-loop), and the user reviews every disposition at the gate before signing off.
   - *repo*: the user dispositions every finding **before any code is touched**. A disposition you assigned yourself is a proposal until they say so. The pause after the table is blocking: present, stop, wait.
-- **Never widen a follow-up pass back to full scope.** If pass 2 looks thin, that is the loop working, not a reason to re-review the phase.
+- **Never widen a follow-up pass back to full scope**, except when the reviewed commit is no longer an ancestor of `HEAD` ([the loop](#the-loop), step 3). If pass 2 looks thin, that is the loop working, not a reason to re-review the phase.
 - **Never report a bundle without its reconciled file count.** An unstated count is how a reviewer ends up reviewing half a phase and nobody notices.
 - The Codex stop-time review gate (`/codex:setup`) stays **off** — it reviews every turn and burns quota; these checkpoints are the intended cadence.
 - **Triage subagents gather evidence, never verdicts.** A subagent returns the quoted file lines or command output a finding turns on; the judgement stays with the main agent. A subagent is a copy of the main agent with the same blind spots, so it never decides whether a finding is right; outside opinion comes from the other models. Where the user's or the project's own standards say something different, theirs win; otherwise both apply.

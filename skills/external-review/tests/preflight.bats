@@ -432,3 +432,51 @@ block = next(b for b in blocks if 'for m in ${GEMINI_RUNGS' in b and 'agy -p' in
 assert 'gemini_prompt_p<n>_c<chunk>.txt' in block, block
 PY
 }
+
+# gemini_loop <agy body>: the documented Gemini loop with agy stubbed, one rung,
+# pass 1 chunk 1, writing into $TEST_TMP.
+gemini_loop() {
+  python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/gemini.sh" "$TEST_TMP" "$1" <<'PY'
+import pathlib, re, sys
+blocks = re.findall(r'```bash\n(.*?)```', pathlib.Path(sys.argv[1]).read_text(), re.S)
+block = next(b for b in blocks if 'for m in ${GEMINI_RUNGS' in b and 'agy -p' in b)
+prelude = 'GEMINI_RUNGS="gemini-4-neon-high gemini-4-argon-high"\nagy() { ' + sys.argv[4] + ' }\n'
+block = (block.replace('<scratchpad>', sys.argv[3]).replace('<mode>', 'phase')
+         .replace('<n>', '1').replace('<chunk>', '1').replace('<attempt>', '1'))
+pathlib.Path(sys.argv[2]).write_text(prelude + block)
+PY
+}
+
+@test "the documented Gemini loop does not run without its chunk's prompt" {
+  # Fails if a missing prompt file still invokes agy, filing an answer to nothing under the chunk's name.
+  gemini_loop 'touch "$TEST_TMP/AGY-RAN"; echo "No findings.";'
+  run bash "$TEST_TMP/gemini.sh"
+  [ ! -e "$TEST_TMP/AGY-RAN" ] || false
+  [ ! -e "$TEST_TMP/gemini_phase_p1_c1_a1_gemini-4-neon-high.txt" ]
+}
+
+@test "the documented Gemini loop keeps a failed run's partial answer out of the output name" {
+  # Fails if agy writes part of an answer and exits non-zero, and the output file keeps it.
+  printf 'prompt' > "$TEST_TMP/gemini_prompt_p1_c1.txt"
+  gemini_loop 'echo "1. half a finding"; echo "connection reset" >&2; return 1;'
+  run bash "$TEST_TMP/gemini.sh"
+  [ ! -e "$TEST_TMP/gemini_phase_p1_c1_a1_gemini-4-neon-high.txt" ] || false
+  [ -s "$TEST_TMP/gemini_phase_p1_c1_a1_gemini-4-neon-high.partial" ]
+}
+
+@test "the documented Gemini loop passes each chunk its own prompt" {
+  # Fails if the loop reads a prompt other than this chunk's file.
+  printf 'CHUNK-ONE' > "$TEST_TMP/gemini_prompt_p1_c1.txt"
+  printf 'SHARED' > "$TEST_TMP/gemini_prompt_p1.txt"
+  gemini_loop 'printf "%s" "$2" > "$TEST_TMP/seen"; echo "No findings.";'
+  run bash "$TEST_TMP/gemini.sh"
+  [ "$(cat "$TEST_TMP/seen")" = "CHUNK-ONE" ]
+}
+
+@test "the documented Gemini loop keeps a finished answer whose stderr mentions a timeout" {
+  # Fails if any "timed out" warning on stderr discards a complete answer.
+  printf 'prompt' > "$TEST_TMP/gemini_prompt_p1_c1.txt"
+  gemini_loop 'echo "No findings."; echo "request timed out, retrying" >&2; return 0;'
+  run bash "$TEST_TMP/gemini.sh"
+  [ -s "$TEST_TMP/gemini_phase_p1_c1_a1_gemini-4-neon-high.txt" ]
+}

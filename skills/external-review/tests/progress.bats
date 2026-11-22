@@ -52,3 +52,17 @@ age() { touch -t "$(date -v-"$2"M +%Y%m%d%H%M.%S)" "$1"; }
   run bash "$PROGRESS" "$TEST_TMP" 1
   [[ "$output" == *"no invocations for pass 1"* ]]
 }
+
+@test "an answer still being written is running, not done" {
+  # Fails if a Gemini answer that agy is still streaming is reported as done.
+  printf '1. half' > "$TEST_TMP/gemini_phase_p2_c1_a1_m.part"
+  run bash "$PROGRESS" "$TEST_TMP" 2
+  [[ "$output" == *"gemini c1: running"*"bytes so far"* ]]
+}
+
+@test "a cut-off answer is reported as failed" {
+  # Fails if an answer set aside as .partial vanishes from the report.
+  printf '1. half' > "$TEST_TMP/gemini_phase_p2_c1_a1_m.partial"
+  run bash "$PROGRESS" "$TEST_TMP" 2
+  [[ "$output" == *"gemini c1: failed"* ]]
+}

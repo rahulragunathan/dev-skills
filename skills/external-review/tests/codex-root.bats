@@ -217,25 +217,20 @@ print(next(b for b in blocks if 'codex_ladder()' in b))
 PY
 }
 
-# Fails if a priority tie resolves by position in the cache file, or if a rung
-# omits the effort it should run at.
-@test "a priority tie is broken by version, and each rung carries its effort" {
+# Fails if the documented codex_ladder ranks by the cache's priority, OpenAI's
+# default pick, instead of calling codex-ladder.py, or if a rung omits its effort.
+@test "the documented ladder ranks family over the cache's priority" {
   mkdir -p "$TEST_TMP/home/.codex"
   cat > "$TEST_TMP/home/.codex/models_cache.json" <<'JSON'
 {"models":[
- {"slug":"gpt-5.6-sol","visibility":"list","priority":1,"default_reasoning_level":"low",
-  "supported_reasoning_levels":[{"effort":"low"},{"effort":"medium"},{"effort":"max"}]},
- {"slug":"gpt-6-astra","visibility":"list","priority":1,"default_reasoning_level":"low",
-  "supported_reasoning_levels":[{"effort":"low"},{"effort":"medium"},{"effort":"max"}]}]}
+ {"slug":"gpt-6-sol","visibility":"list","priority":1,"default_reasoning_level":"low",
+  "supported_reasoning_levels":[{"effort":"low"},{"effort":"high"},{"effort":"max"}]},
+ {"slug":"gpt-6-astra","visibility":"list","priority":2,"default_reasoning_level":"low",
+  "supported_reasoning_levels":[{"effort":"low"},{"effort":"high"},{"effort":"max"}]}]}
 JSON
-  # fixture property: the tie is real and file order disagrees with the rule
-  [ "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["models"][0]["slug"])' \
-        "$TEST_TMP/home/.codex/models_cache.json")" = "gpt-5.6-sol" ] || false
   CLAUDE_PLUGIN_ROOT="$(cd "$(dirname "$CAPTURE")/../.." && pwd)" run bash -c "$(ladder_fn); HOME='$TEST_TMP/home' codex_ladder"
-  [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | tr ' ' '\n' | grep -c .)" -eq 2 ] || false
-  [ "$(printf '%s\n' "$output" | tr ' ' '\n' | sed -n 1p)" = "gpt-6-astra:max" ]
-  [ "$(printf '%s\n' "$output" | tr ' ' '\n' | sed -n 2p)" = "gpt-5.6-sol:max" ]
+  [ "$status" -eq 0 ] || false
+  [ "$output" = "gpt-6-astra:high gpt-6-sol:high" ]
 }
 
 # Fails if `ultra` is offered as a rung. It delegates tasks automatically, so
@@ -244,12 +239,11 @@ JSON
   mkdir -p "$TEST_TMP/home/.codex"
   cat > "$TEST_TMP/home/.codex/models_cache.json" <<'JSON'
 {"models":[{"slug":"gpt-6-astra","visibility":"list","priority":1,"default_reasoning_level":"low",
- "supported_reasoning_levels":[{"effort":"max"},{"effort":"ultra"}]}]}
+ "supported_reasoning_levels":[{"effort":"low"},{"effort":"ultra"}]}]}
 JSON
-  grep -q ultra "$TEST_TMP/home/.codex/models_cache.json" || false
   CLAUDE_PLUGIN_ROOT="$(cd "$(dirname "$CAPTURE")/../.." && pwd)" run bash -c "$(ladder_fn); HOME='$TEST_TMP/home' codex_ladder"
-  [ "$status" -eq 0 ]
-  [ "$output" = "gpt-6-astra:max" ]
+  [ "$status" -eq 0 ] || false
+  [ -z "$output" ]
 }
 
 # Fails if the documented invocation loop passes a slug:effort rung straight to
@@ -289,5 +283,23 @@ PY
   write_invoke_script 'first:high second:high' "$TEST_TMP/invoke.sh" \
     'echo "${8}" >> "$TEST_TMP/models"; if [ "${8}" = first ]; then echo "ERROR: The '"'"'first'"'"' model is not supported when using Codex with a ChatGPT account." >&2; return 1; fi; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2";'
   run bash "$TEST_TMP/invoke.sh"
+  [ "$(tr '\n' ' ' < "$TEST_TMP/models")" = "first second " ]
+}
+
+# Fails if a quoted ERROR: line in the material under review, early in the
+# transcript, still drives a downshift when the run later dies.
+@test "an ERROR line quoted mid-transcript does not downshift" {
+  write_invoke_script 'first:high second:high' "$TEST_TMP/invoke.sh" \
+    'echo "${8}" >> "$TEST_TMP/models"; { echo "user"; echo "ERROR: The x model is not supported"; for i in 1 2 3 4 5 6 7 8; do echo "transcript line $i"; done; } >&2; return 143;'
+  run bash "$TEST_TMP/invoke.sh"
+  [ "$(cat "$TEST_TMP/models")" = "first" ]
+}
+
+# Fails if the loop's bare command aborts under errexit before it can classify
+# an availability failure and move to the next rung.
+@test "the documented Codex loop still downshifts under errexit" {
+  write_invoke_script 'first:high second:high' "$TEST_TMP/invoke.sh" \
+    'echo "${8}" >> "$TEST_TMP/models"; if [ "${8}" = first ]; then echo "ERROR: The first model is not supported when using Codex with a ChatGPT account." >&2; return 1; fi; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2";'
+  run bash -e "$TEST_TMP/invoke.sh"
   [ "$(tr '\n' ' ' < "$TEST_TMP/models")" = "first second " ]
 }

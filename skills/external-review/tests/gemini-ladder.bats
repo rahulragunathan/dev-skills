@@ -36,8 +36,11 @@ rank() { printf '%s\n' "$@" | python3 "$LADDER"; }
 
 @test "a tie is broken by model id, not by input order" {
   # Fails if two unlisted families at one grade keep agy's print order.
-  run rank gemini-4-cobalt-high gemini-4-boron-high
-  [ "$output" = "gemini-4-boron-high gemini-4-cobalt-high" ]
+  for order in "cobalt boron zinc" "zinc cobalt boron" "boron zinc cobalt"; do
+    set -- $order
+    run rank "gemini-4-$1-high" "gemini-4-$2-high" "gemini-4-$3-high"
+    [ "$output" = "gemini-4-boron-high gemini-4-cobalt-high gemini-4-zinc-high" ] || false
+  done
 }
 
 @test "a repeated id takes one rung" {
@@ -61,8 +64,8 @@ rank() { printf '%s\n' "$@" | python3 "$LADDER"; }
 
 @test "an unlisted family ranks below hydrogen" {
   # Fails if a family missing from the list outranks a listed one.
-  run rank gemini-4-boron-xhigh gemini-4-hydrogen-high
-  [ "$output" = "gemini-4-hydrogen-high gemini-4-boron-xhigh" ]
+  run rank gemini-4-boron-high gemini-4-hydrogen-high
+  [ "$output" = "gemini-4-hydrogen-high gemini-4-boron-high" ]
 }
 
 @test "a newer version outranks an older one" {
@@ -110,4 +113,11 @@ rank() { printf '%s\n' "$@" | python3 "$LADDER"; }
   # Fails if version tuples compare by length, so 4 sorts above 4.1.
   run rank gemini-4-neon-high gemini-4.1-neon-high
   [ "$output" = "gemini-4.1-neon-high gemini-4-neon-high" ]
+}
+
+@test "an ultra id is never offered" {
+  # Fails if an -ultra id, which delegates work, reaches the ladder.
+  run rank gemini-4-neon-ultra
+  [ "$status" -eq 0 ] || false
+  [ -z "$output" ]
 }

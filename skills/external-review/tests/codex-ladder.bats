@@ -57,9 +57,10 @@ PY
 
 @test "ultra is never chosen" {
   # Fails if ultra, which delegates work, is picked over a lower supported effort.
-  cache gpt-6-sol:1:list:medium,ultra
+  cache gpt-6-sol:1:list:low,ultra gpt-6-luna:2:list:ultra
   run python3 "$LADDER" "$TEST_TMP/cache.json"
-  [ "$output" = "gpt-6-sol:medium" ]
+  [ "$status" -eq 0 ] || false
+  [ -z "$output" ]
 }
 
 @test "a missing cache exits 1 with no output" {
@@ -87,7 +88,7 @@ PY
 
 @test "a cache without a models list exits 1 with no output" {
   # Fails if a cache of the wrong shape prints a ladder or a traceback.
-  printf '{"models": 3}' > "$TEST_TMP/bad.json"
+  printf '{"models": {"slug": "gpt-6-sol"}}' > "$TEST_TMP/bad.json"
   run python3 "$LADDER" "$TEST_TMP/bad.json"
   [ "$status" -eq 1 ] || false
   [ -z "$output" ]
@@ -129,4 +130,32 @@ PY
   cache gpt-7-sol:1 gpt-7-sol:2 gpt-7-sol:3 gpt-6-sol:4
   run python3 "$LADDER" "$TEST_TMP/cache.json"
   [ "$output" = "gpt-7-sol:high gpt-6-sol:high" ]
+}
+
+@test "a dated slug with no gpt- name is not versioned by its date" {
+  # Fails if a year after any name is read as the model version.
+  cache o3-2025-04-16:1 gpt-7-sol:2
+  run python3 "$LADDER" "$TEST_TMP/cache.json"
+  [ "$output" = "gpt-7-sol:high o3-2025-04-16:high" ]
+}
+
+@test "one slug listed at several efforts takes one rung, at high" {
+  # Fails if repeated entries for one slug fill the ladder at different efforts.
+  cache gpt-7-sol:1:list:medium gpt-7-sol:2:list:max gpt-7-sol:3:list:high gpt-6-sol:4
+  run python3 "$LADDER" "$TEST_TMP/cache.json"
+  [ "$output" = "gpt-7-sol:high gpt-6-sol:high" ]
+}
+
+@test "an empty or malformed slug gives no rung" {
+  # Fails if an empty slug yields ":high", which the discovery check reads as no ladder.
+  cache ":1" "gpt 6:2" gpt-6-sol:3
+  run python3 "$LADDER" "$TEST_TMP/cache.json"
+  [ "$output" = "gpt-6-sol:high" ]
+}
+
+@test "a model at high outranks one of the same version at medium" {
+  # Fails if effort is ignored, so a stronger family's medium-only rung comes first.
+  cache gpt-7-astra:1:list:low,medium gpt-7-sol:2:list:high
+  run python3 "$LADDER" "$TEST_TMP/cache.json"
+  [ "$output" = "gpt-7-sol:high gpt-7-astra:medium" ]
 }

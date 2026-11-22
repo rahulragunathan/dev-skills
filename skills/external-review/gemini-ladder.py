@@ -5,8 +5,8 @@ Reads `agy models` output on stdin and prints up to three distinct model ids,
 space-separated. Prints an empty line when no model qualifies; the caller
 treats that as "no Gemini reviewer", never as an empty loop.
 
-Orchestrator models and efforts below medium (low, minimal, none) are never
-offered. The rest rank, most significant first:
+Orchestrator models, efforts below medium (low, minimal, none) and ultra,
+which delegates the work, are never offered. The rest rank, most significant first:
   1. version, newest first;
   2. a full model before a light tier (flash, lite);
   3. effort: high, the user's default, then xhigh, then medium, then anything
@@ -25,7 +25,8 @@ FAMILIES = ("carbon", "argon", "neon", "hydrogen")
 LIGHT_TIERS = {"flash", "lite"}
 # The rank of each effort suffix; anything else ranks after these.
 EFFORT_RANK = {"high": 0, "xhigh": 1, "medium": 2}
-BELOW_REVIEW = ("low", "minimal", "none")
+# Never offered: below a review's floor, or (ultra) delegating the work.
+EXCLUDED = ("low", "minimal", "none", "ultra")
 VERSION = re.compile(r"\d+(?:\.\d+)*")
 
 
@@ -52,7 +53,7 @@ def rank(model: str) -> tuple:
 def ladder(lines) -> list[str]:
     ids = [line.split()[0] for line in lines if line.strip()]
     usable = {m for m in ids if m.startswith("gemini-")
-              and "orchestrator" not in m and m.rsplit("-", 1)[-1] not in BELOW_REVIEW}
+              and "orchestrator" not in m and m.rsplit("-", 1)[-1] not in EXCLUDED}
     return sorted(usable, key=rank)[:3]
 
 

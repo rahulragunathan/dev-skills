@@ -98,8 +98,8 @@ credential_shaped() {
   path="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" || artifact_failure
   while [ -n "$path" ]; do
     case "$path" in
-      *.env|*.env.*|*.pem|*.key|*.p12|*.pfx|*.crt|*id_rsa*|*id_ed25519*) return 0 ;;
-      *credentials*|*.netrc|*.npmrc|*.sqlite|*.sqlite3) return 0 ;;
+      *.env|*.env.*|*.pem|*.key|*.p12|*.pfx|*.crt|*id_rsa*|*id_ed25519*|*id_ecdsa*) return 0 ;;
+      *credentials*|*.netrc|*.npmrc|*.pypirc|*.sqlite|*.sqlite3) return 0 ;;
     esac
     case "$path" in */*) path="${path%/*}" ;; *) break ;; esac
   done
