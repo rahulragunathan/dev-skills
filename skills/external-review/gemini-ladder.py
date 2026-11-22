@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 """Rank the Gemini models `agy models` lists, best reviewer first.
 
-Reads `agy models` output on stdin and prints up to three distinct model ids,
-space-separated. Prints an empty line when no model qualifies; the caller
-treats that as "no Gemini reviewer", never as an empty loop.
+Reads `agy models` output on stdin and prints up to three model ids, one per
+model class, space-separated. Prints an empty line when no model qualifies; the
+caller treats that as "no Gemini reviewer", never as an empty loop.
 
-Orchestrator models, efforts below medium (low, minimal, none) and ultra,
-which delegates the work, are never offered. The rest rank, most significant first:
+The model class comes first, then the effort: the user's rule. A class is the
+id without its effort suffix (gemini-4-neon for gemini-4-neon-high). Classes
+rank, most significant first:
   1. version, newest first;
   2. a full model before a light tier (flash, lite);
-  3. effort: high, the user's default, then xhigh, then medium, then anything
-     else, a missing effort suffix included: the id is the only way to tell
-     agy the effort, so an id without one runs at whatever agy defaults to;
-  4. family, by FAMILIES, with an unlisted family after every listed one;
-  5. model id, so the order never depends on how agy printed the list.
+  3. family, by FAMILIES, with an unlisted family after every listed one;
+  4. class name, so the order never depends on how agy printed the list.
+Each class is offered once, at the first of PREFERENCE it has: high, the
+default; then the suffix-less id, which the review loop runs with
+`--effort high`; then xhigh; then medium. Orchestrator models, efforts below
+medium (low, minimal, none) and ultra, which delegates the work, are never
+offered. Another effort is used only when the user asks for it.
 """
 from __future__ import annotations
 
@@ -23,10 +26,9 @@ import sys
 # The user's ranking of Gemini families, strongest first.
 FAMILIES = ("carbon", "argon", "neon", "hydrogen")
 LIGHT_TIERS = {"flash", "lite"}
-# The rank of each effort suffix; anything else ranks after these.
-EFFORT_RANK = {"high": 0, "xhigh": 1, "medium": 2}
-# Never offered: below a review's floor, or (ultra) delegating the work.
-EXCLUDED = ("low", "minimal", "none", "ultra")
+# Within a class, the variant to run: "" is the suffix-less id.
+PREFERENCE = ("high", "", "xhigh", "medium")
+EFFORTS = {"high", "xhigh", "medium", "low", "minimal", "none", "ultra"}
 VERSION = re.compile(r"\d+(?:\.\d+)*")
 
 
@@ -36,25 +38,37 @@ def version_key(version: str) -> tuple[int, ...]:
     return tuple(-n for n in parts + [0] * (4 - len(parts)))
 
 
-def rank(model: str) -> tuple:
-    words = model.split("-")[1:]
+def split(model: str) -> tuple[str, str]:
+    """(class, effort suffix), with "" for an id that carries no effort."""
+    head, _, last = model.rpartition("-")
+    return (head, last) if last in EFFORTS else (model, "")
+
+
+def rank(model_class: str) -> tuple:
+    words = model_class.split("-")[1:]
     version = words.pop(0) if words and VERSION.fullmatch(words[0]) else None
-    effort = EFFORT_RANK.get(words[-1] if words else "", len(EFFORT_RANK))
     family = next((FAMILIES.index(w) for w in words if w in FAMILIES), len(FAMILIES))
     return (
         (0, version_key(version)) if version else (1, ()),
         1 if LIGHT_TIERS & set(words) else 0,
-        effort,
         family,
-        model,
+        model_class,
     )
 
 
 def ladder(lines) -> list[str]:
-    ids = [line.split()[0] for line in lines if line.strip()]
-    usable = {m for m in ids if m.startswith("gemini-")
-              and "orchestrator" not in m and m.rsplit("-", 1)[-1] not in EXCLUDED}
-    return sorted(usable, key=rank)[:3]
+    ids = {line.split()[0] for line in lines if line.strip()}
+    variants: dict[str, dict[str, str]] = {}
+    for m in ids:
+        if m.startswith("gemini-") and "orchestrator" not in m:
+            model_class, effort = split(m)
+            variants.setdefault(model_class, {})[effort] = m
+    rungs = []
+    for model_class in sorted(variants, key=rank):
+        pick = next((variants[model_class][e] for e in PREFERENCE if e in variants[model_class]), None)
+        if pick:
+            rungs.append(pick)
+    return rungs[:3]
 
 
 if __name__ == "__main__":

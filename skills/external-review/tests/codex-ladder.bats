@@ -153,9 +153,9 @@ PY
   [ "$output" = "gpt-6-sol:high" ]
 }
 
-@test "a model at high outranks one of the same version at medium" {
-  # Fails if effort is ignored, so a stronger family's medium-only rung comes first.
-  cache gpt-7-astra:1:list:low,medium gpt-7-sol:2:list:high
+@test "the model class comes first, then its effort" {
+  # Fails if effort outranks family, so a weaker family at high beats a stronger one at medium.
+  cache gpt-7-sol:1:list:high gpt-7-astra:2:list:low,medium
   run python3 "$LADDER" "$TEST_TMP/cache.json"
-  [ "$output" = "gpt-7-sol:high gpt-7-astra:medium" ]
+  [ "$output" = "gpt-7-astra:medium gpt-7-sol:high" ]
 }

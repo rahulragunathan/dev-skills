@@ -114,12 +114,15 @@ real one and the coverage line cannot carry the difference. Record the reviewer 
 with the reason: it is installed, so it is not a missing CLI. Whether the pass is partial or no
 coverage depends on what the *other* reviewer did.
 
-**Reviews run at `high` effort by default, for both reviewers.** Each Codex rung is
+**Reviews run at `high` effort by default, for both reviewers, on the strongest model class
+available: the class is chosen first, then its effort.** Another effort, such as `xhigh` or
+`max`, is used only when the user asks for it for that review: then replace the effort in each
+Codex rung, and pick each Gemini class's id with that suffix. Each Codex rung is
 `slug:effort`, at `high` where the model supports it; `codex-ladder.py`'s `EFFORTS` gives the
 fallback order, and nothing below `medium` is offered. `ultra` is never chosen for either
 reviewer: it delegates tasks automatically, so the work may not come from the recorded model.
-A Gemini id carries its effort. `gemini-ladder.py` ranks `-high` ids first within a version and
-tier, and offers no id below `medium`; an id with an unknown suffix or none ranks last. Set the effort explicitly, since `-m`
+A Gemini id carries its effort. `gemini-ladder.py` offers one id per model class: its `-high`
+id, else its suffix-less id (run with `--effort high`), else `-xhigh`, else `-medium`. Set the effort explicitly, since `-m`
 alone does not: split the pair and pass `-m "$slug"` with `-c model_reasoning_effort="$effort"`;
 the cache's default effort does not select the rung. Bare slugs keep the explicit `high`
 fallback. Record the effort beside the slug — a `high` run and a `max` run from one slug are
@@ -183,8 +186,10 @@ for m in ${GEMINI_RUNGS?run the ladder discovery block first}; do
   rm -f "$OUT" "$PART" "${OUT%.txt}.partial" "$ERR"   # never inherit a previous attempt
   PROMPT="$(cat "<scratchpad>/gemini_prompt_p<n>_c<chunk>.txt")" && [ -n "$PROMPT" ] \
     || { echo "no prompt for this chunk — not run"; break; }
+  # An id with an effort suffix carries its effort; a suffix-less one is told high.
+  case "$m" in *-high|*-xhigh|*-medium) EFFORT=() ;; *) EFFORT=(--effort high) ;; esac
   rc=0
-  agy -p "$PROMPT" --model "$m" --print-timeout 25m > "$PART" 2> "$ERR" || rc=$?
+  agy -p "$PROMPT" --model "$m" ${EFFORT[@]+"${EFFORT[@]}"} --print-timeout 25m > "$PART" 2> "$ERR" || rc=$?
   if [ "$rc" = 0 ] && [ -s "$PART" ]; then
     if ! grep -qi 'print timeout' "$ERR"; then mv "$PART" "$OUT"; break; fi
     mv "$PART" "${OUT%.txt}.partial"   # a cut-off answer is not coverage
@@ -206,8 +211,10 @@ done
   running. On a print timeout `agy` exits 0 and returns the partial answer, saying so only on
   stderr; that answer, and any answer from a failed run, is set aside as `.partial`, so the
   pair stays uncovered.
-- **Pass no `--effort`.** The model id carries its effort (`gemini-4-neon-xhigh`), and `agy`
-  refuses a second one: `--model gemini-4-neon-xhigh conflicts with --effort=high`.
+- **Pass `--effort` only for a suffix-less id.** An id with a suffix carries its effort
+  (`gemini-4-neon-xhigh`), and `agy` refuses a second one:
+  `--model gemini-4-neon-xhigh conflicts with --effort=high`. A suffix-less id gets
+  `--effort high`.
 
 **Classify availability only after a failed invocation, and keep stderr in its own file.**
 Grepping a combined stream for `not supported` misreads a *successful* review whose findings

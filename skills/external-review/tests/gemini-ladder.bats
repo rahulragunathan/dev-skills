@@ -19,12 +19,13 @@ rank() { printf '%s\n' "$@" | python3 "$LADDER"; }
   [ "$output" = "gemini-4-argon-high gemini-4-neon-high gemini-4-hydrogen-high" ]
 }
 
-@test "high, the default effort, outranks xhigh across families" {
-  # Fails if xhigh ranks with high, so a stronger family's xhigh comes first.
-  run rank gemini-4-carbon-xhigh gemini-4-hydrogen-high
-  [ "$output" = "gemini-4-hydrogen-high gemini-4-carbon-xhigh" ] || false
-  run rank gemini-4-neon-xhigh gemini-4-neon-medium
-  [ "$output" = "gemini-4-neon-xhigh gemini-4-neon-medium" ]
+@test "the model class comes first, then its high variant" {
+  # Fails if effort outranks the model: a weaker family's high would come before a stronger one.
+  run rank gemini-4-hydrogen-high gemini-4-carbon-medium gemini-4-carbon-xhigh gemini-4-carbon-high
+  [ "$output" = "gemini-4-carbon-high gemini-4-hydrogen-high" ] || false
+  # A class without a high variant takes its next best, still ahead of a weaker class.
+  run rank gemini-4-hydrogen-high gemini-4-carbon-medium gemini-4-carbon-xhigh
+  [ "$output" = "gemini-4-carbon-xhigh gemini-4-hydrogen-high" ]
 }
 
 @test "low, minimal and none are never offered" {
@@ -84,14 +85,14 @@ rank() { printf '%s\n' "$@" | python3 "$LADDER"; }
   [ "$output" = "gemini-4-zinc-high gemini-4-neon-lite-high" ]
 }
 
-@test "medium ranks below every review-grade rung of the same version and tier" {
-  # Fails if a stronger family's medium outranks a weaker family's high.
-  run rank gemini-4-argon-medium gemini-4-hydrogen-high
-  [ "$output" = "gemini-4-hydrogen-high gemini-4-argon-medium" ]
+@test "one rung per model class, at high when it has one" {
+  # Fails if a class fills several rungs, or if xhigh or medium is picked over high.
+  run rank gemini-4-neon-medium gemini-4-neon-xhigh gemini-4-neon-high gemini-4-argon-medium
+  [ "$output" = "gemini-4-argon-medium gemini-4-neon-high" ]
 }
 
-@test "an unknown suffix ranks below medium" {
-  # Fails if an unrecognised effort suffix is treated as review grade.
+@test "an unknown suffix names its own class" {
+  # Fails if a variant name is read as an effort and merged into the base class.
   run rank gemini-4-neon-preview gemini-4-neon-medium
   [ "$output" = "gemini-4-neon-medium gemini-4-neon-preview" ]
 }
@@ -103,10 +104,12 @@ rank() { printf '%s\n' "$@" | python3 "$LADDER"; }
   [ "$output" = "gemini-4-neon-high gemini-exp-neon-high" ]
 }
 
-@test "a model with no effort suffix ranks below medium" {
-  # Fails if a model whose effort agy cannot be told is ranked as review grade.
-  run rank gemini-4-neon gemini-4-neon-medium
-  [ "$output" = "gemini-4-neon-medium gemini-4-neon" ]
+@test "a suffix-less id is that class's high rung when no -high exists" {
+  # Fails if a suffix-less id, which the loop runs with --effort high, loses to medium or xhigh.
+  run rank gemini-4-neon-medium gemini-4-neon gemini-4-neon-xhigh
+  [ "$output" = "gemini-4-neon" ] || false
+  run rank gemini-4-neon gemini-4-neon-high
+  [ "$output" = "gemini-4-neon-high" ]
 }
 
 @test "a point release outranks its major version" {

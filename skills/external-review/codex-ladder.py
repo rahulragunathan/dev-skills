@@ -6,11 +6,12 @@ no output when the cache is missing, not JSON or has no list of models; the
 caller treats that as "no Codex reviewer". A malformed entry is skipped.
 
 Only models the cache lists as visible are offered. They rank newest version
-first (the number after `gpt`; anything else ranks last), then by the effort
-the rung runs at, then by family, by FAMILIES, with an unlisted family after
-every listed one, then by slug. The cache's own `priority` is not used: it is OpenAI's
+first (the number after `gpt`; anything else ranks last), then by family, by
+FAMILIES, with an unlisted family after every listed one, then by slug: the
+model class first, then its effort. The cache's own `priority` is not used: it is OpenAI's
 default pick, not a capability rank. Each rung runs at `high`, the user's
 default, or where the model lacks it at the first of EFFORTS it supports.
+Another effort is used only when the user asks for it.
 
 Usage:
     codex-ladder.py [CACHE]    (default ~/.codex/models_cache.json)
@@ -38,7 +39,7 @@ def version_key(version: str) -> tuple[int, ...]:
     return tuple(-n for n in parts + [0] * (4 - len(parts)))
 
 
-def rank(slug: str, effort: str) -> tuple:
+def rank(slug: str) -> tuple:
     words = slug.split("-")
     # The version is the word after `gpt` (gpt-6.2-sol); in o3-2025-04-16 the
     # numbers are a date, and such a model ranks after every versioned one.
@@ -46,7 +47,6 @@ def rank(slug: str, effort: str) -> tuple:
     family = next((FAMILIES.index(w) for w in words if w in FAMILIES), len(FAMILIES))
     return (
         (0, version_key(version)) if version else (1, ()),
-        EFFORTS.index(effort),
         family,
         slug,
     )
@@ -69,7 +69,7 @@ def ladder(models: list) -> list[str]:
     for slug, efforts in supported.items():
         effort = next((e for e in EFFORTS if e in efforts), None)
         if effort:
-            rungs.append((rank(slug, effort), f"{slug}:{effort}"))
+            rungs.append((rank(slug), f"{slug}:{effort}"))
     return [rung for _, rung in sorted(rungs)][:3]
 
 

@@ -39,7 +39,8 @@ here — the plugin manifest's version is the only record of them.
   unknown `Kind`.
 - **External review** runs up to three passes without checking in. Its stop rule applies
   before any fix, so no fix reaches the gate unreviewed. A fourth pass is the user's call.
-- **External reviews run at `high` effort by default**, for Codex and Gemini alike.
+- **External reviews run at `high` effort by default**, for Codex and Gemini alike, on the
+  strongest model class; another effort only when the user asks for it.
 - **ENH-31 is now KI-56**: a check that says `references verified` for an entry it never
   checked is a defect, not an enhancement.
 - **`/simplify`** runs at a task's refactor step only when the task added or reshaped code, and
@@ -56,8 +57,9 @@ here — the plugin manifest's version is the only record of them.
 ### Fixed
 
 - **The Gemini ladder** put orchestrator models first and `xhigh` last. It now ranks by
-  version, full model before light tier, effort (`high`, then `xhigh`, then `medium`), then
-  family (Carbon > Argon > Neon > Hydrogen). Efforts below `medium` are never offered.
+  model class (version, full model before light tier, then family: Carbon > Argon > Neon >
+  Hydrogen), then offers each class once at `high`, or its suffix-less id run with
+  `--effort high`. Efforts below `medium`, and `ultra`, are never offered.
 - **Gemini calls passed `--effort high`**, which `agy` refuses for any model whose id carries
   another effort, so the ladder could never downshift.
 - **The Codex ladder ranked by the cache's `priority`**, OpenAI's default pick: it put

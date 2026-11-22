@@ -480,3 +480,16 @@ PY
   run bash "$TEST_TMP/gemini.sh"
   [ -s "$TEST_TMP/gemini_phase_p1_c1_a1_gemini-4-neon-high.txt" ]
 }
+
+@test "the documented Gemini loop runs a suffix-less id at high, and a suffixed one as named" {
+  # Fails if a suffix-less id runs at agy's default effort, or a suffixed id gets a second effort.
+  printf 'prompt' > "$TEST_TMP/gemini_prompt_p1_c1.txt"
+  gemini_loop 'printf "%s\n" "$@" > "$TEST_TMP/args-$4"; echo "No findings.";'
+  sed -i.bak 's/^GEMINI_RUNGS=.*/GEMINI_RUNGS="gemini-4-neon"/' "$TEST_TMP/gemini.sh"
+  run bash "$TEST_TMP/gemini.sh"
+  grep -qx -- '--effort' "$TEST_TMP/args-gemini-4-neon" || false
+  grep -qx -- 'high' "$TEST_TMP/args-gemini-4-neon" || false
+  sed -i.bak 's/^GEMINI_RUNGS=.*/GEMINI_RUNGS="gemini-4-neon-xhigh"/' "$TEST_TMP/gemini.sh"
+  run bash "$TEST_TMP/gemini.sh"
+  ! grep -qx -- '--effort' "$TEST_TMP/args-gemini-4-neon-xhigh" || false
+}
