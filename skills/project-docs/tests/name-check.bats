@@ -246,11 +246,16 @@ check() { run python3 "$NC" --root "$REPO" "$@"; }
 import importlib.util, re, sys
 spec = importlib.util.spec_from_file_location('name_check', sys.argv[1])
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-capture = set(re.findall(r"':\(top,exclude,icase\)([^']+)'", open(sys.argv[2]).read()))
-print(sorted(capture ^ set(m.SECRET_NAMES)))
+src = open(sys.argv[2]).read()
+capture = set(re.findall(r"':\(top,exclude,icase\)([^']+)'", src))
+# capture.sh's plan mode has its own case list; it must agree too.
+body = src[src.index("credential_shaped() {"):]
+body = body[:body.index("\n}")]
+cases = {p for line in re.findall(r"^\s+(\*[^)]*)\) return 0", body, re.M) for p in line.split("|")}
+print(sorted(capture ^ set(m.SECRET_NAMES)), sorted(cases ^ set(m.SECRET_NAMES)))
 PY
   [ "$status" -eq 0 ] || false
-  [ "$output" = "[]" ]
+  [ "$output" = "[] []" ]
 }
 
 @test "checks a path in a folder beside the doc" {
@@ -406,4 +411,41 @@ print([n for n in ("home/id_ecdsa", "home/id_ecdsa.pub", ".pypirc") if not m.cre
   check
   [ "$status" -eq 1 ] || false
   [[ "$output" == *"missing command ../outside/tool.sh — outside the repository"* ]]
+}
+
+@test "an entry anchor shown as an example declares nothing" {
+  # Fails if an <a id> in a code span or fence, or in the wrong detail file, declares an ID.
+  put docs/KNOWN_ISSUES.md "$(printf 'Write `<a id="ki-08"></a>` above it.\n\n```\n<a id="ki-09"></a>\n```\n\n<a id="enh-03"></a>')"
+  put doc.md 'See `KI-08`, `KI-09` and `ENH-03`.'
+  check
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"missing id KI-08"* ]] || false
+  [[ "$output" == *"missing id KI-09"* ]] || false
+  [[ "$output" == *"missing id ENH-03"* ]]
+}
+
+@test "an ignore directive may name its target in backticks" {
+  # Fails if backticks inside a real directive blank out the name it ignores.
+  put skills/real.py 'x = 1'
+  put doc.md "$(printf '<!-- name-check: ignore `skills/gone.py` -->\nSee `skills/gone.py`.')"
+  check
+  [ "$status" -eq 0 ]
+}
+
+@test "a tracked doc that cannot be read is said, not passed as empty" {
+  # Fails if a full run checks a deleted tracked doc as an empty one, in silence.
+  put doc.md 'See `gone.md`.'
+  put other.md 'Fine.'
+  git -C "$REPO" commit -qm docs
+  rm "$REPO/doc.md"
+  check
+  [[ "$output" == *"cannot read: doc.md"* ]]
+}
+
+@test "an interpreter command outside the root names its script" {
+  # Fails if the diagnostic names the interpreter instead of the script path.
+  put doc.md 'Run `python3 ../outside/tool.py --flag`.'
+  check
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"missing command ../outside/tool.py — outside the repository"* ]]
 }

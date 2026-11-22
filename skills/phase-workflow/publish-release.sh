@@ -42,7 +42,12 @@ git rev-parse --git-dir >/dev/null 2>&1 || { echo "NOT A GIT REPOSITORY"; exit 1
 
 # A URL carrying credentials would be copied into the committed phase record
 # and the review bundle. Refuse it, and never print it.
-has_credentials() { printf '%s' "$1" | grep -qE '^[A-Za-z][A-Za-z0-9+.-]*://[^/@]*:[^/@]*@|^https?://[^/]*@'; }
+# Any user part in a URL with a scheme, except a bare user over ssh (ssh://git@host),
+# and any query or fragment, which a remote has no use for.
+has_credentials() {
+  printf '%s' "$1" | grep -qiE '^[a-z][a-z0-9+.-]*://[^/@]*:[^/@]*@|^[a-z][a-z0-9+.-]*://.*[?#]' && return 0
+  printf '%s' "$1" | grep -qiE '^[a-z][a-z0-9+.-]*://[^/]*@' && ! printf '%s' "$1" | grep -qiE '^ssh://'
+}
 for url in "$WANT_FETCH" "$WANT_PUSH"; do
   if has_credentials "$url"; then
     echo "CREDENTIALS IN ORIGIN URL — refusing; use SSH or a credential helper, and do not record the URL"

@@ -1031,3 +1031,53 @@ PY
   grep -q '^## Likelihood' "$NEW/KNOWN_ISSUES.md" || false
   grep -q '^| ID | Issue |' "$NEW/ROADMAP.md"
 }
+
+@test "--docs may come before the subcommand" {
+  # Fails if the option is accepted only after the subcommand, breaking the old spelling.
+  run python3 "$RM" --docs "$DOCS" check
+  [ "$status" -eq 0 ]
+}
+
+@test "init: a folder another init made meanwhile is used, not a failure" {
+  # Fails if mkdir losing a race to a concurrent init rolls this one back.
+  NEW="$TEST_TMP/mk/docs"
+  run python3 - "$RM" "$NEW" <<'PY'
+import importlib.util, pathlib, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+real = pathlib.Path.mkdir
+def racing(self, *a, **kw):
+    real(self, *a, **kw)        # someone else made it first
+    return real(self, *a, **kw)
+pathlib.Path.mkdir = racing
+try:
+    print('rc', m.cmd_init(pathlib.Path(sys.argv[2])))
+except SystemExit as e:
+    print('exit', e.code)
+PY
+  [[ "$output" == *"rc 0"* ]] || false
+  [ -f "$NEW/ROADMAP.md" ]
+}
+
+@test "init: a signal between creating a file and recording it still rolls it back" {
+  # Fails if a file made just before SIGTERM is left behind because it was never recorded.
+  NEW="$TEST_TMP/gap/docs"
+  run python3 - "$RM" "$NEW" <<'PY'
+import importlib.util, os, pathlib, signal, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+real, calls = os.fstat, []
+def fstat(fd):
+    calls.append(fd)
+    if len(calls) == 2:
+        os.kill(os.getpid(), signal.SIGTERM)   # the file exists; it is not yet recorded
+    return real(fd)
+m.os.fstat = fstat
+try:
+    m.cmd_init(pathlib.Path(sys.argv[2]))
+except SystemExit as e:
+    print('exit', e.code)
+PY
+  [[ "$output" == *"exit 1"* ]] || false
+  [ ! -e "$TEST_TMP/gap" ]
+}

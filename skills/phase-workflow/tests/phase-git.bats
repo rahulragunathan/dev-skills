@@ -193,13 +193,19 @@ teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/nul
 # Fails if a remote URL that carries credentials passes the check, which would
 # let phase start copy the token into the committed docs/PHASE_RECORD.md.
 @test "origin check: refuses a URL carrying credentials, without printing it" {
-  for url in "https://someone:notasecret@example.invalid/r.git" "https://notasecret@example.invalid/r.git"; do
-    git remote set-url origin "$url"
-    git remote set-url --push origin "$url"
-    run bash "$PUBLISH" --check-origin "$url" "$url"
-    [ "$status" -eq 1 ] || false
-    [[ "$output" == *"CREDENTIALS IN ORIGIN URL"* ]] || false
-    [[ "$output" != *notasecret* ]] || false
+  clean="https://example.invalid/r.git"
+  for url in "https://someone:notasecret@example.invalid/r.git" "HTTPS://notasecret@example.invalid/r.git" \
+             "git+https://notasecret@example.invalid/r.git" "https://example.invalid/r.git?token=notasecret"; do
+    # A clean fetch URL with a bad push URL, then the reverse: each side is checked.
+    for pair in "$clean $url" "$url $clean"; do
+      set -- $pair
+      git remote set-url origin "$1"
+      git remote set-url --push origin "$2"
+      run bash "$PUBLISH" --check-origin "$1" "$2"
+      [ "$status" -eq 1 ] || false
+      [[ "$output" == *"CREDENTIALS IN ORIGIN URL"* ]] || false
+      [[ "$output" != *notasecret* ]] || false
+    done
   done
   git remote set-url origin "ssh://git@example.invalid/r.git"
   git remote set-url --push origin "ssh://git@example.invalid/r.git"

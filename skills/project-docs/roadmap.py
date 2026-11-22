@@ -538,38 +538,58 @@ def cmd_init(docs: pathlib.Path) -> int:
 
     made_dirs = []                      # deepest last
     created: list[tuple[pathlib.Path, int, int]] = []
-    previous = {sig: signal.signal(sig, interrupted) for sig in (signal.SIGINT, signal.SIGTERM)}
+    signals = {signal.SIGINT, signal.SIGTERM}
+    previous = {sig: signal.signal(sig, interrupted) for sig in signals}
     try:
         for folder in [*reversed(docs.parents), docs]:
-            if not os.path.lexists(folder):
+            if os.path.lexists(folder):
+                continue
+            # Signals wait while a folder or file is made and recorded, so
+            # nothing exists on disk that the rollback does not know about.
+            signal.pthread_sigmask(signal.SIG_BLOCK, signals)
+            try:
                 folder.mkdir()
                 made_dirs.append(folder)
+            except FileExistsError:
+                if not folder.is_dir():
+                    raise
+                # Another init made it; it is theirs, so ours to use, not remove.
+            finally:
+                signal.pthread_sigmask(signal.SIG_UNBLOCK, signals)
         for name, text in bodies.items():
             # Mode "x" refuses any existing entry, a dangling symlink included,
             # so nothing that appeared since the check above is replaced.
+            signal.pthread_sigmask(signal.SIG_BLOCK, signals)
             try:
                 f = open(docs / name, "x")
-            except FileExistsError:
-                continue
-            with f:
                 st = os.fstat(f.fileno())
                 created.append((docs / name, st.st_dev, st.st_ino))
+            except FileExistsError:
+                continue
+            finally:
+                signal.pthread_sigmask(signal.SIG_UNBLOCK, signals)
+            with f:
                 f.write(text)
     except BaseException as exc:
         for sig in previous:
             signal.signal(sig, signal.SIG_IGN)
+        left = []
         for path, dev, ino in created:
             try:
                 st = os.lstat(path)
+                if (st.st_dev, st.st_ino) == (dev, ino):
+                    path.unlink()
             except FileNotFoundError:
-                continue
-            if (st.st_dev, st.st_ino) == (dev, ino):
-                path.unlink()
+                pass
+            except OSError:
+                left.append(str(path))
         for folder in reversed(made_dirs):
             try:
                 folder.rmdir()
             except OSError:
-                break                   # someone else's file is in it now
+                left.append(str(folder))  # someone else's file is in it now
+        if left:
+            fail(f"refusing: set-up failed: {exc}; could not remove {', '.join(left)}")
         fail(f"refusing: set-up failed, nothing of ours left behind: {exc}")
     finally:
         for sig, handler in previous.items():
@@ -581,12 +601,14 @@ def cmd_init(docs: pathlib.Path) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    # --docs may come before or after the subcommand.
+    ap.add_argument("--docs", type=pathlib.Path, default=pathlib.Path("docs"))
     commands = ap.add_subparsers(dest="command", required=True)
     for name in ("check", "close", "init"):
         sub = commands.add_parser(name)
         if name == "close":
             sub.add_argument("id", help="the entry to close, e.g. KI-15")
-        sub.add_argument("--docs", type=pathlib.Path, default=pathlib.Path("docs"))
+        sub.add_argument("--docs", type=pathlib.Path, default=argparse.SUPPRESS)
     args = ap.parse_args()
     if args.command == "check":
         return cmd_check(args.docs)

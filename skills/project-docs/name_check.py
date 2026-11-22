@@ -52,7 +52,7 @@ IGNORE = re.compile(r"<!--\s*name-check:\s*ignore\s+(.+?)\s*-->")
 REFDEF = re.compile(r"^ {0,3}\[[^\]]+\]:\s*<?([^\s>]+)>?")
 HEADING = re.compile(r"^ {0,3}#{1,6}\s+(.*?)\s*#*\s*$")
 HTML_ID = re.compile(r"""\b(?:id|name)=["']([^"']+)["']""")
-DETAIL_FILES = tuple(f"docs/{name}" for name in FILES.values())
+DETAIL_FILES = {prefix: f"docs/{name}" for prefix, name in FILES.items()}
 
 
 class NotARepo(Exception):
@@ -99,7 +99,11 @@ class Repo:
         self._text: dict[str, str | None] = {}
         self._anchors: dict[str, set[str]] = {}
         self._code: str | None = None
-        self.ids = {m[1].upper() for f in DETAIL_FILES for m in ID_ANCHOR.finditer(self.text(f) or "")}
+        # A declaration is a visible anchor in its own detail file, not an example.
+        self.ids = {m[1].upper() for prefix, f in DETAIL_FILES.items()
+                    for line in visible_lines(self.text(f) or "")
+                    for m in ID_ANCHOR.finditer(blank_spans(line))
+                    if m[1].upper().startswith(prefix + "-")}
         self.ids |= set(ID_WORD.findall(self.text("CHANGELOG.md") or ""))
 
     def inside(self, rel: str) -> bool:
@@ -232,9 +236,9 @@ def check_doc(repo: Repo, rel: str) -> list[Finding]:
     ignored: set[str] = set()
     for number, line in enumerate(visible_lines(repo.text(rel) or ""), 1):
         here, ignored = ignored, set()
-        directive = IGNORE.search(blank_spans(line))
-        if directive:
-            ignored = set(directive[1].split())
+        # The directive must sit outside a code span; the names it lists may be backticked.
+        if IGNORE.search(blank_spans(line)):
+            ignored = set(IGNORE.search(line)[1].replace("`", " ").split())
             continue
         found: list[tuple] = []
         scripts, lone_flags = [], []
@@ -281,7 +285,8 @@ def check_command(repo, words, doc_dir, found) -> str | None:
     script = locate(repo, path_token(first), doc_dir)
     args = words[1:]
     if not script and first in INTERPRETERS:
-        script, args = locate(repo, path_token(words[1]), doc_dir), words[2:]
+        first = words[1]
+        script, args = locate(repo, path_token(first), doc_dir), words[2:]
     if not script:
         if (BARE.fullmatch(first) and words[1].startswith("--") and not shutil.which(first)
                 and first not in repo.basenames
@@ -344,6 +349,10 @@ def main() -> int:
         print(f"cannot read: {', '.join(unreadable)}", file=sys.stderr)
         return 2
     docs = [f for f in (named or repo.tracked) if in_scope(f)]
+    skipped = [f for f in docs if repo.text(f) is None]
+    if skipped:
+        print(f"cannot read: {', '.join(skipped)} (not checked)", file=sys.stderr)
+        docs = [f for f in docs if f not in skipped]
     findings = [f for rel in docs for f in check_doc(repo, rel)]
     for f in findings:
         print(f"{f.path}:{f.line}: missing {f.kind} {f.name}" + (f" — {f.reason}" if f.reason else ""))
