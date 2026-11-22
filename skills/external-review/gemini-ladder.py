@@ -12,21 +12,23 @@ rank, most significant first:
      or lite included) after every listed one;
   2. version, newest first;
   3. class name, so the order never depends on how agy printed the list.
-Each class is offered once, at the first of PREFERENCE it has: high, the
-default; then the suffix-less id, which the review loop runs with
-`--effort high`; then xhigh; then medium. Orchestrator models, efforts below
+Each class is offered once, at `high`, the user's default: its -high id, else
+its suffix-less id, which the review loop runs with `--effort high`. A class
+with neither is skipped. Orchestrator models, efforts below
 medium (low, minimal, none) and ultra, which delegates the work, are never
-offered. Another effort is used only when the user asks for it.
+offered. xhigh or medium is used only when the user asks for it (--effort).
 """
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 
 # The user's ranking of Gemini families, strongest first.
 FAMILIES = ("carbon", "argon", "neon", "hydrogen")
-# Within a class, the variant to run: "" is the suffix-less id.
-PREFERENCE = ("high", "", "xhigh", "medium")
+# Within a class, the variant to run for each effort the user can ask for: ""
+# is the suffix-less id, which the review loop runs with --effort high.
+PREFERENCE = {"high": ("high", ""), "xhigh": ("xhigh",), "medium": ("medium",)}
 EFFORTS = {"high", "xhigh", "medium", "low", "minimal", "none", "ultra"}
 VERSION = re.compile(r"\d+(?:\.\d+)*")
 
@@ -54,20 +56,23 @@ def rank(model_class: str) -> tuple:
     )
 
 
-def ladder(lines) -> list[str]:
+def ladder(lines, effort: str = "high") -> list[str]:
     ids = {line.split()[0] for line in lines if line.strip()}
     variants: dict[str, dict[str, str]] = {}
     for m in ids:
         if m.startswith("gemini-") and "orchestrator" not in m:
-            model_class, effort = split(m)
-            variants.setdefault(model_class, {})[effort] = m
+            model_class, suffix = split(m)
+            variants.setdefault(model_class, {})[suffix] = m
     rungs = []
     for model_class in sorted(variants, key=rank):
-        pick = next((variants[model_class][e] for e in PREFERENCE if e in variants[model_class]), None)
+        pick = next((variants[model_class][e] for e in PREFERENCE[effort] if e in variants[model_class]), None)
         if pick:
             rungs.append(pick)
     return rungs[:3]
 
 
 if __name__ == "__main__":
-    print(" ".join(ladder(sys.stdin)))
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--effort", choices=sorted(PREFERENCE), default="high",
+                    help="only when the user asks for an effort other than high")
+    print(" ".join(ladder(sys.stdin, ap.parse_args().effort)))

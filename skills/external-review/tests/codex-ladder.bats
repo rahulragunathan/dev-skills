@@ -98,14 +98,20 @@ PY
   [ -z "$output" ]
 }
 
-@test "high is the default effort, then xhigh, max and medium" {
-  # Fails if a rung takes the highest supported effort instead of high first.
-  cache gpt-6-sol:1:list:medium,high,xhigh,max gpt-6-terra:2:list:medium,xhigh,max gpt-6-luna:3:list:medium,max
+@test "every rung runs at high, and a model without high is skipped" {
+  # Fails if a model lacking high climbs to xhigh or max, or drops to medium, without the user asking.
+  cache gpt-6-sol:1:list:medium,high,xhigh,max gpt-6-terra:2:list:medium,xhigh,max gpt-6-luna:3:list:medium
   run python3 "$LADDER" "$TEST_TMP/cache.json"
-  [ "$output" = "gpt-6-sol:high gpt-6-terra:xhigh gpt-6-luna:max" ] || false
-  cache gpt-6-sol:1:list:low,medium
-  run python3 "$LADDER" "$TEST_TMP/cache.json"
-  [ "$output" = "gpt-6-sol:medium" ]
+  [ "$output" = "gpt-6-sol:high" ]
+}
+
+@test "an effort the user asks for replaces high" {
+  # Fails if --effort is ignored, or offers a model that does not support the asked effort.
+  cache gpt-6-sol:1:list:high,xhigh,max gpt-6-terra:2:list:high
+  run python3 "$LADDER" "$TEST_TMP/cache.json" --effort max
+  [ "$output" = "gpt-6-sol:max" ] || false
+  run python3 "$LADDER" "$TEST_TMP/cache.json" --effort ultra
+  [ "$status" -ne 0 ]
 }
 
 @test "a model supporting nothing above low gives no rung" {
@@ -158,10 +164,10 @@ PY
 }
 
 @test "the model class comes first, then its effort" {
-  # Fails if effort outranks family, so a weaker family at high beats a stronger one at medium.
-  cache gpt-7-sol:1:list:high gpt-7-astra:2:list:low,medium
+  # Fails if effort outranks family among models that run at high.
+  cache gpt-7-sol:1:list:high gpt-7-astra:2:list:high
   run python3 "$LADDER" "$TEST_TMP/cache.json"
-  [ "$output" = "gpt-7-astra:medium gpt-7-sol:high" ]
+  [ "$output" = "gpt-7-astra:high gpt-7-sol:high" ]
 }
 
 @test "a malformed effort value is skipped, not fatal" {

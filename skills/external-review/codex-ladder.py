@@ -9,15 +9,16 @@ Only models the cache lists as visible are offered. They rank by family, by
 FAMILIES, with an unlisted family after every listed one; then newest version
 first (the number after `gpt`; anything else ranks last); then by slug. The
 model comes first, then its effort. The cache's own `priority` is not used: it is OpenAI's
-default pick, not a capability rank. Each rung runs at `high`, the user's
-default, or where the model lacks it at the first of EFFORTS it supports.
-Another effort is used only when the user asks for it.
+default pick, not a capability rank. Every rung runs at `high`, the user's
+default; a model without it is skipped. Another effort is used only when the
+user asks for it, with --effort.
 
 Usage:
-    codex-ladder.py [CACHE]    (default ~/.codex/models_cache.json)
+    codex-ladder.py [CACHE] [--effort E]    (default ~/.codex/models_cache.json, high)
 """
 from __future__ import annotations
 
+import argparse
 import json
 import pathlib
 import re
@@ -25,10 +26,11 @@ import sys
 
 # The user's ranking of OpenAI families, strongest first.
 FAMILIES = ("astra", "sol", "terra", "luna")
-# The effort each rung runs at: the first of these the model supports. High is
-# the user's default. Nothing below medium is a review, and `ultra` is left out
-# on purpose: it delegates the work to other models.
-EFFORTS = ("high", "xhigh", "max", "medium")
+# The effort every rung runs at: `high`, the user's default. Another runs only
+# when the user asks for it (--effort). `ultra` is never one: it delegates the
+# work to other models.
+DEFAULT_EFFORT = "high"
+EFFORTS = ("medium", "high", "xhigh", "max")
 VERSION = re.compile(r"\d+(?:\.\d+)*")
 SLUG = re.compile(r"[a-z0-9][a-z0-9.-]*")
 
@@ -58,7 +60,7 @@ def usable(m) -> bool:
             and isinstance(m.get("slug"), str) and SLUG.fullmatch(m["slug"]) is not None)
 
 
-def ladder(models: list) -> list[str]:
+def ladder(models: list, effort: str = DEFAULT_EFFORT) -> list[str]:
     # A slug listed more than once offers every effort any of its entries does.
     supported: dict[str, set] = {}
     for m in filter(usable, models):
@@ -68,21 +70,26 @@ def ladder(models: list) -> list[str]:
         supported.setdefault(m["slug"], set()).update(efforts)
     rungs = []
     for slug, efforts in supported.items():
-        effort = next((e for e in EFFORTS if e in efforts), None)
-        if effort:
+        # A model that cannot run at the effort is skipped, not run at another.
+        if effort in efforts:
             rungs.append((rank(slug), f"{slug}:{effort}"))
     return [rung for _, rung in sorted(rungs)][:3]
 
 
 def main() -> int:
-    path = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "~/.codex/models_cache.json").expanduser()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("cache", nargs="?", default="~/.codex/models_cache.json")
+    ap.add_argument("--effort", choices=EFFORTS, default=DEFAULT_EFFORT,
+                    help="only when the user asks for an effort other than high")
+    args = ap.parse_args()
+    path = pathlib.Path(args.cache).expanduser()
     try:
         models = json.loads(path.read_text())["models"]
     except (OSError, ValueError, KeyError, TypeError):
         return 1
     if not isinstance(models, list):
         return 1
-    rungs = ladder(models)
+    rungs = ladder(models, args.effort)
     print(" ".join(rungs))
     return 0
 

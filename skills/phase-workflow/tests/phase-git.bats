@@ -613,3 +613,28 @@ after_review() {
     [ "$status" -eq 0 ] || false
   done
 }
+
+# record_check <pr>: the documented phase-record check, for PR <pr>.
+record_check() {
+  extract_fence 'PHASE RECORD DOES NOT NAME PR' "$TEST_TMP/record.sh" "$BATS_TEST_DIRNAME/../SKILL.md"
+  if grep -q '^ *PR=' "$TEST_TMP/record.sh"; then
+    sed -i.bak "s|^\\( *\\)PR=.*|\\1PR=$1|" "$TEST_TMP/record.sh"
+  else
+    printf 'PR=%s\n%s\n' "$1" "$(cat "$TEST_TMP/record.sh")" > "$TEST_TMP/record.sh"
+  fi
+}
+
+@test "phase record: another repository's PR cannot pair with this release" {
+  # Fails if PR and Release are matched anywhere in the file, so PR 5 from the companion
+  # table passes with this repository's v2.1.0.
+  mkdir -p docs
+  printf '## [2.1.0] - 2026-11-22\n' > CHANGELOG.md
+  printf '| Key | Value |\n| --- | --- |\n| `PR` | 9 |\n| Release | v2.1.0 |\n\nCompanion:\n\n| Key | Value |\n| --- | --- |\n| `PR` | 5 |\n| Release | v1.1.0 |\n' > docs/PHASE_RECORD.md
+  git add -A && git commit -qm record
+  record_check 5
+  run bash "$TEST_TMP/record.sh"
+  [ "$status" -ne 0 ] || false
+  record_check 9
+  run bash "$TEST_TMP/record.sh"
+  [ "$status" -eq 0 ]
+}

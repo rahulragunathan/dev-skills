@@ -114,19 +114,18 @@ real one and the coverage line cannot carry the difference. Record the reviewer 
 with the reason: it is installed, so it is not a missing CLI. Whether the pass is partial or no
 coverage depends on what the *other* reviewer did.
 
-**Reviews run at `high` effort by default, for both reviewers, on the strongest model class
-available: the class is chosen first, then its effort.** Another effort, such as `xhigh` or
-`max`, is used only when the user asks for it for that review: then replace the effort in each
-Codex rung, and pick each Gemini class's id with that suffix. Each Codex rung is
-`slug:effort`, at `high` where the model supports it; `codex-ladder.py`'s `EFFORTS` gives the
-fallback order, and nothing below `medium` is offered. `ultra` is never chosen for either
-reviewer: it delegates tasks automatically, so the work may not come from the recorded model.
-A Gemini id carries its effort. `gemini-ladder.py` offers one id per model class: its `-high`
-id, else its suffix-less id (run with `--effort high`), else `-xhigh`, else `-medium`. Set the effort explicitly, since `-m`
-alone does not: split the pair and pass `-m "$slug"` with `-c model_reasoning_effort="$effort"`;
-the cache's default effort does not select the rung. Bare slugs keep the explicit `high`
-fallback. Record the effort beside the slug — a `high` run and a `max` run from one slug are
-different review configurations.
+**Reviews run at `high` effort, for both reviewers, on the strongest model available: the
+model is chosen first (family, then version), then run at `high`.** A model that cannot run at
+`high` is skipped, never run at another effort. Another effort runs only when the user asks for
+it for that review: then pass it to both ladders, `codex-ladder.py --effort <level>` (`medium`,
+`xhigh` or `max`) and `gemini-ladder.py --effort <level>` (`medium` or `xhigh`; Gemini lists no
+`max`). `ultra` is never chosen: it delegates tasks automatically, so the work may not come from
+the recorded model. Each Codex rung is `slug:effort`. A Gemini id carries its effort: the ladder
+offers each model's `-high` id, else its suffix-less id, run with `--effort high`. Set the Codex
+effort explicitly, since `-m` alone does not: split the pair and pass `-m "$slug"` with
+`-c model_reasoning_effort="$effort"`; the cache's default effort does not select the rung. Bare
+slugs keep the explicit `high` fallback. Record the effort beside the slug — a `high` run and a
+`max` run from one slug are different review configurations.
 
 **Record which model and effort actually ran**, using `slug:effort` for Codex in the coverage
 line and the findings table's Model column.

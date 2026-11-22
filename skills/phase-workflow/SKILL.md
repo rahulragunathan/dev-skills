@@ -292,12 +292,18 @@ what remains expired.
 7. **Present to the user and stop** — the phase gate.
    - **Include the review record** from step 5 in the hand-off, and put it in the PR description (`gh pr edit "$PR" -R "$REPO" --body-file <file>`) — never in a per-phase review file in the repository. It exists so the user can see every finding and pull any deferred or accepted one back into this phase before signing off.
    - **Confirm `docs/PHASE_RECORD.md` is current, and do not take that on trust.** Step 4 brought
-     it current, but steps 5 to 7 and every re-gate come after step 4. Check that it names this
-     PR and the release the CHANGELOG prepares:
+     it current, but steps 5 to 7 and every re-gate come after step 4. Check, in the committed
+     file, that its first table (this repository's phase) names this PR and the release the
+     CHANGELOG prepares; a companion repository's table below it does not count:
 
      ```bash
-     VERSION="$(grep -m1 -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md | tr -d '#[] ')"
-     grep -qF "| \`PR\` | $PR |" docs/PHASE_RECORD.md && grep -qF "| Release | v$VERSION |" docs/PHASE_RECORD.md \
+     set -euo pipefail
+     PR="<this phase's PR number>"
+     VERSION="$(git show HEAD:CHANGELOG.md | grep -m1 -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' | tr -d '#[] ' || true)"
+     RECORD="$(git show HEAD:docs/PHASE_RECORD.md | awk '/^\| Key \| Value \|/ {n++} n == 1')"
+     [ -n "$PR" ] && [ -n "$VERSION" ] \
+       && printf '%s\n' "$RECORD" | grep -qxF "| \`PR\` | $PR |" \
+       && printf '%s\n' "$RECORD" | grep -qxF "| Release | v$VERSION |" \
        || { echo "PHASE RECORD DOES NOT NAME PR $PR AND v$VERSION — update it"; exit 1; }
      ```
 

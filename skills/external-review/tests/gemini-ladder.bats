@@ -23,9 +23,9 @@ rank() { printf '%s\n' "$@" | python3 "$LADDER"; }
   # Fails if effort outranks the model: a weaker family's high would come before a stronger one.
   run rank gemini-4-hydrogen-high gemini-4-carbon-medium gemini-4-carbon-xhigh gemini-4-carbon-high
   [ "$output" = "gemini-4-carbon-high gemini-4-hydrogen-high" ] || false
-  # A class without a high variant takes its next best, still ahead of a weaker class.
+  # A class without a high variant is skipped: xhigh and medium only when the user asks.
   run rank gemini-4-hydrogen-high gemini-4-carbon-medium gemini-4-carbon-xhigh
-  [ "$output" = "gemini-4-carbon-xhigh gemini-4-hydrogen-high" ]
+  [ "$output" = "gemini-4-hydrogen-high" ]
 }
 
 @test "low, minimal and none are never offered" {
@@ -83,8 +83,8 @@ print(m.rank("gemini-4-boron") < m.rank("gemini-4-cobalt"))' "$LADDER"
   # Fails if versions compare as text or floats, or if effort outranks version.
   run rank gemini-3.9-pro-high gemini-3.10-pro-high
   [ "$output" = "gemini-3.10-pro-high gemini-3.9-pro-high" ] || false
-  run rank gemini-3.9-pro-high gemini-4-neon-medium
-  [ "$output" = "gemini-4-neon-medium gemini-3.9-pro-high" ]
+  run rank gemini-3.9-pro-high gemini-4-neon-high
+  [ "$output" = "gemini-4-neon-high gemini-3.9-pro-high" ]
 }
 
 @test "family comes before version" {
@@ -105,13 +105,13 @@ print(m.rank("gemini-4-boron") < m.rank("gemini-4-cobalt"))' "$LADDER"
 @test "one rung per model class, at high when it has one" {
   # Fails if a class fills several rungs, or if xhigh or medium is picked over high.
   run rank gemini-4-neon-medium gemini-4-neon-xhigh gemini-4-neon-high gemini-4-argon-medium
-  [ "$output" = "gemini-4-argon-medium gemini-4-neon-high" ]
+  [ "$output" = "gemini-4-neon-high" ]
 }
 
 @test "an unknown suffix names its own class" {
   # Fails if a variant name is read as an effort and merged into the base class.
-  run rank gemini-4-neon-preview gemini-4-neon-medium
-  [ "$output" = "gemini-4-neon-medium gemini-4-neon-preview" ]
+  run rank gemini-4-neon-preview gemini-4-neon-high
+  [ "$output" = "gemini-4-neon-high gemini-4-neon-preview" ]
 }
 
 @test "an unparsable version does not crash" {
@@ -125,6 +125,8 @@ print(m.rank("gemini-4-boron") < m.rank("gemini-4-cobalt"))' "$LADDER"
   # Fails if a suffix-less id, which the loop runs with --effort high, loses to medium or xhigh.
   run rank gemini-4-neon-medium gemini-4-neon gemini-4-neon-xhigh
   [ "$output" = "gemini-4-neon" ] || false
+  run rank gemini-4-neon-medium gemini-4-neon-xhigh
+  [ -z "$output" ] || false
   run rank gemini-4-neon gemini-4-neon-high
   [ "$output" = "gemini-4-neon-high" ]
 }
@@ -140,4 +142,10 @@ print(m.rank("gemini-4-boron") < m.rank("gemini-4-cobalt"))' "$LADDER"
   run rank gemini-4-neon-ultra
   [ "$status" -eq 0 ] || false
   [ -z "$output" ]
+}
+
+@test "an effort the user asks for picks that variant instead of high" {
+  # Fails if --effort is ignored, or a class without that variant is offered.
+  run bash -c 'printf "%s\n" gemini-4-neon-high gemini-4-neon-xhigh gemini-4-argon-high | python3 "$LADDER" --effort xhigh'
+  [ "$output" = "gemini-4-neon-xhigh" ]
 }

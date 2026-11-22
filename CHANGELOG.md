@@ -42,7 +42,7 @@ here — the plugin manifest's version is the only record of them.
 - **External review** runs up to three passes without checking in. Its stop rule applies
   before any fix, so no fix reaches the gate unreviewed. A fourth pass is the user's call.
 - **External reviews run at `high` effort by default**, for Codex and Gemini alike, on the
-  strongest model class; another effort only when the user asks for it.
+  strongest model; another effort (`--effort` on both ladders) only when the user asks.
 - **ENH-31 is now KI-56**: a check that says `references verified` for an entry it never
   checked is a defect, not an enhancement.
 - **`/simplify`** runs at a task's refactor step only when the task added or reshaped code, and
@@ -60,13 +60,13 @@ here — the plugin manifest's version is the only record of them.
 
 - **The Gemini ladder** put orchestrator models first and `xhigh` last. It now ranks by
   family (Carbon > Argon > Neon > Hydrogen, then any other line such as flash or lite), then
-  version, newest first, and offers each model once at `high`, or its suffix-less id run with
-  `--effort high`. Efforts below `medium`, and `ultra`, are never offered.
+  version, newest first, and offers each model once at `high` (its `-high` id, or its suffix-less id run with
+  `--effort high`); a model without either is skipped. Efforts below `medium`, and `ultra`, are never offered.
 - **Gemini calls passed `--effort high`**, which `agy` refuses for any model whose id carries
   another effort, so the ladder could never downshift.
 - **The Codex ladder ranked by the cache's `priority`**, OpenAI's default pick: it put
   `gpt-6.2-sol` above `gpt-6.2-astra`. It now ranks by family (Astra > Sol > Terra > Luna),
-  then version, newest first, at `high` effort where the model supports it. A malformed cache entry is
+  then version, newest first, at `high` effort; a model without `high` is skipped. A malformed cache entry is
   skipped rather than emptying the ladder.
 - **The Codex loop downshifted on a failed run's transcript**: Codex writes the prompt to stderr,
   so any availability phrase in the material under review read as an unavailable model. It now

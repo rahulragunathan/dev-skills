@@ -491,3 +491,13 @@ print([n for n in ("home/id_ecdsa", "home/id_ecdsa.pub", ".pypirc") if not m.cre
   [ "$status" -eq 1 ] || false
   [[ "$output" == *"missing command node"* ]]
 }
+
+@test "an interpreter with a missing repo script reports the script" {
+  # Control for F-147: `locate` names a path under a known root whether or not it exists, so a
+  # missing script after an interpreter is still reported.
+  put skills/real.py 'x = 1'
+  put doc.md 'Run `python3 skills/gone.py --flag`.'
+  check
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"missing command skills/gone.py"* ]]
+}
