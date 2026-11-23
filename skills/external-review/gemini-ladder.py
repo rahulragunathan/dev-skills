@@ -28,8 +28,8 @@ import sys
 FAMILIES = ("carbon", "argon", "neon", "hydrogen")
 # Within a class, the variant to run for each effort the user can ask for: ""
 # is the suffix-less id, which the review loop runs with --effort high.
-PREFERENCE = {"high": ("high", ""), "xhigh": ("xhigh",), "medium": ("medium",)}
-EFFORTS = {"high", "xhigh", "medium", "low", "minimal", "none", "ultra"}
+PREFERENCE = {"high": ("high", ""), "xhigh": ("xhigh",), "max": ("max",), "medium": ("medium",)}
+EFFORTS = {"high", "xhigh", "max", "medium", "low", "minimal", "none", "ultra"}
 VERSION = re.compile(r"\d+(?:\.\d+)*")
 
 

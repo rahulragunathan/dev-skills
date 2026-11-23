@@ -130,8 +130,10 @@ probe() {
       python3 "$RUNNER" "$DEADLINE" codex exec ${ROOT_ARGS[@]+"${ROOT_ARGS[@]}"} --skip-git-repo-check --sandbox read-only \
         -m "$slug" -c model_reasoning_effort="$effort" -o "$OUT" "$PROBE" > "$TMP/codex.stdout" 2> "$ERR" < /dev/null
     else
-      # No --effort: the model id carries its own, and agy refuses a second one.
-      python3 "$RUNNER" "$DEADLINE" agy -p "$PROBE" --model "$model" \
+      # An id with an effort suffix carries its own, and agy refuses a second
+      # one; a suffix-less id is told high, exactly as the review loop does.
+      case "$model" in *-high|*-xhigh|*-max|*-medium) EFFORT=() ;; *) EFFORT=(--effort high) ;; esac
+      python3 "$RUNNER" "$DEADLINE" agy -p "$PROBE" --model "$model" ${EFFORT[@]+"${EFFORT[@]}"} \
         --print-timeout "${DEADLINE}s" > "$OUT" 2> "$ERR" < /dev/null
     fi
     rc=$?

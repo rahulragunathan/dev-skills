@@ -552,3 +552,24 @@ SH
   grep -qx -- '-C' "$TEST_TMP/codex-args" || false
   grep -qxF -- "$TEST_TMP/root" "$TEST_TMP/codex-args"
 }
+
+@test "the Gemini probe runs a suffix-less id at high, as the review does" {
+  # Fails if the probe checks a suffix-less id at agy's default while the review runs it at high (F-132).
+  fake_codex_ready; fake_agy_ready
+  sed -i.bak '2i\
+printf "%s\\n" "$@" > "$TEST_TMP/agy-args"\
+' "$BIN/agy"
+  run bash "$PREFLIGHT" --gemini-model gemini-4-neon
+  grep -qx -- '--effort' "$TEST_TMP/agy-args" || false
+  grep -qx -- 'high' "$TEST_TMP/agy-args"
+}
+
+@test "the documented Gemini loop gives a -max id no second effort" {
+  # Fails if -max is not read as an effort suffix, so the loop adds --effort high to it (F-131).
+  printf 'prompt' > "$TEST_TMP/gemini_prompt_p1_c1.txt"
+  gemini_loop 'printf "%s\n" "$@" > "$TEST_TMP/args-$4"; echo "No findings.";'
+  sed -i.bak 's/^GEMINI_RUNGS=.*/GEMINI_RUNGS="gemini-4-neon-max"/' "$TEST_TMP/gemini.sh"
+  run bash "$TEST_TMP/gemini.sh"
+  [ -e "$TEST_TMP/args-gemini-4-neon-max" ] || false
+  ! grep -qx -- '--effort' "$TEST_TMP/args-gemini-4-neon-max"
+}

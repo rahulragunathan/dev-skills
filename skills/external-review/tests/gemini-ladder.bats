@@ -149,3 +149,11 @@ print(m.rank("gemini-4-boron") < m.rank("gemini-4-cobalt"))' "$LADDER"
   run bash -c 'printf "%s\n" gemini-4-neon-high gemini-4-neon-xhigh gemini-4-argon-high | python3 "$LADDER" --effort xhigh'
   [ "$output" = "gemini-4-neon-xhigh" ]
 }
+
+@test "a -max id is an effort variant of its model, offered only when asked" {
+  # Fails if -max is read as a separate model that takes a second rung at the default (F-131).
+  run rank gemini-4-neon-high gemini-4-neon-max gemini-4-hydrogen-high
+  [ "$output" = "gemini-4-neon-high gemini-4-hydrogen-high" ] || false
+  run bash -c 'printf "%s\n" gemini-4-neon-high gemini-4-neon-max | python3 "$LADDER" --effort max'
+  [ "$output" = "gemini-4-neon-max" ]
+}

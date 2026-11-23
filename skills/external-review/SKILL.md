@@ -118,8 +118,8 @@ coverage depends on what the *other* reviewer did.
 model is chosen first (family, then version), then run at `high`.** A model that cannot run at
 `high` is skipped, never run at another effort. Another effort runs only when the user asks for
 it for that review: then pass it to both ladders, `codex-ladder.py --effort <level>` (`medium`,
-`xhigh` or `max`) and `gemini-ladder.py --effort <level>` (`medium` or `xhigh`; Gemini lists no
-`max`). `ultra` is never chosen: it delegates tasks automatically, so the work may not come from
+`xhigh` or `max`) and `gemini-ladder.py --effort <level>` (`medium`, `xhigh` or `max`; Gemini lists no
+`max` today, so that request skips every Gemini model). `ultra` is never chosen: it delegates tasks automatically, so the work may not come from
 the recorded model. Each Codex rung is `slug:effort`. A Gemini id carries its effort: the ladder
 offers each model's `-high` id, else its suffix-less id, run with `--effort high`. Set the Codex
 effort explicitly, since `-m` alone does not: split the pair and pass `-m "$slug"` with
@@ -186,7 +186,7 @@ for m in ${GEMINI_RUNGS?run the ladder discovery block first}; do
   PROMPT="$(cat "<scratchpad>/gemini_prompt_p<n>_c<chunk>.txt")" && [ -n "$PROMPT" ] \
     || { echo "no prompt for this chunk — not run"; break; }
   # An id with an effort suffix carries its effort; a suffix-less one is told high.
-  case "$m" in *-high|*-xhigh|*-medium) EFFORT=() ;; *) EFFORT=(--effort high) ;; esac
+  case "$m" in *-high|*-xhigh|*-max|*-medium) EFFORT=() ;; *) EFFORT=(--effort high) ;; esac
   rc=0
   agy -p "$PROMPT" --model "$m" ${EFFORT[@]+"${EFFORT[@]}"} --print-timeout 25m > "$PART" 2> "$ERR" || rc=$?
   if [ "$rc" = 0 ] && [ -s "$PART" ]; then
