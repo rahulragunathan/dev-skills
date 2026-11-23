@@ -342,18 +342,33 @@ Prompt drift between the two reviewers corrupts the agree/disagree triage. Compo
 3. **Focus list** by mode:
    - *plan*: gaps and missing steps, risks and failure modes, sequencing problems, simpler approaches missed, anything underspecified.
    - *phase / repo*: real bugs (report everything, do not self-filter for severity), silent failures, security issues, design choices that will not hold up, code duplication/consolidation opportunities, genuinely missing test coverage; plus doc-vs-code contradictions (README, ARCHITECTURE, AGENTS.md or CLAUDE.md, the roadmap files where the repo has them, CHANGELOG).
-4. **Test-discrimination question** (*phase / repo* only): *"For each test in the material below, say whether it would still pass with the change it covers reverted. Name any test that asserts on a mock, on a constant, or on something true before the change."* This is a backstop — phase-workflow §3 step 3 already checks that every new test has a recorded red, and **mutates** the named behaviour of a test written after its fix, which a reviewer cannot do. Ask anyway: a reviewer reading the assertion catches a different class than a mutation catches.
-5. **Do-not-read instruction (mandatory, both reviewers):**
+4. **Security (both reviewers, every mode):**
+
+   > **Security.** Look for security problems on purpose, not in passing.
+   > *plan*: trust boundaries and untrusted inputs, including text that reaches another agent's
+   > prompt (bundles, tool output, review records); authentication and authorization; privilege
+   > and sandbox boundaries; where secrets live and where they could leak (logs, bundles,
+   > records, URLs, command lines); data sent to outside services; and any new dependency or
+   > tool the plan adds.
+   > *phase / repo*: trace each untrusted input to the command, file, query, page or outbound
+   > request it reaches, and name the missing control: injection (shell, SQL, path, template,
+   > XSS), SSRF, path traversal and symlink following, unsafe parsing or deserialization, weak
+   > crypto or disabled TLS checks, unsafe file and temp-file permissions, secret exposure, and
+   > missing auth checks. Treat a dependency change (a new or upgraded package, an unpinned
+   > version, an install script) as a prompt to inspect it; report it with a concrete consequence.
+
+5. **Test-discrimination question** (*phase / repo* only): *"For each test in the material below, say whether it would still pass with the change it covers reverted. Name any test that asserts on a mock, on a constant, or on something true before the change."* This is a backstop — phase-workflow §3 step 3 already checks that every new test has a recorded red, and **mutates** the named behaviour of a test written after its fix, which a reviewer cannot do. Ask anyway: a reviewer reading the assertion catches a different class than a mutation catches.
+6. **Do-not-read instruction (mandatory, both reviewers):**
 
    > Do not open `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `credentials*`, `.netrc`, `.npmrc`, `.pypirc`, `id_rsa*`, `id_ed25519*`, `id_ecdsa*`, or anything else shaped like a secret. If a finding depends on one, name the file and say what you would need rather than reading it.
 
-6. **Don't explain the tools:**
+7. **Don't explain the tools:**
 
    > This is a workflow document, not a git tutorial. Flag any passage that explains standard behaviour of `git`, `gh`, `pytest` or the shell rather than stating this project's policy. Genuine nuances that people get wrong are in scope; plain feature descriptions are not.
 
-7. **Suggested remediation:** for each finding, add one or two sentences on how you would fix it. A sketch, not a patch — enough to show what change you have in mind.
+8. **Suggested remediation:** for each finding, add one or two sentences on how you would fix it. A sketch, not a patch — enough to show what change you have in mind.
 
-8. **Output contract — always a list, even an empty one:**
+9. **Output contract — always a list, even an empty one:**
 
    > Return a numbered list of findings, each with file/function references and a severity. Return the list **even when you found nothing**: emit the heading and the single line `No findings.` Never answer with prose instead of the list.
 

@@ -116,7 +116,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 | Step | Artifact it must produce |
 | --- | --- |
 | 1. Confidence check | a written answer, and the extra tests it directed |
-| 2. `design-review phase` → `/simplify` on the branch diff → `/code-review high` | the module table plus whatever fired, or the line saying nothing did; and a re-run green suite |
+| 2. dependency scan → `design-review phase` → `/simplify` on the branch diff → `/code-review high` → `/security-review` | the scan's output, the module table plus whatever fired (or the line saying nothing did), the `/security-review` result, and a re-run green suite |
 | 3. Red record check | a `Red:` line for every test added or changed this phase, or a mutation result for each one without a line, written after its fix, or in doubt |
 | 4. Documentation pass | the doc diffs, the name-check output, and the list of docs read in full |
 | 5. External review loop | the review record: one findings table across all passes, its notes, and a coverage line per pass |
@@ -133,10 +133,20 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 | "This phase was small / it's just docs" | Size is not a listed exemption. Only *both* CLIs missing is, and only in writing. |
 | "The structure is obvious, I'll skip the table" | The table is what makes it obvious to someone who was not in the conversation. It is also what the external reviewers read. |
 | "I'll run the review after they sign off" | Sign-off is a decision made *on* the findings. After is too late. |
+| "This repo has no dependencies worth scanning" | The scan says so itself, in one line. Run it. |
 | "The tests pass, so they test the right thing" | Passing is what a test does when the bug is absent *and* when the test is vacuous. Step 3 is what tells them apart: a recorded red, or a mutation. |
 
 1. **Confidence check:** explicitly answer "what am I least confident about right now?" (untested edge cases, quota/API assumptions, auth corners) and use it to direct extra tests/verification.
-2. **Consolidation & simplification analysis** of the codebase as it now stands. Run **`design-review` in `phase` mode first, then `/simplify` on the whole branch diff, then `/code-review high`** — in that order. External review (step 5) comes after, and only then is the PR marked ready.
+2. **Consolidation, simplification and security analysis** of the codebase as it now stands. Run **the dependency scan, then `design-review` in `phase` mode, then `/simplify` on the whole branch diff, then `/code-review high`, then `/security-review`** — in that order. External review (step 5) comes after, and only then is the PR marked ready.
+   - **The dependency scan first**, because it is cheap and deterministic, and an upgrade it forces is then seen by every later pass:
+
+     ```bash
+     # fence: dependency-scan
+     python3 "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/dependency-scan.py" --root .
+     ```
+
+     It reads only the committed lockfiles, with `osv-scanner`, and sends package names and versions (never source) to the OSV database; a private package name can still identify an internal service, so pass `--offline` with a downloaded database where that matters. Exit 0 is clean or nothing to scan, 1 is findings, 3 is a coverage gap (a manifest with no lockfile, a file with no packages, an unpinned requirement), and 2 is a scanner that is missing or failed. Each finding and gap joins the review record like any other finding: fixed (an upgrade, with a test where behaviour changes), filed, or accepted with a reason. A missing scanner is reported like a missing review CLI and never blocks the gate. Run it again before the gate if any lockfile changed after it ran. Change it in `dependency-scan.py` and verify it with `tests/dependency-scan.bats`.
+   - **`/security-review` last**: Claude Code's built-in review of the branch's committed changes against the default branch, so it reads what `/simplify` and `/code-review` left. Where it is unavailable or fails, say so in the step's artifact; the external review's security item always runs, and the hand-off credits security coverage only to material an independent reviewer covered at step 5.
    - **That order, not the reverse.** Each pass must read the shape the one before it left: `design-review` moves responsibilities, `/simplify` rewrites, and `/code-review` is the correctness pass over everything that moved.
    - **Invoke it; do not restate its questions here.** The rubric lives in `design-review`; a second copy is a second edit site. Where it says to file a finding it does not fix, the rule at the top of this skill applies: through `project-docs` where the repository has the four roadmap files, otherwise in the PR's review record.
    - **Re-run the test suite after `/simplify`.** It rewrites code after the phase's green bar was established, and step 7 hands the user a diff to sign off on. Green is re-earned and reported, never assumed.

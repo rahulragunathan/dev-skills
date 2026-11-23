@@ -225,6 +225,35 @@ keep the retain rule: nothing is deleted that was not proven safe.
 
 ---
 
+<a id="enh-38"></a>
+
+## ENH-38 — name security in design-review's plan-time checks
+
+**Priority:** Medium · **Effort:** ~2 hours
+**Where:** [design-review/SKILL.md](../skills/design-review/SKILL.md) — `## The six checks` · **Regression net:** `skills/design-review/tests/`
+
+### What it is
+
+`design-review` checks structure at plan time and phase end, and names no security question: a
+trust boundary, where untrusted input enters, or what a new dependency brings. The external
+review now asks both reviewers about security in every mode, and the phase end runs
+`/security-review` and a dependency scan, but the design pass itself, which shapes the plan, is
+silent on it.
+
+### Why it matters
+
+A trust boundary drawn in the wrong place is cheapest to move in the plan. The other passes find
+it after the code exists.
+
+### Notes for the work
+
+Editing `design-review/SKILL.md` expires its recorded pressure-test results, so this belongs with
+the design-review rework, and its new rule needs its own pressure test.
+
+**Source:** the user's question during plan review, dependable-helpers phase, 2026-11-23.
+
+---
+
 <a id="enh-32"></a>
 
 ## ENH-32 — drop explanations of standard tool behaviour from the skills

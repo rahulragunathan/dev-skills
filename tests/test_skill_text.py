@@ -86,5 +86,36 @@ class FenceMarkerTest(unittest.TestCase):
             self.assertEqual(len(names), len(set(names)), p)
 
 
+class SecurityCoverageTest(unittest.TestCase):
+    """The reviews look for security problems on purpose, in every mode (Decision 9)."""
+
+    def test_rubric_has_a_security_item_for_each_mode(self):
+        # Fails if plan reviews get no security prompt, or phase/repo reviews only the bare words.
+        rubric = (ROOT / "skills/external-review/SKILL.md").read_text()
+        rubric = rubric[rubric.index("## Shared rubric"):rubric.index("## Modes")]
+        self.assertIn("**Security", rubric)
+        security = rubric[rubric.index("**Security"):]
+        security = security[:security.index("\n5. ")] if "\n5. " in security else security
+        for words in ("trust boundar", "secret", "injection", "path traversal", "dependency"):
+            self.assertIn(words, security.lower(), words)
+        for mode in ("*plan*", "*phase / repo*"):
+            self.assertIn(mode, security)
+
+    def test_phase_end_order_is_scan_then_reviews_then_security_review(self):
+        # Fails if the dependency scan runs after the passes its upgrades would need, or
+        # /security-review is missing from the retrospective.
+        skill = (ROOT / "skills/phase-workflow/SKILL.md").read_text()
+        self.assertIn("2. **Consolidation", skill)
+        step = skill[skill.index("2. **Consolidation"):]
+        step = step[:step.index("\n3. ")]
+        names = ("the dependency scan", "`design-review` in `phase` mode", "`/simplify`",
+                 "`/code-review high`", "`/security-review`")
+        for name in names:
+            self.assertIn(name, step)
+        order = [step.index(name) for name in names]
+        self.assertEqual(order, sorted(order))
+        self.assertIn("# fence: dependency-scan", skill)
+
+
 if __name__ == "__main__":
     unittest.main()

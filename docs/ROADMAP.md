@@ -70,6 +70,7 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 | [ENH-23](ENHANCEMENTS.md#enh-23) | Calibrate graders with blind hand-graded anchors | Medium | ~1 day |
 | [ENH-26](ENHANCEMENTS.md#enh-26) | Test the conversion of a helper's evaluation gap into an opaque call | Medium | ~1 hour |
 | [ENH-28](ENHANCEMENTS.md#enh-28) | Let `publish-release.sh` verify remote presence itself | Medium | ~2 hours |
+| [ENH-38](ENHANCEMENTS.md#enh-38) | Name security in design-review's plan-time checks | Medium | ~2 hours |
 | [ENH-32](ENHANCEMENTS.md#enh-32) | Drop explanations of standard tool behaviour from the skills | Low | ~2 hours |
 
 ## Open Questions

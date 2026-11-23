@@ -10,6 +10,18 @@ here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
 
+### Added
+
+- **Security in every review.** The external review's shared rubric gains a security item for
+  every mode: trust boundaries, secrets and outside services in a plan; injection, traversal,
+  unsafe parsing, weak crypto, file permissions, secret exposure and missing auth checks in code,
+  each traced from its untrusted input. The phase-end retrospective runs `/security-review`
+  after `/code-review high`.
+- **`dependency-scan.py`**, run first at phase end: known vulnerabilities in the committed
+  lockfiles, through `osv-scanner`, with a manifest that has no lockfile, a file with no packages
+  and an unpinned requirement reported as coverage gaps rather than clean. It reads a `HEAD`
+  export only, names what a tracked `osv-scanner.toml` ignores, and has an `--offline` mode.
+
 ### Fixed
 
 - **Fences read the same under zsh and bash (KI-74).** Claude Code's Bash tool runs the login
