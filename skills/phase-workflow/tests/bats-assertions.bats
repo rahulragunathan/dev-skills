@@ -116,7 +116,9 @@ setup() {
 
 @test "--count-mid fails on an unreadable input instead of printing a count" {
   # Fails if a scan that could not read its input reports a count, which reads as clean.
-  run python3 "$SCRIPT" --count-mid "$FIX/no-such-file.bats"
-  [ "$status" -ne 0 ] || false
+  # A readable file first, so a partial count would show; the read error is exit 1 and names the file.
+  run python3 "$SCRIPT" --count-mid "$FIX/brace.bats" "$FIX/no-such-file.bats"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"no-such-file.bats"* ]] || false
   [ "$(printf '%s\n' "$output" | grep -cx '[0-9][0-9]*')" = 0 ]
 }

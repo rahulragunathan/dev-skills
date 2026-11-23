@@ -375,6 +375,63 @@ Bound the rendered size of `str`, `repr` and formatting, and run each grade with
 
 ---
 
+<a id="ki-76"></a>
+
+## KI-76 — the probe's error classes still match loose substrings
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [preflight.sh](../skills/external-review/preflight.sh) — `classify_error() {`
+
+### What happens
+
+`classify_error` reads any `is not available` as a model refusal and any `turn in progress`
+as a timeout, wherever it appears in stderr. A refusal from another service, or a successful probe
+whose stderr mentions a turn, is misread, and the Codex loop's confirming probe inherits the
+error.
+
+### Example scenario
+
+A probe whose stderr says a proxy "is not available" confirms the model unavailable, and the
+review moves to a weaker rung.
+
+### Notes for a fix
+
+Match the deadline runner's own diagnostic and each CLI's model-refusal line, and exercise the
+real classifier in one downshift test.
+
+**Source:** gpt-6.2-astra:high — phase review pass 1, dependable-helpers phase, 2026-11-23.
+
+---
+
+<a id="ki-77"></a>
+
+## KI-77 — a root lockfile covers every manifest below it
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [dependency-scan.py](../skills/phase-workflow/dependency-scan.py) — `declares dependencies and has no lockfile`
+
+### What happens
+
+A manifest counts as covered when its ecosystem's lockfile sits in its folder or any folder
+above it. An independent project nested under a repository with a root lockfile is then never
+reported, though nothing locks its versions.
+
+### Example scenario
+
+`tools/web/package.json` declares dependencies and has no lockfile; the root
+`package-lock.json` belongs to another app. The scan reports nothing missing.
+
+### Notes for a fix
+
+Decide coverage from workspace membership (npm and pnpm workspaces, Cargo and uv workspaces) or
+the lockfile's own contents, not from folder position.
+
+**Source:** gpt-6.2-astra:high — phase review pass 1, dependable-helpers phase, 2026-11-23.
+
+---
+
 <a id="ki-44"></a>
 
 ## KI-44 — a stale dispatch log gives a misleading replacement message
@@ -400,3 +457,28 @@ Name both agent IDs in the message and say which command brings the log and the 
 in line.
 
 **Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.
+
+---
+
+<a id="ki-78"></a>
+
+## KI-78 — index rows are not bound to their section
+
+**Severity:** Low
+**Likelihood:** Rare
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def index_rows(`
+
+### What happens
+
+`index_rows` finds a KI row anywhere in ROADMAP.md, so a known-issue row under the Enhancements
+heading reconciles.
+
+### Example scenario
+
+A KI row pasted into the Enhancements table passes `check`.
+
+### Notes for a fix
+
+Read rows per section, and refuse a row whose prefix does not belong to its section's table.
+
+**Source:** gpt-6.2-astra:high — phase review pass 1, dependable-helpers phase, 2026-11-23.

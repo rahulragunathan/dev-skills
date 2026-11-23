@@ -7,8 +7,9 @@ already shipped is in [CHANGELOG.md](../CHANGELOG.md).
 
 A plugin of four agent skills. Each exposes a `SKILL.md` that the agent reads and follows.
 Shell helpers implement review capture, reviewer preflight, mutation restoration and release
-checks. Python helpers rank the reviewer models, handle reviewer deadlines, set up and edit
-roadmap files, check the names docs mention, and run the design-review test tooling.
+checks. Python helpers rank the reviewer models, handle reviewer deadlines, read the phase
+record, scan dependencies with `osv-scanner`, set up and edit roadmap files, check the names docs
+mention, and run the design-review test tooling.
 `docs/build_architecture.py` generates the module diagram.
 
 There is no application entry point. A module here is a skill directory, with an invocation as
@@ -32,7 +33,7 @@ what sits at the bottom changes when someone else ships a new CLI.
 
 | Unit | Responsibility | Interface | Depends on |
 | --- | --- | --- | --- |
-| `phase-workflow` | Run a phase from plan review to merge | the `phase-workflow` skill; `phase-record.py`, `dependency-scan.py`, `publish-release.sh`, `mutation-restore.sh` | `design-review`, `project-docs`, `external-review`, `gh`, `osv-scanner` |
+| `phase-workflow` | Run a phase from plan review to merge | the `phase-workflow` skill; `phase-record.py`, `dependency-scan.py`, `publish-release.sh`, `mutation-restore.sh`, `bats_assertions.py` | `design-review`, `project-docs`, `external-review`, `gh`, `osv-scanner` |
 | `project-docs` | Keep a project's docs by tense, its roadmap files on request, and the name check | the `project-docs` skill; `roadmap.py`, `name_check.py` | `git` |
 | `design-review` | Decide structure at plan time and re-check it at phase end | the `design-review` skill, `plan` or `phase` mode | `drawio` skill |
 | `external-review` | Get a review from other models of a plan, a phase diff or the repo | the `external-review` skill, `plan`, `phase` or `repo` mode | `project-docs`, `codex`, `agy` |
@@ -79,10 +80,10 @@ The suites run against scratch repositories and temporary directories:
 | Skill | Executable checks |
 | --- | --- |
 | `external-review` | bundle capture, pruned export, documented Codex invocation, preflight, both model ladders |
-| `phase-workflow` | mutation restoration, release checks, documented release and cleanup commands, bats assertion enumeration |
+| `phase-workflow` | mutation restoration, release checks, documented release, gate and cleanup commands, phase-record parsing, dependency scan against recorded `osv-scanner` answers, bats assertion enumeration |
 | `project-docs` | roadmap set-up, edits, rating scales and reference verification; the name check |
 | `design-review` | transcript handling, fixture evaluation, Results writer, rollup tooling |
-| repo | the plugin name appears only in the manifests, README, CHANGELOG and phase record; nothing names the roadmap machinery's old paths |
+| repo | the plugin name appears only in the manifests, README, CHANGELOG and phase record; nothing names the roadmap machinery's old paths; the release test runs when its file runs directly; skill text holds no argument placeholders or zsh traps, and every fence a suite runs is marked |
 
 Run them with:
 

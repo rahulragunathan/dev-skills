@@ -163,9 +163,10 @@ print(m.rank("gemini-4-boron") < m.rank("gemini-4-cobalt"))' "$LADDER"
   # Carbon > Neon > Hydrogen).
   run rank gemini-4-argon-high gemini-4-hydrogen-high gemini-4-neon-high gemini-4-carbon-high
   [ "$output" = "gemini-4-carbon-high gemini-4-neon-high gemini-4-hydrogen-high" ] || false
-  # With a slot free, Argon sits after Hydrogen, among the unlisted lines, not above them.
-  run rank gemini-4-zinc-high gemini-4-argon-high gemini-4-hydrogen-high
-  [ "$output" = "gemini-4-hydrogen-high gemini-4-argon-high gemini-4-zinc-high" ]
+  # With a slot free, Argon sits among the unlisted lines, by name: after Alpha, which a
+  # listed Argon would follow.
+  run rank gemini-4-alpha-high gemini-4-argon-high gemini-4-hydrogen-high
+  [ "$output" = "gemini-4-hydrogen-high gemini-4-alpha-high gemini-4-argon-high" ]
 }
 
 @test "an id holding a shell pattern character is never offered" {

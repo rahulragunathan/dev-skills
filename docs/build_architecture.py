@@ -608,7 +608,7 @@ review = box(
 # --------------------------------------------------------------------------
 codex = box(800, 150, 420, 60, "<b>codex</b> " + sub("OpenAI Codex CLI"), fill=EXTERNAL)
 agy = box(800, 230, 420, 60, "<b>agy</b> " + sub("Gemini CLI"), fill=EXTERNAL)
-gh = box(800, 310, 420, 60, "<b>gh</b> " + sub("GitHub CLI"), fill=EXTERNAL)
+gh = box(800, 310, 420, 60, "<b>gh</b> · <b>osv-scanner</b> " + sub("GitHub CLI · dependency scan"), fill=EXTERNAL)
 drawio = box(800, 390, 420, 60, "<b>drawio</b> " + sub("Diagram skill"), fill=EXTERNAL)
 
 # --------------------------------------------------------------------------
@@ -700,7 +700,7 @@ edge(
     phase,
     gh,
     color=PROCESS,
-    label="Open PR,<div>Merge, Tag</div>",
+    label="PR, Tag,<div>Scan</div>",
     waypoints=[(725, 188), (725, 340)],
     exitX=1,
     exitY=0.5,
@@ -733,7 +733,7 @@ box(
     W - 80,
     36,
     desc(
-        "Arrow colour matches its source. codex, agy and drawio are optional — a "
+        "Arrow colour matches its source. codex, agy, osv-scanner and drawio are optional — a "
         "missing one degrades that step. gh is required: no PR, no phase."
     ),
     fill="#ffffff",

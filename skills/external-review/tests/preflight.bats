@@ -549,7 +549,7 @@ printf '%s\n' "$@" > "$TEST_TMP/codex-args"
 while [ "$1" != -o ]; do shift; done; echo ready > "$2"
 SH
   chmod +x "$BIN/codex"
-  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model m:high --gemini-model g --root "$TEST_TMP/root"
+  run bash "$PREFLIGHT" --codex-model m:high --gemini-model g --root "$TEST_TMP/root"
   grep -qx -- '-C' "$TEST_TMP/codex-args" || false
   grep -qxF -- "$TEST_TMP/root" "$TEST_TMP/codex-args"
 }

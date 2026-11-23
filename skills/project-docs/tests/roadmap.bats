@@ -1268,6 +1268,7 @@ PY
   [ "$(tail -c 1 "$DOCS/KNOWN_ISSUES.md")" = "E" ] || false
   run python3 "$RM" close KI-02 --docs "$DOCS"
   [ "$status" -eq 0 ] || false
+  [ "$(grep -c 'DOOMED-BODY' "$DOCS/KNOWN_ISSUES.md")" -eq 0 ] || false
   [ "$(tail -c 1 "$DOCS/KNOWN_ISSUES.md")" = "E" ]
 }
 
@@ -1341,6 +1342,7 @@ t = t.replace("**Priority:** Low · **Effort:** ~1 hour\n**Where:** [docs](.)\n"
 p.write_text(t)
 PY
   printf 'def present_fn(x):\n    return x\n' > "$TEST_TMP/x.py"
+  grep -qF "$1" "$DOCS/ENHANCEMENTS.md" || { echo "where_on_enh: the field was not written" >&2; return 1; }
 }
 
 @test "check: an inline Where field after another field is checked" {

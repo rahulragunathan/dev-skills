@@ -943,7 +943,8 @@ origin_refused() {
 }
 
 @test "the gate refuses a head other than the one the post-review check inspected" {
-  # Fails if the branch, origin and PR advance together after the check and the gate still passes.
+  # Fails if HEAD moves after the post-review check and the gate still passes. (Origin and the PR are
+  # checked against this same head by the later lines of the fence.)
   inspected="$(git rev-parse HEAD)"
   git commit -q --allow-empty -m later
   extract_fence gate "$TEST_TMP/gate.sh" "$BATS_TEST_DIRNAME/../SKILL.md"

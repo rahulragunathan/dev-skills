@@ -37,9 +37,12 @@ here — the plugin manifest's version is the only record of them.
   checks the first table's `REPO`, `PR` and `Release`, so a companion table, a padded row or a
   large record no longer misleads it. The first push refuses a record inherited unchanged from
   the default branch. The review record reaches the PR description only at the gate's head.
-- **The origin check is an allow-list (KI-70).** It accepts ssh, https, scp-style and local-path
-  remotes, refuses every transport helper, unlisted scheme and option-shaped URL, and decides with
-  shell patterns, so no external command can fail open. A push-URL listing that fails refuses.
+- **The origin check is an allow-list (KI-70).** It accepts `ssh://`, `git+ssh://`,
+  `ssh+git://` and `https://` in lower case, the scp form and an absolute local path without
+  spaces; it refuses every transport helper, any other scheme or spelling, an option-shaped URL,
+  a `%`-escape in a user part, a configured `remote.origin.vcs`, and an ssh URL holding an IPv6
+  literal. It decides with shell patterns, so no external command can fail open, and the push
+  list must be exactly the approved URL.
 - **Branch cleanup reports every retained branch (ENH-29)** before it exits, rather than
   stopping at the first.
 - **The post-review gate check sees both sides of a rename and pins one head (KI-62).** A file

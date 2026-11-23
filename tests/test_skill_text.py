@@ -77,6 +77,21 @@ class ZshTrapLintTest(unittest.TestCase):
 
 
 class FenceMarkerTest(unittest.TestCase):
+    # The fences the suites run; a missing marker would leave its tests selecting nothing.
+    REQUIRED = {
+        "external-review": {"ladder-wrappers", "discovery", "codex-loop", "gemini-loop", "probe", "failure-probe"},
+        "phase-workflow": {"first-push", "after-review", "record-check", "gate", "publish-record", "release-tag",
+                           "branch-cleanup", "prune", "mid-scan", "dependency-scan"},
+        "project-docs": {"roadmap-close"},
+    }
+
+    def test_required_markers_are_present(self):
+        # Fails if a fence the suites run loses its marker.
+        for skill, names in self.REQUIRED.items():
+            text = (ROOT / "skills" / skill / "SKILL.md").read_text()
+            found = set(re.findall(r"^\s*# fence: (\S+)$", text, re.M))
+            self.assertEqual(names - found, set(), skill)
+
     def test_each_marker_names_one_fence(self):
         # Fails if two fences share a marker, so a test could run the wrong one.
         for p in SKILLS:
