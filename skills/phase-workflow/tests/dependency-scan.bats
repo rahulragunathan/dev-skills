@@ -135,7 +135,7 @@ scan() { run python3 "$SCAN" --root "$REPO" "$@"; }
   put requirements.txt "$(printf 'six==1.17.0\nrequests>=2.0\n# a comment\n')"
   scan
   [ "$status" -eq 3 ] || false
-  [[ "$output" == *"NOT SCANNED requirements.txt: requests>=2.0 is not pinned"* ]] || false
+  [[ "$output" == *"NOT SCANNED requirements.txt: line 2 is not pinned"* ]] || false
   [[ "$output" != *"comment"* ]]
 }
 
@@ -174,7 +174,7 @@ scan() { run python3 "$SCAN" --root "$REPO" "$@"; }
   put osv-scanner.toml "$(printf '[[IgnoredVulns]]\nid = "PYSEC-2018-28"\nreason = "not reachable"\n')"
   scan
   [ "$status" -eq 0 ] || false
-  [[ "$output" == *"osv-scanner.toml ignores PYSEC-2018-28"* ]]
+  [[ "$output" == *"osv-scanner.toml can suppress findings: PYSEC-2018-28"* ]]
 }
 
 @test "paths with a space or a colon reach the scanner intact" {
@@ -259,4 +259,110 @@ SH
     scan
     [ "$status" -eq 3 ] || { echo "$body: $output"; false; }
   done
+}
+
+# --- external review pass 1 fixes ----------------------------------------------
+
+@test "a requirements file that includes another file is NOT SCANNED and never reaches the scanner" {
+  # Fails if osv-scanner follows a committed -r include, which can reach files outside HEAD.
+  put requirements.txt "$(printf 'six==1.17.0\n-r ../../outside.txt\n')"
+  scan
+  [ "$status" -eq 3 ] || false
+  [[ "$output" == *"NOT SCANNED requirements.txt: line 2 includes another file"* ]] || false
+  [ ! -e "$TEST_TMP/calls" ]
+}
+
+@test "an unpinned line is named by its number, never its text" {
+  # Fails if a URL requirement carrying credentials is copied into the report.
+  put requirements.txt "$(printf 'six==1.17.0\npkg @ https://user:s3cret@example.invalid/pkg.tar.gz\n')"
+  scan
+  [ "$status" -eq 3 ] || false
+  [[ "$output" == *"NOT SCANNED requirements.txt: line 2 is not pinned"* ]] || false
+  [[ "$output" != *"s3cret"* ]]
+}
+
+@test "scanner errors are printed with credentials masked" {
+  # Fails if a URL with userinfo in osv-scanner's stderr reaches the report.
+  put uv.lock 'clean'
+  printf '#!/bin/bash\necho "fetch https://user:s3cret@db.example.invalid/x failed" >&2; exit 127\n' > "$BIN/osv-scanner"
+  scan
+  [ "$status" -eq 2 ] || false
+  [[ "$output" != *"s3cret"* ]] || false
+  [[ "$output" == *"https://***@db.example.invalid"* ]]
+}
+
+@test "a tracked osv-scanner.toml names single-quoted ids and package overrides" {
+  # Fails if a valid suppression is reported as ignoring nothing.
+  put uv.lock 'clean'
+  put osv-scanner.toml "$(printf "[[IgnoredVulns]]\nid = 'PYSEC-1'\n\n[[PackageOverrides]]\nname = \"left-pad\"\nignore = true\n")"
+  scan
+  [[ "$output" == *"osv-scanner.toml can suppress findings: PYSEC-1, a package override"* ]]
+}
+
+@test "only dependency files are read from HEAD" {
+  # Fails if every committed blob is copied out, credential-shaped files included.
+  put uv.lock 'clean'
+  put src/app.py 'print(1)'
+  put .env 'NOT-A-REAL-SECRET'
+  local real_git; real_git="$(command -v git)"
+  printf '#!/bin/bash\nprintf "%%s\\n" "$*" >> "%s/git-calls"\nexec "%s" "$@"\n' "$TEST_TMP" "$real_git" > "$BIN/git"
+  chmod +x "$BIN/git"
+  scan
+  [ "$status" -eq 0 ] || false
+  [ "$(grep -c 'cat-file' "$TEST_TMP/git-calls")" -eq 1 ]
+}
+
+@test "exit 0 with no readable results is a scanner failure" {
+  # Fails if an empty or malformed answer with exit 0 is counted as clean.
+  local body
+  put uv.lock 'clean'
+  for body in '' '{}' '{"results": null}'; do
+    printf '#!/bin/bash\nprintf "%%s" %q; exit 0\n' "$body" > "$BIN/osv-scanner"
+    scan
+    [ "$status" -eq 2 ] || { echo "[$body]: $status $output"; false; }
+  done
+}
+
+@test "wildcard and editable requirements are NOT SCANNED" {
+  # Fails if ==2.* or -e lines pass as pinned.
+  put requirements.txt "$(printf 'six==1.17.0\nrequests==2.*\n-e .\n')"
+  scan
+  [ "$status" -eq 3 ] || false
+  [[ "$output" == *"line 2 is not pinned"* ]] || false
+  [[ "$output" == *"line 3 is not pinned"* ]]
+}
+
+@test "require-dev, peer dependencies, python-dateutil and an indented key count as declared" {
+  # Fails if a manifest whose only dependencies sit in these places is read as tooling-only.
+  local f body
+  for f in composer.json package.json pyproject.toml pyproject.toml; do :; done
+  put composer.json '{"require-dev": {"phpunit/phpunit": "^10"}}'
+  scan; [[ "$output" == *"NOT SCANNED composer.json"* ]] || false
+  git -C "$REPO" rm -q composer.json && git -C "$REPO" commit -qm rm
+  put package.json '{"peerDependencies": {"react": "^18"}}'
+  scan; [[ "$output" == *"NOT SCANNED package.json"* ]] || false
+  git -C "$REPO" rm -q package.json && git -C "$REPO" commit -qm rm
+  put pyproject.toml "$(printf '[tool.poetry.dependencies]\npython-dateutil = "^2"\n')"
+  scan; [[ "$output" == *"NOT SCANNED pyproject.toml"* ]] || false
+  put pyproject.toml "$(printf '[project]\n  dependencies = ["x"]\n')"
+  scan; [[ "$output" == *"NOT SCANNED pyproject.toml"* ]]
+}
+
+@test "a symlinked manifest is a coverage gap" {
+  # Fails if a manifest that is a symlink disappears from the report.
+  printf '{"dependencies": {"x": "1"}}' > "$TEST_TMP/outside.json"
+  ln -s "$TEST_TMP/outside.json" "$REPO/package.json"
+  git -C "$REPO" add package.json && git -C "$REPO" commit -qm link
+  scan
+  [ "$status" -eq 3 ] || false
+  [[ "$output" == *"NOT SCANNED package.json: a symlink, not read"* ]]
+}
+
+@test "other formats osv-scanner reads are scanned" {
+  # Fails if a pubspec.lock or mix.lock reads as nothing to scan.
+  put pubspec.lock 'clean'
+  put mix.lock 'clean'
+  scan
+  [ "$status" -eq 0 ] || false
+  [[ "$output" == *"2 files scanned"* ]]
 }

@@ -4,13 +4,15 @@
 Usage:
     dependency-scan.py [--root DIR] [--offline]
 
-It reads only what is committed at HEAD, blob by blob from git's tree (so
-export-ignore attributes drop nothing), so an untracked or ignored file and an
-untracked osv-scanner.toml cannot change the verdict. A committed symlink is
-never followed; one named like a lockfile is a coverage gap. A tracked osv-scanner.toml is honoured, and
-the output names what it ignores. Each supported file is scanned on its own,
-so its own exit status counts. Nothing is installed: lockfiles are read as
-they are.
+It reads only the dependency files committed at HEAD, blob by blob from git's
+tree (so export-ignore attributes drop nothing, and no other file is copied
+out), so an untracked or ignored file and an untracked osv-scanner.toml cannot
+change the verdict. A committed symlink is never followed; one named like a
+dependency file is a coverage gap. A requirements file that includes another
+file is a gap and is not scanned, since the scanner would follow the include
+wherever it points. A tracked osv-scanner.toml is honoured, and the output
+names what it can suppress. Each supported file is scanned on its own, so its
+own exit status counts. Nothing is installed: lockfiles are read as they are.
 
 Package names and versions, never source, go to the OSV database (api.osv.dev);
 a private package name can still identify an internal service. --offline uses a
@@ -38,29 +40,41 @@ import tempfile
 # The lockfiles osv-scanner reads exactly, by ecosystem. requirements*.txt is
 # best effort: the scanner skips any line that is not pinned.
 LOCKFILES = {
-    "npm": ("package-lock.json", "pnpm-lock.yaml", "yarn.lock"),
+    "npm": ("package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock"),
     "python": ("uv.lock", "poetry.lock", "Pipfile.lock", "pdm.lock"),
     "cargo": ("Cargo.lock",),
     "go": ("go.mod",),
     "ruby": ("Gemfile.lock",),
     "php": ("composer.lock",),
     "gradle": ("gradle.lockfile",),
+    "dart": ("pubspec.lock",),
+    "elixir": ("mix.lock",),
+    "nuget": ("packages.lock.json",),
 }
 REQUIREMENTS = "requirements*.txt"
 # A manifest that declares dependencies needs a lockfile of its ecosystem in its
 # folder or a folder above it, or the versions it runs with are unknown.
 MANIFESTS = {"package.json": "npm", "Cargo.toml": "cargo", "Gemfile": "ruby",
              "composer.json": "php", "pyproject.toml": "python"}
-PINNED = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*(\[[^\]]*\])?\s*===?\s*[^\s;,\\]+\s*(;.*)?$")
+PINNED = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*(\[[^\]]*\])?\s*===?\s*[^\s;,\\*]+\s*(;.*)?$")
+INCLUDE = re.compile(r"^\s*(-r|-c|--requirement|--constraint)(\s|=)")
 # pip-compile --generate-hashes adds options and continuation lines after a pin.
 OPTIONS = re.compile(r"\s+--[\w-]+(=\S*)?|\s*\\$")
-IGNORED_ID = re.compile(r'^\s*id\s*=\s*"([^"]+)"', re.M)
-INSTALL_HINT = "brew install osv-scanner (dev-setup's bootstrap.sh installs it)"
+IGNORED_ID = re.compile(r"""(?<![\w-])id\s*=\s*(?:"([^"]+)"|'([^']+)')""")
+OVERRIDE = re.compile(r"^\s*\[\[\s*PackageOverrides\s*\]\]|PackageOverrides\s*=", re.M)
+USERINFO = re.compile(r"(://)[^/@\s]+@")
+INSTALL_HINT = "brew install osv-scanner"
+
+
+def wanted(name: str) -> bool:
+    """A file the scan reads: a lockfile, a requirements file, a manifest, the scanner's config."""
+    return (any(name in known for known in LOCKFILES.values()) or fnmatch.fnmatch(name, REQUIREMENTS)
+            or name in MANIFESTS or name == "osv-scanner.toml")
 
 
 def export_head(root: pathlib.Path, into: pathlib.Path) -> list[str]:
-    """Write the regular files committed at HEAD into `into`; return the paths of
-    committed symlinks, which are never followed."""
+    """Write the dependency files committed at HEAD into `into`, and nothing else;
+    return the paths of committed symlinks with those names, which are never followed."""
     git = ["git", "-c", "core.fsmonitor=false", "-C", str(root)]
     tree = subprocess.run([*git, "ls-tree", "-r", "-z", "HEAD"], capture_output=True)
     if tree.returncode != 0:
@@ -71,6 +85,8 @@ def export_head(root: pathlib.Path, into: pathlib.Path) -> list[str]:
         mode, kind, sha = meta.decode().split()
         rel = path.decode("utf-8", errors="surrogateescape")
         parts = pathlib.PurePosixPath(rel).parts
+        if not wanted(parts[-1] if parts else ""):
+            continue
         if mode == "120000":
             links.append(rel)
             continue
@@ -94,34 +110,53 @@ def declares_dependencies(name: str, text: str) -> bool:
     try:
         if name == "package.json":
             data = json.loads(text)
-            return any(data.get(k) for k in ("dependencies", "devDependencies", "optionalDependencies"))
+            return any(data.get(k) for k in ("dependencies", "devDependencies",
+                                             "optionalDependencies", "peerDependencies"))
         if name == "composer.json":
-            return bool(json.loads(text).get("require"))
+            data = json.loads(text)
+            return bool(data.get("require") or data.get("require-dev"))
     except (ValueError, AttributeError):
         return True              # unreadable: assume it does, so a gap is not hidden
     if name == "pyproject.toml":
-        project = re.search(r"^dependencies\s*=\s*\[\s*[^\]\s]", text, re.M)
+        project = re.search(r"^\s*dependencies\s*=\s*\[\s*[^\]\s]", text, re.M)
         groups = re.search(r"^\[(?:dependency-groups|project\.optional-dependencies)\]\s*\n\s*[\w-]+\s*=", text, re.M)
         poetry = re.search(r"^\[tool\.poetry(?:\.group\.[^\].]+)?\.dependencies\]\s*\n(.*?)(?=^\[|\Z)",
                            text, re.M | re.S)
         return bool(project) or bool(groups) or bool(poetry and any(
-            line.strip() and not line.strip().startswith(("#", "python"))
+            line.strip() and not line.strip().startswith("#")
+            and not re.match(r"python\s*=", line.strip())
             for line in poetry[1].splitlines()))
     return True
 
 
-def unpinned(text: str) -> list[str]:
-    """Requirement lines without an exact version, which the scanner skips silently."""
+def unpinned(text: str) -> list[int]:
+    """Numbers of the requirement lines without an exact version, which the scanner
+    skips silently. Lines are named by number: a URL requirement can carry a credential."""
     out = []
-    for line in text.splitlines():
+    for number, line in enumerate(text.splitlines(), 1):
         line = OPTIONS.sub("", line.split(" #", 1)[0]).strip()
-        if line and not line.startswith(("#", "-")) and not PINNED.match(line):
-            out.append(line)
+        if not line or line.startswith("#") or INCLUDE.match(line):
+            continue
+        if line.startswith("-") and not line.startswith(("-e", "--editable")):
+            continue                      # other pip options name no package
+        if not PINNED.match(line):
+            out.append(number)
     return out
 
 
+def includes(text: str) -> list[int]:
+    return [n for n, line in enumerate(text.splitlines(), 1) if INCLUDE.match(line)]
+
+
+def masked(text: str) -> str:
+    return USERINFO.sub(r"\1***@", text)
+
+
 def findings_in(stdout: str, rel: str) -> list[str]:
-    results = json.loads(stdout).get("results", []) if stdout.strip() else []
+    """The FINDING lines in osv-scanner's JSON; ValueError for anything not shaped as its answer."""
+    results = json.loads(stdout).get("results") if stdout.strip() else None
+    if not isinstance(results, list):
+        raise ValueError("no results list")
     out = []
     for result in results:
         for pkg in result.get("packages", []):
@@ -140,7 +175,7 @@ def scan(root: pathlib.Path, offline: bool) -> int:
         tree.mkdir()
         try:
             links = export_head(root, tree)
-        except RuntimeError as exc:
+        except (RuntimeError, OSError) as exc:
             print(f"cannot read HEAD of {root}: {exc}")
             return 2
         files = sorted(p.relative_to(tree).as_posix() for p in tree.rglob("*") if p.is_file())
@@ -151,9 +186,7 @@ def scan(root: pathlib.Path, offline: bool) -> int:
 
         gaps, findings, failed = [], [], []
         for rel in links:
-            name = rel.rsplit("/", 1)[-1]
-            if any(name in known for known in LOCKFILES.values()) or fnmatch.fnmatch(name, REQUIREMENTS):
-                gaps.append(f"NOT SCANNED {rel}: a symlink, not read")
+            gaps.append(f"NOT SCANNED {rel}: a symlink, not read")
         for rel in files:
             eco = MANIFESTS.get(names[rel])
             if not eco or not declares_dependencies(names[rel], (tree / rel).read_text(errors="replace")):
@@ -162,8 +195,10 @@ def scan(root: pathlib.Path, offline: bool) -> int:
                 gaps.append(f"NOT SCANNED {rel}: declares dependencies and has no lockfile")
         for rel in files:
             if names[rel] == "osv-scanner.toml":
-                ids = IGNORED_ID.findall((tree / rel).read_text(errors="replace"))
-                print(f"{rel} ignores {', '.join(ids) if ids else 'nothing'}")
+                text = (tree / rel).read_text(errors="replace")
+                what = [a or b for a, b in IGNORED_ID.findall(text)]
+                what += ["a package override"] * len(OVERRIDE.findall(text))
+                print(f"{rel} can suppress findings: {', '.join(what) if what else 'nothing recognised'}")
 
         if not lockfiles:
             for line in gaps or ["no supported dependency files"]:
@@ -179,8 +214,13 @@ def scan(root: pathlib.Path, offline: bool) -> int:
         scanned = 0
         for rel in sorted(lockfiles):
             if rel in requirements:
-                gaps += [f"NOT SCANNED {rel}: {line} is not pinned"
-                         for line in unpinned((tree / rel).read_text(errors="replace"))]
+                text = (tree / rel).read_text(errors="replace")
+                included = includes(text)
+                if included:
+                    # The scanner would follow the include wherever it points, outside HEAD too.
+                    gaps.append(f"NOT SCANNED {rel}: line {included[0]} includes another file")
+                    continue
+                gaps += [f"NOT SCANNED {rel}: line {n} is not pinned" for n in unpinned(text)]
             # The parser prefix keeps a colon in the path from being read as one.
             parser = "requirements.txt" if rel in requirements else names[rel]
             cmd = [scanner, "scan", "source", "--format", "json", "--no-resolve",
@@ -190,12 +230,12 @@ def scan(root: pathlib.Path, offline: bool) -> int:
                 gaps.append(f"NOT SCANNED {rel}: no packages found")
                 continue
             if run.returncode not in (0, 1):
-                err = " ".join(run.stderr.split())[-300:]
+                err = masked(" ".join(run.stderr.split()))[-300:]
                 failed.append(f"osv-scanner failed on {rel} (exit {run.returncode}): {err}")
                 continue
             try:
                 found = findings_in(run.stdout, rel)
-            except (ValueError, AttributeError):
+            except (ValueError, AttributeError, TypeError):
                 failed.append(f"osv-scanner gave unreadable output for {rel}")
                 continue
             if run.returncode == 1 and not found:
@@ -206,7 +246,7 @@ def scan(root: pathlib.Path, offline: bool) -> int:
             scanned += 1
         for line in failed + findings + gaps:
             print(line)
-        if not (failed or findings):
+        if scanned and not (failed or findings):
             print(f"{scanned} file{'' if scanned == 1 else 's'} scanned: no known vulnerabilities")
         return 2 if failed else 1 if findings else 3 if gaps else 0
 
