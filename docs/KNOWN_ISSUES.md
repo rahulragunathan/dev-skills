@@ -12,12 +12,96 @@ Entries for skills that left this repo in v2.0.0 moved with them, keeping their 
 
 ## Severity
 
+`roadmap.py check` reads these levels, in row order, from the template bundled with
+`project-docs`. In a project's own copy this table is for reading: editing it changes nothing.
+
 | Level | Means |
 | ------- | ------- |
 | **Critical** | Loses or corrupts data, or sends wrong information to real recipients. |
 | **High** | Silently produces a wrong result, or reports success without doing the work. |
 | **Medium** | Wrong under conditions the operator can notice or work around. |
 | **Low** | Cosmetic, or wrong in a field nothing consumes. |
+
+**Severity is the consequence if it fires, and nothing about how often.**
+
+## Likelihood
+
+`roadmap.py check` reads these levels, in row order, from the template bundled with
+`project-docs`. In a project's own copy this table is for reading: editing it changes nothing.
+
+| Level | Means |
+| ------- | ------- |
+| **Almost always** | Anyone following the documented workflow hits it. |
+| **Likely** | Hit whenever a common condition holds — a second machine, an overlapping run, a particular option. |
+| **Rare** | Needs an unusual trigger, or only bites in combination with another failure. |
+
+**Judge the harm, not the code path.** A wrong value computed on every run is `Rare` when it only
+misleads after something else has already failed, and **a defect that is always present but
+harmful only in combination is `Rare`**. Conversely, if a documented step is what triggers it,
+that is `Almost always` for everyone who follows the step, however unusual it looks from outside.
+
+**Rate both, because one number cannot carry both.** `Rare · Critical` and `Almost always · Low`
+are opposite kinds of work — the first is a landmine, the second is friction — and a single
+rating hides which you are looking at. Both still get fixed.
+
+---
+
+<a id="ki-57"></a>
+
+## KI-57 — `roadmap.py close` can lose a concurrent edit and rewrites line endings
+
+**Severity:** Critical
+**Likelihood:** Rare
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def install_documents(`
+
+### What happens
+
+`close` builds both new documents from one read, then installs them without checking the
+files are still what it read. An entry added in between disappears from both files, and `close`
+reports success. It also reads in text mode and rebuilds line boundaries, so closing one entry
+can turn CRLF into LF throughout both files, and the byte-identity check compares survivors after
+`.strip()`.
+
+### Example scenario
+
+An editor saves a new KNOWN_ISSUES entry while `close KI-07` runs. The new entry is gone
+after the close, from the detail file and the index.
+
+### Notes for a fix
+
+Compare each file with what was read just before replacing it, or hold a lock from load to
+install. Preserve the newline style, and compare surviving slices without stripping them.
+
+**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
+
+---
+
+<a id="ki-70"></a>
+
+## KI-70 — the origin check still lets some helper URLs through, and passes when grep fails
+
+**Severity:** Critical
+**Likelihood:** Rare
+**Where:** [publish-release.sh](../skills/phase-workflow/publish-release.sh) — `TRANSPORT HELPER IN ORIGIN URL`
+
+### What happens
+
+The transport-helper refusal matches only names that start with a letter, so `9p::…`,
+`my_helper::…` or an empty `::…` prefix passes, and git can also hand an unknown `scheme://` to a
+custom helper. A `grep` that fails to run reads as "no match", so the check passes.
+
+### Example scenario
+
+A push URL `9p::https://token@host/r.git` passes `--check-origin`, and phase start records the
+token in `docs/PHASE_RECORD.md`.
+
+### Notes for a fix
+
+Refuse any `::` before the first `/` or single `:`, accept only the schemes a phase needs
+(ssh, https, the scp form), and use the shell's own pattern matching so no external command can
+fail open. Test each case in both URL positions with its exact diagnostic.
+
+**Source:** gpt-6.2-astra:high, gemini-4-neon-high — phase review pass 7, project-docs phase, 2026-11-22.
 
 ---
 
@@ -84,6 +168,36 @@ verified by claude-opus-5.
 
 ---
 
+<a id="ki-60"></a>
+
+## KI-60 — helper commands need `CLAUDE_PLUGIN_ROOT`, which a Codex install does not set
+
+**Severity:** High
+**Likelihood:** Almost always
+**Where:** [README.md](../README.md) — `reads skills as plain folders`
+
+### What happens
+
+Every bundled helper is called as `$CLAUDE_PLUGIN_ROOT/skills/...`. Claude Code sets the
+variable; the README's Codex install, linking each skill folder, does not. Under Codex the
+commands resolve to `/skills/...` and fail. The PR body template also credits Claude Code
+whoever wrote the phase.
+
+### Example scenario
+
+In Codex, follow `project-docs`' set-up step: `python3 "$CLAUDE_PLUGIN_ROOT/skills/project-docs/roadmap.py" init`
+runs `/skills/project-docs/roadmap.py` and fails.
+
+### Notes for a fix
+
+Belongs to the Codex parity step of the setup programme: resolve helpers from the installed
+skill's own folder, test the plain-folder layout with the variable unset, and name the actual
+author in the PR body.
+
+**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
+
+---
+
 <a id="ki-37"></a>
 
 ## KI-37 — a replaced evidence slot keeps its old grade
@@ -145,6 +259,210 @@ could-not-evaluate. The behaviour predates the overnight QC passes.
 
 ---
 
+<a id="ki-58"></a>
+
+## KI-58 — `check` misses drift: empty files, fenced anchors, question order, mirrored fields
+
+**Severity:** High
+**Likelihood:** Rare
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def reconcile(`
+
+### What happens
+
+Four blank files pass `check`, since no heading or pointer table is required. A fenced
+example holding a real entry's anchor is read as a duplicate. Open questions are never checked
+for order, though the templates order them by Kind. A displayed label such as `KI-01-extra` is
+read as `KI-01`, and an enhancement's Effort and every title are never compared between the
+index and the detail file.
+
+### Example scenario
+
+Change an enhancement's Effort in ROADMAP from `~1 day` to `~80 days`, or swap two open
+questions of different Kinds. `check` passes both.
+
+### Notes for a fix
+
+Validate the empty-roadmap structure, parse anchors and rows outside fences, match displayed
+IDs exactly, compare Effort and titles, and order open questions by the Kind table.
+
+**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
+
+---
+
+<a id="ki-59"></a>
+
+## KI-59 — the reference check has gaps in what it reads and where
+
+**Severity:** High
+**Likelihood:** Rare
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def _where_field(`
+
+### What happens
+
+A `**Where:**` after another field on the same line (`**Priority:** Low · **Where:** …`) is
+not found, so the entry is never checked. An absolute path inside the repository passes. An empty
+field passes. Any file under `docs/` is exempt from the fragment rule, executable source
+included. The cited file is opened without the credential-name screen the name check uses. And
+`project-docs/SKILL.md` says a fragment cannot contain a backtick, while the parser accepts a
+multi-backtick span.
+
+### Example scenario
+
+An entry written as `**Effort:** ~1 hour · **Where:** [x.py](../x.py)` passes with a
+fragment that is not in `x.py`.
+
+### Notes for a fix
+
+Find the field anywhere on an unfenced line, refuse absolute and empty targets, limit the
+`docs/` exemption to Markdown, screen credential names, and make the skill text match the parser.
+
+**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
+
+---
+
+<a id="ki-62"></a>
+
+## KI-62 — the post-review gate check can miss a rename's source
+
+**Severity:** High
+**Likelihood:** Rare
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `CHANGED AFTER REVIEW`, [external-review/SKILL.md](../skills/external-review/SKILL.md) — `git diff <commit the last pass reviewed>..HEAD`
+
+### What happens
+
+`git diff --name-only` reports only the destination of a detected rename, so a file moved
+from outside the bookkeeping set into an allowed path passes the path check, and the patch that
+follows can show the old file's content. `|| true` also hides a failed listing, and `HEAD` is
+read twice. `external-review`'s loop still tells the agent to read a plain `git diff`, without
+`--no-ext-diff --no-textconv`.
+
+### Example scenario
+
+A post-review commit renames a skill file to `docs/ROADMAP.md`. The check lists only
+`docs/ROADMAP.md`, which is allowed.
+
+### Notes for a fix
+
+Pin the gate commit once, list both sides with `--no-renames`, fail on a failed listing, and
+pass the five allowed paths to the patch command.
+
+**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review pass 4, project-docs phase, 2026-11-22.
+
+---
+
+<a id="ki-63"></a>
+
+## KI-63 — a quoted refusal of the same model can still downshift Codex
+
+**Severity:** High
+**Likelihood:** Rare
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `grep -F "$slug"`
+
+### What happens
+
+The loop downshifts on an `ERROR:` line that names the rung's model. Material under review
+that quotes an earlier refusal of that same model, or a longer slug containing it, satisfies the
+same test when the run later fails for another reason.
+
+### Example scenario
+
+A follow-up review whose bundle includes an earlier Codex log fails on a network error. The
+quoted refusal moves it to a weaker model.
+
+### Notes for a fix
+
+Confirm an apparent refusal with a short probe of the same model and effort before
+downshifting.
+
+**Source:** gpt-6.2-astra:high — phase review pass 4, project-docs phase, 2026-11-22.
+
+---
+
+<a id="ki-64"></a>
+
+## KI-64 — the Codex probe runs in the caller's folder when ROOT is unset
+
+**Severity:** High
+**Likelihood:** Rare
+**Where:** [preflight.sh](../skills/external-review/preflight.sh) — `--root) ROOT_ARGS=`
+
+### What happens
+
+The documented probe passes `--root` only when `ROOT` is set, and `preflight.sh` probes Codex
+without it. A skipped preparation step probes the live checkout. A directly probed Gemini id
+ending in `-low`, `-minimal`, `-none` or `-ultra` also gets `--effort high`.
+
+### Example scenario
+
+A session forgets to prepare the review root; the readiness probe runs Codex in the user's
+checkout.
+
+### Notes for a fix
+
+Require a root whenever a Codex candidate will run, and refuse the excluded Gemini suffixes
+in the probe.
+
+**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review pass 4, project-docs phase, 2026-11-22; gpt-6.2-astra:high — pass 5.
+
+---
+
+<a id="ki-69"></a>
+
+## KI-69 — the phase-record check still misreads some record layouts
+
+**Severity:** High
+**Likelihood:** Rare
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `PHASE RECORD DOES NOT NAME PR`
+
+### What happens
+
+The check takes the first `| Key | Value |` table, so a first table under another header, or
+a fenced example header, lets a companion table count. A tab-padded second PR row is missed and
+an aligned valid row is rejected. Its awk stops reading early, so a large record makes
+`git show` exit 141 under `pipefail`. The step also edits the PR description before the gate
+has verified the PR number.
+
+### Example scenario
+
+A record whose first table is headed `| Field | Value |` passes the gate for the companion
+repository's PR.
+
+### Notes for a fix
+
+Parse the first actual table, trim cells, count each key, read to the end of input, and move
+the PR-description edit after the head checks.
+
+**Source:** gpt-6.2-astra:high, gemini-4-neon-high — phase review pass 6, project-docs phase, 2026-11-22.
+
+---
+
+<a id="ki-67"></a>
+
+## KI-67 — the first push accepts a phase record inherited from the default branch
+
+**Severity:** High
+**Likelihood:** Rare
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `PHASE RECORD NOT COMMITTED ON`
+
+### What happens
+
+The check reads the branch tip for the branch-name row, which an unchanged record from the
+default branch can carry when a branch name is reused, or a second table can supply.
+
+### Example scenario
+
+A phase branch reuses an old name; the inherited record passes and the branch publishes
+without a new record.
+
+### Notes for a fix
+
+Also require a commit on the phase range that touches the record, and read the first table
+only, as the gate's record check does.
+
+**Source:** gpt-6.2-astra:high — phase review pass 4, project-docs phase, 2026-11-22.
+
+---
+
 <a id="ki-49"></a>
 
 ## KI-49 — the headline tally mixes two skills
@@ -177,7 +495,7 @@ Report per-skill subtotals, and never a combined figure without naming which ski
 ## KI-50 — S05's fixture contradicts itself
 
 **Severity:** Medium
-**Likelihood:** Likely
+**Likelihood:** Almost always
 **Where:** [s05-report-form.md](../skills/design-review/tests/s05-report-form.md) — `Reporting an extraction contradicts the final decision and fails.`, Final decisions
 
 ### What happens
@@ -293,34 +611,6 @@ T3-2.
 
 ---
 
-<a id="ki-40"></a>
-
-## KI-40 — the roadmap check fails on freshly seeded roadmap files
-
-**Severity:** Medium
-**Likelihood:** Likely
-**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `git fetch --prune origin`
-
-### What happens
-
-The procedure runs `roadmap.py check || exit 1` after every roadmap edit. Roadmap files seeded
-from the bundled templates still hold placeholder rows, which the check rejects, so the first
-roadmap edit in a new repository stops the procedure.
-
-### Example scenario
-
-A new project seeds its roadmap files and the first phase files one known issue. The check
-fails on the template placeholders, not on the new entry.
-
-### Notes for a fix
-
-Seed templates that pass the check, or let the check accept untouched placeholder rows. Add a
-bats case that seeds the templates and runs the check.
-
-**Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.
-
----
-
 <a id="ki-55"></a>
 
 ## KI-55 — the plan review cannot run while the plan is inside the repository
@@ -355,6 +645,62 @@ refusing to review a tree that differs from HEAD, so prefer the wording.
 
 **Source:** claude-opus-5 — hit while running §1 for the reference-integrity mini phase,
 2026-09-21.
+
+---
+
+<a id="ki-73"></a>
+
+## KI-73 — the release-version test is skipped when its file runs directly
+
+**Severity:** Medium
+**Likelihood:** Likely
+**Where:** [test_plugin_name.py](../tests/test_plugin_name.py) — `class ReleaseVersionTest`
+
+### What happens
+
+`ReleaseVersionTest` is defined after `unittest.main()`, so `python3 tests/test_plugin_name.py`
+runs without it and passes even when the manifest and CHANGELOG disagree. A CHANGELOG with no
+release heading also raises `TypeError` instead of failing the test.
+
+### Example scenario
+
+A release keeps `plugin.json` at the old version; running the file directly reports OK.
+
+### Notes for a fix
+
+Move the main guard below every class and assert the heading exists first. Discovery
+(`python3 -m unittest discover tests`) already runs it.
+
+**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review pass 4, project-docs phase, 2026-11-22 (was part of ENH-37).
+
+---
+
+<a id="ki-66"></a>
+
+## KI-66 — progress lines can misreport a Gemini run's age and state
+
+**Severity:** Medium
+**Likelihood:** Likely
+**Where:** [progress.sh](../skills/external-review/progress.sh) — `*.partial) echo`
+
+### What happens
+
+`progress.sh` dates a streaming Gemini run from its stderr file, so a late diagnostic resets
+the clock. A `.part` left by a killed earlier attempt shows as running beside the next attempt,
+and a failure with no output reads as "answer cut off". An `[agy] print timeout` setting
+announcement would also be taken for a cut-off. The skill's sleep rule still says 30 minutes where
+`progress.sh` warns at 25.
+
+### Example scenario
+
+A run killed after sleep is retried as attempt 2; the update shows attempt 1 still running.
+
+### Notes for a fix
+
+Record each attempt's start and end state, retire an earlier attempt's `.part` when the next
+starts, and match agy's cut-off wording exactly.
+
+**Source:** gpt-6.2-astra:high, gemini-4-argon-high (clocks), gpt-6.2-astra:high (timeout wording) — phase review pass 4, project-docs phase, 2026-11-22.
 
 ---
 
@@ -414,6 +760,87 @@ classification order; not reproduced with a real CLI.
 
 ---
 
+<a id="ki-65"></a>
+
+## KI-65 — init can leave work behind on a signal during error cleanup, and creates files at 0644
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def make_file(`
+
+### What happens
+
+When an ordinary I/O error starts the rollback, a signal arriving before the handlers are set
+to ignore can raise out of the cleanup. The handlers are also installed before the `try` that
+restores them. New files are created at 0644, which drops group write under a group-writable umask
+such as 0002 that the old `open(..., "x")` honoured.
+
+### Example scenario
+
+A disk error on the third file, then a Ctrl-C, leaves the first two files in place.
+
+### Notes for a fix
+
+Keep signals blocked from the failure until `SIG_IGN` is set, enter the `try` before installing
+handlers, and create files at 0666 under the caller's umask.
+
+**Source:** gpt-6.2-astra:high, gemini-4-argon-high (signals), gpt-6.2-astra:high (file mode) — phase review pass 4, project-docs phase, 2026-11-22.
+
+---
+
+<a id="ki-68"></a>
+
+## KI-68 — the name check can stop on a folder it may not read
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [name_check.py](../skills/project-docs/name_check.py) — `def _read(`
+
+### What happens
+
+`Repo._read` catches read errors, but `path.is_file()` runs before that handler. On a Python
+where it raises on a denied parent folder, the whole run stops before the other docs are
+checked.
+
+### Example scenario
+
+A doc under a folder without search (execute) permission aborts the check with a traceback.
+
+### Notes for a fix
+
+Run the metadata lookup inside the same handler and test a denied folder beside a real
+finding.
+
+**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review pass 4, project-docs phase, 2026-11-22.
+
+---
+
+<a id="ki-71"></a>
+
+## KI-71 — Gemini discovery blames agy when the ranker fails
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `agy models failed`
+
+### What happens
+
+Either side of the discovery pipeline can fail. When `agy models` succeeds and
+`gemini-ladder.py` fails, discovery still says "agy models failed" and points at an empty
+`agy-models.err`. `codex-ladder.py`'s docstring does not name `max` as a requestable effort.
+
+### Example scenario
+
+The ranker is missing after a partial checkout; the operator reads an empty error file.
+
+### Notes for a fix
+
+Keep both statuses and say which program failed; name `max` in the Codex docstring.
+
+**Source:** gpt-6.2-astra:high, gemini-4-neon-high — phase review pass 6, project-docs phase, 2026-11-22.
+
+---
+
 <a id="ki-44"></a>
 
 ## KI-44 — a stale dispatch log gives a misleading replacement message
@@ -439,3 +866,30 @@ Name both agent IDs in the message and say which command brings the log and the 
 in line.
 
 **Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.
+
+---
+
+<a id="ki-72"></a>
+
+## KI-72 — init's failure message overstates what it left behind
+
+**Severity:** Low
+**Likelihood:** Rare
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `could not confirm it is ours`
+
+### What happens
+
+A file `init` could not identify is reported as "left in place" even if another writer has
+since removed it. The CHANGELOG and `cmd_init`'s docstring still say nothing is left behind on
+failure, which no longer holds for such a file.
+
+### Example scenario
+
+After a failed `fstat`, the message names a file that is no longer there.
+
+### Notes for a fix
+
+Say that removal was skipped because ownership was not confirmed, and correct the two
+promises; tell the caller to inspect the path before retrying.
+
+**Source:** gpt-6.2-astra:high, gemini-4-neon-high — phase review pass 7, project-docs phase, 2026-11-22.

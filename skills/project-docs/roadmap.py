@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Close a roadmap entry, or check that the roadmap files reconcile.
+"""Set up, close or check the roadmap files.
 
 Closing an entry means deleting it from its detail file and removing its
 pointer row from the index. Done by hand it has destroyed content twice in
@@ -14,6 +14,7 @@ was. Counting is not enough — a count can be right while the content is wrong.
 Usage:
     roadmap.py check [--docs DIR]
     roadmap.py close KI-15 [--docs DIR]
+    roadmap.py init [--docs DIR]
 
 Exit 0 on success, 1 on refusal. Nothing is written unless every check passes.
 """
@@ -45,6 +46,10 @@ LINE_ANCHOR = re.compile(r'#L\d+')
 WHERE = "**Where:**"
 WHERE_LIKE = re.compile(r'^\s*(?:[-+*]\s+|\d+[.)]\s+)?\*\*Where(?::\*\*|\*\*:)')
 Ref = collections.namedtuple("Ref", "target fragment")
+# The rated fields of each kind of entry, in sort-key order. Their levels are
+# not listed here: they are read from the templates bundled beside this file.
+FIELDS = {"KI": ["Severity", "Likelihood"], "ENH": ["Priority"], "UNK": ["Kind"]}
+TEMPLATES = pathlib.Path(__file__).resolve().parent
 
 
 def fail(msg: str) -> None:
@@ -91,6 +96,11 @@ def split_entries(text: str) -> tuple[str, dict[str, str]]:
     return text[:first_start], entries
 
 
+def _cells(line: str) -> list[str]:
+    """The cells of one Markdown table row, stripped."""
+    return [c.strip() for c in line.strip().split("|")[1:-1]]
+
+
 def index_rows(roadmap: str, prefix: str) -> dict[str, dict]:
     """{entry-id: {"line": the row, "anchor": what the link actually targets}}.
 
@@ -101,7 +111,7 @@ def index_rows(roadmap: str, prefix: str) -> dict[str, dict]:
     rows: dict[str, dict] = {}
     headers = []
     for line in roadmap.splitlines(keepends=True):
-        cells = [c.strip() for c in line.strip().split("|")[1:-1]]
+        cells = _cells(line)
         if cells and cells[0] == "ID":
             headers = cells
         m = re.match(rf'^\|\s*\[?({prefix}-\d+)\b', line)
@@ -119,6 +129,43 @@ def index_rows(roadmap: str, prefix: str) -> dict[str, dict]:
     return rows
 
 
+def load_scales(template_dir: pathlib.Path) -> dict[str, dict[str, list[str]]]:
+    """{prefix: {field: [levels, best first]}}, read from each template's scale table.
+
+    The scale tables in the templates are the one source of the levels: a row
+    added or moved there changes what `check` accepts, with no second copy here.
+    """
+    scales: dict[str, dict[str, list[str]]] = {}
+    for prefix, fields in FIELDS.items():
+        name = FILES[prefix].replace(".md", "-template.md")
+        lines = (template_dir / name).read_text().splitlines()
+        scales[prefix] = {}
+        for field in fields:
+            try:
+                start = lines.index(f"## {field}")
+            except ValueError:
+                fail(f"refusing: no {field} scale in {name}")
+            rows, in_table = [], False
+            for line in lines[start + 1:]:
+                # The table belongs to this section: never take the next one's.
+                if line.startswith("## "):
+                    break
+                if line.startswith("|"):
+                    in_table = True
+                    rows.append(line)
+                elif in_table:
+                    break
+            # Skip the header and delimiter rows; a level is the bold first cell.
+            levels = [_cells(r)[0].strip("*").strip() for r in rows[2:]]
+            if not levels:
+                fail(f"refusing: the {field} scale in {name} is empty")
+            repeated = sorted(lv for lv, n in collections.Counter(levels).items() if n > 1)
+            if repeated:
+                fail(f"refusing: the {field} scale in {name} repeats {repeated}")
+            scales[prefix][field] = levels
+    return scales
+
+
 def reconcile(docs: pathlib.Path, proposed: dict[str, str] | None = None):
     """Check the index against the detail files. `proposed` replaces a file's
     text in memory, so a change can be reconciled before anything is written."""
@@ -127,6 +174,7 @@ def reconcile(docs: pathlib.Path, proposed: dict[str, str] | None = None):
         return proposed[name] if name in proposed else (docs / name).read_text()
 
     roadmap = text_of("ROADMAP.md")
+    scales = load_scales(TEMPLATES)
     ok, problems = True, []
     for prefix, name in FILES.items():
         _, entries = split_entries(text_of(name))
@@ -144,7 +192,7 @@ def reconcile(docs: pathlib.Path, proposed: dict[str, str] | None = None):
             problems.append(f"  entries with no index row:      {orphaned}"); ok = False
         if destinations:
             problems.append(f"  wrong destination: {destinations}"); ok = False
-        fields = {"KI": ["Severity", "Likelihood"], "ENH": ["Priority"], "UNK": ["Kind"]}[prefix]
+        fields = FIELDS[prefix]
         ratings = {}
         for eid, body in entries.items():
             ratings[eid] = {}
@@ -154,13 +202,16 @@ def reconcile(docs: pathlib.Path, proposed: dict[str, str] | None = None):
                 ratings[eid][field] = val
                 if eid in rows and (not val or rows[eid]["cells"].get(field) != val):
                     problems.append(f"  rating mismatch: {eid} {field}"); ok = False
-        ranks = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3,
-                 "Almost always": 0, "Likely": 1, "Rare": 2}
+                if val and val not in scales[prefix][field]:
+                    problems.append(f"  unknown {field}: {eid} ({val})"); ok = False
+        # Open questions are grouped by kind, but their order is not checked.
         if prefix != "UNK":
             for label, ids in [("detail", entries), ("index", rows)]:
-                keys = [tuple(ranks.get(ratings[e][f], 99) for f in fields)
-                        for e in ids if e in ratings]
-                if keys != sorted(keys) or any(99 in k for k in keys):
+                # An unknown level is reported above, so order only the known ones.
+                keys = [tuple(scales[prefix][f].index(ratings[e][f]) for f in fields)
+                        for e in ids if e in ratings
+                        and all(ratings[e][f] in scales[prefix][f] for f in fields)]
+                if keys != sorted(keys):
                     problems.append(f"  rating order invalid: {label}"); ok = False
         if wrong:
             detail = [f"{e} -> #{rows[e]['anchor']}" for e in wrong]
@@ -168,7 +219,7 @@ def reconcile(docs: pathlib.Path, proposed: dict[str, str] | None = None):
     return ok, problems
 
 
-def _fenced_lines(text: str) -> list[bool]:
+def fenced_lines(text: str) -> list[bool]:
     """Keep nested, shorter fences from hiding the references after a block.
 
     Only the opening character repeated at least as many times, followed by
@@ -178,6 +229,7 @@ def _fenced_lines(text: str) -> list[bool]:
     Second fence tracker, after skills/design-review/tests/write_results.py; only
     this one rejects backtick fences with backticks in their info strings.
     Two stay separate under the rule of three; a third occurrence creates a shared home.
+    name_check.py imports this one rather than adding a third.
     """
     flags, opened = [], None
     for line in text.splitlines():
@@ -271,7 +323,7 @@ def verify_references(docs: pathlib.Path) -> tuple[bool, list[str]]:
             # Keep a boundary where a fence was, rather than joining a field
             # before the example to unrelated text after it.
             lines = ["" if fenced else line
-                     for line, fenced in zip(body.splitlines(), _fenced_lines(body))]
+                     for line, fenced in zip(body.splitlines(), fenced_lines(body))]
             # Line anchors are banned throughout the entry. Parse links only
             # to retain their destination in the diagnostic, not to limit scope.
             text = "\n".join(lines)
@@ -289,6 +341,9 @@ def verify_references(docs: pathlib.Path) -> tuple[bool, list[str]]:
             if not field:
                 if any(WHERE_LIKE.match(line) for line in lines):
                     findings.append(f"  {eid}: malformed Where field")
+                elif not eid.startswith("UNK"):
+                    # Known issues and enhancements always say where they live (KI-56).
+                    findings.append(f"  {eid}: no Where field")
                 continue
             try:
                 refs = _references(field)
@@ -455,16 +510,140 @@ def install_documents(docs: pathlib.Path, proposed: dict[str, str]) -> None:
             shutil.rmtree(recovery)
 
 
+def cmd_init(docs: pathlib.Path) -> int:
+    """Create whichever roadmap files are missing, from the templates without
+    their example entries, so a fresh set-up passes `check`. An existing file,
+    or a symlink in its place, is never touched, and a file that appears while
+    this runs is left to whoever made it. On failure, or on SIGINT or SIGTERM,
+    it removes what it made and only that: each file it still owns, by inode,
+    and each folder it created."""
+    names = ["ROADMAP.md", *FILES.values()]
+    if os.path.lexists(docs) and not docs.is_dir():
+        fail(f"refusing: {docs} exists and is not a folder")
+    missing = [n for n in names if not os.path.lexists(docs / n)]
+    if not missing:
+        print("nothing to set up")
+        return 0
+    bodies = {}
+    for name in missing:
+        text = (TEMPLATES / name.replace(".md", "-template.md")).read_text()
+        if name == "ROADMAP.md":
+            examples = set()
+            for prefix in FILES:
+                examples |= {r["line"] for r in index_rows(text, prefix).values()}
+            text = "".join(l for l in text.splitlines(keepends=True) if l not in examples)
+        else:
+            text = split_entries(text)[0].rstrip("\n") + "\n"
+        bodies[name] = text
+
+    fired = []
+
+    def interrupted(signum, frame):
+        # Raise once; a second signal must not interrupt the rollback of the first.
+        if not fired:
+            fired.append(signum)
+            raise KeyboardInterrupt(f"signal {signum}")
+
+    made_dirs = []                      # deepest last
+    created: list[list] = []            # [path, (dev, ino) or None]
+    signals = {signal.SIGINT, signal.SIGTERM}
+    previous = {sig: signal.signal(sig, interrupted) for sig in signals}
+
+    def guarded(step):
+        # Signals wait while a folder or file is made and recorded, so nothing
+        # exists on disk that the rollback does not know about. The caller's
+        # own mask is restored afterwards, not cleared.
+        mask = signal.pthread_sigmask(signal.SIG_BLOCK, signals)
+        try:
+            step()
+        finally:
+            signal.pthread_sigmask(signal.SIG_SETMASK, mask)
+
+    def make_folder(folder):
+        try:
+            folder.mkdir()
+            made_dirs.append(folder)
+        except FileExistsError:
+            if not folder.is_dir():
+                raise
+            # Another init made it; it is theirs, so ours to use, not remove.
+
+    def make_file(path, text):
+        # O_EXCL refuses any existing entry, a dangling symlink included, so
+        # nothing that appeared since the check above is replaced.
+        try:
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        except FileExistsError:
+            return
+        entry = [path, None]
+        created.append(entry)
+        try:
+            st = os.fstat(fd)
+            entry[1] = (st.st_dev, st.st_ino)
+            with os.fdopen(fd, "w") as f:
+                fd = None
+                f.write(text)
+        finally:
+            if fd is not None:
+                os.close(fd)
+
+    try:
+        for folder in [*reversed(docs.parents), docs]:
+            if not os.path.lexists(folder):
+                guarded(lambda folder=folder: make_folder(folder))
+        for name, text in bodies.items():
+            guarded(lambda name=name, text=text: make_file(docs / name, text))
+    except BaseException as exc:
+        for sig in previous:
+            signal.signal(sig, signal.SIG_IGN)
+        left, unconfirmed = [], []
+        for path, ident in created:
+            if ident is None:
+                # Made here, but its identity was never read: another writer may
+                # have replaced it since, so it is left in place and reported.
+                unconfirmed.append(str(path))
+                continue
+            try:
+                st = os.lstat(path)
+                if (st.st_dev, st.st_ino) == ident:
+                    path.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError:
+                left.append(str(path))
+        for folder in reversed(made_dirs):
+            try:
+                folder.rmdir()
+            except OSError:
+                left.append(str(folder))  # someone else's file is in it now
+        if unconfirmed:
+            left.append(f"{', '.join(unconfirmed)} (could not confirm it is ours, so left in place)")
+        if left:
+            fail(f"refusing: set-up failed: {exc}; could not remove {', '.join(left)}")
+        fail(f"refusing: set-up failed, nothing of ours left behind: {exc}")
+    finally:
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
+    for path, _ in created:
+        print(f"created {path}")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("command", choices=["check", "close"])
-    ap.add_argument("id", nargs="?")
+    # --docs may come before or after the subcommand.
     ap.add_argument("--docs", type=pathlib.Path, default=pathlib.Path("docs"))
+    commands = ap.add_subparsers(dest="command", required=True)
+    for name in ("check", "close", "init"):
+        sub = commands.add_parser(name)
+        if name == "close":
+            sub.add_argument("id", help="the entry to close, e.g. KI-15")
+        sub.add_argument("--docs", type=pathlib.Path, default=argparse.SUPPRESS)
     args = ap.parse_args()
     if args.command == "check":
         return cmd_check(args.docs)
-    if not args.id:
-        fail("close needs an entry id, e.g. roadmap.py close KI-15")
+    if args.command == "init":
+        return cmd_init(args.docs)
     return cmd_close(args.docs, args.id.upper())
 
 

@@ -5,9 +5,10 @@ already shipped is in [CHANGELOG.md](../CHANGELOG.md).
 
 ## What this is
 
-A plugin of three agent skills. Each exposes a `SKILL.md` that the agent reads and follows.
+A plugin of four agent skills. Each exposes a `SKILL.md` that the agent reads and follows.
 Shell helpers implement review capture, reviewer preflight, mutation restoration and release
-checks. Python helpers handle reviewer deadlines, roadmap edits and design-review test tooling.
+checks. Python helpers rank the reviewer models, handle reviewer deadlines, set up and edit
+roadmap files, check the names docs mention, and run the design-review test tooling.
 `docs/build_architecture.py` generates the module diagram.
 
 There is no application entry point. A module here is a skill directory, with an invocation as
@@ -31,29 +32,34 @@ what sits at the bottom changes when someone else ships a new CLI.
 
 | Unit | Responsibility | Interface | Depends on |
 | --- | --- | --- | --- |
-| `phase-workflow` | Run a phase from plan review to merge | the `phase-workflow` skill | `design-review`, `external-review`, `gh` |
+| `phase-workflow` | Run a phase from plan review to merge | the `phase-workflow` skill | `design-review`, `project-docs`, `external-review`, `gh` |
+| `project-docs` | Keep a project's docs by tense, its roadmap files on request, and the name check | the `project-docs` skill; `roadmap.py`, `name_check.py` | `git` |
 | `design-review` | Decide structure at plan time and re-check it at phase end | the `design-review` skill, `plan` or `phase` mode | `drawio` skill |
-| `external-review` | Get a review from other models of a plan, a phase diff or the repo | the `external-review` skill, `plan`, `phase` or `repo` mode | `codex`, `agy` |
+| `external-review` | Get a review from other models of a plan, a phase diff or the repo | the `external-review` skill, `plan`, `phase` or `repo` mode | `project-docs`, `codex`, `agy` |
 
 **Expected change:** a new external reviewer. Adding one edits `external-review`, and today
 also `phase-workflow`, which names the reviewer pair in its skip rules — that second edit is the
 coupling to remove if this expectation is to hold.
 
-**Shared state:** none inside the plugin. The skills write only to the repository they run in
-and to temporary directories.
+**Shared state:** none inside the plugin. The skills write to the repository they run in and
+to temporary directories. The one exception is the docs pass, which also updates docs about the
+project kept in the folder that holds the repository; the hand-off names each such edit, since
+the phase diff cannot show it.
 
-## How the three fit together
+## How the four fit together
 
-`phase-workflow` orchestrates; `design-review` and `external-review` are called by it at
-defined points and are useful on their own. The dependency is mostly one way:
+`phase-workflow` orchestrates; `design-review`, `project-docs` and `external-review` are called
+by it at defined points and are useful on their own. `external-review` also files through
+`project-docs` where a repository has roadmap files. The dependency is mostly one way:
 `external-review repo` runs on a repository that has never seen a phase. It is not clean,
-though — both sub-skills reference workflow stages by number and `phase-workflow` names the
-reviewer pair, so the three are more coupled than the call graph suggests.
+though — `design-review` and `external-review` reference workflow stages by number and
+`phase-workflow` names the reviewer pair, so the skills are more coupled than the call graph
+suggests.
 
 Machine setup — permissions, the global standards, backups, local model backends and project
 environments — lives outside this plugin, so these skills assume nothing it installs.
 
-## External tools are all optional
+## External tools
 
 `codex`, `agy` and the `drawio` skill are each invoked by exactly one skill, and a missing one
 degrades that step rather than blocking the workflow. `external-review` reports its
@@ -72,10 +78,11 @@ The suites run against scratch repositories and temporary directories:
 
 | Skill | Executable checks |
 | --- | --- |
-| `external-review` | bundle capture, pruned export, documented Codex invocation, preflight |
-| `phase-workflow` | mutation restoration, release checks, documented release and cleanup commands, roadmap edits, reference verification, bats assertion enumeration |
+| `external-review` | bundle capture, pruned export, documented Codex invocation, preflight, both model ladders |
+| `phase-workflow` | mutation restoration, release checks, documented release and cleanup commands, bats assertion enumeration |
+| `project-docs` | roadmap set-up, edits, rating scales and reference verification; the name check |
 | `design-review` | transcript handling, fixture evaluation, Results writer, rollup tooling |
-| repo | the plugin name appears only in the manifests, README and CHANGELOG |
+| repo | the plugin name appears only in the manifests, README, CHANGELOG and phase record; nothing names the roadmap machinery's old paths |
 
 Run them with:
 

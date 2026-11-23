@@ -13,6 +13,8 @@ ALLOWED = {
     ".claude-plugin/marketplace.json",
     "README.md",
     "CHANGELOG.md",
+    # The phase record holds the repository identity the merge cycle reads back.
+    "docs/PHASE_RECORD.md",
 }
 
 
@@ -49,3 +51,12 @@ class PluginNameTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReleaseVersionTest(unittest.TestCase):
+    def test_manifest_version_is_the_newest_changelog_release(self):
+        # Fails if a release is prepared in CHANGELOG while plugin.json keeps
+        # the old version, which is the one the installer reads (ENH-35).
+        heading = re.search(r"^## \[(\d+\.\d+\.\d+)\]", (ROOT / "CHANGELOG.md").read_text(), re.M)
+        manifest = json.loads((ROOT / ".claude-plugin/plugin.json").read_text())["version"]
+        self.assertEqual(manifest, heading[1])

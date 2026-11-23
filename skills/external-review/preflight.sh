@@ -28,7 +28,7 @@
 
 set -uo pipefail
 
-CODEX_MODELS=()
+CODEX_MODELS=(); ROOT_ARGS=()
 GEMINI_MODELS=()
 AUTHORED_BY=""
 DEADLINE="${PREFLIGHT_TIMEOUT:-120}"
@@ -43,6 +43,7 @@ while [ $# -gt 0 ]; do
       esac
       shift 2 ;;
     --timeout) DEADLINE="${2:?timeout required}"; shift 2 ;;
+    --root) ROOT_ARGS=(-C "${2:?root required}"); shift 2 ;;
     *) echo "unknown argument: $1"; exit 1 ;;
   esac
 done
@@ -126,10 +127,13 @@ probe() {
       slug="${model%%:*}"
       case "$model" in *:*) effort="${model#*:}";; *) effort=high;; esac
       model="$slug:$effort"
-      python3 "$RUNNER" "$DEADLINE" codex exec --skip-git-repo-check --sandbox read-only \
+      python3 "$RUNNER" "$DEADLINE" codex exec ${ROOT_ARGS[@]+"${ROOT_ARGS[@]}"} --skip-git-repo-check --sandbox read-only \
         -m "$slug" -c model_reasoning_effort="$effort" -o "$OUT" "$PROBE" > "$TMP/codex.stdout" 2> "$ERR" < /dev/null
     else
-      python3 "$RUNNER" "$DEADLINE" agy -p "$PROBE" --model "$model" --effort high \
+      # An id with an effort suffix carries its own, and agy refuses a second
+      # one; a suffix-less id is told high, exactly as the review loop does.
+      case "$model" in *-high|*-xhigh|*-max|*-medium) EFFORT=() ;; *) EFFORT=(--effort high) ;; esac
+      python3 "$RUNNER" "$DEADLINE" agy -p "$PROBE" --model "$model" ${EFFORT[@]+"${EFFORT[@]}"} \
         --print-timeout "${DEADLINE}s" > "$OUT" 2> "$ERR" < /dev/null
     fi
     rc=$?

@@ -190,6 +190,30 @@ teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/nul
   [ "$(git show-ref)" = "$before" ]
 }
 
+# Fails if a remote URL that carries credentials passes the check, which would
+# let phase start copy the token into the committed docs/PHASE_RECORD.md.
+@test "origin check: refuses a URL carrying credentials, without printing it" {
+  clean="https://example.invalid/r.git"
+  for url in "https://someone:notasecret@example.invalid/r.git" "HTTPS://notasecret@example.invalid/r.git" \
+             "git+https://notasecret@example.invalid/r.git" "https://example.invalid/r.git?token=notasecret" \
+             "http::https://notasecret@example.invalid/r.git" "ssh://me@mail.example:notasecret@example.invalid/r.git"; do
+    # A clean fetch URL with a bad push URL, then the reverse: each side is checked.
+    for pair in "$clean $url" "$url $clean"; do
+      set -- $pair
+      git remote set-url origin "$1"
+      git remote set-url --push origin "$2"
+      run bash "$PUBLISH" --check-origin "$1" "$2"
+      [ "$status" -eq 1 ] || false
+      [[ "$output" == *"CREDENTIALS IN ORIGIN URL"* || "$output" == *"TRANSPORT HELPER"* ]] || false
+      [[ "$output" != *notasecret* ]] || false
+    done
+  done
+  git remote set-url origin "ssh://git@example.invalid/r.git"
+  git remote set-url --push origin "ssh://git@example.invalid/r.git"
+  run bash "$PUBLISH" --check-origin "ssh://git@example.invalid/r.git" "ssh://git@example.invalid/r.git"
+  [ "$status" -eq 0 ]
+}
+
 @test "origin check: rejects a changed fetch URL" {
   git remote set-url origin "$TEST_TMP/other.git"
   run bash "$PUBLISH" --check-origin "$FETCH_URL" "$PUSH_URL"
@@ -513,4 +537,139 @@ ki46_squash_branch() {          # leaves feature squash-merged, tip in $1
   [[ "$msg" != *"holds commits absent"* ]] || false
   run git rev-parse --verify feature
   [ "$status" -eq 0 ]
+}
+
+# first_push <skill>: the documented first-push fence, for feature/x.
+first_push() {
+  extract_fence 'PHASE RECORD NOT COMMITTED ON' "$TEST_TMP/push.sh" "$1"
+  sed -i.bak '1i\
+PHASE_BRANCH=feature/x DEFAULT_BRANCH=main
+' "$TEST_TMP/push.sh"
+  git push -q origin main && git fetch -q origin
+}
+
+@test "first push: refuses from another branch, and after a commit that drops the record" {
+  # Fails if the check reads HEAD while pushing $PHASE_BRANCH, or accepts a deleted record.
+  first_push "$BATS_TEST_DIRNAME/../SKILL.md"
+  git switch -qc feature/x
+  mkdir -p docs && printf '| `PHASE_BRANCH` | `feature/x` |\n' > docs/PHASE_RECORD.md
+  git add docs && git commit -qm record
+  git switch -qc other
+  run bash "$TEST_TMP/push.sh"
+  [ "$status" -ne 0 ] || false
+  ! git ls-remote --exit-code --heads origin feature/x >/dev/null || false
+  git switch -q feature/x && git rm -q docs/PHASE_RECORD.md && git commit -qm drop
+  run bash "$TEST_TMP/push.sh"
+  [ "$status" -ne 0 ] || false
+  ! git ls-remote --exit-code --heads origin feature/x >/dev/null
+}
+
+@test "first push: publishes the branch whose tip holds its record" {
+  # Control: the fence pushes when the checked-out phase branch carries its record.
+  first_push "$BATS_TEST_DIRNAME/../SKILL.md"
+  git switch -qc feature/x
+  mkdir -p docs && printf '| `PHASE_BRANCH` | `feature/x` |\n' > docs/PHASE_RECORD.md
+  git add docs && git commit -qm record
+  run bash "$TEST_TMP/push.sh"
+  [ "$status" -eq 0 ] || false
+  git ls-remote --exit-code --heads origin feature/x >/dev/null
+}
+
+# after_review: the documented post-review check, with REVIEWED bound to $1.
+after_review() {
+  extract_fence 'CHANGED AFTER REVIEW' "$TEST_TMP/after.sh" "$BATS_TEST_DIRNAME/../SKILL.md"
+  sed -i.bak "s|^\( *\)REVIEWED=.*|\1REVIEWED=$1|" "$TEST_TMP/after.sh"
+}
+
+@test "after review: a changed file outside the bookkeeping set is named before any content is shown" {
+  # Fails if a post-review fix passes the gate, or its contents are printed before the path check.
+  reviewed="$(git rev-parse HEAD)"
+  printf 'def add(a, b):\n    return a - b  # SECRET-LOOKING\n' > calc.py
+  git commit -qam fix
+  after_review "$reviewed"
+  run bash "$TEST_TMP/after.sh"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"CHANGED AFTER REVIEW"*"calc.py"* ]] || false
+  [[ "$output" != *SECRET-LOOKING* ]]
+}
+
+@test "after review: a phase-record-only change passes and is shown" {
+  # Control: bookkeeping in the allowed files passes, with its patch printed for reading.
+  reviewed="$(git rev-parse HEAD)"
+  mkdir -p docs && printf '| `PR` | 9 |\n' > docs/PHASE_RECORD.md
+  git add docs && git commit -qm record
+  after_review "$reviewed"
+  run bash "$TEST_TMP/after.sh"
+  [ "$status" -eq 0 ] || false
+  [[ "$output" == *'`PR` | 9'* ]]
+}
+
+@test "origin check: accepts a bare user over each ssh spelling" {
+  # Fails if git+ssh:// or ssh+git:// with a plain user name is taken for a credential.
+  for url in "git+ssh://git@example.invalid/r.git" "ssh+git://git@example.invalid/r.git" "ssh://git@example.invalid:22/r.git"; do
+    git remote set-url origin "$url"
+    git remote set-url --push origin "$url"
+    run bash "$PUBLISH" --check-origin "$url" "$url"
+    [ "$status" -eq 0 ] || false
+  done
+}
+
+# record_check <pr>: the documented phase-record check, for PR <pr>.
+record_check() {
+  extract_fence 'PHASE RECORD DOES NOT NAME PR' "$TEST_TMP/record.sh" "$BATS_TEST_DIRNAME/../SKILL.md"
+  if grep -q '^ *PR=' "$TEST_TMP/record.sh"; then
+    sed -i.bak "s|^\\( *\\)PR=.*|\\1PR=$1|" "$TEST_TMP/record.sh"
+  else
+    printf 'PR=%s\n%s\n' "$1" "$(cat "$TEST_TMP/record.sh")" > "$TEST_TMP/record.sh"
+  fi
+}
+
+@test "phase record: another repository's PR cannot pair with this release" {
+  # Fails if PR and Release are matched anywhere in the file, so PR 5 from the companion
+  # table passes with this repository's v2.1.0.
+  mkdir -p docs
+  printf '## [2.1.0] - 2026-11-22\n' > CHANGELOG.md
+  printf '| Key | Value |\n| --- | --- |\n| `PR` | 9 |\n| Release | v2.1.0 |\n\nCompanion:\n\n| Key | Value |\n| --- | --- |\n| `PR` | 5 |\n| Release | v1.1.0 |\n' > docs/PHASE_RECORD.md
+  git add -A && git commit -qm record
+  record_check 5
+  run bash "$TEST_TMP/record.sh"
+  [ "$status" -ne 0 ] || false
+  record_check 9
+  run bash "$TEST_TMP/record.sh"
+  [ "$status" -eq 0 ]
+}
+
+@test "phase record: only the first table counts, however the next is headed" {
+  # Fails if the check reads past the first table, so a companion table headed differently,
+  # or a second PR row, can satisfy it (F-149).
+  mkdir -p docs
+  printf '## [2.1.0] - 2026-11-22\n' > CHANGELOG.md
+  printf '| Key   | Value |\n| --- | --- |\n| `PR` | 9 |\n| Release | v2.1.0 |\n\nCompanion:\n\n| Field | Value |\n| --- | --- |\n| `PR` | 5 |\n' > docs/PHASE_RECORD.md
+  git add -A && git commit -qm record
+  record_check 5
+  run bash "$TEST_TMP/record.sh"
+  [ "$status" -ne 0 ] || false
+  record_check 9
+  run bash "$TEST_TMP/record.sh"
+  [ "$status" -eq 0 ] || false
+  printf '| Key | Value |\n| --- | --- |\n| `PR` | 9 |\n| `PR` | 5 |\n| Release | v2.1.0 |\n' > docs/PHASE_RECORD.md
+  git commit -qam two-prs
+  record_check 5
+  run bash "$TEST_TMP/record.sh"
+  [ "$status" -ne 0 ]
+}
+
+@test "origin check: refuses every transport-helper URL" {
+  # Fails if a <transport>:: URL passes in any form: chained, scheme-less, opaque, or even
+  # clean, since a normal remote never needs one and the forms cannot all be parsed (F-127).
+  clean="https://example.invalid/r.git"
+  for url in "http::http::https://notasecret@example.invalid/r.git" "http::notasecret@example.invalid/r.git" \
+             "ext::sh -c notasecret" "http::https://example.invalid/r.git"; do
+    git remote set-url origin "$clean"
+    git remote set-url --push origin "$url"
+    run bash "$PUBLISH" --check-origin "$clean" "$url"
+    [ "$status" -eq 1 ] || false
+    [[ "$output" == *"CREDENTIALS IN ORIGIN URL"* || "$output" == *"TRANSPORT HELPER"* ]] || false
+    [[ "$output" != *notasecret* ]] || false
+  done
 }

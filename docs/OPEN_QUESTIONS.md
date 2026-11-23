@@ -14,6 +14,10 @@ nothing. IDs are never reused.
 
 ## Kind
 
+`roadmap.py check` reads these levels from the template bundled with `project-docs`, and
+refuses any other Kind; it does not check the order of open questions. In a project's own
+copy this table is for reading: editing it changes nothing.
+
 | Kind | Means |
 | ------ | ------- |
 | **Decision** | The code does something defensible, but nobody has chosen whether it is right. Asks for an answer. |
@@ -50,3 +54,24 @@ enough. The reworded condition changes the condition hash, so the affected rows 
 re-grading against it.
 
 **Source:** claude-opus-5 — round-9 grading, 2026-09-14.
+
+---
+
+<a id="unk-05"></a>
+
+## UNK-05 — what drives repeat review findings?
+
+**Kind:** Verification
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `in code an earlier fix of this review wrote`
+
+External review often needs several passes, and later passes keep finding problems. It is not
+known how many of the findings in a narrow pass are in code the previous pass's fixes wrote, and
+how many are documentation drift those fixes caused.
+
+**What settles it:** the per-pass counts the review record now keeps, read across a few phases.
+If most later findings sit in fix code, the fix step needs more care. A narrow pass never reviews
+untouched code, so these counts cannot say what a first pass missed; that would need a separate
+full-scope sample.
+
+**Source:** gpt-6.2-sol:max, gpt-6.2-astra:max — plan review, project-docs phase, 2026-11-20;
+narrowed after gpt-6.2-astra:max — phase review pass 1, 2026-11-22.

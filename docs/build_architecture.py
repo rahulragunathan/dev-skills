@@ -540,7 +540,7 @@ def desc(text, size=11):
 #   [ Development process ] [ External tools ]
 #
 # Reserved routing corridors — keep these in sync when the layout moves:
-#   y=265  lane    — phase-workflow down into its two sub-skills
+#   y=265  lane    — phase-workflow down into its three sub-skills
 #   y=490  lane    — design-review across to the drawio skill
 #   x=695  channel — external-review to codex
 #   x=710  channel — external-review to agy
@@ -575,17 +575,27 @@ phase = box(
 design = box(
     80,
     300,
-    260,
+    170,
     120,
     "<b>design-review</b><br>"
     + desc("Module table and six structure checks, at plan time and phase end"),
     fill=PROCESS,
     bold=False,
 )
-review = box(
-    380,
+docs = box(
+    275,
     300,
-    260,
+    170,
+    120,
+    "<b>project-docs</b><br>"
+    + desc("Roadmap files on request, their checks, and the name check"),
+    fill=PROCESS,
+    bold=False,
+)
+review = box(
+    470,
+    300,
+    170,
     120,
     "<b>external-review</b><br>"
     + desc("Review by other models of a plan, a phase diff, or the whole repo"),
@@ -605,14 +615,26 @@ drawio = box(800, 390, 420, 60, "<b>drawio</b> " + sub("Diagram skill"), fill=EX
 # Edges. Emitted after every box so labels layer on top.
 # --------------------------------------------------------------------------
 
-# phase-workflow down into its two sub-skills — y=265 lane.
+# phase-workflow down into its three sub-skills — y=265 lane.
 edge(
     phase,
     design,
     color=PROCESS,
     label="Structure<div>Pass</div>",
-    waypoints=[(210, 265)],
-    exitX=0.25,
+    waypoints=[(165, 265)],
+    exitX=0.152,
+    exitY=1,
+    entryX=0.5,
+    entryY=0,
+    label_bg="#f3f0fb",
+)
+edge(
+    phase,
+    docs,
+    color=PROCESS,
+    label="Docs<div>Pass</div>",
+    waypoints=[(360, 265)],
+    exitX=0.5,
     exitY=1,
     entryX=0.5,
     entryY=0,
@@ -623,12 +645,26 @@ edge(
     review,
     color=PROCESS,
     label="External<div>Review</div>",
-    waypoints=[(510, 265)],
-    exitX=0.75,
+    waypoints=[(555, 265)],
+    exitX=0.848,
     exitY=1,
     entryX=0.5,
     entryY=0,
     label_bg="#f3f0fb",
+)
+
+# external-review files deferred findings through project-docs — y=455 lane,
+# under the two boxes and above the drawio lane.
+edge(
+    review,
+    docs,
+    color=PROCESS,
+    label="File Findings",
+    waypoints=[(555, 455), (360, 455)],
+    exitX=0.5,
+    exitY=1,
+    entryX=0.5,
+    entryY=1,
 )
 
 # external-review out to the reviewer CLIs — x=700 and x=690 channels.
@@ -680,7 +716,7 @@ edge(
     drawio,
     color=PROCESS,
     label="Generate Diagrams",
-    waypoints=[(210, 490), (740, 490), (740, 420)],
+    waypoints=[(165, 490), (740, 490), (740, 420)],
     exitX=0.5,
     exitY=1,
     entryX=0,
