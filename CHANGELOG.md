@@ -10,6 +10,8 @@ here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-11-23 — dependable helpers
+
 ### Added
 
 - **Security in every review.** The external review's shared rubric gains a security item for
@@ -1105,7 +1107,8 @@ corrections are recorded here.
 
 ## Reference
 
-[Unreleased]: https://github.com/rahulragunathan/dev-skills/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/rahulragunathan/dev-skills/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/rahulragunathan/dev-skills/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/rahulragunathan/dev-skills/compare/v2.0.1...v2.1.0
 [2.0.1]: https://github.com/rahulragunathan/dev-skills/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/rahulragunathan/dev-skills/compare/v1.12.0...v2.0.0

@@ -22,6 +22,8 @@ in flight the body is the single line `No phase in flight.`
 | `MERGE_METHOD` | `squash` |
 | Branched from | `origin/main` at `277e9ed` |
 | Started | 2026-11-23 |
+| `PR` | 10 |
+| Release | v2.2.0 |
 
 All three merge methods are enabled on the repository; `squash` is selected because the preflight
 takes the first allowed method in the order squash, rebase, merge.

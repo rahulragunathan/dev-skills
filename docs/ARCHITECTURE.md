@@ -32,7 +32,7 @@ what sits at the bottom changes when someone else ships a new CLI.
 
 | Unit | Responsibility | Interface | Depends on |
 | --- | --- | --- | --- |
-| `phase-workflow` | Run a phase from plan review to merge | the `phase-workflow` skill | `design-review`, `project-docs`, `external-review`, `gh` |
+| `phase-workflow` | Run a phase from plan review to merge | the `phase-workflow` skill; `phase-record.py`, `dependency-scan.py`, `publish-release.sh`, `mutation-restore.sh` | `design-review`, `project-docs`, `external-review`, `gh`, `osv-scanner` |
 | `project-docs` | Keep a project's docs by tense, its roadmap files on request, and the name check | the `project-docs` skill; `roadmap.py`, `name_check.py` | `git` |
 | `design-review` | Decide structure at plan time and re-check it at phase end | the `design-review` skill, `plan` or `phase` mode | `drawio` skill |
 | `external-review` | Get a review from other models of a plan, a phase diff or the repo | the `external-review` skill, `plan`, `phase` or `repo` mode | `project-docs`, `codex`, `agy` |

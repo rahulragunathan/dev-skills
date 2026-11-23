@@ -25,7 +25,7 @@ prepared. An
 item dropped rather than built moves to "Decisions taken and not taken". IDs are never
 reused. Nothing here looks backward — completed phases are CHANGELOG releases.
 
-**Last Updated**: 2026-11-22
+**Last Updated**: 2026-11-23
 
 ## Status
 
