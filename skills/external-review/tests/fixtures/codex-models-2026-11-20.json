@@ -1,0 +1,292 @@
+{
+ "models": [
+  {
+   "slug": "gpt-6.2-sol",
+   "priority": 1,
+   "visibility": "list",
+   "supported_reasoning_levels": [
+    {
+     "effort": "low"
+    },
+    {
+     "effort": "medium"
+    },
+    {
+     "effort": "high"
+    },
+    {
+     "effort": "xhigh"
+    },
+    {
+     "effort": "max"
+    },
+    {
+     "effort": "ultra"
+    }
+   ]
+  },
+  {
+   "slug": "gpt-6.2-astra",
+   "priority": 2,
+   "visibility": "list",
+   "supported_reasoning_levels": [
+    {
+     "effort": "low"
+    },
+    {
+     "effort": "medium"
+    },
+    {
+     "effort": "high"
+    },
+    {
+     "effort": "xhigh"
+    },
+    {
+     "effort": "max"
+    },
+    {
+     "effort": "ultra"
+    }
+   ]
+  },
+  {
+   "slug": "gpt-6.1-terra",
+   "priority": 3,
+   "visibility": "list",
+   "supported_reasoning_levels": [
+    {
+     "effort": "low"
+    },
+    {
+     "effort": "medium"
+    },
+    {
+     "effort": "high"
+    },
+    {
+     "effort": "xhigh"
+    },
+    {
+     "effort": "max"
+    },
+    {
+     "effort": "ultra"
+    }
+   ]
+  },
+  {
+   "slug": "gpt-reserve",
+   "priority": 4,
+   "visibility": "hide",
+   "supported_reasoning_levels": [
+    {
+     "effort": "low"
+    },
+    {
+     "effort": "medium"
+    },
+    {
+     "effort": "high"
+    },
+    {
+     "effort": "xhigh"
+    },
+    {
+     "effort": "max"
+    }
+   ]
+  },
+  {
+   "slug": "gpt-6.1-sol",
+   "priority": 5,
+   "visibility": "list",
+   "supported_reasoning_levels": [
+    {
+     "effort": "low"
+    },
+    {
+     "effort": "medium"
+    },
+    {
+     "effort": "high"
+    },
+    {
+     "effort": "xhigh"
+    },
+    {
+     "effort": "max"
+    },
+    {
+     "effort": "ultra"
+    }
+   ]
+  },
+  {
+   "slug": "gpt-6-astra",
+   "priority": 6,
+   "visibility": "list",
+   "supported_reasoning_levels": [
+    {
+     "effort": "low"
+    },
+    {
+     "effort": "medium"
+    },
+    {
+     "effort": "high"
+    },
+    {
+     "effort": "xhigh"
+    },
+    {
+     "effort": "max"
+    },
+    {
+     "effort": "ultra"
+    }
+   ]
+  },
+  {
+   "slug": "gpt-6-sol",
+   "priority": 7,
+   "visibility": "list",
+   "supported_reasoning_levels": [
+    {
+     "effort": "low"
+    },
+    {
+     "effort": "medium"
+    },
+    {
+     "effort": "high"
+    },
+    {
+     "effort": "xhigh"
+    },
+    {
+     "effort": "max"
+    },
+    {
+     "effort": "ultra"
+    }
+   ]
+  },
+  {
+   "slug": "gpt-6-luna",
+   "priority": 8,
+   "visibility": "list",
+   "supported_reasoning_levels": [
+    {
+     "effort": "low"
+    },
+    {
+     "effort": "medium"
+    },
+    {
+     "effort": "high"
+    },
+    {
+     "effort": "xhigh"
+    },
+    {
+     "effort": "max"
+    }
+   ]
+  },
+  {
+   "slug": "gpt-5.6-sol",
+   "priority": 9,
+   "visibility": "list",
+   "supported_reasoning_levels": [
+    {
+     "effort": "low"
+    },
+    {
+     "effort": "medium"
+    },
+    {
+     "effort": "high"
+    },
+    {
+     "effort": "xhigh"
+    },
+    {
+     "effort": "max"
+    },
+    {
+     "effort": "ultra"
+    }
+   ]
+  },
+  {
+   "slug": "gpt-5.6-terra",
+   "priority": 10,
+   "visibility": "list",
+   "supported_reasoning_levels": [
+    {
+     "effort": "low"
+    },
+    {
+     "effort": "medium"
+    },
+    {
+     "effort": "high"
+    },
+    {
+     "effort": "xhigh"
+    },
+    {
+     "effort": "max"
+    },
+    {
+     "effort": "ultra"
+    }
+   ]
+  },
+  {
+   "slug": "gpt-5.6-luna",
+   "priority": 11,
+   "visibility": "list",
+   "supported_reasoning_levels": [
+    {
+     "effort": "low"
+    },
+    {
+     "effort": "medium"
+    },
+    {
+     "effort": "high"
+    },
+    {
+     "effort": "xhigh"
+    },
+    {
+     "effort": "max"
+    }
+   ]
+  },
+  {
+   "slug": "codex-auto-review",
+   "priority": 12,
+   "visibility": "hide",
+   "supported_reasoning_levels": [
+    {
+     "effort": "low"
+    },
+    {
+     "effort": "medium"
+    },
+    {
+     "effort": "high"
+    },
+    {
+     "effort": "xhigh"
+    },
+    {
+     "effort": "max"
+    }
+   ]
+  }
+ ]
+}

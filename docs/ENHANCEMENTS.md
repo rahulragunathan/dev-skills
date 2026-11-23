@@ -10,6 +10,9 @@ moves to "Decisions taken and not taken" in [AGENTS.md](../AGENTS.md). IDs are n
 
 ## Priority
 
+`roadmap.py check` reads these levels, in row order, from the template bundled with
+`project-docs`. In a project's own copy this table is for reading: editing it changes nothing.
+
 Priority is about value, not urgency. Effort is a rough estimate — a session, or days.
 
 | Level | Means |
@@ -59,27 +62,6 @@ Repeating a long answer enlarges reports and packets without adding evidence.
 ### Notes for the work
 
 Audit all consumers and provide a migration for existing reports before changing the JSON layout. Keep tonight's batch interface intact. The separate --production coverage gap is now covered by a CLI regression. Source: QC Tier 5, grading output size.
-
----
-
-<a id="enh-17"></a>
-
-## ENH-17 — Give roadmap rating scales one source
-
-**Priority:** Medium · **Effort:** ~1 day
-**Where:** [roadmap.py](../skills/phase-workflow/roadmap.py) — `def index_rows(` · **Regression net:** `skills/phase-workflow/tests/roadmap.bats`
-
-### What it is
-
-Make the issue severity, likelihood and enhancement priority scales shared between the templates and the roadmap validator.
-
-### Why it matters
-
-Editing a template can leave a valid documented rating rejected by hardcoded Python ranks.
-
-### Notes for the work
-
-Choose structured shared data or a validated template reader. Test ordering and unknown ratings, preserving existing entry IDs, links and CLI refusals. Source: QC Tier 5, roadmap rating duplication.
 
 ---
 
@@ -243,42 +225,6 @@ keep the retain rule: nothing is deleted that was not proven safe.
 
 ---
 
-<a id="enh-31"></a>
-
-## ENH-31 — report an entry that omits its `**Where:**` field entirely
-
-**Priority:** Low · **Effort:** ~1 hour
-**Where:** [roadmap.py](../skills/phase-workflow/roadmap.py) — `def verify_references(` · **Regression net:** `skills/phase-workflow/tests/roadmap.bats`
-
-### What it is
-
-`verify_references` reports a `**Where:**` field that looks like one and does not parse — a list
-item, a `**Where**:` typo. An entry with no Where-ish line at all is skipped in silence, so a
-`KI-nn` or `ENH-nn` whose field was deleted is never verified and the gate still says
-`references verified`.
-
-### Why it matters
-
-Every live KNOWN_ISSUES and ENHANCEMENTS entry carries the field, so nothing is unverified today.
-But the templates mandate it, the check now enforces its contents, and the one way to escape that
-enforcement entirely is to remove the field — which is exactly the shape of change nobody reviews
-closely.
-
-### Notes for the work
-
-**The obvious fix breaks the tests, and that is the whole difficulty.** Requiring the field for
-`KI-`/`ENH-` entries reds `roadmap.bats`'s baseline and several controls, because the scratch
-fixture in `setup()` builds KI-01 to KI-03 and ENH-01 with no Where fields. `gpt-6-astra` refused
-this exact change during the reference-integrity phase for that reason and was right to.
-
-So the work is fixture-first: give the scratch entries a Where field and a seeded source tree in
-`setup()`, confirm the twenty-odd unrelated tests still pass, and only then enforce the rule.
-`UNK-nn` entries must stay exempt — open questions legitimately have no Where field.
-
-**Source:** gemini-3.1-pro-high — phase review, mini phase reference integrity, 2026-09-22.
-
----
-
 <a id="enh-29"></a>
 
 ## ENH-29 — evaluate every gone branch before reporting
@@ -305,3 +251,145 @@ exit non-zero at the end if any were retained. A behaviour introduced by the KI-
 present before it.
 
 **Source:** gemini-3.8-flash-high — phase review, phase 1 gate integrity, 2026-09-21.
+
+---
+
+<a id="enh-32"></a>
+
+## ENH-32 — drop explanations of standard tool behaviour from the skills
+
+**Priority:** Low · **Effort:** ~2 hours
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `Three dots, not two`, [external-review/SKILL.md](../skills/external-review/SKILL.md) — `Run the discovery block in the same shell as the loops` · **Regression net:** none (prose)
+
+### What it is
+
+Several passages explain how Git works rather than stating this project's policy: why a
+three-dot diff differs from a two-dot one, what `git mv` tracks, and how `git stash` treats
+untracked files. `external-review` repeats the diff explanation in its capture section, explains
+shell-variable lifetime beside the ladder discovery, and explains why a diff omits untracked
+files. `phase-workflow` explains why a commit cannot contain its own hash, and `AGENTS.md` how
+the reflog recovers committed work. Keep the policy and the commands; drop the tutorial.
+
+### Why it matters
+
+`AGENTS.md` already says skills do not explain standard tools. The passages cost reading time on
+every invocation and drift from the tools they describe.
+
+### Notes for the work
+
+Belongs with the fresh look at this plugin that follows the deep cut of the standards. Keep the
+nuances people get wrong, such as which diff a review must use.
+
+**Source:** gpt-6.2-sol:max, gpt-6.2-astra:max — plan review, project-docs phase, 2026-11-20; more sites from gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, 2026-11-22.
+
+---
+
+<a id="enh-33"></a>
+
+## ENH-33 — check more command spellings in the name check
+
+**Priority:** Low · **Effort:** ~2 hours
+**Where:** [name_check.py](../skills/project-docs/name_check.py) — `def check_command(` · **Regression net:** `skills/project-docs/tests/name-check.bats`
+
+### What it is
+
+The name check reads a command only when it is path-shaped. It does not check
+`python3 roadmap.py` (an interpreter and a bare script name), a bare script in its own code span
+beside a flag, a `"$CLAUDE_PLUGIN_ROOT/..."` path, or a missing program followed by a
+subcommand rather than a flag. A reference-style link whose definition was deleted is not
+reported either.
+
+### Why it matters
+
+These are the spellings the skills themselves use most, so a renamed helper can pass.
+
+### Notes for the work
+
+Resolve bare script names against tracked basenames, strip the plugin-root prefix, and resolve
+reference uses against definitions. Keep the false-positive test on real skill prose green.
+
+**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
+
+---
+
+<a id="enh-34"></a>
+
+## ENH-34 — tighten the roadmap close tests and template examples
+
+**Priority:** Low · **Effort:** ~2 hours
+**Where:** [roadmap.bats](../skills/project-docs/tests/roadmap.bats) — `close: works on enhancements too` · **Regression net:** `skills/project-docs/tests/roadmap.bats`
+
+### What it is
+
+Several close tests pass when `close` does nothing: their inverted `grep` assertions are not
+the last command, and they check survivors that were there before. The rollback tests accept a
+broad exception or a printed `exit 1`, so an earlier refusal can stand in for the restore they
+claim. The templates show a link without a fragment, lowercase likelihoods and backticked
+rating placeholders, which fail `check` when filled in literally.
+
+### Why it matters
+
+A test that cannot fail is false evidence for the behaviour CHANGELOG cites it for.
+
+### Notes for the work
+
+Assert each absence by status, prove the entry and pointer left before inducing drift, record
+that the injected fault fired, compare whole trees, and fill one entry from each template in a
+test.
+
+**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
+
+---
+
+<a id="enh-36"></a>
+
+## ENH-36 — strengthen the review-loop and ladder tests
+
+**Priority:** Low · **Effort:** ~2 hours
+**Where:** [preflight.bats](../skills/external-review/tests/preflight.bats) — `the documented Gemini loop reads chunk 2's prompt for chunk 2` · **Regression net:** `skills/external-review/tests/`, `skills/project-docs/tests/roadmap.bats`, `skills/phase-workflow/tests/phase-git.bats`
+
+### What it is
+
+Several tests added in this phase's review would stay green with their fix undone: the
+chunk-2 prompt test rewrites every `_c1`; fault-injection tests never assert their fault fired;
+some ladder and record tests use fixtures where both answers agree. Later passes added more:
+the discovery block's `EFFORT_ARGS` call sites are untested; the Argon test would let Argon
+keep a fourth slot; and the origin tests accept either refusal message.
+
+### Why it matters
+
+A test that cannot fail is false evidence for the behaviour CHANGELOG cites it for.
+
+### Notes for the work
+
+Substitute only the placeholder under test, assert each injected event, and give each test
+a fixture where the wrong implementation gives a different answer.
+
+**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review passes 4 and 5; gpt-6.2-astra:high, gemini-4-neon-high — passes 6 and 7, project-docs phase, 2026-11-22.
+
+---
+
+<a id="enh-37"></a>
+
+## ENH-37 — tidy the review record rules and three small doc slips
+
+**Priority:** Low · **Effort:** ~1 hour
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `Only a row's Disposition may change` · **Regression net:** none (prose), `tests/test_plugin_name.py`
+
+### What it is
+
+The record rule allows only a Disposition change, but a row the user reopens and fixes also
+needs its Commit and evidence. KI-59's example now predicts the wrong result for KI and ENH
+entries. (The
+release test that is skipped when its file runs directly is now KI-73.) The red-evidence matching step and AGENTS.md still ask for a `Red:`
+line where a mutation may stand in.
+
+### Why it matters
+
+Each is small, and each makes a rule read differently in two places.
+
+### Notes for the work
+
+Allow Commit and evidence to be added with the user's disposition; fix the example; say "a `Red:` line or a mutation result" at each site.
+
+**Source:** gpt-6.2-astra:high — phase review pass 4, project-docs phase, 2026-11-22.

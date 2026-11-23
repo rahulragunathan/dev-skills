@@ -79,6 +79,7 @@ WITHHELD="$OUT/withheld.txt"
 EXCL=(':(top,exclude,icase)*.env' ':(top,exclude,icase)*.env.*' ':(top,exclude,icase)*.pem'
       ':(top,exclude,icase)*.key' ':(top,exclude,icase)*.p12' ':(top,exclude,icase)*.pfx'
       ':(top,exclude,icase)*.crt' ':(top,exclude,icase)*id_rsa*' ':(top,exclude,icase)*id_ed25519*'
+      ':(top,exclude,icase)*id_ecdsa*' ':(top,exclude,icase)*.pypirc'
       ':(top,exclude,icase)*credentials*' ':(top,exclude,icase)*.netrc' ':(top,exclude,icase)*.npmrc'
       ':(top,exclude,icase)*.sqlite' ':(top,exclude,icase)*.sqlite3')
 if [ "${#EXTRA_EXCL[@]}" -gt 0 ]; then
@@ -97,8 +98,8 @@ credential_shaped() {
   path="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" || artifact_failure
   while [ -n "$path" ]; do
     case "$path" in
-      *.env|*.env.*|*.pem|*.key|*.p12|*.pfx|*.crt|*id_rsa*|*id_ed25519*) return 0 ;;
-      *credentials*|*.netrc|*.npmrc|*.sqlite|*.sqlite3) return 0 ;;
+      *.env|*.env.*|*.pem|*.key|*.p12|*.pfx|*.crt|*id_rsa*|*id_ed25519*|*id_ecdsa*) return 0 ;;
+      *credentials*|*.netrc|*.npmrc|*.pypirc|*.sqlite|*.sqlite3) return 0 ;;
     esac
     case "$path" in */*) path="${path%/*}" ;; *) break ;; esac
   done

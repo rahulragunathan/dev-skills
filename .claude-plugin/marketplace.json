@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "dev-skills",
-      "description": "Plan review, phase gates, structural design review and outside model review.",
+      "description": "Plan review, phase gates, project docs, structural design review and outside model review.",
       "source": "./",
       "category": "development"
     }

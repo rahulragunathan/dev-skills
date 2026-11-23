@@ -25,7 +25,8 @@ people get wrong are in scope.
 
 ## Roadmap hygiene
 
-The taxonomy is in `phase-workflow`. One thing specific to this repo:
+The roadmap rules and templates are in `project-docs`; `phase-workflow` keeps the KI/ENH/UNK
+classification it files by. One thing specific to this repo:
 
 **Check the index against the detail after every edit.** ROADMAP rows drifting from the
 `KNOWN_ISSUES` / `ENHANCEMENTS` / `OPEN_QUESTIONS` entries they point at is the most common
@@ -41,7 +42,8 @@ setup skill and assume nothing it installs.
 
 **Historical red-state evidence is not required, and not recoverable here.** This repository's
 history begins with implementation and tests together at the v1.8.0 import, so no test's red
-state can be recovered from a commit. The answer was to do nothing: the mutation check in
+state can be recovered from a commit. Since 2.1.0 each new test's red is recorded as a `Red:`
+line in its commit message. For older tests the answer was to do nothing: the mutation check in
 `phase-workflow` §3 step 3 breaks the named behaviour now and confirms the test fails on the
 named assertion, which works whatever the history contains. Closed as UNK-02, 2026-09-21. The
 2026-09-20 phase measured the limit of that substitute — a mutation can show an assertion is
@@ -55,10 +57,11 @@ at that same tree, and `git reflog` recovers only what was committed. Per-task c
 draft PR give the same visibility with none of the exposure, and the full diff stays available
 as `git diff "origin/$DEFAULT_BRANCH"...HEAD`.
 
-**External review has no pass ceiling.** A fixed number was tried and dropped: how many passes
-a phase needs depends on what the findings are and which way the count is moving, neither of
-which is knowable at the start. Each pass ends with the trend and a recommendation, and the
-user decides.
+**External review stops on a rule; three passes is when it checks in.** A fixed number of passes
+was tried and dropped: how many a phase needs depends on what the findings are and which way the count is
+moving, neither of which is knowable at the start. Since 2.1.0 the agent runs passes without
+checking in until the stop rule fires or three have run; a fourth is the user's call, shown with
+the trend.
 
 **A reviewer always emits a findings list, empty if it found nothing.** Absent output means the
 review did not run, and nothing else does. Without this, a quota failure and a clean pass look

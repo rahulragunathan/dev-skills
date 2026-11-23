@@ -18,7 +18,8 @@ The tables below are **pointers, not summaries** — ID, title, rating, link. No
 described twice.
 
 An item's whole life is a move: it enters here and its supporting file together, and on
-completion is deleted from both, with the record written into CHANGELOG `[Unreleased]`. An
+completion is deleted from both, with the record written into the CHANGELOG release being
+prepared, or `[Unreleased]` where none is. An
 item dropped rather than built moves to "Decisions taken and not taken". IDs are never
 reused. Nothing here looks backward — completed phases are CHANGELOG releases.
 
@@ -26,14 +27,8 @@ reused. Nothing here looks backward — completed phases are CHANGELOG releases.
 
 ## Status
 
-<!-- Two or three sentences: where the project stands, and what the active queue is. -->
-
-### Phases
-
-<!-- Only what is in flight or planned — often nothing. Completed phases are CHANGELOG
-releases, not rows here. -->
-
-<Phase N — name> is in progress. / No phase is in flight, and none is planned.
+<!-- Two or three sentences: where the project stands, and what the active queue is. The
+phase in flight is in docs/PHASE_RECORD.md and is not named here. -->
 
 ## Known Issues
 

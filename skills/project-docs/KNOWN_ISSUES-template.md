@@ -9,6 +9,9 @@ the record lives in [CHANGELOG.md](../CHANGELOG.md). IDs are never reused.
 
 ## Severity
 
+`roadmap.py check` reads these levels, in row order, from the template bundled with
+`project-docs`. In a project's own copy this table is for reading: editing it changes nothing.
+
 | Level | Means |
 | ------- | ------- |
 | **Critical** | Loses or corrupts data, or sends wrong information to real recipients. |
@@ -19,6 +22,9 @@ the record lives in [CHANGELOG.md](../CHANGELOG.md). IDs are never reused.
 **Severity is the consequence if it fires, and nothing about how often.**
 
 ## Likelihood
+
+`roadmap.py check` reads these levels, in row order, from the template bundled with
+`project-docs`. In a project's own copy this table is for reading: editing it changes nothing.
 
 | Level | Means |
 | ------- | ------- |

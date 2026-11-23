@@ -33,6 +33,7 @@ Preamble that must survive.
 
 **Severity:** High
 **Likelihood:** Rare
+**Where:** [docs](.)
 
 SURVIVOR-ONE
 
@@ -44,6 +45,7 @@ SURVIVOR-ONE
 
 **Severity:** Medium
 **Likelihood:** Likely
+**Where:** [docs](.)
 
 DOOMED-BODY
 
@@ -55,6 +57,7 @@ DOOMED-BODY
 
 **Severity:** Low
 **Likelihood:** Almost always
+**Where:** [docs](.)
 
 SURVIVOR-THREE
 EOF
@@ -69,6 +72,7 @@ EOF
 ## ENH-01 — an enhancement
 
 **Priority:** Low
+**Where:** [docs](.)
 
 SURVIVOR-ENH
 EOF
@@ -365,8 +369,8 @@ PY
   python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/commands.sh" <<'PY'
 import pathlib, re, sys
 text = pathlib.Path(sys.argv[1]).read_text()
-blocks = [b for b in re.findall(r'```bash\n(.*?)```', text, re.S) if 'roadmap.py' in b]
-assert len(blocks) == 1, 'SOP must invoke the tested roadmap close and check commands'
+blocks = [b for b in re.findall(r'```bash\n(.*?)```', text, re.S) if 'roadmap.py" close' in b]
+assert len(blocks) == 1, 'SOP must invoke the tested roadmap close and check commands in one block'
 pathlib.Path(sys.argv[2]).write_text(blocks[0].replace('<entry-id>', 'KI-02'))
 PY
   cd "$TEST_TMP"
@@ -419,6 +423,8 @@ put_ref() {
     return 1
   fi
   printf '%s\n' "$1" > "$TEST_TMP/ref.txt"
+  # The entry's own Where field gives way to the one under test.
+  python3 -c 'import pathlib,sys; p=pathlib.Path(sys.argv[1]); p.write_text(p.read_text().replace("**Where:** [docs](.)\n", "", 1))' "$DOCS/KNOWN_ISSUES.md"
   awk -v f="$TEST_TMP/ref.txt" '
     $0 == "SURVIVOR-ONE" { while ((getline l < f) > 0) print l; next }
     { print }
@@ -793,4 +799,382 @@ before:  [x.sh:2](../skills/x.sh#L2)
   run python3 "$RM" check --docs "$DOCS"
   [ "$status" -eq 1 ]
   [[ "$output" == *"KI-01: a link in this Where field is not in the accepted reference form"* ]] || false
+}
+
+# The rating scales come from the templates bundled beside roadmap.py. These
+# tests run a copy of the skill so they can edit its templates.
+skill_copy() {
+  export SKILL="$TEST_TMP/skill"
+  mkdir -p "$SKILL"
+  cp "$RM" "$(dirname "$RM")"/*-template.md "$SKILL/"
+  export RMC="$SKILL/roadmap.py"
+}
+
+@test "scales: a level added to a template is accepted in rank order" {
+  # Fails while the ranks are hard-coded: an unknown level breaks the order check.
+  skill_copy
+  python3 - "$SKILL/KNOWN_ISSUES-template.md" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+row = next(l for l in t.splitlines(True) if l.startswith('| **Medium** |'))
+p.write_text(t.replace(row, '| **Severe** | Between high and medium. |\n' + row, 1))
+PY
+  grep -q '^| \*\*Severe\*\*' "$SKILL/KNOWN_ISSUES-template.md" || false
+  sed -i.bak 's/^\*\*Severity:\*\* Medium/**Severity:** Severe/' "$DOCS/KNOWN_ISSUES.md"
+  sed -i.bak 's/doomed issue | Likely | Medium/doomed issue | Likely | Severe/' "$DOCS/ROADMAP.md"
+  run python3 "$RMC" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
+
+@test "scales: a reordered template changes the accepted order" {
+  # Fails while the ranks are hard-coded: Low before Medium is refused.
+  skill_copy
+  python3 - "$SKILL/KNOWN_ISSUES-template.md" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1]); s = p.read_text().splitlines(True)
+m = next(i for i, l in enumerate(s) if l.startswith('| **Medium** |'))
+l = next(i for i, l in enumerate(s) if l.startswith('| **Low** |'))
+s[m], s[l] = s[l], s[m]; p.write_text(''.join(s))
+PY
+  sed -i.bak 's/^\*\*Severity:\*\* Medium/**Severity:** LOWTMP/; s/^\*\*Severity:\*\* Low/**Severity:** Medium/; s/LOWTMP/Low/' "$DOCS/KNOWN_ISSUES.md"
+  sed -i.bak 's/doomed issue | Likely | Medium/doomed issue | Likely | Low/; s/third issue | Almost always | Low/third issue | Almost always | Medium/' "$DOCS/ROADMAP.md"
+  run python3 "$RMC" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
+
+@test "scales: a missing, empty or repeated scale is refused by name" {
+  # Fails if a broken scale table is silently ignored instead of refused.
+  skill_copy
+  cp "$SKILL/KNOWN_ISSUES-template.md" "$TEST_TMP/ki.orig"
+  for broken in missing tableless empty repeated; do
+    cp "$TEST_TMP/ki.orig" "$SKILL/KNOWN_ISSUES-template.md"
+    python3 - "$SKILL/KNOWN_ISSUES-template.md" "$broken" <<'PY'
+import pathlib, re, sys
+p = pathlib.Path(sys.argv[1]); t = p.read_text(); how = sys.argv[2]
+rows = re.compile(r'^\| \*\*(Critical|High|Medium|Low)\*\* \|.*\n', re.M)
+if how == 'missing':
+    t = t.replace('## Severity', '## Seriousness', 1)
+elif how == 'tableless':
+    # The heading stays; its table goes, so the next section's table is nearest.
+    t = re.sub(r'(## Severity\n)(?:.*\n)*?(?=## )', r'\1\nNo table.\n\n', t, count=1)
+elif how == 'empty':
+    t = rows.sub('', t)
+else:
+    first = rows.search(t)[0]
+    t = t.replace(first, first + first, 1)
+p.write_text(t)
+PY
+    run python3 "$RMC" check --docs "$DOCS"
+    [ "$status" -eq 1 ] || false
+    [[ "$output" == *"KNOWN_ISSUES-template.md"* ]] || false
+    [[ "$output" == *"Severity"* ]] || false
+  done
+}
+
+@test "scales: an unknown Kind is refused" {
+  # Fails while Kind is only compared between the entry and its row, never against the scale.
+  sed -i.bak 's/^\*\*Kind:\*\* Verification/**Kind:** Maybe/' "$DOCS/OPEN_QUESTIONS.md"
+  sed -i.bak 's/a question | Verification/a question | Maybe/' "$DOCS/ROADMAP.md"
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"unknown Kind: UNK-01"* ]]
+}
+
+@test "init: a fresh set-up passes the check" {
+  # Fails if init leaves the templates' example rows in place (KI-40).
+  NEW="$TEST_TMP/fresh/docs"
+  run python3 "$RM" init --docs "$NEW"
+  [ "$status" -eq 0 ] || false
+  run python3 "$RM" check --docs "$NEW"
+  [ "$status" -eq 0 ]
+}
+
+@test "init never touches an existing file, including a dangling symlink" {
+  # Fails if init overwrites a file the project already has, or writes through a symlink.
+  NEW="$TEST_TMP/partial/docs"; mkdir -p "$NEW"
+  printf 'KEEP\n' > "$NEW/ENHANCEMENTS.md"
+  ln -s "$TEST_TMP/nowhere.md" "$NEW/OPEN_QUESTIONS.md"
+  run python3 "$RM" init --docs "$NEW"
+  [ "$status" -eq 0 ] || false
+  [ "$(cat "$NEW/ENHANCEMENTS.md")" = "KEEP" ] || false
+  [ -L "$NEW/OPEN_QUESTIONS.md" ] || false
+  [ ! -e "$TEST_TMP/nowhere.md" ] || false
+  [ -f "$NEW/ROADMAP.md" ] || false
+  [ -f "$NEW/KNOWN_ISSUES.md" ]
+}
+
+@test "init: a failure after the first file is created removes only what init created" {
+  # Fails if a failed init leaves a partial set or a new docs/ behind, or removes a file it did not create.
+  NEW="$TEST_TMP/broken/docs"; mkdir -p "$NEW"
+  printf 'KEEP\n' > "$NEW/ENHANCEMENTS.md"
+  FRESH="$TEST_TMP/fresh-broken/docs"
+  run python3 - "$RM" "$NEW" "$FRESH" <<'PY'
+import builtins, importlib.util, pathlib, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+import os
+REAL = os.open
+for target in sys.argv[2:]:
+    created = []
+    def flaky(path, flags, *a, **kw):
+        if flags & os.O_EXCL:
+            created.append(path)
+            if len(created) == 2:
+                raise OSError('injected failure on the second file')
+        return REAL(path, flags, *a, **kw)
+    m.os.open = flaky
+    try:
+        m.cmd_init(pathlib.Path(target))
+    except SystemExit as e:
+        print('exit', e.code)
+PY
+  [[ "$output" == *"exit 1"*"exit 1"* ]] || false
+  [ "$(cat "$NEW/ENHANCEMENTS.md")" = "KEEP" ] || false
+  [ "$(ls -A "$NEW")" = "ENHANCEMENTS.md" ] || false
+  [ ! -e "$FRESH" ] || false
+  # The parent init made for docs/ goes too.
+  [ ! -e "$TEST_TMP/fresh-broken" ]
+}
+
+@test "init: a file replaced by someone else during set-up survives the rollback" {
+  # Fails if rollback unlinks by name, deleting a file another writer put in place.
+  NEW="$TEST_TMP/race/docs"
+  run python3 - "$RM" "$NEW" <<'PY'
+import builtins, importlib.util, os, pathlib, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+import os
+REAL = os.open
+docs = pathlib.Path(sys.argv[2]); opened = []
+def flaky(path, flags, *a, **kw):
+    if flags & os.O_EXCL:
+        opened.append(pathlib.Path(path))
+        if len(opened) == 2:
+            # Another writer replaces the first file, then this init fails.
+            os.unlink(opened[0]); opened[0].write_text('THEIRS\n')
+            raise OSError('injected failure on the second file')
+    return REAL(path, flags, *a, **kw)
+m.os.open = flaky
+try:
+    m.cmd_init(docs)
+except SystemExit as e:
+    print('exit', e.code)
+print('first:', opened[0].read_text().strip() if opened[0].exists() else 'GONE')
+PY
+  [[ "$output" == *"exit 1"* ]] || false
+  [[ "$output" == *"first: THEIRS"* ]]
+}
+
+@test "init: a file another init created meanwhile is left in place, not a failure" {
+  # Fails if a concurrent init's file makes this one roll back, leaving the set incomplete.
+  NEW="$TEST_TMP/twin/docs"
+  run python3 - "$RM" "$NEW" <<'PY'
+import builtins, importlib.util, pathlib, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+import os
+REAL = os.open
+docs = pathlib.Path(sys.argv[2]); seen = []
+def racing(path, flags, *a, **kw):
+    if flags & os.O_EXCL:
+        seen.append(path)
+        if len(seen) == 2:
+            builtins.open(path, 'w').write('OTHER INIT\n')
+    return REAL(path, flags, *a, **kw)
+m.os.open = racing
+try:
+    print('rc', m.cmd_init(docs))
+except SystemExit as e:
+    print('exit', e.code)
+print(sorted(p.name for p in docs.iterdir()))
+PY
+  [[ "$output" == *"rc 0"* ]] || false
+  [[ "$output" == *"['ENHANCEMENTS.md', 'KNOWN_ISSUES.md', 'OPEN_QUESTIONS.md', 'ROADMAP.md']"* ]]
+}
+
+@test "init: a termination signal mid-set-up rolls back" {
+  # Fails if SIGTERM kills init with a partial set on disk.
+  NEW="$TEST_TMP/term/docs"
+  run python3 - "$RM" "$NEW" <<'PY'
+import builtins, importlib.util, os, pathlib, signal, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+import os
+REAL = os.open
+count = []
+def killed(path, flags, *a, **kw):
+    if flags & os.O_EXCL:
+        count.append(path)
+        if len(count) == 3:
+            os.kill(os.getpid(), signal.SIGTERM)
+    return REAL(path, flags, *a, **kw)
+m.os.open = killed
+try:
+    m.cmd_init(pathlib.Path(sys.argv[2]))
+except SystemExit as e:
+    print('exit', e.code)
+PY
+  [[ "$output" == *"exit 1"* ]] || false
+  [ ! -e "$TEST_TMP/term" ]
+}
+
+@test "init: a docs path that is a file is refused cleanly" {
+  # Fails if init crashes with a traceback when --docs names a file.
+  printf 'x\n' > "$TEST_TMP/afile"
+  run python3 "$RM" init --docs "$TEST_TMP/afile"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" != *Traceback* ]] || false
+  [ "$(cat "$TEST_TMP/afile")" = "x" ]
+}
+
+@test "init and check refuse a stray entry id" {
+  # Fails if `init KI-01` is read as `init`, setting up files the user did not mean to create.
+  run python3 "$RM" init KI-01 --docs "$TEST_TMP/stray/docs"
+  [ "$status" -ne 0 ] || false
+  [ ! -e "$TEST_TMP/stray" ] || false
+  run python3 "$RM" check KI-01 --docs "$DOCS"
+  [ "$status" -ne 0 ]
+}
+
+@test "init: keeps each template's header and scales" {
+  # Fails if stripping the example entries also strips the scale tables or the index tables.
+  NEW="$TEST_TMP/hdr/docs"
+  run python3 "$RM" init --docs "$NEW"
+  [ "$status" -eq 0 ] || false
+  grep -q '^## Severity' "$NEW/KNOWN_ISSUES.md" || false
+  grep -q '^## Likelihood' "$NEW/KNOWN_ISSUES.md" || false
+  grep -q '^| ID | Issue |' "$NEW/ROADMAP.md"
+}
+
+@test "--docs may come before the subcommand" {
+  # Fails if the option is accepted only after the subcommand, breaking the old spelling.
+  run python3 "$RM" --docs "$DOCS" check
+  [ "$status" -eq 0 ]
+}
+
+@test "init: a folder another init made meanwhile is used, not a failure" {
+  # Fails if mkdir losing a race to a concurrent init rolls this one back.
+  NEW="$TEST_TMP/mk/docs"
+  run python3 - "$RM" "$NEW" <<'PY'
+import importlib.util, pathlib, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+real = pathlib.Path.mkdir
+def racing(self, *a, **kw):
+    real(self, *a, **kw)        # someone else made it first
+    return real(self, *a, **kw)
+pathlib.Path.mkdir = racing
+try:
+    print('rc', m.cmd_init(pathlib.Path(sys.argv[2])))
+except SystemExit as e:
+    print('exit', e.code)
+PY
+  [[ "$output" == *"rc 0"* ]] || false
+  [ -f "$NEW/ROADMAP.md" ]
+}
+
+@test "init: a signal between creating a file and recording it still rolls it back" {
+  # Fails if a file made just before SIGTERM is left behind because it was never recorded.
+  NEW="$TEST_TMP/gap/docs"
+  run python3 - "$RM" "$NEW" <<'PY'
+import importlib.util, os, pathlib, signal, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+real, calls = os.fstat, []
+def fstat(fd):
+    calls.append(fd)
+    if len(calls) == 2:
+        os.kill(os.getpid(), signal.SIGTERM)   # the file exists; it is not yet recorded
+    return real(fd)
+m.os.fstat = fstat
+try:
+    m.cmd_init(pathlib.Path(sys.argv[2]))
+except SystemExit as e:
+    print('exit', e.code)
+PY
+  [[ "$output" == *"exit 1"* ]] || false
+  [ ! -e "$TEST_TMP/gap" ]
+}
+
+@test "init: the caller's blocked signals stay blocked" {
+  # Fails if init unblocks a signal its caller had deliberately blocked.
+  NEW="$TEST_TMP/mask/docs"
+  run python3 - "$RM" "$NEW" <<'PY'
+import importlib.util, pathlib, signal, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
+m.cmd_init(pathlib.Path(sys.argv[2]))
+print('still blocked', signal.SIGTERM in signal.pthread_sigmask(signal.SIG_BLOCK, set()))
+PY
+  [[ "$output" == *"still blocked True"* ]]
+}
+
+@test "init: a file whose identity cannot be read is left and reported, not removed" {
+  # Fails if rollback unlinks by name a file whose ownership it never confirmed: another
+  # writer may have replaced it, as here, and that file must survive (F-126).
+  NEW="$TEST_TMP/nofstat/docs"
+  run python3 - "$RM" "$NEW" <<'PY'
+import importlib.util, os, pathlib, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+docs = pathlib.Path(sys.argv[2])
+def fstat(fd):
+    # Another writer replaces the new file, then the identity read fails.
+    first = docs / "ROADMAP.md"
+    os.unlink(first); first.write_text("THEIRS\n")
+    raise OSError('injected fstat failure')
+m.os.fstat = fstat
+try:
+    m.cmd_init(docs)
+except SystemExit as e:
+    print('exit', e.code)
+print('first:', (docs / "ROADMAP.md").read_text().strip() if (docs / "ROADMAP.md").exists() else 'GONE')
+PY
+  [[ "$output" == *"exit 1"* ]] || false
+  [[ "$output" == *"ROADMAP.md (could not confirm"* ]] || false
+  [[ "$output" == *"first: THEIRS"* ]]
+}
+
+@test "init: a removal that fails does not stop the rest of the rollback" {
+  # Fails if one failed unlink leaves later files behind, or the message hides what was left.
+  NEW="$TEST_TMP/partial/docs"
+  run python3 - "$RM" "$NEW" <<'PY'
+import builtins, importlib.util, pathlib, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+real_unlink, seen = pathlib.Path.unlink, []
+def unlink(self, *a, **kw):
+    if self.name == "ROADMAP.md":
+        raise OSError("injected")
+    return real_unlink(self, *a, **kw)
+pathlib.Path.unlink = unlink
+real_open, n = m.os.open, []
+def failing_open(path, *a, **kw):
+    n.append(path)
+    if len(n) == 3:
+        raise OSError("injected failure on the third file")
+    return real_open(path, *a, **kw)
+m.os.open = failing_open
+try:
+    m.cmd_init(pathlib.Path(sys.argv[2]))
+except SystemExit as e:
+    print('exit', e.code)
+print(sorted(p.name for p in pathlib.Path(sys.argv[2]).iterdir()))
+PY
+  [[ "$output" == *"exit 1"* ]] || false
+  [[ "$output" == *"could not remove"*"ROADMAP.md"* ]] || false
+  [[ "$output" == *"['ROADMAP.md']"* ]]
+}
+
+@test "check: a known issue or enhancement with no Where field is a finding (KI-56)" {
+  # Fails if an entry whose Where line was deleted is skipped and "references verified" printed.
+  python3 - "$DOCS/KNOWN_ISSUES.md" <<'PY'
+import pathlib, re, sys
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+p.write_text(re.sub(r"^\*\*Where:\*\*.*\n", "", t, count=1, flags=re.M))
+PY
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"no Where field"* ]]
 }

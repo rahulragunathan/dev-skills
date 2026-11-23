@@ -24,14 +24,15 @@ setup() {
 # Build a runnable copy of the documented Codex invocation loop, with the
 # ladder stubbed to emit $1. Both invocation tests need this; the copies
 # differed only in the stub's output.
-write_invoke_script() {   # $1 = ladder output, $2 = destination
-  python3 - "$CODEX_ROOT" "$2" "$TEST_TMP" "$1" <<'INVOKE_PY'
+write_invoke_script() {   # $1 = ladder output, $2 = destination, $3 = optional codex() body
+  python3 - "$CODEX_ROOT" "$2" "$TEST_TMP" "$1" "${3:-}" <<'INVOKE_PY'
 import pathlib,re,sys
 text=pathlib.Path(sys.argv[1]).with_name('SKILL.md').read_text()
 block=next(b for b in re.findall(r'```bash\n(.*?)```',text,re.S)
-           if 'for m in $(codex_ladder)' in b and 'codex exec' in b)
-prelude=('codex_ladder() { echo ' + sys.argv[4] + '; }\n'
-         'codex() { printf "%s\\n" "$@" > "$ARGS"; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2"; }\n')
+           if 'for m in ${CODEX_RUNGS' in b and 'codex exec' in b)
+body=sys.argv[5] or 'printf "%s\\n" "$@" > "$ARGS"; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2";'
+prelude=('CODEX_RUNGS="' + sys.argv[4] + '"\n'
+         'codex() { ' + body + ' }\n')
 pathlib.Path(sys.argv[2]).write_text(prelude+block.replace('<scratchpad>',sys.argv[3]).replace('<repo-root>','SOURCE-REPO'))
 INVOKE_PY
 }
@@ -203,15 +204,9 @@ PY
 # ---------------------------------------------------------------------------
 # The Codex ladder emits (slug, effort) rungs.
 #
-# codex_ladder() has never run under test: the invocation tests stub it with
-# `codex_ladder() { echo fixture-model; }`, which is why two defects survived.
-#
-#  1. It emits bare slugs, so the real ladder -- Sol-medium, Astra-low,
-#     Astra-max -- cannot be expressed at all, and every rung ran at whatever
-#     effort the caller hardcoded.
-#  2. `gpt-5.6-sol` and `gpt-6-astra` both sit at `priority: 1` in the live
-#     cache, so `sorted(key=priority)` is stable and rung 1 resolves to
-#     whichever appears first in the JSON file, not to rank.
+# These run the documented codex_ladder() function itself, with HOME pointed at
+# a fixture cache, so the wiring from SKILL.md to codex-ladder.py is covered as
+# well as the ranking that tests/codex-ladder.bats pins.
 # ---------------------------------------------------------------------------
 
 ladder_fn() {
@@ -222,25 +217,20 @@ print(next(b for b in blocks if 'codex_ladder()' in b))
 PY
 }
 
-# Fails if a priority tie resolves by position in the cache file, or if a rung
-# omits the effort it should run at.
-@test "a priority tie is broken by version, and each rung carries its effort" {
+# Fails if the documented codex_ladder ranks by the cache's priority, OpenAI's
+# default pick, instead of calling codex-ladder.py, or if a rung omits its effort.
+@test "the documented ladder ranks family over the cache's priority" {
   mkdir -p "$TEST_TMP/home/.codex"
   cat > "$TEST_TMP/home/.codex/models_cache.json" <<'JSON'
 {"models":[
- {"slug":"gpt-5.6-sol","visibility":"list","priority":1,"default_reasoning_level":"low",
-  "supported_reasoning_levels":[{"effort":"low"},{"effort":"medium"},{"effort":"max"}]},
- {"slug":"gpt-6-astra","visibility":"list","priority":1,"default_reasoning_level":"low",
-  "supported_reasoning_levels":[{"effort":"low"},{"effort":"medium"},{"effort":"max"}]}]}
+ {"slug":"gpt-6-sol","visibility":"list","priority":1,"default_reasoning_level":"low",
+  "supported_reasoning_levels":[{"effort":"low"},{"effort":"high"},{"effort":"max"}]},
+ {"slug":"gpt-6-astra","visibility":"list","priority":2,"default_reasoning_level":"low",
+  "supported_reasoning_levels":[{"effort":"low"},{"effort":"high"},{"effort":"max"}]}]}
 JSON
-  # fixture property: the tie is real and file order disagrees with the rule
-  [ "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["models"][0]["slug"])' \
-        "$TEST_TMP/home/.codex/models_cache.json")" = "gpt-5.6-sol" ] || false
-  run bash -c "$(ladder_fn); HOME='$TEST_TMP/home' codex_ladder"
-  [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | tr ' ' '\n' | grep -c .)" -eq 2 ] || false
-  [ "$(printf '%s\n' "$output" | tr ' ' '\n' | sed -n 1p)" = "gpt-6-astra:max" ]
-  [ "$(printf '%s\n' "$output" | tr ' ' '\n' | sed -n 2p)" = "gpt-5.6-sol:max" ]
+  CLAUDE_PLUGIN_ROOT="$(cd "$(dirname "$CAPTURE")/../.." && pwd)" run bash -c "$(ladder_fn); HOME='$TEST_TMP/home' codex_ladder"
+  [ "$status" -eq 0 ] || false
+  [ "$output" = "gpt-6-astra:high gpt-6-sol:high" ]
 }
 
 # Fails if `ultra` is offered as a rung. It delegates tasks automatically, so
@@ -249,12 +239,11 @@ JSON
   mkdir -p "$TEST_TMP/home/.codex"
   cat > "$TEST_TMP/home/.codex/models_cache.json" <<'JSON'
 {"models":[{"slug":"gpt-6-astra","visibility":"list","priority":1,"default_reasoning_level":"low",
- "supported_reasoning_levels":[{"effort":"max"},{"effort":"ultra"}]}]}
+ "supported_reasoning_levels":[{"effort":"low"},{"effort":"ultra"}]}]}
 JSON
-  grep -q ultra "$TEST_TMP/home/.codex/models_cache.json" || false
-  run bash -c "$(ladder_fn); HOME='$TEST_TMP/home' codex_ladder"
-  [ "$status" -eq 0 ]
-  [ "$output" = "gpt-6-astra:max" ]
+  CLAUDE_PLUGIN_ROOT="$(cd "$(dirname "$CAPTURE")/../.." && pwd)" run bash -c "$(ladder_fn); HOME='$TEST_TMP/home' codex_ladder"
+  [ "$status" -eq 0 ] || false
+  [ -z "$output" ]
 }
 
 # Fails if the documented invocation loop passes a slug:effort rung straight to
@@ -275,4 +264,60 @@ assert 'fixture-model:medium' not in args, args
 assert 'model_reasoning_effort=medium' in args, args
 assert 'model_reasoning_effort=high' not in args, args
 PY
+}
+
+# Fails if the loop reads its availability verdict from the whole log. Codex
+# writes the prompt and its transcript to stderr, so a run killed mid-review
+# whose material quotes "not supported" or "entitle" was taken for an
+# unavailable model and the next rung started (pass 1 of 2.1.0's review).
+@test "a failed run whose transcript quotes an availability phrase does not downshift" {
+  write_invoke_script 'first:high second:high' "$TEST_TMP/invoke.sh" \
+    'echo "${8}" >> "$TEST_TMP/models"; echo "user"; echo "quoted: model is not supported, entitlement error" >&2; return 143;'
+  run bash "$TEST_TMP/invoke.sh"
+  [ "$(cat "$TEST_TMP/models")" = "first" ] || false
+  [[ "$output" == *"not availability"* ]]
+}
+
+# Fails if a real availability error, an ERROR: line, stops downshifting.
+@test "an ERROR line naming an unsupported model moves to the next rung" {
+  write_invoke_script 'first:high second:high' "$TEST_TMP/invoke.sh" \
+    'echo "${8}" >> "$TEST_TMP/models"; if [ "${8}" = first ]; then echo "ERROR: The '"'"'first'"'"' model is not supported when using Codex with a ChatGPT account." >&2; return 1; fi; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2";'
+  run bash "$TEST_TMP/invoke.sh"
+  [ "$(tr '\n' ' ' < "$TEST_TMP/models")" = "first second " ]
+}
+
+# Fails if a quoted ERROR: line in the material under review, early in the
+# transcript, still drives a downshift when the run later dies.
+@test "an ERROR line quoted mid-transcript does not downshift" {
+  write_invoke_script 'first:high second:high' "$TEST_TMP/invoke.sh" \
+    'echo "${8}" >> "$TEST_TMP/models"; { echo "user"; echo "ERROR: The x model is not supported"; for i in 1 2 3 4 5 6 7 8; do echo "transcript line $i"; done; } >&2; return 143;'
+  run bash "$TEST_TMP/invoke.sh"
+  [ "$(cat "$TEST_TMP/models")" = "first" ]
+}
+
+# Fails if the loop's bare command aborts under errexit before it can classify
+# an availability failure and move to the next rung.
+@test "the documented Codex loop still downshifts under errexit" {
+  write_invoke_script 'first:high second:high' "$TEST_TMP/invoke.sh" \
+    'echo "${8}" >> "$TEST_TMP/models"; if [ "${8}" = first ]; then echo "ERROR: The first model is not supported when using Codex with a ChatGPT account." >&2; return 1; fi; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2";'
+  run bash -e "$TEST_TMP/invoke.sh"
+  [ "$(tr '\n' ' ' < "$TEST_TMP/models")" = "first second " ]
+}
+
+# Fails if a quoted ERROR: line about another model, at the very end of a
+# failed run's log, moves the loop to the next rung.
+@test "a quoted ERROR line about another model at the end of the log does not downshift" {
+  write_invoke_script 'first:high second:high' "$TEST_TMP/invoke.sh" \
+    'echo "${8}" >> "$TEST_TMP/models"; { echo "transcript"; echo "ERROR: The gpt-x model is not supported"; } >&2; return 1;'
+  run bash "$TEST_TMP/invoke.sh"
+  [ "$(cat "$TEST_TMP/models")" = "first" ]
+}
+
+# Fails if a real refusal of this rung's own model, followed by more log lines,
+# is missed because only the last lines are read.
+@test "a refusal naming this rung's model downshifts even with lines after it" {
+  write_invoke_script 'first:high second:high' "$TEST_TMP/invoke.sh" \
+    'echo "${8}" >> "$TEST_TMP/models"; if [ "${8}" = first ]; then { echo "ERROR: The '"'"'first'"'"' model is not supported when using Codex with a ChatGPT account."; for i in 1 2 3 4 5 6; do echo "shutdown $i"; done; } >&2; return 1; fi; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2";'
+  run bash "$TEST_TMP/invoke.sh"
+  [ "$(tr '\n' ' ' < "$TEST_TMP/models")" = "first second " ]
 }

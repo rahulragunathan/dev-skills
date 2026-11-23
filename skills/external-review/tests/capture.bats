@@ -51,6 +51,19 @@ teardown() { teardown_capture_env; }
   refute_canary
 }
 
+@test "repo: an ECDSA key and a .pypirc never reach the bundle" {
+  # Red while the exclusion list names id_rsa and id_ed25519 but not id_ecdsa,
+  # and .netrc and .npmrc but not .pypirc.
+  mkdir -p keys
+  printf 'SECRET-CANARY\n' > keys/id_ecdsa
+  printf 'password = SECRET-CANARY\n' > .pypirc
+  git add -A && git commit -qm creds
+
+  run bash "$CAPTURE" repo "$OUT"
+  [ "$status" -eq 0 ]
+  refute_canary
+}
+
 # --- completeness ----------------------------------------------------------
 
 @test "repo: a tracked file missing from the tree is withheld, not skipped" {
@@ -459,4 +472,16 @@ SH
   [ "$(wc -c < "$OUT/withheld.txt")" -gt 131072 ]
   [ "$status" -eq 1 ]
   [[ "$output" == *"A FILE FAILED TO READ"* ]]
+}
+
+@test "plan: an ECDSA key or a .pypirc named as the plan is withheld" {
+  # Red while plan mode's own credential list, separate from EXCL, lacks id_ecdsa and .pypirc.
+  for name in id_ecdsa .pypirc; do
+    printf 'SECRET-CANARY\n' > "$OUTSIDE/$name"
+    rm -rf "$OUT"
+    run bash "$CAPTURE" plan "$OUT" "$OUTSIDE/$name"
+    [ "$status" -eq 0 ] || false
+    refute_canary
+    withheld_for "$name" "credential"
+  done
 }
