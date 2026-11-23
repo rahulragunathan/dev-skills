@@ -38,6 +38,22 @@ here — the plugin manifest's version is the only record of them.
   reports a retried chunk's earlier attempt as superseded, and tells a failed run from a cut-off
   one; only agy's own cut-off notice counts as one. Discovery says which program failed, agy or
   the ranker.
+- **`roadmap.py close` never loses an edit and keeps the file's own bytes (KI-57).** It refuses
+  when either file changed after it read them, a rollback leaves a file someone edited
+  meanwhile as they wrote it, and the closed entry is cut out byte for byte, so CRLF line
+  endings, trailing whitespace and a missing final newline survive.
+- **`roadmap.py check` sees more drift (KI-58, KI-59).** Blank files, an anchor in a fenced
+  example, open questions out of Kind order, a displayed `KI-01-extra`, and titles or an
+  Effort that differ between index and detail are all reported. A `**Where:**` field after
+  another field on its line is checked; an absolute, empty or credential-shaped target is
+  refused, the last without being opened; and source files under `docs/` need a fragment.
+- **`roadmap.py init` under a signal, and its file mode (KI-65, KI-72).** A signal during error
+  cleanup no longer stops the rollback, new files follow the caller's umask, and a file whose
+  ownership could not be confirmed is reported as a skipped removal to inspect. (2.1.0 said
+  `init` leaves nothing behind on failure; such a file is the exception.)
+- **The roadmap templates fill in cleanly, and the close tests can fail (ENH-34).** A template
+  example filled in literally passes `check`; the close tests assert absence by status and
+  check that their injected faults fired.
 
 ## [2.1.0] - 2026-11-20 — project-docs and September's rules
 

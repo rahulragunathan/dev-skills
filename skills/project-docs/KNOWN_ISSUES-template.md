@@ -47,8 +47,8 @@ rating hides which you are looking at. Both still get fixed.
 
 ## KI-01 — `<title>`
 
-**Severity:** `<level>`
-**Likelihood:** `<almost always | likely | rare>`
+**Severity:** <Critical | High | Medium | Low>
+**Likelihood:** <Almost always | Likely | Rare>
 **Where:** [file.py](../file.py) — `def the_function_that_is_wrong(`
 
 ### What happens

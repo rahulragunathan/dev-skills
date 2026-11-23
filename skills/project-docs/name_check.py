@@ -27,15 +27,10 @@ import sys
 import urllib.parse
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from roadmap import FILES, FRAGMENT, LINK, fenced_lines  # noqa: E402
+from roadmap import FILES, FRAGMENT, LINK, SECRET_NAMES, credential_shaped, fenced_lines  # noqa: E402,F401
 
 Finding = collections.namedtuple("Finding", "path line kind name reason")
 
-# The credential-shaped names external-review's capture.sh withholds; a test
-# keeps the two lists equal.
-SECRET_NAMES = ("*.env", "*.env.*", "*.pem", "*.key", "*.p12", "*.pfx", "*.crt", "*id_rsa*",
-                "*id_ed25519*", "*id_ecdsa*", "*.pypirc", "*credentials*", "*.netrc", "*.npmrc",
-                "*.sqlite", "*.sqlite3")
 INTERPRETERS = {"python3", "python", "bash", "sh", "node"}
 ID = re.compile(rf"({'|'.join(FILES)})-\d+")
 # An ID is declared by its entry's anchor in a detail file, or named in CHANGELOG.
@@ -68,16 +63,6 @@ def in_scope(rel: str) -> bool:
     return (rel.endswith(".md") and name != "CHANGELOG.md" and not name.endswith("-template.md")
             and not test_input
             and not rel.startswith(("docs/superpowers/plans/", "docs/superpowers/specs/")))
-
-
-def credential_shaped(rel: str) -> bool:
-    """The rule capture.sh applies: the path or any folder above it matches."""
-    path = rel.lower()
-    while path:
-        if any(fnmatch.fnmatch(path, p) for p in SECRET_NAMES):
-            return True
-        path = path.rsplit("/", 1)[0] if "/" in path else ""
-    return False
 
 
 def flag_name(word: str) -> str | None:

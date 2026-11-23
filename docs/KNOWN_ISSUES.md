@@ -46,36 +46,6 @@ rating hides which you are looking at. Both still get fixed.
 
 ---
 
-<a id="ki-57"></a>
-
-## KI-57 — `roadmap.py close` can lose a concurrent edit and rewrites line endings
-
-**Severity:** Critical
-**Likelihood:** Rare
-**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def install_documents(`
-
-### What happens
-
-`close` builds both new documents from one read, then installs them without checking the
-files are still what it read. An entry added in between disappears from both files, and `close`
-reports success. It also reads in text mode and rebuilds line boundaries, so closing one entry
-can turn CRLF into LF throughout both files, and the byte-identity check compares survivors after
-`.strip()`.
-
-### Example scenario
-
-An editor saves a new KNOWN_ISSUES entry while `close KI-07` runs. The new entry is gone
-after the close, from the detail file and the index.
-
-### Notes for a fix
-
-Compare each file with what was read just before replacing it, or hold a lock from load to
-install. Preserve the newline style, and compare surviving slices without stripping them.
-
-**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
-
----
-
 <a id="ki-47"></a>
 
 ## KI-47 — grading packets omit information their conditions require
@@ -227,67 +197,6 @@ Treat a guard whose failure is expected by the enclosing context manager or hand
 could-not-evaluate. The behaviour predates the overnight QC passes.
 
 **Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.
-
----
-
-<a id="ki-58"></a>
-
-## KI-58 — `check` misses drift: empty files, fenced anchors, question order, mirrored fields
-
-**Severity:** High
-**Likelihood:** Rare
-**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def reconcile(`
-
-### What happens
-
-Four blank files pass `check`, since no heading or pointer table is required. A fenced
-example holding a real entry's anchor is read as a duplicate. Open questions are never checked
-for order, though the templates order them by Kind. A displayed label such as `KI-01-extra` is
-read as `KI-01`, and an enhancement's Effort and every title are never compared between the
-index and the detail file.
-
-### Example scenario
-
-Change an enhancement's Effort in ROADMAP from `~1 day` to `~80 days`, or swap two open
-questions of different Kinds. `check` passes both.
-
-### Notes for a fix
-
-Validate the empty-roadmap structure, parse anchors and rows outside fences, match displayed
-IDs exactly, compare Effort and titles, and order open questions by the Kind table.
-
-**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
-
----
-
-<a id="ki-59"></a>
-
-## KI-59 — the reference check has gaps in what it reads and where
-
-**Severity:** High
-**Likelihood:** Rare
-**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def _where_field(`
-
-### What happens
-
-A `**Where:**` after another field on the same line (`**Priority:** Low · **Where:** …`) is
-not found, so the entry is never checked. An absolute path inside the repository passes. An empty
-field passes. Any file under `docs/` is exempt from the fragment rule, executable source
-included. The cited file is opened without the credential-name screen the name check uses. And
-`project-docs/SKILL.md` says a fragment cannot contain a backtick, while the parser accepts a
-multi-backtick span.
-
-### Example scenario
-
-An entry written as `**Effort:** ~1 hour · **Where:** [x.py](../x.py)` passes with a
-fragment that is not in `x.py`.
-
-### Notes for a fix
-
-Find the field anywhere on an unfenced line, refuse absolute and empty targets, limit the
-`docs/` exemption to Markdown, screen credential names, and make the skill text match the parser.
-
-**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
 
 ---
 
@@ -530,34 +439,6 @@ Bound the rendered size of `str`, `repr` and formatting, and run each grade with
 
 ---
 
-<a id="ki-65"></a>
-
-## KI-65 — init can leave work behind on a signal during error cleanup, and creates files at 0644
-
-**Severity:** Medium
-**Likelihood:** Rare
-**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def make_file(`
-
-### What happens
-
-When an ordinary I/O error starts the rollback, a signal arriving before the handlers are set
-to ignore can raise out of the cleanup. The handlers are also installed before the `try` that
-restores them. New files are created at 0644, which drops group write under a group-writable umask
-such as 0002 that the old `open(..., "x")` honoured.
-
-### Example scenario
-
-A disk error on the third file, then a Ctrl-C, leaves the first two files in place.
-
-### Notes for a fix
-
-Keep signals blocked from the failure until `SIG_IGN` is set, enter the `try` before installing
-handlers, and create files at 0666 under the caller's umask.
-
-**Source:** gpt-6.2-astra:high, gemini-4-argon-high (signals), gpt-6.2-astra:high (file mode) — phase review pass 4, project-docs phase, 2026-11-22.
-
----
-
 <a id="ki-68"></a>
 
 ## KI-68 — the name check can stop on a folder it may not read
@@ -610,30 +491,3 @@ Name both agent IDs in the message and say which command brings the log and the 
 in line.
 
 **Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.
-
----
-
-<a id="ki-72"></a>
-
-## KI-72 — init's failure message overstates what it left behind
-
-**Severity:** Low
-**Likelihood:** Rare
-**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `could not confirm it is ours`
-
-### What happens
-
-A file `init` could not identify is reported as "left in place" even if another writer has
-since removed it. The CHANGELOG and `cmd_init`'s docstring still say nothing is left behind on
-failure, which no longer holds for such a file.
-
-### Example scenario
-
-After a failed `fstat`, the message names a file that is no longer there.
-
-### Notes for a fix
-
-Say that removal was skipped because ownership was not confirmed, and correct the two
-promises; tell the caller to inspect the path before retrying.
-
-**Source:** gpt-6.2-astra:high, gemini-4-neon-high — phase review pass 7, project-docs phase, 2026-11-22.

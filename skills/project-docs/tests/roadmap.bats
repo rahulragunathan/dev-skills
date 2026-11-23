@@ -71,7 +71,7 @@ EOF
 
 ## ENH-01 — an enhancement
 
-**Priority:** Low
+**Priority:** Low · **Effort:** ~1 hour
 **Where:** [docs](.)
 
 SURVIVOR-ENH
@@ -149,7 +149,7 @@ pointers() { grep -c 'KNOWN_ISSUES.md#ki-' "$DOCS/ROADMAP.md"; }
   run python3 "$RM" close KI-03 --docs "$DOCS"
   [ "$status" -eq 0 ]
   grep -q 'SURVIVOR-ONE' "$DOCS/KNOWN_ISSUES.md"
-  ! grep -q 'SURVIVOR-THREE' "$DOCS/KNOWN_ISSUES.md"
+  [ "$(grep -c 'SURVIVOR-THREE' "$DOCS/KNOWN_ISSUES.md")" -eq 0 ] || false
   [ "$(entries)" -eq 2 ]
 }
 
@@ -195,8 +195,8 @@ PY
 @test "close: works on enhancements too" {
   run python3 "$RM" close ENH-01 --docs "$DOCS"
   [ "$status" -eq 0 ]
-  ! grep -q 'SURVIVOR-ENH' "$DOCS/ENHANCEMENTS.md"
-  ! grep -q 'ENHANCEMENTS.md#enh-01' "$DOCS/ROADMAP.md"
+  [ "$(grep -c 'SURVIVOR-ENH' "$DOCS/ENHANCEMENTS.md")" -eq 0 ] || false
+  [ "$(grep -c 'ENHANCEMENTS.md#enh-01' "$DOCS/ROADMAP.md")" -eq 0 ] || false
   grep -q 'SURVIVOR-ONE' "$DOCS/KNOWN_ISSUES.md"
 }
 
@@ -309,7 +309,9 @@ pathlib.Path.write_text, os.replace = bad_write, bad_replace
 try: m.cmd_close(d, 'KI-02')
 except (OSError, SystemExit): pass
 else: raise AssertionError('injection never fired')
+assert failed, 'the refusal came from somewhere other than the injected fault'
 assert all(p.read_bytes() == b for p,b in before.items()), 'partial close changed original'
+assert set(d.iterdir()) == set(before), 'a file was added or removed'
 PY
   [ "$status" -eq 0 ]
 }
@@ -374,7 +376,7 @@ PY
   cd "$TEST_TMP"
   CLAUDE_PLUGIN_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)" run bash "$TEST_TMP/commands.sh"
   [ "$status" -eq 0 ]
-  ! grep -q 'DOOMED-BODY' "$DOCS/KNOWN_ISSUES.md"
+  [ "$(grep -c 'DOOMED-BODY' "$DOCS/KNOWN_ISSUES.md")" -eq 0 ] || false
   grep -q 'SURVIVOR-ONE' "$DOCS/KNOWN_ISSUES.md"
   grep -q 'SURVIVOR-THREE' "$DOCS/KNOWN_ISSUES.md"
   sed -i.bak 's/ki-01/wrong-anchor/' "$DOCS/ROADMAP.md"
@@ -781,7 +783,7 @@ before:  [x.sh:2](../skills/x.sh#L2)
   put_ref "**Where:** [outside]($TEST_TMP/outside.txt) — \`sentinel-value-for-this-test\`"
   run python3 "$RM" check --docs "$DOCS"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"cited path outside repository: $TEST_TMP/outside.txt"* ]] || false
+  [[ "$output" == *"absolute path: $TEST_TMP/outside.txt"* ]] || false
   [[ "$output" != *"cannot read"* ]] || false
 }
 
@@ -1130,7 +1132,7 @@ except SystemExit as e:
 print('first:', (docs / "ROADMAP.md").read_text().strip() if (docs / "ROADMAP.md").exists() else 'GONE')
 PY
   [[ "$output" == *"exit 1"* ]] || false
-  [[ "$output" == *"ROADMAP.md (could not confirm"* ]] || false
+  [[ "$output" == *"removal skipped for"*"ROADMAP.md"*"inspect it before retrying"* ]] || false
   [[ "$output" == *"first: THEIRS"* ]]
 }
 
@@ -1175,4 +1177,306 @@ PY
   run python3 "$RM" check --docs "$DOCS"
   [ "$status" -eq 1 ] || false
   [[ "$output" == *"no Where field"* ]]
+}
+
+# --- KI-57: close never loses an edit, and keeps the file's own bytes ---------
+
+# close_with <python body run after load>: cmd_close with a hook run after the
+# documents were read and checked, just before they are installed.
+close_with() {
+  python3 - "$RM" "$DOCS" "$1" <<'PY'
+import importlib.util, pathlib, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+d = pathlib.Path(sys.argv[2]); real = m.reconcile
+def hooked(*a, **kw):
+    result = real(*a, **kw)
+    if a[1:] or kw:          # the proposed-documents call, after load
+        exec(sys.argv[3], {"d": d})
+    return result
+m.reconcile = hooked
+try: m.cmd_close(d, 'KI-02')
+except SystemExit as e: print('exit', e.code)
+PY
+}
+
+@test "close: an edit to the detail file after it was read aborts the close" {
+  # Fails if close installs documents built from a read that an editor has since changed (KI-57).
+  run close_with 'p = d / "KNOWN_ISSUES.md"; p.write_text(p.read_text() + "\nEDITOR-ENTRY\n")'
+  [[ "$output" == *"exit 1"* ]] || false
+  grep -q 'EDITOR-ENTRY' "$DOCS/KNOWN_ISSUES.md" || false
+  grep -q 'DOOMED-BODY' "$DOCS/KNOWN_ISSUES.md" || false
+  grep -q 'KNOWN_ISSUES.md#ki-02' "$DOCS/ROADMAP.md"
+}
+
+@test "close: an edit to the index after it was read aborts the close" {
+  # Fails if only the first file is re-checked before either is replaced.
+  run close_with 'p = d / "ROADMAP.md"; p.write_text(p.read_text() + "\nEDITOR-ROW\n")'
+  [[ "$output" == *"exit 1"* ]] || false
+  grep -q 'EDITOR-ROW' "$DOCS/ROADMAP.md" || false
+  grep -q 'DOOMED-BODY' "$DOCS/KNOWN_ISSUES.md"
+}
+
+@test "close: rollback never overwrites an edit made after the first replacement" {
+  # Fails if rollback restores the original over a file an editor changed after close replaced it.
+  run python3 - "$RM" "$DOCS" <<'PY'
+import importlib.util, os, pathlib, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+d = pathlib.Path(sys.argv[2]); real = os.replace; fired = []
+def replace(src, dst):
+    if pathlib.Path(dst).name == "ROADMAP.md":
+        (d / "KNOWN_ISSUES.md").write_text("EDITOR-REWRITE\n")
+        fired.append(1); raise OSError("injected failure on the second file")
+    return real(src, dst)
+m.os.replace = replace
+try: m.cmd_close(d, 'KI-02')
+except SystemExit as e: print('exit', e.code)
+assert fired, 'the fault never fired'
+print('detail:', (d / "KNOWN_ISSUES.md").read_text().strip())
+PY
+  [[ "$output" == *"exit 1"* ]] || false
+  [[ "$output" == *"detail: EDITOR-REWRITE"* ]] || false
+  [[ "$output" == *"retained"* ]]
+}
+
+@test "close: CRLF line endings and trailing whitespace survive byte for byte" {
+  # Fails if close rebuilds line boundaries, turning CRLF into LF or trimming a survivor.
+  sed -i.bak 's/^SURVIVOR-ONE$/SURVIVOR-ONE  /' "$DOCS/KNOWN_ISSUES.md"
+  python3 - "$DOCS" <<'PY'
+import pathlib, sys
+d = pathlib.Path(sys.argv[1])
+for n in ("KNOWN_ISSUES.md", "ROADMAP.md"):
+    p = d / n; p.write_bytes(p.read_bytes().replace(b"\n", b"\r\n"))
+PY
+  run python3 "$RM" close KI-02 --docs "$DOCS"
+  [ "$status" -eq 0 ] || false
+  python3 - "$DOCS" <<'PY'
+import pathlib, sys
+d = pathlib.Path(sys.argv[1])
+k = (d / "KNOWN_ISSUES.md").read_bytes(); r = (d / "ROADMAP.md").read_bytes()
+assert b"\n" not in k.replace(b"\r\n", b""), "a bare LF appeared in KNOWN_ISSUES.md"
+assert b"\n" not in r.replace(b"\r\n", b""), "a bare LF appeared in ROADMAP.md"
+assert b"SURVIVOR-ONE  \r\n" in k, "trailing whitespace was trimmed"
+assert b"DOOMED-BODY" not in k and b"ki-02" not in r
+PY
+}
+
+@test "close: a file without a final newline keeps that form" {
+  # Fails if close adds a final newline the file never had.
+  printf '%s' "$(cat "$DOCS/KNOWN_ISSUES.md")" > "$DOCS/KNOWN_ISSUES.md"
+  [ "$(tail -c 1 "$DOCS/KNOWN_ISSUES.md")" = "E" ] || false
+  run python3 "$RM" close KI-02 --docs "$DOCS"
+  [ "$status" -eq 0 ] || false
+  [ "$(tail -c 1 "$DOCS/KNOWN_ISSUES.md")" = "E" ]
+}
+
+# --- KI-58: check sees drift it used to miss ---------------------------------
+
+@test "check: four blank files fail" {
+  # Fails if empty files pass because nothing requires a heading or a pointer table.
+  for f in ROADMAP.md KNOWN_ISSUES.md ENHANCEMENTS.md OPEN_QUESTIONS.md; do : > "$DOCS/$f"; done
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"structure"* ]]
+}
+
+@test "check: an anchor inside a fenced example is not a duplicate" {
+  # Fails if a fenced example holding a real entry's anchor is read as a second entry.
+  python3 - "$DOCS/KNOWN_ISSUES.md" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+p.write_text(t.replace("SURVIVOR-ONE\n", "SURVIVOR-ONE\n\n```markdown\n<a id=\"ki-03\"></a>\n```\n", 1))
+PY
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
+
+@test "check: open questions out of Kind order fail" {
+  # Fails if a Decision listed after a Verification passes (the templates order them by Kind).
+  printf '\n---\n\n<a id="unk-02"></a>\n\n## UNK-02 — a decision\n\n**Kind:** Decision\n\nLATE-DECISION\n' >> "$DOCS/OPEN_QUESTIONS.md"
+  printf '| [UNK-02](OPEN_QUESTIONS.md#unk-02) | a decision | Decision |\n' >> "$DOCS/ROADMAP.md"
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"order"* ]]
+}
+
+@test "check: a displayed KI-01-extra is not KI-01" {
+  # Fails if the displayed ID is matched by prefix.
+  sed -i.bak 's/\[KI-01\](KNOWN_ISSUES.md#ki-01)/[KI-01-extra](KNOWN_ISSUES.md#ki-01)/' "$DOCS/ROADMAP.md"
+  grep -q 'KI-01-extra' "$DOCS/ROADMAP.md" || false
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ]
+}
+
+@test "check: an Effort differing between index and detail fails" {
+  # Fails if an enhancement's Effort is never compared.
+  sed -i.bak 's/| an enhancement | Low | ~1 hour |/| an enhancement | Low | ~80 days |/' "$DOCS/ROADMAP.md"
+  grep -q '~80 days' "$DOCS/ROADMAP.md" || false
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"ENH-01 Effort"* ]]
+}
+
+@test "check: a title differing between index and detail fails" {
+  # Fails if titles are never compared; only the case of the first letter may differ.
+  sed -i.bak 's/| first issue |/| renamed issue |/' "$DOCS/ROADMAP.md"
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"KI-01 title"* ]] || false
+  sed -i.bak 's/| renamed issue |/| First issue |/' "$DOCS/ROADMAP.md"
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
+
+# --- KI-59: the Where field --------------------------------------------------
+
+# where_on_enh <where text>: ENH-01's Where field, written inline after its ratings.
+where_on_enh() {
+  python3 - "$DOCS/ENHANCEMENTS.md" "$1" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+t = t.replace("**Priority:** Low · **Effort:** ~1 hour\n**Where:** [docs](.)\n",
+              "**Priority:** Low · **Effort:** ~1 hour · " + sys.argv[2] + "\n")
+p.write_text(t)
+PY
+  printf 'def present_fn(x):\n    return x\n' > "$TEST_TMP/x.py"
+}
+
+@test "check: an inline Where field after another field is checked" {
+  # Fails if a Where field that does not start its line is never found (KI-59).
+  where_on_enh '**Where:** [x.py](../x.py) — `def present_fn(`'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ] || false
+  sed -i.bak 's/def present_fn(/def absent_fn(/' "$DOCS/ENHANCEMENTS.md"
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"fragment absent from ../x.py: def absent_fn("* ]]
+}
+
+@test "check: an absolute target inside the repository fails" {
+  # Fails if an absolute path passes because it happens to resolve inside the tree.
+  where_on_enh "**Where:** [x.py]($TEST_TMP/x.py) — \`def present_fn(\`"
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"ENH-01: absolute path: $TEST_TMP/x.py"* ]]
+}
+
+@test "check: an empty Where field fails" {
+  # Fails if a Where field with nothing in it passes as checked.
+  where_on_enh '**Where:**'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"ENH-01: empty Where field"* ]]
+}
+
+@test "check: a non-Markdown file under docs needs its fragment" {
+  # Fails if every file under docs/ is exempt, executable source included.
+  printf 'def build():\n    pass\n' > "$DOCS/build.py"
+  where_on_enh '**Where:** [build.py](build.py)'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"ENH-01: file link with no fragment: build.py"* ]]
+}
+
+@test "check: a credential-named target is refused without being opened" {
+  # Fails if check reads a file shaped like a secret to look for a fragment, directly or by alias.
+  printf 'token = "nothing here"\n' > "$TEST_TMP/credentials.json"
+  ln -s credentials.json "$TEST_TMP/settings.txt"
+  for target in credentials.json settings.txt; do
+    cp "$DOCS/ENHANCEMENTS.md" "$TEST_TMP/enh.bak"
+    where_on_enh "**Where:** [c](../$target) — \`token = \`"
+    run python3 - "$RM" "$DOCS" <<'PY'
+import builtins, importlib.util, pathlib, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+opened = []; real = pathlib.Path.read_text
+def read_text(self, *a, **kw):
+    opened.append(self.resolve().name); return real(self, *a, **kw)
+pathlib.Path.read_text = read_text
+code = m.cmd_check(pathlib.Path(sys.argv[2]))
+print('exit', code, 'opened credentials:', 'credentials.json' in opened)
+PY
+    [[ "$output" == *"exit 1 opened credentials: False"* ]] || { echo "$target: $output"; false; }
+    [[ "$output" == *"refusing to read"* ]] || false
+    cp "$TEST_TMP/enh.bak" "$DOCS/ENHANCEMENTS.md"
+  done
+}
+
+# --- KI-65: init under a signal, and its file mode ----------------------------
+
+@test "init: a signal during error cleanup leaves nothing behind" {
+  # Fails if a signal raised while rolling back an I/O error stops the rollback (KI-65).
+  NEW="$TEST_TMP/sigclean/docs"
+  run python3 - "$RM" "$NEW" <<'PY'
+import importlib.util, os, pathlib, signal, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+real_open, n = m.os.open, []
+def failing_open(path, *a, **kw):
+    n.append(path)
+    if len(n) == 3: raise OSError("injected failure on the third file")
+    return real_open(path, *a, **kw)
+m.os.open = failing_open
+# The signal arrives as cleanup begins, before the handlers are set to ignore.
+real_signal, sent = m.signal.signal, []
+def deliver_first(sig, handler):
+    if handler is signal.SIG_IGN and not sent:
+        sent.append(1); os.kill(os.getpid(), signal.SIGINT)
+    return real_signal(sig, handler)
+m.signal.signal = deliver_first
+try: m.cmd_init(pathlib.Path(sys.argv[2]))
+except BaseException as e: print('raised', type(e).__name__)
+assert sent, 'the signal was never sent'
+left = sorted(p.name for p in pathlib.Path(sys.argv[2]).parent.rglob('*'))
+print('left:', left)
+PY
+  [[ "$output" == *"left: []"* ]]
+}
+
+@test "init: new files honour a group-writable umask" {
+  # Fails if init creates files at a fixed 0644 instead of 0666 under the caller's umask.
+  NEW="$TEST_TMP/umask/docs"
+  run bash -c 'umask 0002; python3 "$1" init --docs "$2"' _ "$RM" "$NEW"
+  [ "$status" -eq 0 ] || false
+  [ "$(stat -f %Lp "$NEW/ROADMAP.md")" = 664 ]
+}
+
+# --- ENH-34: what the templates show must pass when filled in -----------------
+
+@test "templates: an entry filled in from each template passes check" {
+  # Fails if a template's example, filled in literally, cannot pass check.
+  NEW="$TEST_TMP/filled/docs"
+  python3 "$RM" init --docs "$NEW" >/dev/null
+  printf 'def the_function_that_is_wrong(x):\ndef the_function_to_change(y):\ndef the_question(z):\n' > "$TEST_TMP/filled/file.py"
+  python3 - "$(dirname "$RM")" "$NEW" <<'PY'
+import pathlib, re, sys
+src, docs = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+fill = {"<title>": "A title", "<Critical | High | Medium | Low>": "High",
+        "<Almost always | Likely | Rare>": "Rare", "<High | Medium | Low>": "High",
+        "<~hours / ~days>": "~1 day", "<Decision | Verification | Risk>": "Decision",
+        "<the question, as a question>": "A question?", "<question>": "A question?",
+        "<YYYY-MM-DD>": "2026-11-23", "<what changed>": "set up",
+        "Almost always / Likely / Rare": "Rare", "Critical / High / Medium / Low": "High",
+        "High / Medium / Low": "High", "~hours / ~days": "~1 day",
+        "Decision / Verification / Risk": "Decision"}
+def filled(text):
+    for k, v in fill.items(): text = text.replace(k, v)
+    return text
+for name in ("KNOWN_ISSUES.md", "ENHANCEMENTS.md", "OPEN_QUESTIONS.md"):
+    t = (src / name.replace(".md", "-template.md")).read_text()
+    example = t[t.index("\n---\n"):]
+    (docs / name).write_text((docs / name).read_text().rstrip("\n") + "\n" + filled(example))
+road = (src / "ROADMAP-template.md").read_text()
+rows = [l for l in road.splitlines() if re.match(r"^\| \[(KI|ENH|UNK)-01\]", l)]
+r = (docs / "ROADMAP.md").read_text()
+for row in rows:
+    header = {"KI": "| ID | Issue |", "ENH": "| ID | Enhancement |", "UNK": "| ID | Question |"}[row[3:row.index("-")]]
+    i = r.index(header); j = r.index("\n", r.index("\n", i) + 1) + 1
+    r = r[:j] + filled(row) + "\n" + r[j:]
+(docs / "ROADMAP.md").write_text(r)
+PY
+  run python3 "$RM" check --docs "$NEW"
+  echo "$output" >&3
+  [ "$status" -eq 0 ]
 }

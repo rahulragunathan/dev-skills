@@ -193,7 +193,7 @@ Found in Claude's adversarial review of the overnight passes, 2026-09-14. Write 
 
 <a id="enh-28"></a>
 
-## ENH-28 — let `publish-release.sh` verify remote presence instead of being told
+## ENH-28 — let `publish-release.sh` verify remote presence itself
 
 **Priority:** Medium · **Effort:** ~2 hours
 **Where:** [publish-release.sh](../skills/phase-workflow/publish-release.sh) — `--check-origin exits before any ref changes.` · **Regression net:** `skills/phase-workflow/tests/phase-git.bats`
@@ -278,35 +278,6 @@ These are the spellings the skills themselves use most, so a renamed helper can 
 
 Resolve bare script names against tracked basenames, strip the plugin-root prefix, and resolve
 reference uses against definitions. Keep the false-positive test on real skill prose green.
-
-**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
-
----
-
-<a id="enh-34"></a>
-
-## ENH-34 — tighten the roadmap close tests and template examples
-
-**Priority:** Low · **Effort:** ~2 hours
-**Where:** [roadmap.bats](../skills/project-docs/tests/roadmap.bats) — `close: works on enhancements too` · **Regression net:** `skills/project-docs/tests/roadmap.bats`
-
-### What it is
-
-Several close tests pass when `close` does nothing: their inverted `grep` assertions are not
-the last command, and they check survivors that were there before. The rollback tests accept a
-broad exception or a printed `exit 1`, so an earlier refusal can stand in for the restore they
-claim. The templates show a link without a fragment, lowercase likelihoods and backticked
-rating placeholders, which fail `check` when filled in literally.
-
-### Why it matters
-
-A test that cannot fail is false evidence for the behaviour CHANGELOG cites it for.
-
-### Notes for the work
-
-Assert each absence by status, prove the entry and pointer left before inducing drift, record
-that the injected fault fired, compare whole trees, and fill one entry from each template in a
-test.
 
 **Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
 
