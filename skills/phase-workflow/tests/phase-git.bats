@@ -913,3 +913,39 @@ origin_refused() {
   run git rev-parse --verify -q feature/c
   [ "$status" -ne 0 ]
 }
+
+# --- the post-review check and the gate's head (KI-62) ----------------------
+
+@test "after review: a rename into an allowed path names its source" {
+  # Fails if --name-only reports only the destination of a detected rename (KI-62).
+  reviewed="$(git rev-parse HEAD)"
+  mkdir -p docs && git mv calc.py docs/ROADMAP.md && git commit -qm "move calc.py"
+  after_review "$reviewed"
+  run bash "$TEST_TMP/after.sh"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"CHANGED AFTER REVIEW"*"calc.py"* ]]
+}
+
+@test "after review: a failed listing stops the check" {
+  # Fails if a listing that errors reads as "nothing changed" and the gate continues.
+  reviewed="$(git rev-parse HEAD)"
+  local real_git; real_git="$(command -v git)"
+  mkdir -p "$TEST_TMP/bin"
+  printf '#!/bin/bash\ncase "$*" in *--name-only*) exit 128 ;; esac\nexec "%s" "$@"\n' "$real_git" > "$TEST_TMP/bin/git"
+  chmod +x "$TEST_TMP/bin/git"
+  after_review "$reviewed"
+  PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/after.sh"
+  [ "$status" -ne 0 ] || false
+  [[ "$output" == *"CANNOT LIST"* ]]
+}
+
+@test "the gate refuses a head other than the one the post-review check inspected" {
+  # Fails if the branch, origin and PR advance together after the check and the gate still passes.
+  inspected="$(git rev-parse HEAD)"
+  git commit -q --allow-empty -m later
+  extract_fence gate "$TEST_TMP/gate.sh" "$BATS_TEST_DIRNAME/../SKILL.md"
+  printf 'PHASE_BRANCH=main INSPECTED=%s\n%s\n' "$inspected" "$(cat "$TEST_TMP/gate.sh")" > "$TEST_TMP/gate.sh"
+  run bash "$TEST_TMP/gate.sh"
+  [ "$status" -ne 0 ] || false
+  [[ "$output" == *"HEAD MOVED SINCE THE POST-REVIEW CHECK"* ]]
+}

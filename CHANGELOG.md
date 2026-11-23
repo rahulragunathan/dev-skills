@@ -27,6 +27,9 @@ here — the plugin manifest's version is the only record of them.
   shell patterns, so no external command can fail open. A push-URL listing that fails refuses.
 - **Branch cleanup reports every retained branch (ENH-29)** before it exits, rather than
   stopping at the first.
+- **The post-review gate check sees both sides of a rename and pins one head (KI-62).** A file
+  moved into a bookkeeping path is named by its source, a failed listing stops the gate, and the
+  ready step refuses a head other than the one the check inspected.
 
 ## [2.1.0] - 2026-11-20 — project-docs and September's rules
 

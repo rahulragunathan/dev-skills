@@ -682,10 +682,10 @@ and the gate takes the user's recorded decision instead.
 **After the last pass, only bookkeeping lands:** new roadmap entries and pointer rows for the
 deferred rows, and the phase record's PR number and release version. Anything else, such as an
 edit to an existing entry, a doc fix or a regenerated diagram, needs a narrow pass of its own. At
-the gate, check that the reviewed commit is an ancestor of `HEAD`
-(`git merge-base --is-ancestor`), then read the patch since it
-(`git diff <commit the last pass reviewed>..HEAD`), not only its file list: a filing and a fix
-can share one file. The hand-off names what landed.
+the gate, run `phase-workflow`'s post-review check (§3 step 7): it lists both sides of every change
+since the reviewed commit, refuses anything outside the bookkeeping files, and prints their patch,
+which is read in full because a filing and a fix can share one file. The hand-off names what
+landed.
 
 ### What the user sees at the gate
 

@@ -342,11 +342,21 @@ what remains expired.
      # fence: after-review
      set -euo pipefail
      REVIEWED="<commit the last pass reviewed>"
-     git merge-base --is-ancestor "$REVIEWED" HEAD || { echo "REVIEWED COMMIT REWRITTEN — run a full pass"; exit 1; }
-     OTHER="$(git --no-pager diff --no-ext-diff --name-only "$REVIEWED"..HEAD \
-       | grep -vxE 'docs/(PHASE_RECORD|ROADMAP|KNOWN_ISSUES|ENHANCEMENTS|OPEN_QUESTIONS)\.md' || true)"
+     INSPECTED="$(git rev-parse --verify HEAD)"   # the gate below must find this same head
+     git merge-base --is-ancestor "$REVIEWED" "$INSPECTED" || { echo "REVIEWED COMMIT REWRITTEN — run a full pass"; exit 1; }
+     # --no-renames lists both sides of a move, so a file cannot arrive under an allowed name.
+     CHANGED="$(git --no-pager diff --no-ext-diff --no-renames --name-only "$REVIEWED" "$INSPECTED")" \
+       || { echo "CANNOT LIST THE CHANGES SINCE REVIEW — stop"; exit 1; }
+     OTHER=""
+     while IFS= read -r f; do
+       case "$f" in
+         ''|docs/PHASE_RECORD.md|docs/ROADMAP.md|docs/KNOWN_ISSUES.md|docs/ENHANCEMENTS.md|docs/OPEN_QUESTIONS.md) ;;
+         *) OTHER="$OTHER  $f"$'\n' ;;
+       esac
+     done <<< "$CHANGED"
      [ -z "$OTHER" ] || { printf 'CHANGED AFTER REVIEW — needs a narrow pass:\n%s\n' "$OTHER"; exit 1; }
-     git --no-pager diff --no-ext-diff --no-textconv "$REVIEWED"..HEAD
+     git --no-pager diff --no-ext-diff --no-textconv --no-renames "$REVIEWED" "$INSPECTED" -- \
+       docs/PHASE_RECORD.md docs/ROADMAP.md docs/KNOWN_ISSUES.md docs/ENHANCEMENTS.md docs/OPEN_QUESTIONS.md
      ```
 
      Read that patch: a filing and a fix can share a file, and in the record only the `PR` and `Release` rows may change. Anything else needs a narrow pass first. Name what landed in the hand-off.
@@ -362,6 +372,7 @@ what remains expired.
      BRANCH="$(git symbolic-ref --quiet --short HEAD)"
      [ "$BRANCH" = "$PHASE_BRANCH" ] || { echo "WRONG BRANCH — stop"; exit 1; }
      LOCAL_SHA="$(git rev-parse --verify HEAD)"
+     [ "$LOCAL_SHA" = "$INSPECTED" ] || { echo "HEAD MOVED SINCE THE POST-REVIEW CHECK — run it again"; exit 1; }
      bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
        --check-origin "$ORIGIN_URL" "$ORIGIN_PUSH_URL"
      [ "$(gh repo view "$ORIGIN_URL" --json nameWithOwner --jq .nameWithOwner)" = "$REPO" ] \

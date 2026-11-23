@@ -291,36 +291,6 @@ Find the field anywhere on an unfenced line, refuse absolute and empty targets, 
 
 ---
 
-<a id="ki-62"></a>
-
-## KI-62 — the post-review gate check can miss a rename's source
-
-**Severity:** High
-**Likelihood:** Rare
-**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `CHANGED AFTER REVIEW`, [external-review/SKILL.md](../skills/external-review/SKILL.md) — `git diff <commit the last pass reviewed>..HEAD`
-
-### What happens
-
-`git diff --name-only` reports only the destination of a detected rename, so a file moved
-from outside the bookkeeping set into an allowed path passes the path check, and the patch that
-follows can show the old file's content. `|| true` also hides a failed listing, and `HEAD` is
-read twice. `external-review`'s loop still tells the agent to read a plain `git diff`, without
-`--no-ext-diff --no-textconv`.
-
-### Example scenario
-
-A post-review commit renames a skill file to `docs/ROADMAP.md`. The check lists only
-`docs/ROADMAP.md`, which is allowed.
-
-### Notes for a fix
-
-Pin the gate commit once, list both sides with `--no-renames`, fail on a failed listing, and
-pass the five allowed paths to the patch command.
-
-**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review pass 4, project-docs phase, 2026-11-22.
-
----
-
 <a id="ki-63"></a>
 
 ## KI-63 — a quoted refusal of the same model can still downshift Codex

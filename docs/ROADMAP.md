@@ -50,7 +50,6 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-38](KNOWN_ISSUES.md#ki-38) | An assertion the test expects to fail still grades as did-not-hold | Rare | High |
 | [KI-58](KNOWN_ISSUES.md#ki-58) | `check` misses drift: empty files, fenced anchors, question order, mirrored fields | Rare | High |
 | [KI-59](KNOWN_ISSUES.md#ki-59) | The reference check has gaps in what it reads and where | Rare | High |
-| [KI-62](KNOWN_ISSUES.md#ki-62) | The post-review gate check can miss a rename's source | Rare | High |
 | [KI-63](KNOWN_ISSUES.md#ki-63) | A quoted refusal of the same model can still downshift Codex | Rare | High |
 | [KI-64](KNOWN_ISSUES.md#ki-64) | The Codex probe runs in the caller's folder when ROOT is unset | Rare | High |
 | [KI-49](KNOWN_ISSUES.md#ki-49) | The headline tally mixes two skills | Almost always | Medium |
