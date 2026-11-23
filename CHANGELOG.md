@@ -59,6 +59,12 @@ here — the plugin manifest's version is the only record of them.
   `"$CLAUDE_PLUGIN_ROOT/..."` path, a missing script before a subcommand, and a reference link
   whose definition was deleted are all checked. A doc it cannot read is listed and the rest are
   still checked.
+- **The release test runs when its file runs directly (KI-73)**, and a CHANGELOG with no
+  release heading fails it as an assertion.
+- **Smaller fixes (KI-55, ENH-36, ENH-37).** `phase-workflow` §1 says the plan is drafted
+  outside the repository. Review-loop and ladder tests that could not fail now can, and the
+  origin refusal tests name the exact message. A user-reopened review row gains its Commit and
+  evidence, and the red-evidence rule reads "a `Red:` line or a mutation result" everywhere.
 
 ## [2.1.0] - 2026-11-20 — project-docs and September's rules
 

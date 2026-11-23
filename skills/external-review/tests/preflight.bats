@@ -437,13 +437,13 @@ PY
 # gemini_loop <agy body>: the documented Gemini loop with agy stubbed, one rung,
 # pass 1 chunk 1, writing into $TEST_TMP.
 gemini_loop() {
-  python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/gemini.sh" "$TEST_TMP" "$1" <<'PY'
+  python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/gemini.sh" "$TEST_TMP" "$1" "${2:-1}" <<'PY'
 import pathlib, re, sys
 sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
 block = fence(sys.argv[1], 'gemini-loop')
 prelude = 'GEMINI_RUNGS="gemini-4-neon-high gemini-4-argon-high"\nagy() { ' + sys.argv[4] + ' }\n'
 block = (block.replace('<scratchpad>', sys.argv[3]).replace('<mode>', 'phase')
-         .replace('<n>', '1').replace('<chunk>', '1').replace('<attempt>', '1'))
+         .replace('<n>', '1').replace('<chunk>', sys.argv[5]).replace('<attempt>', '1'))
 pathlib.Path(sys.argv[2]).write_text(prelude + block)
 PY
 }
@@ -533,8 +533,8 @@ PY
   # Fails if the prompt file is fixed to one chunk rather than following <chunk>.
   printf 'CHUNK-ONE' > "$TEST_TMP/gemini_prompt_p1_c1.txt"
   printf 'CHUNK-TWO' > "$TEST_TMP/gemini_prompt_p1_c2.txt"
-  gemini_loop 'printf "%s" "$2" > "$TEST_TMP/seen"; echo "No findings.";'
-  sed -i.bak 's/_c1\([_.]\)/_c2\1/g' "$TEST_TMP/gemini.sh"
+  # Only the <chunk> placeholder becomes 2, so a chunk number fixed in the fence stays wrong.
+  gemini_loop 'printf "%s" "$2" > "$TEST_TMP/seen"; echo "No findings.";' 2
   run bash "$TEST_TMP/gemini.sh"
   [ "$(cat "$TEST_TMP/seen")" = "CHUNK-TWO" ]
 }

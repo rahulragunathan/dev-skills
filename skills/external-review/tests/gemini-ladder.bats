@@ -162,7 +162,10 @@ print(m.rank("gemini-4-boron") < m.rank("gemini-4-cobalt"))' "$LADDER"
   # Fails if Argon keeps a place in the family order above Neon or Hydrogen (the user's order:
   # Carbon > Neon > Hydrogen).
   run rank gemini-4-argon-high gemini-4-hydrogen-high gemini-4-neon-high gemini-4-carbon-high
-  [ "$output" = "gemini-4-carbon-high gemini-4-neon-high gemini-4-hydrogen-high" ]
+  [ "$output" = "gemini-4-carbon-high gemini-4-neon-high gemini-4-hydrogen-high" ] || false
+  # With a slot free, Argon sits after Hydrogen, among the unlisted lines, not above them.
+  run rank gemini-4-zinc-high gemini-4-argon-high gemini-4-hydrogen-high
+  [ "$output" = "gemini-4-hydrogen-high gemini-4-argon-high gemini-4-zinc-high" ]
 }
 
 @test "an id holding a shell pattern character is never offered" {

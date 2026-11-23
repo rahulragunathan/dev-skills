@@ -51,9 +51,7 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-50](KNOWN_ISSUES.md#ki-50) | S05's fixture contradicts itself | Almost always | Medium |
 | [KI-36](KNOWN_ISSUES.md#ki-36) | A grader quote of a table cell that holds a pipe is refused | Likely | Medium |
 | [KI-39](KNOWN_ISSUES.md#ki-39) | `print` with an f-string argument still hides later guards | Likely | Medium |
-| [KI-55](KNOWN_ISSUES.md#ki-55) | The plan review cannot run while the plan is inside the repository | Likely | Medium |
 | [KI-51](KNOWN_ISSUES.md#ki-51) | Rejected grading attempts are not retained | Likely | Medium |
-| [KI-73](KNOWN_ISSUES.md#ki-73) | The release-version test is skipped when its file runs directly | Likely | Medium |
 | [KI-41](KNOWN_ISSUES.md#ki-41) | Converting a large sequence to text has no size bound | Rare | Medium |
 | [KI-44](KNOWN_ISSUES.md#ki-44) | A stale dispatch log gives a misleading replacement message | Rare | Low |
 
@@ -73,8 +71,6 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 | [ENH-26](ENHANCEMENTS.md#enh-26) | Test the conversion of a helper's evaluation gap into an opaque call | Medium | ~1 hour |
 | [ENH-28](ENHANCEMENTS.md#enh-28) | Let `publish-release.sh` verify remote presence itself | Medium | ~2 hours |
 | [ENH-32](ENHANCEMENTS.md#enh-32) | Drop explanations of standard tool behaviour from the skills | Low | ~2 hours |
-| [ENH-36](ENHANCEMENTS.md#enh-36) | Strengthen the review-loop and ladder tests | Low | ~2 hours |
-| [ENH-37](ENHANCEMENTS.md#enh-37) | Tidy the review record rules and three small doc slips | Low | ~1 hour |
 
 ## Open Questions
 

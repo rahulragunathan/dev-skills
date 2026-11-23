@@ -43,7 +43,7 @@ setup skill and assume nothing it installs.
 **Historical red-state evidence is not required, and not recoverable here.** This repository's
 history begins with implementation and tests together at the v1.8.0 import, so no test's red
 state can be recovered from a commit. Since 2.1.0 each new test's red is recorded as a `Red:`
-line in its commit message. For older tests the answer was to do nothing: the mutation check in
+line in its commit message, or by a mutation result where no red was watched. For older tests the answer was to do nothing: the mutation check in
 `phase-workflow` §3 step 3 breaks the named behaviour now and confirms the test fails on the
 named assertion, which works whatever the history contains. Closed as UNK-02, 2026-09-21. The
 2026-09-20 phase measured the limit of that substitute — a mutation can show an assertion is

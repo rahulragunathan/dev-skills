@@ -189,9 +189,9 @@ teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/nul
 # let phase start copy the token into the committed docs/PHASE_RECORD.md.
 @test "origin check: refuses a URL carrying credentials, without printing it" {
   clean="https://example.invalid/r.git"
+  # Forms refused before their credentials are read are in the unsupported-form tests below.
   for url in "https://someone:notasecret@example.invalid/r.git" "HTTPS://notasecret@example.invalid/r.git" \
-             "git+https://notasecret@example.invalid/r.git" "https://example.invalid/r.git?token=notasecret" \
-             "http::https://notasecret@example.invalid/r.git" "ssh://me@mail.example:notasecret@example.invalid/r.git"; do
+             "https://example.invalid/r.git?token=notasecret" "ssh://me@mail.example:notasecret@example.invalid/r.git"; do
     # A clean fetch URL with a bad push URL, then the reverse: each side is checked.
     for pair in "$clean $url" "$url $clean"; do
       set -- $pair
@@ -199,7 +199,7 @@ teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/nul
       git remote set-url --push origin "$2"
       run bash "$PUBLISH" --check-origin "$1" "$2"
       [ "$status" -eq 1 ] || false
-      [[ "$output" == *"CREDENTIALS IN ORIGIN URL"* || "$output" == *"UNSUPPORTED ORIGIN URL"* ]] || false
+      [[ "$output" == "CREDENTIALS IN ORIGIN URL"* ]] || false
       [[ "$output" != *notasecret* ]] || false
     done
   done
@@ -669,7 +669,7 @@ record_check() {
     git remote set-url --push origin "$url"
     run bash "$PUBLISH" --check-origin "$clean" "$url"
     [ "$status" -eq 1 ] || false
-    [[ "$output" == *"CREDENTIALS IN ORIGIN URL"* || "$output" == *"UNSUPPORTED ORIGIN URL"* ]] || false
+    [[ "$output" == "UNSUPPORTED ORIGIN URL"* ]] || false
     [[ "$output" != *notasecret* ]] || false
   done
 }

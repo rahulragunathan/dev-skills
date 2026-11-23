@@ -684,7 +684,8 @@ and the gate takes the user's recorded decision instead.
    that an earlier pass's fix did not work gets a new row in this pass that names the earlier ID
    (`F-12 — the F-03 fix is partial`), and counts as new at its own severity. Earlier rows keep
    their pass and finding, and per-pass counts never change. Only a row's Disposition may change
-   later, and only by the user: write it as `<new> — was <old>, the user's call`.
+   later, and only by the user: write it as `<new> — was <old>, the user's call`. A row the user
+   reopens for a fix also gains its Commit and its test evidence.
 2. **Apply the stop rule before fixing anything, and only to a complete pass.** Count verified
    findings only; `Rejected` rows do not count. Stop after pass 3. Stop when a pass, from pass 2
    on, has no new Critical or High and fewer findings than the pass before. Stop when a pass
