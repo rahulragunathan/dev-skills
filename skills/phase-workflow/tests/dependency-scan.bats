@@ -23,7 +23,7 @@ file=""; prev=""
 for a in "$@"; do [ "$prev" = -L ] && file="${a#*:}"; prev="$a"; done
 case " $* " in *" --offline "*) [ -n "${FAKE_NO_DB:-}" ] && { echo "no local database" >&2; exit 127; } ;; esac
 [ -f "$file" ] || { echo "failed to resolve path: $file" >&2; exit 127; }
-if grep -q VULN "$file"; then sed "s|<FILE>|$file|" "$OSV/vuln.json"; exit 1; fi
+if grep -qE "VULN|==2\.19\.0" "$file"; then sed "s|<FILE>|$file|" "$OSV/vuln.json"; exit 1; fi
 if grep -q EMPTY "$file"; then echo "found 0 packages" >&2; exit 128; fi
 if grep -q FAIL "$file"; then echo "boom: the database is unreachable" >&2; exit 127; fi
 sed "s|<FILE>|$file|" "$OSV/clean.json"; exit 0
@@ -48,7 +48,7 @@ scan() { run python3 "$SCAN" --root "$REPO" "$@"; }
   put README.md 'hello'
   scan
   [ "$status" -eq 0 ] || false
-  [ "$output" = "no supported dependency files" ] || false
+  [[ "$output" == *"no supported dependency files" ]] || false
   [ ! -e "$TEST_TMP/calls" ]
 }
 
@@ -81,7 +81,7 @@ scan() { run python3 "$SCAN" --root "$REPO" "$@"; }
 
 @test "a finding prints its advisory group, aliases, package, version and file" {
   # Fails if a vulnerable lockfile reads as clean or loses what identifies the advisory.
-  put requirements.txt 'requests==2.19.0  # VULN'
+  put requirements.txt 'requests==2.19.0'
   scan
   [ "$status" -eq 1 ] || false
   [[ "$output" == *"FINDING PYSEC-2018-28 (CVE-2018-18074, GHSA-x84v-xcm2-53pg) requests 2.19.0 requirements.txt"* ]]
@@ -89,7 +89,7 @@ scan() { run python3 "$SCAN" --root "$REPO" "$@"; }
 
 @test "findings and gaps are both printed" {
   # Fails if a coverage gap hides a finding, or the reverse.
-  put requirements.txt 'requests==2.19.0  # VULN'
+  put requirements.txt 'requests==2.19.0'
   put web/package.json '{"dependencies": {"left-pad": "1.3.0"}}'
   scan
   [ "$status" -eq 1 ] || false
@@ -119,15 +119,15 @@ scan() { run python3 "$SCAN" --root "$REPO" "$@"; }
   put pyproject.toml "$(printf '[tool.ruff]\nline-length = 100\n')"
   scan
   [ "$status" -eq 0 ] || false
-  [ "$output" = "no supported dependency files" ]
+  [[ "$output" == *"no supported dependency files" ]]
 }
 
 @test "a file yielding no packages is NOT SCANNED" {
   # Fails if exit 128, no packages found, counts as clean.
-  put requirements.txt '# EMPTY'
+  put uv.lock 'EMPTY'
   scan
   [ "$status" -eq 3 ] || false
-  [[ "$output" == *"NOT SCANNED requirements.txt: no packages found"* ]]
+  [[ "$output" == *"NOT SCANNED uv.lock: no packages found"* ]]
 }
 
 @test "unpinned requirements lines are listed as not scanned" {
@@ -153,7 +153,7 @@ scan() { run python3 "$SCAN" --root "$REPO" "$@"; }
   put uv.lock 'FAIL'
   scan
   [ "$status" -eq 2 ] || false
-  [[ "$output" == *"osv-scanner failed on uv.lock"*"boom"* ]] || false
+  [[ "$output" == *"osv-scanner failed on uv.lock (exit 127)"* ]] || false
   printf '#!/bin/bash\necho "unknown command: scan" >&2; exit 127\n' > "$BIN/osv-scanner"
   put requirements.txt 'six==1.17.0'
   scan
@@ -215,7 +215,7 @@ fence_in() {
   cat > "$BIN/osv-scanner" <<'SH'
 #!/bin/bash
 printf '%s\n' "$*" >> "$TEST_TMP/calls"
-echo '{"results": [{"source": {"path": "x"}, "advisories": []}]}'; exit 1
+echo '{"results": [{"source": {"path": "x"}, "packages": [{"package": {"name": "x", "version": "1"}, "advisories": []}]}]}'; exit 1
 SH
   chmod +x "$BIN/osv-scanner"
   scan
@@ -269,7 +269,7 @@ SH
   scan
   [ "$status" -eq 3 ] || false
   [[ "$output" == *"NOT SCANNED requirements.txt: line 2 includes another file"* ]] || false
-  [ ! -e "$TEST_TMP/calls" ]
+  [[ "$(cat "$TEST_TMP/calls")" != *"requirements.txt:$REPO"* ]]   # the committed file never reaches it
 }
 
 @test "an unpinned line is named by its number, never its text" {
@@ -287,8 +287,7 @@ SH
   printf '#!/bin/bash\necho "fetch https://user:s3cret@db.example.invalid/x failed" >&2; exit 127\n' > "$BIN/osv-scanner"
   scan
   [ "$status" -eq 2 ] || false
-  [[ "$output" != *"s3cret"* ]] || false
-  [[ "$output" == *"https://***@db.example.invalid"* ]]
+  [[ "$output" != *"s3cret"* ]]
 }
 
 @test "a tracked osv-scanner.toml names single-quoted ids and package overrides" {
@@ -365,4 +364,57 @@ SH
   scan
   [ "$status" -eq 0 ] || false
   [[ "$output" == *"2 files scanned"* ]]
+}
+
+# --- external review pass 2 fixes ----------------------------------------------
+
+@test "the scanner gets only the validated pins, never the committed requirements file" {
+  # Fails if a continuation-joined or attached include, or an env-var version, reaches the scanner (pass 2, Codex 1, 11).
+  put requirements.txt "$(printf 'six==1.17.0\n-r\\\n  ../../x.txt\n-rother.txt\nreq==${VER}\n')"
+  cat > "$BIN/osv-scanner" <<'SH'
+#!/bin/bash
+prev=""; for a in "$@"; do [ "$prev" = -L ] && cp "${a#*:}" "$TEST_TMP/scanned"; prev="$a"; done
+cat "$OSV/clean.json"; exit 0
+SH
+  chmod +x "$BIN/osv-scanner"
+  scan
+  [ "$status" -eq 3 ] || false
+  [ "$(cat "$TEST_TMP/scanned")" = "six==1.17.0" ] || false
+  [[ "$output" == *"line 2"* ]] || false
+  [[ "$output" == *"line 4"* ]] || false
+  [[ "$output" == *"line 5 is not pinned"* ]]
+}
+
+@test "scanner stderr never reaches the report" {
+  # Fails if any of osv-scanner's own error text, a signed URL or token included, is copied out (Codex 7).
+  put uv.lock 'clean'
+  printf '#!/bin/bash\necho "GET https://db.example.invalid/x?sig=TOPSECRET failed" >&2; exit 127\n' > "$BIN/osv-scanner"
+  scan
+  [ "$status" -eq 2 ] || false
+  [[ "$output" != *"TOPSECRET"* ]] || false
+  [[ "$output" == *"osv-scanner failed on uv.lock (exit 127)"* ]]
+}
+
+@test "a results entry without packages is unreadable output, not clean" {
+  # Fails if {"results":[{}]} counts as a scanned, clean file (Codex 10).
+  put uv.lock 'clean'
+  printf '#!/bin/bash\necho %s; exit 0\n' "'{\"results\": [{}]}'" > "$BIN/osv-scanner"
+  scan
+  [ "$status" -eq 2 ] || false
+}
+
+@test "a later Poetry group and a Dart manifest count as declared" {
+  # Fails if only the first Poetry table is read, or pubspec.yaml is not a manifest (Codex 11).
+  put pyproject.toml "$(printf '[tool.poetry.dependencies]\npython = "^3.11"\n\n[tool.poetry.group.dev.dependencies]\npytest = "^8"\n')"
+  scan; [[ "$output" == *"NOT SCANNED pyproject.toml"* ]] || false
+  git -C "$REPO" rm -q pyproject.toml && git -C "$REPO" commit -qm rm
+  put pubspec.yaml "$(printf 'name: app\ndependencies:\n  http: ^1.0.0\n')"
+  scan; [[ "$output" == *"NOT SCANNED pubspec.yaml"* ]]
+}
+
+@test "the report names the commit it scanned" {
+  # Fails if the scanned commit has to be found separately and may describe another state (Codex 20).
+  put uv.lock 'clean'
+  scan
+  [[ "$output" == *"scanned commit $(git -C "$REPO" rev-parse HEAD)"* ]]
 }
