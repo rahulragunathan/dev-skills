@@ -44,16 +44,18 @@ git rev-parse --git-dir >/dev/null 2>&1 || { echo "NOT A GIT REPOSITORY"; exit 1
 # and the review bundle. Refuse it, and never print it.
 # Any user part in a URL with a scheme, except a bare user over ssh (ssh://git@host),
 # and any query or fragment, which a remote has no use for.
-# A transport-helper prefix (`http::https://…`) is stripped first, so the URL
-# inside it is checked too.
 has_credentials() {
-  local url
-  url="$(printf '%s' "$1" | sed -E 's/^[A-Za-z][A-Za-z0-9+.-]*:://')"
-  printf '%s' "$url" | grep -qiE '^[a-z][a-z0-9+.-]*://[^/]*:[^/@]*@|^[a-z][a-z0-9+.-]*://.*[?#]' && return 0
-  printf '%s' "$url" | grep -qiE '^[a-z][a-z0-9+.-]*://[^/]*@' \
-    && ! printf '%s' "$url" | grep -qiE '^(ssh|git\+ssh|ssh\+git)://'
+  printf '%s' "$1" | grep -qiE '^[a-z][a-z0-9+.-]*://[^/]*:[^/@]*@|^[a-z][a-z0-9+.-]*://.*[?#]' && return 0
+  printf '%s' "$1" | grep -qiE '^[a-z][a-z0-9+.-]*://[^/]*@' \
+    && ! printf '%s' "$1" | grep -qiE '^(ssh|git\+ssh|ssh\+git)://'
 }
+# A transport-helper URL (`http::…`, `ext::…`) can carry a credential in forms no
+# pattern can parse, and a normal remote never needs one, so it is refused.
 for url in "$WANT_FETCH" "$WANT_PUSH"; do
+  if printf '%s' "$url" | grep -qE '^[A-Za-z][A-Za-z0-9+.-]*::'; then
+    echo "TRANSPORT HELPER IN ORIGIN URL — refusing; use an ssh or https remote, and do not record the URL"
+    exit 1
+  fi
   if has_credentials "$url"; then
     echo "CREDENTIALS IN ORIGIN URL — refusing; use SSH or a credential helper, and do not record the URL"
     exit 1

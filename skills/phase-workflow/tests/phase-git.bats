@@ -204,7 +204,7 @@ teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/nul
       git remote set-url --push origin "$2"
       run bash "$PUBLISH" --check-origin "$1" "$2"
       [ "$status" -eq 1 ] || false
-      [[ "$output" == *"CREDENTIALS IN ORIGIN URL"* ]] || false
+      [[ "$output" == *"CREDENTIALS IN ORIGIN URL"* || "$output" == *"TRANSPORT HELPER"* ]] || false
       [[ "$output" != *notasecret* ]] || false
     done
   done
@@ -657,4 +657,19 @@ record_check() {
   record_check 5
   run bash "$TEST_TMP/record.sh"
   [ "$status" -ne 0 ]
+}
+
+@test "origin check: refuses every transport-helper URL" {
+  # Fails if a <transport>:: URL passes in any form: chained, scheme-less, opaque, or even
+  # clean, since a normal remote never needs one and the forms cannot all be parsed (F-127).
+  clean="https://example.invalid/r.git"
+  for url in "http::http::https://notasecret@example.invalid/r.git" "http::notasecret@example.invalid/r.git" \
+             "ext::sh -c notasecret" "http::https://example.invalid/r.git"; do
+    git remote set-url origin "$clean"
+    git remote set-url --push origin "$url"
+    run bash "$PUBLISH" --check-origin "$clean" "$url"
+    [ "$status" -eq 1 ] || false
+    [[ "$output" == *"CREDENTIALS IN ORIGIN URL"* || "$output" == *"TRANSPORT HELPER"* ]] || false
+    [[ "$output" != *notasecret* ]] || false
+  done
 }

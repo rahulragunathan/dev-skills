@@ -596,12 +596,16 @@ def cmd_init(docs: pathlib.Path) -> int:
     except BaseException as exc:
         for sig in previous:
             signal.signal(sig, signal.SIG_IGN)
-        left = []
+        left, unconfirmed = [], []
         for path, ident in created:
+            if ident is None:
+                # Made here, but its identity was never read: another writer may
+                # have replaced it since, so it is left in place and reported.
+                unconfirmed.append(str(path))
+                continue
             try:
                 st = os.lstat(path)
-                # An unknown identity is a file this call made and could not stat.
-                if ident is None or (st.st_dev, st.st_ino) == ident:
+                if (st.st_dev, st.st_ino) == ident:
                     path.unlink()
             except FileNotFoundError:
                 pass
@@ -612,6 +616,8 @@ def cmd_init(docs: pathlib.Path) -> int:
                 folder.rmdir()
             except OSError:
                 left.append(str(folder))  # someone else's file is in it now
+        if unconfirmed:
+            left.append(f"{', '.join(unconfirmed)} (could not confirm it is ours, so left in place)")
         if left:
             fail(f"refusing: set-up failed: {exc}; could not remove {', '.join(left)}")
         fail(f"refusing: set-up failed, nothing of ours left behind: {exc}")

@@ -1110,25 +1110,30 @@ PY
   [[ "$output" == *"still blocked True"* ]]
 }
 
-@test "init: a file whose identity cannot be read is still removed on rollback" {
-  # Fails if an fstat failure leaves a just-created file the rollback never knew about.
+@test "init: a file whose identity cannot be read is left and reported, not removed" {
+  # Fails if rollback unlinks by name a file whose ownership it never confirmed: another
+  # writer may have replaced it, as here, and that file must survive (F-126).
   NEW="$TEST_TMP/nofstat/docs"
   run python3 - "$RM" "$NEW" <<'PY'
-import importlib.util, pathlib, sys
+import importlib.util, os, pathlib, sys
 spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-calls = []
+docs = pathlib.Path(sys.argv[2])
 def fstat(fd):
-    calls.append(fd)
+    # Another writer replaces the new file, then the identity read fails.
+    first = docs / "ROADMAP.md"
+    os.unlink(first); first.write_text("THEIRS\n")
     raise OSError('injected fstat failure')
 m.os.fstat = fstat
 try:
-    m.cmd_init(pathlib.Path(sys.argv[2]))
+    m.cmd_init(docs)
 except SystemExit as e:
     print('exit', e.code)
+print('first:', (docs / "ROADMAP.md").read_text().strip() if (docs / "ROADMAP.md").exists() else 'GONE')
 PY
   [[ "$output" == *"exit 1"* ]] || false
-  [ ! -e "$TEST_TMP/nofstat" ]
+  [[ "$output" == *"ROADMAP.md (could not confirm"* ]] || false
+  [[ "$output" == *"first: THEIRS"* ]]
 }
 
 @test "init: a removal that fails does not stop the rest of the rollback" {
