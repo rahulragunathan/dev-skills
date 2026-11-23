@@ -1397,7 +1397,7 @@ pathlib.Path.read_text = read_text
 code = m.cmd_check(pathlib.Path(sys.argv[2]))
 print('exit', code, 'opened credentials:', 'credentials.json' in opened)
 PY
-    [[ "$output" == *"exit 1 opened credentials: False"* ]] || { echo "$target: $output"; false; }
+    [[ "$output" == *"exit 1 opened credentials: False"* ]] || false
     [[ "$output" == *"refusing to read"* ]] || false
     cp "$TEST_TMP/enh.bak" "$DOCS/ENHANCEMENTS.md"
   done

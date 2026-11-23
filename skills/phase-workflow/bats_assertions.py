@@ -153,15 +153,14 @@ def main() -> int:
             print(f"{filename}: {exc}", file=sys.stderr)
             failed = True
             continue
-        output.extend(f"{filename}\t{line}\t{name}\t{position}"
-                      for line, name, position in rows)
+        output.extend((filename, line, name, position) for line, name, position in rows)
     if args.count_mid:
         # No count after a failed read: a partial count would read as clean.
         if not failed:
-            print(sum(row.endswith("\tmid") for row in output))
+            print(sum(position == "mid" for *_, position in output))
     else:
         for row in output:
-            print(row)
+            print("\t".join(map(str, row)))
     return 1 if failed else 0
 
 

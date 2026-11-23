@@ -27,6 +27,7 @@ import sys
 import urllib.parse
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+# SECRET_NAMES is re-exported for the test that keeps it equal to capture.sh's list.
 from roadmap import FILES, FRAGMENT, LINK, SECRET_NAMES, credential_shaped, fenced_lines  # noqa: E402,F401
 
 Finding = collections.namedtuple("Finding", "path line kind name reason")
@@ -87,7 +88,10 @@ class Repo:
             raise NotARepo(f"not a git repository: {root}")
         self.tracked = [p for p in out.stdout.split("\0") if p]
         self.tops = {p.split("/", 1)[0] for p in self.tracked}
-        self.basenames = {p.rsplit("/", 1)[-1] for p in self.tracked}
+        self.by_basename: dict[str, list[str]] = collections.defaultdict(list)
+        for p in self.tracked:
+            self.by_basename[p.rsplit("/", 1)[-1]].append(p)
+        self.basenames = set(self.by_basename)
         self._text: dict[str, str | None] = {}
         self._anchors: dict[str, set[str]] = {}
         self._code: str | None = None
@@ -134,7 +138,7 @@ class Repo:
 
     def scripts_named(self, name: str) -> list[str]:
         """Tracked files with this basename."""
-        return [p for p in self.tracked if p.rsplit("/", 1)[-1] == name]
+        return self.by_basename.get(name, [])
 
     def code(self) -> str:
         """The text of every readable tracked file that is not Markdown, which

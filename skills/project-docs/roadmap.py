@@ -105,12 +105,8 @@ def entry_spans(text: str) -> dict[str, tuple[int, int]]:
     example text, not an entry.
     """
     fenced = fenced_lines(text)
-    line_starts = [0] + [i + 1 for i, c in enumerate(text) if c == "\n"]
-    def in_fence(pos):
-        line = next(n for n in range(len(line_starts) - 1, -1, -1) if line_starts[n] <= pos)
-        return line < len(fenced) and fenced[line]
     anchors = [m for m in re.finditer(r'^<a id="([a-z]+-\d+)"></a>\s*$', text, re.M)
-               if not in_fence(m.start())]
+               if not fenced[text.count("\n", 0, m.start())]]
     spans: dict[str, tuple[int, int]] = {}
     for i, m in enumerate(anchors):
         start = _entry_start(text, m)
@@ -549,7 +545,7 @@ def cmd_close(docs: pathlib.Path, eid: str) -> int:
         new_detail += "\n"
 
     # The check that matters: every surviving entry must come back byte-identical.
-    _, entries = split_entries(detail)
+    entries = {k: detail[s:e] for k, (s, e) in spans.items()}
     survivors = {k: v for k, v in entries.items() if k != eid}
     _, reparsed = split_entries(new_detail)
     if set(reparsed) != set(survivors):
@@ -597,7 +593,7 @@ def install_documents(docs: pathlib.Path, proposed: dict[str, bytes],
     recovery = pathlib.Path(tempfile.mkdtemp(prefix="roadmap-"))
     landed: dict[str, bytes] = {}
     retain_recovery = False
-    cleaning = []
+    rolling_back = False
 
     def replace_from(source, destination):
         fd, staged = tempfile.mkstemp(prefix=".roadmap-", dir=destination.parent)
@@ -611,7 +607,7 @@ def install_documents(docs: pathlib.Path, proposed: dict[str, bytes],
 
     def interrupted(signum, frame):
         # Once rollback has begun, a signal waits for it to finish.
-        if not cleaning:
+        if not rolling_back:
             raise KeyboardInterrupt(f"signal {signum}")
 
     previous = {}
@@ -628,7 +624,7 @@ def install_documents(docs: pathlib.Path, proposed: dict[str, bytes],
             replace_from(recovery / name, docs / name)
             landed[name] = proposed[name]
     except BaseException as exc:
-        cleaning.append(exc)
+        rolling_back = True
         if isinstance(exc, SystemExit):
             raise
         for sig in previous:

@@ -80,10 +80,11 @@ DOWN=()
 # Classify a failed probe from its error text. Quota and availability read alike
 # to a bare exit status and demand opposite responses, so they are separated
 # here rather than at each call site.
-timed_out() { grep -qiE 'probe timeout|print timeout|timed out|turn in progress' "$1"; }
 # A deadline or explicit cut-off, which overrides even a ready answer. A retried
-# request that merely mentions a timeout is not one.
-cut_off() { grep -qiE 'probe timeout|print timeout|turn in progress' "$1"; }
+# request that merely mentions a timeout is not one, but explains a failure.
+CUT_OFF='probe timeout|print timeout|turn in progress'
+cut_off() { grep -qiE "$CUT_OFF" "$1"; }
+timed_out() { grep -qiE "$CUT_OFF|timed out" "$1"; }
 
 classify_error() {
   local err="$1"

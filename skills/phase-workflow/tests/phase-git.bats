@@ -866,7 +866,7 @@ origin_refused() {
     git remote set-url origin "$url"; git remote set-url --push origin "$url"
     PATH="$TEST_TMP/nogrep" run bash "$PUBLISH" --check-origin "$url" "$url"
     [ "$status" -eq 1 ] || { echo "accepted: $url"; false; }
-    [[ "$output" == "CREDENTIALS IN ORIGIN URL"* ]] || { echo "$url: $output"; false; }
+    [[ "$output" == "CREDENTIALS IN ORIGIN URL"* ]] || false
   done
 }
 

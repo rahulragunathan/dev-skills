@@ -710,7 +710,7 @@ PY
   for msg in "print timeout: turn in progress" "[agy] print timeout after 2m0s with turn in progress; returning partial output" "probe timeout"; do
     printf '#!/bin/sh\necho ready\necho "%s" >&2\n' "$msg" > "$BIN/agy"; chmod +x "$BIN/agy"
     run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected
-    [[ "$(printf '%s\n' "$output" | grep '^gemini')" == *TIMEOUT* ]] || { echo "$msg: $output"; false; }
+    [[ "$(printf '%s\n' "$output" | grep '^gemini')" == *TIMEOUT* ]] || false
   done
 }
 

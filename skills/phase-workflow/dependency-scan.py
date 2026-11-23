@@ -136,7 +136,8 @@ def scan(root: pathlib.Path, offline: bool) -> int:
         files = sorted(p.relative_to(tree).as_posix() for p in tree.rglob("*") if p.is_file())
         names = {rel: rel.rsplit("/", 1)[-1] for rel in files}
         lockfiles = {rel: eco for rel in files for eco, known in LOCKFILES.items() if names[rel] in known}
-        lockfiles.update({rel: "python" for rel in files if fnmatch.fnmatch(names[rel], REQUIREMENTS)})
+        requirements = {rel for rel in files if fnmatch.fnmatch(names[rel], REQUIREMENTS)}
+        lockfiles.update({rel: "python" for rel in requirements})
 
         gaps, findings, failed = [], [], []
         for rel in files:
@@ -162,12 +163,11 @@ def scan(root: pathlib.Path, offline: bool) -> int:
 
         scanned = 0
         for rel in sorted(lockfiles):
-            requirements = fnmatch.fnmatch(names[rel], REQUIREMENTS)
-            if requirements:
+            if rel in requirements:
                 gaps += [f"NOT SCANNED {rel}: {line} is not pinned"
                          for line in unpinned((tree / rel).read_text(errors="replace"))]
             # The parser prefix keeps a colon in the path from being read as one.
-            parser = "requirements.txt" if requirements else names[rel]
+            parser = "requirements.txt" if rel in requirements else names[rel]
             cmd = [scanner, "scan", "source", "--format", "json", "--no-resolve",
                    *(["--offline"] if offline else []), "-L", f"{parser}:{tree / rel}"]
             run = subprocess.run(cmd, capture_output=True, text=True, cwd=tree)
