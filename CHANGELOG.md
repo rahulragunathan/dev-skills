@@ -10,6 +10,19 @@ here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Fences read the same under zsh and bash (KI-74).** Claude Code's Bash tool runs the login
+  shell, often zsh, where the review loops ran once with every rung as one model, the probe passed
+  `--root <path>` as one word, and discovery named `--effort` as the effort.
+- **Skill arguments no longer rewrite `phase-workflow`'s commands (KI-75).** Claude Code replaces
+  `$1`-style text in a skill invoked with arguments; five awk field programs went with it. The
+  `mid` count now comes from `bats_assertions.py --count-mid`.
+- **The phase record is read by a tested parser, `phase-record.py` (KI-67, KI-69).** The gate
+  checks the first table's `REPO`, `PR` and `Release`, so a companion table, a padded row or a
+  large record no longer misleads it. The first push refuses a record inherited unchanged from
+  the default branch. The review record reaches the PR description only at the gate's head.
+
 ## [2.1.0] - 2026-11-20 — project-docs and September's rules
 
 ### Added

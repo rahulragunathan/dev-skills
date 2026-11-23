@@ -82,8 +82,12 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    # fence: first-push
    set -euo pipefail
    [ "$(git symbolic-ref --quiet --short HEAD)" = "$PHASE_BRANCH" ] || { echo "WRONG BRANCH — stop"; exit 1; }
-   git diff --quiet HEAD -- docs/PHASE_RECORD.md \
-     && git show "${PHASE_BRANCH}:docs/PHASE_RECORD.md" 2>/dev/null | grep -qF "| \`PHASE_BRANCH\` | \`$PHASE_BRANCH\` |" \
+   # The record is committed, its first table names this branch, and it differs from the default
+   # branch's: a reused branch name must not inherit an old phase's record.
+   RECORDED="$(git show HEAD:docs/PHASE_RECORD.md \
+     | python3 "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/phase-record.py" get PHASE_BRANCH)" || RECORDED=""
+   git diff --quiet HEAD -- docs/PHASE_RECORD.md && [ "$RECORDED" = "$PHASE_BRANCH" ] \
+     && ! git diff --quiet "refs/remotes/origin/$DEFAULT_BRANCH" HEAD -- docs/PHASE_RECORD.md \
      || { echo "PHASE RECORD NOT COMMITTED ON $PHASE_BRANCH — stop"; exit 1; }
    git push -u origin "$PHASE_BRANCH"
    ```
@@ -291,7 +295,7 @@ what remains expired.
    - Every finding fixed here gets a failing test first, with its `Red:` line. Run step 3's check on those tests before the next pass, and again before the gate.
 6. **Post-fix drift re-check — narrow, and inside the loop.** Step 5's fixes change code after step 4 declared the docs true, so each round of fixes re-checks what it touched before it is committed for the next pass: the docs and code comments the changed files invalidate, the CHANGELOG entries whose claims moved, and the diagrams if a module moved. That way the next pass reviews them. After the last pass, confirm only that every filing has both its full entry and its ROADMAP pointer row, with ratings that agree, where the roadmap files exist; anything else this finds needs a narrow pass (`external-review`'s [loop](../external-review/SKILL.md#the-loop)). Report what you found, not only what you fixed.
 7. **Present to the user and stop** — the phase gate.
-   - **Include the review record** from step 5 in the hand-off, and put it in the PR description (`gh pr edit <PR number> -R <repository> --body-file <file>`) — never in a per-phase review file in the repository. It exists so the user can see every finding and pull any deferred or accepted one back into this phase before signing off.
+   - **Include the review record** from step 5 in the hand-off, and put it in the PR description once the gate's checks below have passed — never in a per-phase review file in the repository. It exists so the user can see every finding and pull any deferred or accepted one back into this phase before signing off.
    - **Confirm `docs/PHASE_RECORD.md` is current, and do not take that on trust.** Step 4 brought
      it current, but steps 5 to 7 and every re-gate come after step 4. Check, in the committed
      file, that its first table (this repository's phase) names this PR and the release the
@@ -301,17 +305,20 @@ what remains expired.
      # fence: record-check
      set -euo pipefail
      PR="<this phase's PR number>"
+     REPO="<the REPO recorded at phase start>"
      VERSION="$(git show HEAD:CHANGELOG.md | grep -m1 -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' | tr -d '#[] ' || true)"
-     # The first table only: it starts at the first `| Key | Value |` header and ends at the
-     # first line that is not a table row. It must hold one PR row and one Release row.
-     RECORD="$(git show HEAD:docs/PHASE_RECORD.md \
-       | awk '!n && /^\| *Key *\| *Value *\|/ {n = 1} n == 1 {if (/^\|/) print; else exit}')"
-     PRS="$(printf '%s\n' "$RECORD" | awk '/^\| *`PR` *\|/' )"
-     RELEASES="$(printf '%s\n' "$RECORD" | awk '/^\| *Release *\|/' )"
-     [ -n "$PR" ] && [ -n "$VERSION" ] \
-       && [ "$PRS" = "| \`PR\` | $PR |" ] && [ "$RELEASES" = "| Release | v$VERSION |" ] \
-       || { echo "PHASE RECORD DOES NOT NAME PR $PR AND v$VERSION — update it"; exit 1; }
+     # The first table is this repository's phase; phase-record.py reads it and nothing below it.
+     RECORD="$(git show HEAD:docs/PHASE_RECORD.md)"
+     READ="$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/phase-record.py"
+     GOT_REPO="$(printf '%s\n' "$RECORD" | python3 "$READ" get REPO)" || GOT_REPO=""
+     GOT_PR="$(printf '%s\n' "$RECORD" | python3 "$READ" get PR)" || GOT_PR=""
+     GOT_RELEASE="$(printf '%s\n' "$RECORD" | python3 "$READ" get Release)" || GOT_RELEASE=""
+     [ -n "$PR" ] && [ -n "$VERSION" ] && [ "$GOT_REPO" = "$REPO" ] \
+       && [ "$GOT_PR" = "$PR" ] && [ "$GOT_RELEASE" = "v$VERSION" ] \
+       || { echo "PHASE RECORD DOES NOT NAME $REPO PR $PR AND v$VERSION — update it"; exit 1; }
      ```
+
+     Change how the record is read in `phase-record.py` and verify it with `tests/phase-record.bats`.
 
      A later reviewed commit does not make a correct record stale. **A phase whose record names
      another PR or release has not reached the gate**, whatever the tests say — §4 reads
@@ -383,6 +390,15 @@ what remains expired.
      ```
 
      Record these SHAs, the repository, PR number and link, base branch, phase branch, merge method and release tag in the hand-off. Give the phase diff command: `git diff "origin/$DEFAULT_BRANCH"..."$GATE_SHA"`. The user signs off on `GATE_SHA`. Set `APPROVED_SHA` to that recorded value only after approval; never refresh it from a later HEAD.
+
+     Then put the review record in the PR description, at the head the gate verified:
+
+     ```bash
+     # fence: publish-record
+     set -euo pipefail
+     [ "$(git rev-parse HEAD)" = "$GATE_SHA" ] || { echo "HEAD MOVED SINCE THE GATE — stop"; exit 1; }
+     gh pr edit "$PR" -R "$REPO" --body-file "<review record file>"
+     ```
 
      Second, **the reviewer artifacts exist on disk**. Apply
      `external-review`'s [coverage classification](../external-review/SKILL.md#coverage-classification)

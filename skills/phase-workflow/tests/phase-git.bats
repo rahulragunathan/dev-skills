@@ -540,14 +540,21 @@ first_push() {
   sed -i.bak '1i\
 PHASE_BRANCH=feature/x DEFAULT_BRANCH=main
 ' "$TEST_TMP/push.sh"
+  export CLAUDE_PLUGIN_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   git push -q origin main && git fetch -q origin
+}
+
+# write_record <branch>: a phase record whose first table names <branch>.
+write_record() {
+  mkdir -p docs
+  printf '# Phase record\n\n| Key | Value |\n| --- | --- |\n| `REPO` | `fixture/repo` |\n| `PHASE_BRANCH` | `%s` |\n' "$1" > docs/PHASE_RECORD.md
 }
 
 @test "first push: refuses from another branch, and after a commit that drops the record" {
   # Fails if the check reads HEAD while pushing $PHASE_BRANCH, or accepts a deleted record.
   first_push "$BATS_TEST_DIRNAME/../SKILL.md"
   git switch -qc feature/x
-  mkdir -p docs && printf '| `PHASE_BRANCH` | `feature/x` |\n' > docs/PHASE_RECORD.md
+  write_record feature/x
   git add docs && git commit -qm record
   git switch -qc other
   run bash "$TEST_TMP/push.sh"
@@ -563,7 +570,7 @@ PHASE_BRANCH=feature/x DEFAULT_BRANCH=main
   # Control: the fence pushes when the checked-out phase branch carries its record.
   first_push "$BATS_TEST_DIRNAME/../SKILL.md"
   git switch -qc feature/x
-  mkdir -p docs && printf '| `PHASE_BRANCH` | `feature/x` |\n' > docs/PHASE_RECORD.md
+  write_record feature/x
   git add docs && git commit -qm record
   run bash "$TEST_TMP/push.sh"
   [ "$status" -eq 0 ] || false
@@ -612,11 +619,9 @@ after_review() {
 # record_check <pr>: the documented phase-record check, for PR <pr>.
 record_check() {
   extract_fence record-check "$TEST_TMP/record.sh" "$BATS_TEST_DIRNAME/../SKILL.md"
-  if grep -q '^ *PR=' "$TEST_TMP/record.sh"; then
-    sed -i.bak "s|^\\( *\\)PR=.*|\\1PR=$1|" "$TEST_TMP/record.sh"
-  else
-    printf 'PR=%s\n%s\n' "$1" "$(cat "$TEST_TMP/record.sh")" > "$TEST_TMP/record.sh"
-  fi
+  export CLAUDE_PLUGIN_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
+  sed -i.bak -e "s|^\\( *\\)PR=.*|\\1PR=$1|" -e "s|^\\( *\\)REPO=.*|\\1REPO=${2:-fixture/repo}|" "$TEST_TMP/record.sh"
+  grep -q "^ *PR=$1\$" "$TEST_TMP/record.sh" && grep -q "^ *REPO=" "$TEST_TMP/record.sh" || false
 }
 
 @test "phase record: another repository's PR cannot pair with this release" {
@@ -624,7 +629,7 @@ record_check() {
   # table passes with this repository's v2.1.0.
   mkdir -p docs
   printf '## [2.1.0] - 2026-11-22\n' > CHANGELOG.md
-  printf '| Key | Value |\n| --- | --- |\n| `PR` | 9 |\n| Release | v2.1.0 |\n\nCompanion:\n\n| Key | Value |\n| --- | --- |\n| `PR` | 5 |\n| Release | v1.1.0 |\n' > docs/PHASE_RECORD.md
+  printf '| Key | Value |\n| --- | --- |\n| `REPO` | `fixture/repo` |\n| `PR` | 9 |\n| Release | v2.1.0 |\n\nCompanion:\n\n| Key | Value |\n| --- | --- |\n| `REPO` | `fixture/other` |\n| `PR` | 5 |\n| Release | v1.1.0 |\n' > docs/PHASE_RECORD.md
   git add -A && git commit -qm record
   record_check 5
   run bash "$TEST_TMP/record.sh"
@@ -639,7 +644,7 @@ record_check() {
   # or a second PR row, can satisfy it (F-149).
   mkdir -p docs
   printf '## [2.1.0] - 2026-11-22\n' > CHANGELOG.md
-  printf '| Key   | Value |\n| --- | --- |\n| `PR` | 9 |\n| Release | v2.1.0 |\n\nCompanion:\n\n| Field | Value |\n| --- | --- |\n| `PR` | 5 |\n' > docs/PHASE_RECORD.md
+  printf '| Key   | Value |\n| --- | --- |\n| `REPO` | `fixture/repo` |\n| `PR` | 9 |\n| Release | v2.1.0 |\n\nCompanion:\n\n| Field | Value |\n| --- | --- |\n| `PR` | 5 |\n' > docs/PHASE_RECORD.md
   git add -A && git commit -qm record
   record_check 5
   run bash "$TEST_TMP/record.sh"
@@ -647,7 +652,7 @@ record_check() {
   record_check 9
   run bash "$TEST_TMP/record.sh"
   [ "$status" -eq 0 ] || false
-  printf '| Key | Value |\n| --- | --- |\n| `PR` | 9 |\n| `PR` | 5 |\n| Release | v2.1.0 |\n' > docs/PHASE_RECORD.md
+  printf '| Key | Value |\n| --- | --- |\n| `REPO` | `fixture/repo` |\n| `PR` | 9 |\n| `PR` | 5 |\n| Release | v2.1.0 |\n' > docs/PHASE_RECORD.md
   git commit -qam two-prs
   record_check 5
   run bash "$TEST_TMP/record.sh"
@@ -737,4 +742,91 @@ prune_in() {
   # Fails if the field reading differs under zsh.
   command -v zsh >/dev/null || skip "zsh is not installed"
   prune_in zsh -f
+}
+
+# --- the phase record's first table (KI-67, KI-69) --------------------------
+
+@test "phase record: a companion table with the same PR and release is not this repository's" {
+  # Fails if the gate accepts a first table that names another repository (F-05).
+  mkdir -p docs
+  printf '## [2.1.0] - 2026-11-22\n' > CHANGELOG.md
+  printf '| Key | Value |\n| --- | --- |\n| `REPO` | `fixture/other` |\n| `PR` | 9 |\n| Release | v2.1.0 |\n\n| Key | Value |\n| --- | --- |\n| `REPO` | `fixture/repo` |\n| `PR` | 9 |\n| Release | v2.1.0 |\n' > docs/PHASE_RECORD.md
+  git add -A && git commit -qm record
+  record_check 9 fixture/repo
+  run bash "$TEST_TMP/record.sh"
+  [ "$status" -ne 0 ] || false
+  [[ "$output" == *"PHASE RECORD DOES NOT NAME"* ]]
+}
+
+@test "phase record: the gate reads a large record to its end under pipefail" {
+  # Fails if the reader stops early and the producer dies of SIGPIPE, failing a valid gate.
+  mkdir -p docs
+  printf '## [2.1.0] - 2026-11-22\n' > CHANGELOG.md
+  { printf '| Key | Value |\n| --- | --- |\n| `REPO` | `fixture/repo` |\n| `PR` | 9 |\n| Release | v2.1.0 |\n\n'
+    for i in $(seq 1 100000); do echo "padding line $i"; done; } > docs/PHASE_RECORD.md
+  git add -A && git commit -qm record
+  record_check 9
+  run bash "$TEST_TMP/record.sh"
+  [ "$status" -eq 0 ]
+}
+
+@test "first push: refuses a record inherited unchanged from the default branch" {
+  # Fails if a reused branch name lets the default branch's old record pass (KI-67).
+  first_push "$BATS_TEST_DIRNAME/../SKILL.md"
+  write_record feature/x
+  git add docs && git commit -qm "old phase's record"
+  git push -q origin main && git fetch -q origin
+  git switch -qc feature/x
+  run bash "$TEST_TMP/push.sh"
+  [ "$status" -ne 0 ] || false
+  ! git ls-remote --exit-code --heads origin feature/x >/dev/null
+}
+
+@test "first push: refuses a record changed and then reverted on the branch" {
+  # Fails if a commit touching the record counts although the tip matches the default branch.
+  first_push "$BATS_TEST_DIRNAME/../SKILL.md"
+  write_record feature/x
+  git add docs && git commit -qm "old phase's record"
+  git push -q origin main && git fetch -q origin
+  git switch -qc feature/x
+  printf 'edit\n' >> docs/PHASE_RECORD.md && git commit -qam edit
+  git revert --no-edit HEAD >/dev/null
+  run bash "$TEST_TMP/push.sh"
+  [ "$status" -ne 0 ] || false
+  ! git ls-remote --exit-code --heads origin feature/x >/dev/null
+}
+
+@test "first push: refuses a record whose first table names another branch" {
+  # Fails if a PHASE_BRANCH row in a later table satisfies the check.
+  first_push "$BATS_TEST_DIRNAME/../SKILL.md"
+  git switch -qc feature/x
+  write_record feature/old
+  printf '\n| Key | Value |\n| --- | --- |\n| `PHASE_BRANCH` | `feature/x` |\n' >> docs/PHASE_RECORD.md
+  git add docs && git commit -qm record
+  run bash "$TEST_TMP/push.sh"
+  [ "$status" -ne 0 ] || false
+  ! git ls-remote --exit-code --heads origin feature/x >/dev/null
+}
+
+# publish_record <gate sha>: the documented PR-description step, with gh faked.
+publish_record() {
+  extract_fence publish-record "$TEST_TMP/publish.sh" "$BATS_TEST_DIRNAME/../SKILL.md"
+  mkdir -p "$TEST_TMP/bin"
+  printf '#!/bin/bash\nprintf "%%s\\n" "$*" >> "%s/gh-calls"\n' "$TEST_TMP" > "$TEST_TMP/bin/gh"
+  chmod +x "$TEST_TMP/bin/gh"
+  printf 'record\n' > "$TEST_TMP/record.md"
+  sed -i.bak "s|<review record file>|$TEST_TMP/record.md|" "$TEST_TMP/publish.sh"
+  printf 'PR=9 REPO=fixture/repo GATE_SHA=%s\n%s\n' "$1" "$(cat "$TEST_TMP/publish.sh")" > "$TEST_TMP/publish.sh"
+}
+
+@test "the review record reaches the PR only at the gate's verified head" {
+  # Fails if the PR description is edited when HEAD is not the SHA the gate verified.
+  publish_record 0000000000000000000000000000000000000000
+  PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/publish.sh"
+  [ "$status" -ne 0 ] || false
+  [ ! -e "$TEST_TMP/gh-calls" ] || false
+  publish_record "$(git rev-parse HEAD)"
+  PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/publish.sh"
+  [ "$status" -eq 0 ] || false
+  grep -q '^pr edit 9 -R fixture/repo --body-file' "$TEST_TMP/gh-calls"
 }

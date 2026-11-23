@@ -54,8 +54,6 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-62](KNOWN_ISSUES.md#ki-62) | The post-review gate check can miss a rename's source | Rare | High |
 | [KI-63](KNOWN_ISSUES.md#ki-63) | A quoted refusal of the same model can still downshift Codex | Rare | High |
 | [KI-64](KNOWN_ISSUES.md#ki-64) | The Codex probe runs in the caller's folder when ROOT is unset | Rare | High |
-| [KI-69](KNOWN_ISSUES.md#ki-69) | The phase-record check still misreads some record layouts | Rare | High |
-| [KI-67](KNOWN_ISSUES.md#ki-67) | The first push accepts a phase record inherited from the default branch | Rare | High |
 | [KI-49](KNOWN_ISSUES.md#ki-49) | The headline tally mixes two skills | Almost always | Medium |
 | [KI-50](KNOWN_ISSUES.md#ki-50) | S05's fixture contradicts itself | Almost always | Medium |
 | [KI-36](KNOWN_ISSUES.md#ki-36) | A grader quote of a table cell that holds a pipe is refused | Likely | Medium |
