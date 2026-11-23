@@ -949,3 +949,11 @@ origin_refused() {
   [ "$status" -ne 0 ] || false
   [[ "$output" == *"HEAD MOVED SINCE THE POST-REVIEW CHECK"* ]]
 }
+
+@test "origin check: a local path holding # is not taken for a credential" {
+  # Fails if the query/fragment rule meant for URLs refuses a local path.
+  local url="$TEST_TMP/repo#2.git"
+  git remote set-url origin "$url"; git remote set-url --push origin "$url"
+  run bash "$PUBLISH" --check-origin "$url" "$url"
+  [ "$status" -eq 0 ]
+}

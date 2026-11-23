@@ -4,9 +4,10 @@
 Usage:
     dependency-scan.py [--root DIR] [--offline]
 
-It reads only what is committed at HEAD, from an export of its regular files, so
-an untracked or ignored file, an untracked osv-scanner.toml and a symlink's
-target cannot change the verdict. A tracked osv-scanner.toml is honoured, and
+It reads only what is committed at HEAD, blob by blob from git's tree (so
+export-ignore attributes drop nothing), so an untracked or ignored file and an
+untracked osv-scanner.toml cannot change the verdict. A committed symlink is
+never followed; one named like a lockfile is a coverage gap. A tracked osv-scanner.toml is honoured, and
 the output names what it ignores. Each supported file is scanned on its own,
 so its own exit status counts. Nothing is installed: lockfiles are read as
 they are.
@@ -32,7 +33,6 @@ import pathlib
 import re
 import shutil
 import subprocess
-import tarfile
 import tempfile
 
 # The lockfiles osv-scanner reads exactly, by ecosystem. requirements*.txt is
@@ -51,29 +51,38 @@ REQUIREMENTS = "requirements*.txt"
 # folder or a folder above it, or the versions it runs with are unknown.
 MANIFESTS = {"package.json": "npm", "Cargo.toml": "cargo", "Gemfile": "ruby",
              "composer.json": "php", "pyproject.toml": "python"}
-PINNED = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*(\[[^\]]*\])?\s*===?\s*[^\s;,]+\s*(;.*)?$")
+PINNED = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*(\[[^\]]*\])?\s*===?\s*[^\s;,\\]+\s*(;.*)?$")
+# pip-compile --generate-hashes adds options and continuation lines after a pin.
+OPTIONS = re.compile(r"\s+--[\w-]+(=\S*)?|\s*\\$")
 IGNORED_ID = re.compile(r'^\s*id\s*=\s*"([^"]+)"', re.M)
 INSTALL_HINT = "brew install osv-scanner (dev-setup's bootstrap.sh installs it)"
 
 
-def export_head(root: pathlib.Path, into: pathlib.Path) -> None:
-    """Regular files committed at HEAD, nothing else: no symlink is followed."""
-    archive = subprocess.run(["git", "-c", "core.fsmonitor=false", "-C", str(root), "archive", "HEAD"],
-                             capture_output=True)
-    if archive.returncode != 0:
-        raise RuntimeError(archive.stderr.decode(errors="replace").strip() or "git archive failed")
-    with tempfile.TemporaryFile() as tar_bytes:
-        tar_bytes.write(archive.stdout)
-        tar_bytes.seek(0)
-        with tarfile.open(fileobj=tar_bytes) as tar:
-            for member in tar.getmembers():
-                parts = pathlib.PurePosixPath(member.name).parts
-                if not member.isreg() or member.name.startswith("/") or ".." in parts:
-                    continue
-                target = into.joinpath(*parts)
-                target.parent.mkdir(parents=True, exist_ok=True)
-                with tar.extractfile(member) as src, open(target, "wb") as dst:
-                    shutil.copyfileobj(src, dst)
+def export_head(root: pathlib.Path, into: pathlib.Path) -> list[str]:
+    """Write the regular files committed at HEAD into `into`; return the paths of
+    committed symlinks, which are never followed."""
+    git = ["git", "-c", "core.fsmonitor=false", "-C", str(root)]
+    tree = subprocess.run([*git, "ls-tree", "-r", "-z", "HEAD"], capture_output=True)
+    if tree.returncode != 0:
+        raise RuntimeError(tree.stderr.decode(errors="replace").strip() or "git ls-tree failed")
+    links = []
+    for record in filter(None, tree.stdout.split(b"\0")):
+        meta, _, path = record.partition(b"\t")
+        mode, kind, sha = meta.decode().split()
+        rel = path.decode("utf-8", errors="surrogateescape")
+        parts = pathlib.PurePosixPath(rel).parts
+        if mode == "120000":
+            links.append(rel)
+            continue
+        if kind != "blob" or rel.startswith("/") or ".." in parts:
+            continue
+        blob = subprocess.run([*git, "cat-file", "blob", sha], capture_output=True)
+        if blob.returncode != 0:
+            raise RuntimeError(f"cannot read {rel} at HEAD")
+        target = into.joinpath(*parts)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(blob.stdout)
+    return links
 
 
 def folder_of(rel: str) -> str:
@@ -92,9 +101,10 @@ def declares_dependencies(name: str, text: str) -> bool:
         return True              # unreadable: assume it does, so a gap is not hidden
     if name == "pyproject.toml":
         project = re.search(r"^dependencies\s*=\s*\[\s*[^\]\s]", text, re.M)
-        poetry = re.search(r"^\[tool\.poetry(?:\.group\.\w+)?\.dependencies\]\s*\n(.*?)(?=^\[|\Z)",
+        groups = re.search(r"^\[(?:dependency-groups|project\.optional-dependencies)\]\s*\n\s*[\w-]+\s*=", text, re.M)
+        poetry = re.search(r"^\[tool\.poetry(?:\.group\.[^\].]+)?\.dependencies\]\s*\n(.*?)(?=^\[|\Z)",
                            text, re.M | re.S)
-        return bool(project) or bool(poetry and any(
+        return bool(project) or bool(groups) or bool(poetry and any(
             line.strip() and not line.strip().startswith(("#", "python"))
             for line in poetry[1].splitlines()))
     return True
@@ -104,7 +114,7 @@ def unpinned(text: str) -> list[str]:
     """Requirement lines without an exact version, which the scanner skips silently."""
     out = []
     for line in text.splitlines():
-        line = line.split(" #", 1)[0].strip()
+        line = OPTIONS.sub("", line.split(" #", 1)[0]).strip()
         if line and not line.startswith(("#", "-")) and not PINNED.match(line):
             out.append(line)
     return out
@@ -129,7 +139,7 @@ def scan(root: pathlib.Path, offline: bool) -> int:
         tree = pathlib.Path(tmp) / "head"
         tree.mkdir()
         try:
-            export_head(root, tree)
+            links = export_head(root, tree)
         except RuntimeError as exc:
             print(f"cannot read HEAD of {root}: {exc}")
             return 2
@@ -140,6 +150,10 @@ def scan(root: pathlib.Path, offline: bool) -> int:
         lockfiles.update({rel: "python" for rel in requirements})
 
         gaps, findings, failed = [], [], []
+        for rel in links:
+            name = rel.rsplit("/", 1)[-1]
+            if any(name in known for known in LOCKFILES.values()) or fnmatch.fnmatch(name, REQUIREMENTS):
+                gaps.append(f"NOT SCANNED {rel}: a symlink, not read")
         for rel in files:
             eco = MANIFESTS.get(names[rel])
             if not eco or not declares_dependencies(names[rel], (tree / rel).read_text(errors="replace")):
@@ -152,7 +166,8 @@ def scan(root: pathlib.Path, offline: bool) -> int:
                 print(f"{rel} ignores {', '.join(ids) if ids else 'nothing'}")
 
         if not lockfiles:
-            print("\n".join(gaps) if gaps else "no supported dependency files")
+            for line in gaps or ["no supported dependency files"]:
+                print(line)
             return 3 if gaps else 0
         scanner = shutil.which("osv-scanner")
         if not scanner:
@@ -179,10 +194,15 @@ def scan(root: pathlib.Path, offline: bool) -> int:
                 failed.append(f"osv-scanner failed on {rel} (exit {run.returncode}): {err}")
                 continue
             try:
-                findings += findings_in(run.stdout, rel)
+                found = findings_in(run.stdout, rel)
             except (ValueError, AttributeError):
                 failed.append(f"osv-scanner gave unreadable output for {rel}")
                 continue
+            if run.returncode == 1 and not found:
+                # Exit 1 means it found something; an answer we cannot read is not clean.
+                failed.append(f"osv-scanner reported vulnerabilities but none could be read for {rel}")
+                continue
+            findings += found
             scanned += 1
         for line in failed + findings + gaps:
             print(line)

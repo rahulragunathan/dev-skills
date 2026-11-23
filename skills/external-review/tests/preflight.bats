@@ -778,3 +778,11 @@ PY
   run bash "$TEST_TMP/gemini.sh"
   [ "$(cat "$base.state")" = cut-off ]
 }
+
+@test "a ready answer beside agy's print timeout setting is READY" {
+  # Fails if a line that only announces the print timeout is taken for a cut-off.
+  fake_codex_ready
+  printf '#!/bin/sh\necho ready\necho "[agy] print timeout set to 120s" >&2\n' > "$BIN/agy"; chmod +x "$BIN/agy"
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected
+  [[ "$(printf '%s\n' "$output" | grep '^gemini')" == *READY* ]]
+}

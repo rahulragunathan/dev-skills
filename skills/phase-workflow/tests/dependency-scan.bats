@@ -72,7 +72,7 @@ scan() { run python3 "$SCAN" --root "$REPO" "$@"; }
   mkdir -p "$REPO/sub" && ln -s "$TEST_TMP/outside.lock" "$REPO/sub/Cargo.lock"
   git -C "$REPO" add sub/Cargo.lock && git -C "$REPO" commit -qm link
   scan
-  [ "$status" -eq 0 ] || false
+  [ "$status" -eq 3 ] || false              # the symlinked lockfile is a gap, not read
   [ "$(wc -l < "$TEST_TMP/calls" | tr -d ' ')" = 3 ] || false
   [[ "$(cat "$TEST_TMP/calls")" != *poetry.lock* ]] || false
   [[ "$(cat "$TEST_TMP/calls")" != *node_modules* ]] || false
@@ -205,4 +205,58 @@ fence_in() {
   # Fails if the fence reads differently under zsh.
   command -v zsh >/dev/null || skip "zsh is not installed"
   fence_in zsh -f
+}
+
+# --- /code-review high fixes ---------------------------------------------------
+
+@test "exit 1 with no readable finding is a scanner failure, not clean" {
+  # Fails if osv-scanner says it found something and the run still reports clean.
+  put uv.lock 'VULNSHAPE'
+  cat > "$BIN/osv-scanner" <<'SH'
+#!/bin/bash
+printf '%s\n' "$*" >> "$TEST_TMP/calls"
+echo '{"results": [{"source": {"path": "x"}, "advisories": []}]}'; exit 1
+SH
+  chmod +x "$BIN/osv-scanner"
+  scan
+  [ "$status" -eq 2 ] || false
+  [[ "$output" == *"reported vulnerabilities but none could be read"* ]]
+}
+
+@test "a lockfile marked export-ignore is still scanned" {
+  # Fails if git archive's export-ignore drops a committed lockfile from the scan.
+  put composer.lock 'clean'
+  put .gitattributes 'composer.lock export-ignore'
+  scan
+  [ "$status" -eq 0 ] || false
+  grep -q 'composer.lock' "$TEST_TMP/calls"
+}
+
+@test "a tracked symlink named like a lockfile is a coverage gap" {
+  # Fails if a lockfile that is a symlink is skipped without a word.
+  printf 'VULN\n' > "$TEST_TMP/outside.lock"
+  ln -s "$TEST_TMP/outside.lock" "$REPO/Cargo.lock"
+  git -C "$REPO" add Cargo.lock && git -C "$REPO" commit -qm link
+  scan
+  [ "$status" -eq 3 ] || false
+  [[ "$output" == *"NOT SCANNED Cargo.lock: a symlink, not read"* ]]
+}
+
+@test "hash-pinned requirements are pinned" {
+  # Fails if pip-compile's hash lines are each reported as unpinned.
+  put requirements.txt "$(printf 'six==1.17.0 \\\n    --hash=sha256:abc\nidna==3.7 --hash=sha256:def\n')"
+  scan
+  [ "$status" -eq 0 ] || false
+  [[ "$output" != *"NOT SCANNED"* ]]
+}
+
+@test "dependency groups and optional dependencies count as declared" {
+  # Fails if a pyproject.toml whose dependencies sit in a group is read as tooling-only.
+  local body
+  for body in '[dependency-groups]\ndev = ["requests==2.0"]\n' '[project.optional-dependencies]\nweb = ["flask"]\n' \
+              '[tool.poetry.group.dev-tools.dependencies]\npytest = "^8"\n'; do
+    printf "$body" > "$REPO/pyproject.toml"; git -C "$REPO" add pyproject.toml; git -C "$REPO" commit -qm "$body"
+    scan
+    [ "$status" -eq 3 ] || { echo "$body: $output"; false; }
+  done
 }

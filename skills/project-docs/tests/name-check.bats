@@ -605,3 +605,10 @@ PY
   [[ "$output" == *"missing link [guide]"* ]] || false
   [[ "$output" != *"[kept]"* ]]
 }
+
+@test "an index expression is not a reference link" {
+  # Fails if grid[row][col] in prose is reported as a link with no definition.
+  put doc.md 'The cell is read as grid[row][col], or as m[0][1].'
+  check
+  [ "$status" -eq 0 ]
+}

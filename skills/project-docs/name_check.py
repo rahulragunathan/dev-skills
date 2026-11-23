@@ -48,7 +48,7 @@ IGNORE = re.compile(r"<!--\s*name-check:\s*ignore\s+(.+?)\s*-->")
 REFDEF = re.compile(r"^ {0,3}\[[^\]]+\]:\s*<?([^\s>]+)>?")
 REFDEF_LABEL = re.compile(r"^ {0,3}\[([^\]]+)\]:")
 # A full or collapsed reference, [text][label] or [label][]; a shortcut [label] reads as prose.
-REFUSE = re.compile(r"\[([^\[\]\n]+)\]\[([^\[\]\n]*)\]")
+REFUSE = re.compile(r"(?<![\w\]])\[([^\[\]\n]+)\]\[([^\[\]\n]*)\]")  # not an index like a[0][1]
 # A script named without a folder: matched against tracked basenames.
 SCRIPT_NAME = re.compile(r"[\w.-]+\.(?:py|sh)")
 # The plugin's own root, as the skills spell it in commands.

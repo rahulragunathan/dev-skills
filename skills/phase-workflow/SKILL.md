@@ -353,6 +353,7 @@ what remains expired.
      set -euo pipefail
      REVIEWED="<commit the last pass reviewed>"
      INSPECTED="$(git rev-parse --verify HEAD)"   # the gate below must find this same head
+     echo "Inspected: $INSPECTED — set INSPECTED to this in the gate block"
      git merge-base --is-ancestor "$REVIEWED" "$INSPECTED" || { echo "REVIEWED COMMIT REWRITTEN — run a full pass"; exit 1; }
      # --no-renames lists both sides of a move, so a file cannot arrive under an allowed name.
      CHANGED="$(git --no-pager diff --no-ext-diff --no-renames --name-only "$REVIEWED" "$INSPECTED")" \
@@ -372,7 +373,7 @@ what remains expired.
      Read that patch: a filing and a fix can share a file, and in the record only the `PR` and `Release` rows may change. Anything else needs a narrow pass first. Name what landed in the hand-off.
    - **The gate has two checkable states.** First, **the work is committed, pushed, and on a PR marked ready for review** — every one of those is a fact git or `gh` will answer, none is self-attested:
 
-     Load the phase's recorded `ORIGIN_URL`, `ORIGIN_PUSH_URL`, `REPO`, `DEFAULT_BRANCH`, `PHASE_BRANCH` and `MERGE_METHOD`. Preserve the §2 URL values in the hand-off; do not refresh them from the current remote. Set `PR` to this phase's PR number. This workflow uses a same-repository PR.
+     Load the phase's recorded `ORIGIN_URL`, `ORIGIN_PUSH_URL`, `REPO`, `DEFAULT_BRANCH`, `PHASE_BRANCH` and `MERGE_METHOD`. Set `INSPECTED` to the head the post-review check printed; never re-derive it from `HEAD`, which is what it guards. Preserve the §2 URL values in the hand-off; do not refresh them from the current remote. Set `PR` to this phase's PR number. This workflow uses a same-repository PR.
 
      ```bash
      # fence: gate

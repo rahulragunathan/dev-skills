@@ -82,7 +82,7 @@ DOWN=()
 # here rather than at each call site.
 # A deadline or explicit cut-off, which overrides even a ready answer. A retried
 # request that merely mentions a timeout is not one, but explains a failure.
-CUT_OFF='probe timeout|print timeout|turn in progress'
+CUT_OFF='probe timeout|print timeout after|turn in progress'
 cut_off() { grep -qiE "$CUT_OFF" "$1"; }
 timed_out() { grep -qiE "$CUT_OFF|timed out" "$1"; }
 

@@ -453,12 +453,13 @@ def verify_references(docs: pathlib.Path) -> tuple[bool, list[str]]:
                             findings.append(f"  {eid}: fragment on a directory link: {ref.target}")
                     elif not path.is_file():
                         findings.append(f"  {eid}: cited path is not a file: {ref.target}")
+                    elif path.is_relative_to(docs) and path.suffix == ".md":
+                        # A doc in docs/ is cited for its existence and never opened;
+                        # source there needs a fragment.
+                        continue
                     elif (credential_shaped(named)
                           or credential_shaped(str(path.relative_to(docs.parent)))):
                         findings.append(f"  {eid}: refusing to read a credential-shaped file: {ref.target}")
-                    elif path.is_relative_to(docs) and path.suffix == ".md":
-                        # A doc in docs/ is cited for its existence; source there needs a fragment.
-                        continue
                     elif ref.fragment is None:
                         findings.append(f"  {eid}: file link with no fragment: {ref.target}")
                     # This floor rejects degenerate fragments (spaces, fi, do, {),

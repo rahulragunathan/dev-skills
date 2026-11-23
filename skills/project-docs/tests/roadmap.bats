@@ -1480,3 +1480,11 @@ PY
   echo "$output" >&3
   [ "$status" -eq 0 ]
 }
+
+@test "check: a Markdown doc in docs/ named like a credential is still an existence-only reference" {
+  # Fails if the credential screen refuses a doc that check never opens.
+  printf '# Rotation\n' > "$DOCS/credentials-rotation.md"
+  where_on_enh '**Where:** [rotation](credentials-rotation.md)'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}

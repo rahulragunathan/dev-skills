@@ -62,7 +62,7 @@ kind() {
 # has_credentials <url> <kind>: a password, token or query in an accepted form.
 # A bare user is allowed over ssh (ssh://git@host) and in the scp form.
 has_credentials() {
-  case "$1" in *'?'*|*'#'*) return 0 ;; esac
+  case "$2:$1" in url:*'?'*|url:*'#'*|scp:*'?'*|scp:*'#'*) return 0 ;; esac
   case "$2" in
     url)
       local rest="${1#*://}"
