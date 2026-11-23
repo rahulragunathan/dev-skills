@@ -43,6 +43,7 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | ID | Issue | Likelihood | Severity |
 | ---- | ------- | ---------- | ---------- |
 | [KI-57](KNOWN_ISSUES.md#ki-57) | `roadmap.py close` can lose a concurrent edit and rewrites line endings | Rare | Critical |
+| [KI-70](KNOWN_ISSUES.md#ki-70) | The origin check still lets some helper URLs through, and passes when grep fails | Rare | Critical |
 | [KI-47](KNOWN_ISSUES.md#ki-47) | Grading packets omit information their conditions require | Almost always | High |
 | [KI-48](KNOWN_ISSUES.md#ki-48) | S07's with-skill arm is handed the answer it is graded on | Almost always | High |
 | [KI-60](KNOWN_ISSUES.md#ki-60) | Helper commands need `CLAUDE_PLUGIN_ROOT`, which a Codex install does not set | Almost always | High |
@@ -53,19 +54,23 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-62](KNOWN_ISSUES.md#ki-62) | The post-review gate check can miss a rename's source | Rare | High |
 | [KI-63](KNOWN_ISSUES.md#ki-63) | A quoted refusal of the same model can still downshift Codex | Rare | High |
 | [KI-64](KNOWN_ISSUES.md#ki-64) | The Codex probe runs in the caller's folder when ROOT is unset | Rare | High |
+| [KI-69](KNOWN_ISSUES.md#ki-69) | The phase-record check still misreads some record layouts | Rare | High |
+| [KI-67](KNOWN_ISSUES.md#ki-67) | The first push accepts a phase record inherited from the default branch | Rare | High |
 | [KI-49](KNOWN_ISSUES.md#ki-49) | The headline tally mixes two skills | Almost always | Medium |
 | [KI-50](KNOWN_ISSUES.md#ki-50) | S05's fixture contradicts itself | Almost always | Medium |
 | [KI-36](KNOWN_ISSUES.md#ki-36) | A grader quote of a table cell that holds a pipe is refused | Likely | Medium |
 | [KI-39](KNOWN_ISSUES.md#ki-39) | `print` with an f-string argument still hides later guards | Likely | Medium |
 | [KI-55](KNOWN_ISSUES.md#ki-55) | The plan review cannot run while the plan is inside the repository | Likely | Medium |
 | [KI-51](KNOWN_ISSUES.md#ki-51) | Rejected grading attempts are not retained | Likely | Medium |
+| [KI-73](KNOWN_ISSUES.md#ki-73) | The release-version test is skipped when its file runs directly | Likely | Medium |
+| [KI-66](KNOWN_ISSUES.md#ki-66) | Progress lines can misreport a Gemini run's age and state | Likely | Medium |
 | [KI-41](KNOWN_ISSUES.md#ki-41) | Converting a large sequence to text has no size bound | Rare | Medium |
 | [KI-43](KNOWN_ISSUES.md#ki-43) | A ready reviewer probe reads as TIMEOUT when stderr mentions a timeout | Rare | Medium |
 | [KI-65](KNOWN_ISSUES.md#ki-65) | init can leave work behind on a signal during error cleanup, and creates files at 0644 | Rare | Medium |
-| [KI-66](KNOWN_ISSUES.md#ki-66) | Progress lines can misreport a Gemini run's age and state | Rare | Medium |
-| [KI-67](KNOWN_ISSUES.md#ki-67) | The first push accepts a phase record inherited from the default branch | Rare | Medium |
 | [KI-68](KNOWN_ISSUES.md#ki-68) | The name check can stop on a folder it may not read | Rare | Medium |
+| [KI-71](KNOWN_ISSUES.md#ki-71) | Gemini discovery blames agy when the ranker fails | Rare | Medium |
 | [KI-44](KNOWN_ISSUES.md#ki-44) | A stale dispatch log gives a misleading replacement message | Rare | Low |
+| [KI-72](KNOWN_ISSUES.md#ki-72) | init's failure message overstates what it left behind | Rare | Low |
 
 ## Enhancements
 

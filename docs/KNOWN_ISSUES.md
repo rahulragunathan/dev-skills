@@ -76,6 +76,35 @@ install. Preserve the newline style, and compare surviving slices without stripp
 
 ---
 
+<a id="ki-70"></a>
+
+## KI-70 — the origin check still lets some helper URLs through, and passes when grep fails
+
+**Severity:** Critical
+**Likelihood:** Rare
+**Where:** [publish-release.sh](../skills/phase-workflow/publish-release.sh) — `TRANSPORT HELPER IN ORIGIN URL`
+
+### What happens
+
+The transport-helper refusal matches only names that start with a letter, so `9p::…`,
+`my_helper::…` or an empty `::…` prefix passes, and git can also hand an unknown `scheme://` to a
+custom helper. A `grep` that fails to run reads as "no match", so the check passes.
+
+### Example scenario
+
+A push URL `9p::https://token@host/r.git` passes `--check-origin`, and phase start records the
+token in `docs/PHASE_RECORD.md`.
+
+### Notes for a fix
+
+Refuse any `::` before the first `/` or single `:`, accept only the schemes a phase needs
+(ssh, https, the scp form), and use the shell's own pattern matching so no external command can
+fail open. Test each case in both URL positions with its exact diagnostic.
+
+**Source:** gpt-6.2-astra:high, gemini-4-neon-high — phase review pass 7, project-docs phase, 2026-11-22.
+
+---
+
 <a id="ki-47"></a>
 
 ## KI-47 — grading packets omit information their conditions require
@@ -297,14 +326,15 @@ Find the field anywhere on an unfenced line, refuse absolute and empty targets, 
 
 **Severity:** High
 **Likelihood:** Rare
-**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `CHANGED AFTER REVIEW`
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `CHANGED AFTER REVIEW`, [external-review/SKILL.md](../skills/external-review/SKILL.md) — `git diff <commit the last pass reviewed>..HEAD`
 
 ### What happens
 
 `git diff --name-only` reports only the destination of a detected rename, so a file moved
 from outside the bookkeeping set into an allowed path passes the path check, and the patch that
 follows can show the old file's content. `|| true` also hides a failed listing, and `HEAD` is
-read twice.
+read twice. `external-review`'s loop still tells the agent to read a plain `git diff`, without
+`--no-ext-diff --no-textconv`.
 
 ### Example scenario
 
@@ -316,7 +346,7 @@ A post-review commit renames a skill file to `docs/ROADMAP.md`. The check lists 
 Pin the gate commit once, list both sides with `--no-renames`, fail on a failed listing, and
 pass the five allowed paths to the patch command.
 
-**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review passes 4 and 5, project-docs phase, 2026-11-22.
+**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review pass 4, project-docs phase, 2026-11-22.
 
 ---
 
@@ -344,7 +374,7 @@ quoted refusal moves it to a weaker model.
 Confirm an apparent refusal with a short probe of the same model and effort before
 downshifting.
 
-**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review passes 4 and 5, project-docs phase, 2026-11-22.
+**Source:** gpt-6.2-astra:high — phase review pass 4, project-docs phase, 2026-11-22.
 
 ---
 
@@ -372,7 +402,64 @@ checkout.
 Require a root whenever a Codex candidate will run, and refuse the excluded Gemini suffixes
 in the probe.
 
-**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review passes 4 and 5, project-docs phase, 2026-11-22.
+**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review pass 4, project-docs phase, 2026-11-22; gpt-6.2-astra:high — pass 5.
+
+---
+
+<a id="ki-69"></a>
+
+## KI-69 — the phase-record check still misreads some record layouts
+
+**Severity:** High
+**Likelihood:** Rare
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `PHASE RECORD DOES NOT NAME PR`
+
+### What happens
+
+The check takes the first `| Key | Value |` table, so a first table under another header, or
+a fenced example header, lets a companion table count. A tab-padded second PR row is missed and
+an aligned valid row is rejected. Its awk stops reading early, so a large record makes
+`git show` exit 141 under `pipefail`. The step also edits the PR description before the gate
+has verified the PR number.
+
+### Example scenario
+
+A record whose first table is headed `| Field | Value |` passes the gate for the companion
+repository's PR.
+
+### Notes for a fix
+
+Parse the first actual table, trim cells, count each key, read to the end of input, and move
+the PR-description edit after the head checks.
+
+**Source:** gpt-6.2-astra:high, gemini-4-neon-high — phase review pass 6, project-docs phase, 2026-11-22.
+
+---
+
+<a id="ki-67"></a>
+
+## KI-67 — the first push accepts a phase record inherited from the default branch
+
+**Severity:** High
+**Likelihood:** Rare
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `PHASE RECORD NOT COMMITTED ON`
+
+### What happens
+
+The check reads the branch tip for the branch-name row, which an unchanged record from the
+default branch can carry when a branch name is reused, or a second table can supply.
+
+### Example scenario
+
+A phase branch reuses an old name; the inherited record passes and the branch publishes
+without a new record.
+
+### Notes for a fix
+
+Also require a commit on the phase range that touches the record, and read the first table
+only, as the gate's record check does.
+
+**Source:** gpt-6.2-astra:high — phase review pass 4, project-docs phase, 2026-11-22.
 
 ---
 
@@ -561,6 +648,62 @@ refusing to review a tree that differs from HEAD, so prefer the wording.
 
 ---
 
+<a id="ki-73"></a>
+
+## KI-73 — the release-version test is skipped when its file runs directly
+
+**Severity:** Medium
+**Likelihood:** Likely
+**Where:** [test_plugin_name.py](../tests/test_plugin_name.py) — `class ReleaseVersionTest`
+
+### What happens
+
+`ReleaseVersionTest` is defined after `unittest.main()`, so `python3 tests/test_plugin_name.py`
+runs without it and passes even when the manifest and CHANGELOG disagree. A CHANGELOG with no
+release heading also raises `TypeError` instead of failing the test.
+
+### Example scenario
+
+A release keeps `plugin.json` at the old version; running the file directly reports OK.
+
+### Notes for a fix
+
+Move the main guard below every class and assert the heading exists first. Discovery
+(`python3 -m unittest discover tests`) already runs it.
+
+**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review pass 4, project-docs phase, 2026-11-22 (was part of ENH-37).
+
+---
+
+<a id="ki-66"></a>
+
+## KI-66 — progress lines can misreport a Gemini run's age and state
+
+**Severity:** Medium
+**Likelihood:** Likely
+**Where:** [progress.sh](../skills/external-review/progress.sh) — `*.partial) echo`
+
+### What happens
+
+`progress.sh` dates a streaming Gemini run from its stderr file, so a late diagnostic resets
+the clock. A `.part` left by a killed earlier attempt shows as running beside the next attempt,
+and a failure with no output reads as "answer cut off". An `[agy] print timeout` setting
+announcement would also be taken for a cut-off. The skill's sleep rule still says 30 minutes where
+`progress.sh` warns at 25.
+
+### Example scenario
+
+A run killed after sleep is retried as attempt 2; the update shows attempt 1 still running.
+
+### Notes for a fix
+
+Record each attempt's start and end state, retire an earlier attempt's `.part` when the next
+starts, and match agy's cut-off wording exactly.
+
+**Source:** gpt-6.2-astra:high, gemini-4-argon-high (clocks), gpt-6.2-astra:high (timeout wording) — phase review pass 4, project-docs phase, 2026-11-22.
+
+---
+
 <a id="ki-41"></a>
 
 ## KI-41 — converting a large sequence to text has no size bound
@@ -629,8 +772,8 @@ classification order; not reproduced with a real CLI.
 
 When an ordinary I/O error starts the rollback, a signal arriving before the handlers are set
 to ignore can raise out of the cleanup. The handlers are also installed before the `try` that
-restores them. New files are created at 0644, which drops group write under a shared umask that
-the old `open(..., "x")` honoured.
+restores them. New files are created at 0644, which drops group write under a group-writable umask
+such as 0002 that the old `open(..., "x")` honoured.
 
 ### Example scenario
 
@@ -641,62 +784,7 @@ A disk error on the third file, then a Ctrl-C, leaves the first two files in pla
 Keep signals blocked from the failure until `SIG_IGN` is set, enter the `try` before installing
 handlers, and create files at 0666 under the caller's umask.
 
-**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review passes 4 and 5, project-docs phase, 2026-11-22.
-
----
-
-<a id="ki-66"></a>
-
-## KI-66 — progress lines can misreport a Gemini run's age and state
-
-**Severity:** Medium
-**Likelihood:** Rare
-**Where:** [progress.sh](../skills/external-review/progress.sh) — `*.partial) echo`
-
-### What happens
-
-`progress.sh` dates a streaming Gemini run from its stderr file, so a late diagnostic resets
-the clock. A `.part` left by a killed earlier attempt shows as running beside the next attempt,
-and a failure with no output reads as "answer cut off". An `[agy] print timeout` setting
-announcement would also be taken for a cut-off.
-
-### Example scenario
-
-A run killed after sleep is retried as attempt 2; the update shows attempt 1 still running.
-
-### Notes for a fix
-
-Record each attempt's start and end state, retire an earlier attempt's `.part` when the next
-starts, and match agy's cut-off wording exactly.
-
-**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review passes 4 and 5, project-docs phase, 2026-11-22.
-
----
-
-<a id="ki-67"></a>
-
-## KI-67 — the first push accepts a phase record inherited from the default branch
-
-**Severity:** Medium
-**Likelihood:** Rare
-**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `PHASE RECORD NOT COMMITTED ON`
-
-### What happens
-
-The check reads the branch tip for the branch-name row, which an unchanged record from the
-default branch can carry when a branch name is reused, or a second table can supply.
-
-### Example scenario
-
-A phase branch reuses an old name; the inherited record passes and the branch publishes
-without a new record.
-
-### Notes for a fix
-
-Also require a commit on the phase range that touches the record, and read the first table
-only, as the gate's record check does.
-
-**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review passes 4 and 5, project-docs phase, 2026-11-22.
+**Source:** gpt-6.2-astra:high, gemini-4-argon-high (signals), gpt-6.2-astra:high (file mode) — phase review pass 4, project-docs phase, 2026-11-22.
 
 ---
 
@@ -716,14 +804,40 @@ checked.
 
 ### Example scenario
 
-A doc under a folder the user cannot list aborts the check with a traceback.
+A doc under a folder without search (execute) permission aborts the check with a traceback.
 
 ### Notes for a fix
 
 Run the metadata lookup inside the same handler and test a denied folder beside a real
 finding.
 
-**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review passes 4 and 5, project-docs phase, 2026-11-22.
+**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review pass 4, project-docs phase, 2026-11-22.
+
+---
+
+<a id="ki-71"></a>
+
+## KI-71 — Gemini discovery blames agy when the ranker fails
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `agy models failed`
+
+### What happens
+
+Either side of the discovery pipeline can fail. When `agy models` succeeds and
+`gemini-ladder.py` fails, discovery still says "agy models failed" and points at an empty
+`agy-models.err`. `codex-ladder.py`'s docstring does not name `max` as a requestable effort.
+
+### Example scenario
+
+The ranker is missing after a partial checkout; the operator reads an empty error file.
+
+### Notes for a fix
+
+Keep both statuses and say which program failed; name `max` in the Codex docstring.
+
+**Source:** gpt-6.2-astra:high, gemini-4-neon-high — phase review pass 6, project-docs phase, 2026-11-22.
 
 ---
 
@@ -752,3 +866,30 @@ Name both agent IDs in the message and say which command brings the log and the 
 in line.
 
 **Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.
+
+---
+
+<a id="ki-72"></a>
+
+## KI-72 — init's failure message overstates what it left behind
+
+**Severity:** Low
+**Likelihood:** Rare
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `could not confirm it is ours`
+
+### What happens
+
+A file `init` could not identify is reported as "left in place" even if another writer has
+since removed it. The CHANGELOG and `cmd_init`'s docstring still say nothing is left behind on
+failure, which no longer holds for such a file.
+
+### Example scenario
+
+After a failed `fstat`, the message names a file that is no longer there.
+
+### Notes for a fix
+
+Say that removal was skipped because ownership was not confirmed, and correct the two
+promises; tell the caller to inspect the path before retrying.
+
+**Source:** gpt-6.2-astra:high, gemini-4-neon-high — phase review pass 7, project-docs phase, 2026-11-22.

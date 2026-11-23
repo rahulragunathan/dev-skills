@@ -346,13 +346,15 @@ test.
 ## ENH-36 — strengthen the review-loop and ladder tests
 
 **Priority:** Low · **Effort:** ~2 hours
-**Where:** [preflight.bats](../skills/external-review/tests/preflight.bats) — `the documented Gemini loop reads chunk 2's prompt for chunk 2` · **Regression net:** `skills/external-review/tests/`
+**Where:** [preflight.bats](../skills/external-review/tests/preflight.bats) — `the documented Gemini loop reads chunk 2's prompt for chunk 2` · **Regression net:** `skills/external-review/tests/`, `skills/project-docs/tests/roadmap.bats`, `skills/phase-workflow/tests/phase-git.bats`
 
 ### What it is
 
 Several tests added in this phase's review would stay green with their fix undone: the
 chunk-2 prompt test rewrites every `_c1`; fault-injection tests never assert their fault fired;
-some ladder and record tests use fixtures where both answers agree.
+some ladder and record tests use fixtures where both answers agree. Later passes added more:
+the discovery block's `EFFORT_ARGS` call sites are untested; the Argon test would let Argon
+keep a fourth slot; and the origin tests accept either refusal message.
 
 ### Why it matters
 
@@ -363,7 +365,7 @@ A test that cannot fail is false evidence for the behaviour CHANGELOG cites it f
 Substitute only the placeholder under test, assert each injected event, and give each test
 a fixture where the wrong implementation gives a different answer.
 
-**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review passes 4 and 5, project-docs phase, 2026-11-22.
+**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review passes 4 and 5; gpt-6.2-astra:high, gemini-4-neon-high — passes 6 and 7, project-docs phase, 2026-11-22.
 
 ---
 
@@ -378,8 +380,8 @@ a fixture where the wrong implementation gives a different answer.
 
 The record rule allows only a Disposition change, but a row the user reopens and fixes also
 needs its Commit and evidence. KI-59's example now predicts the wrong result for KI and ENH
-entries. `test_plugin_name.py` defines its release test after `unittest.main()`, so running the
-file directly skips it. The red-evidence matching step and AGENTS.md still ask for a `Red:`
+entries. (The
+release test that is skipped when its file runs directly is now KI-73.) The red-evidence matching step and AGENTS.md still ask for a `Red:`
 line where a mutation may stand in.
 
 ### Why it matters
@@ -388,7 +390,6 @@ Each is small, and each makes a rule read differently in two places.
 
 ### Notes for the work
 
-Allow Commit and evidence to be added with the user's disposition; fix the example; move the
-main guard; say "a `Red:` line or a mutation result" at each site.
+Allow Commit and evidence to be added with the user's disposition; fix the example; say "a `Red:` line or a mutation result" at each site.
 
-**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review passes 4 and 5, project-docs phase, 2026-11-22.
+**Source:** gpt-6.2-astra:high — phase review pass 4, project-docs phase, 2026-11-22.
