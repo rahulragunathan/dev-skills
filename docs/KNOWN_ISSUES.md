@@ -291,6 +291,91 @@ Find the field anywhere on an unfenced line, refuse absolute and empty targets, 
 
 ---
 
+<a id="ki-62"></a>
+
+## KI-62 — the post-review gate check can miss a rename's source
+
+**Severity:** High
+**Likelihood:** Rare
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `CHANGED AFTER REVIEW`
+
+### What happens
+
+`git diff --name-only` reports only the destination of a detected rename, so a file moved
+from outside the bookkeeping set into an allowed path passes the path check, and the patch that
+follows can show the old file's content. `|| true` also hides a failed listing, and `HEAD` is
+read twice.
+
+### Example scenario
+
+A post-review commit renames a skill file to `docs/ROADMAP.md`. The check lists only
+`docs/ROADMAP.md`, which is allowed.
+
+### Notes for a fix
+
+Pin the gate commit once, list both sides with `--no-renames`, fail on a failed listing, and
+pass the five allowed paths to the patch command.
+
+**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review passes 4 and 5, project-docs phase, 2026-11-22.
+
+---
+
+<a id="ki-63"></a>
+
+## KI-63 — a quoted refusal of the same model can still downshift Codex
+
+**Severity:** High
+**Likelihood:** Rare
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `grep -F "$slug"`
+
+### What happens
+
+The loop downshifts on an `ERROR:` line that names the rung's model. Material under review
+that quotes an earlier refusal of that same model, or a longer slug containing it, satisfies the
+same test when the run later fails for another reason.
+
+### Example scenario
+
+A follow-up review whose bundle includes an earlier Codex log fails on a network error. The
+quoted refusal moves it to a weaker model.
+
+### Notes for a fix
+
+Confirm an apparent refusal with a short probe of the same model and effort before
+downshifting.
+
+**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review passes 4 and 5, project-docs phase, 2026-11-22.
+
+---
+
+<a id="ki-64"></a>
+
+## KI-64 — the Codex probe runs in the caller's folder when ROOT is unset
+
+**Severity:** High
+**Likelihood:** Rare
+**Where:** [preflight.sh](../skills/external-review/preflight.sh) — `--root) ROOT_ARGS=`
+
+### What happens
+
+The documented probe passes `--root` only when `ROOT` is set, and `preflight.sh` probes Codex
+without it. A skipped preparation step probes the live checkout. A directly probed Gemini id
+ending in `-low`, `-minimal`, `-none` or `-ultra` also gets `--effort high`.
+
+### Example scenario
+
+A session forgets to prepare the review root; the readiness probe runs Codex in the user's
+checkout.
+
+### Notes for a fix
+
+Require a root whenever a Codex candidate will run, and refuse the excluded Gemini suffixes
+in the probe.
+
+**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review passes 4 and 5, project-docs phase, 2026-11-22.
+
+---
+
 <a id="ki-49"></a>
 
 ## KI-49 — the headline tally mixes two skills
@@ -529,6 +614,116 @@ Classify exit 0 with the answer `ready` first, then timeouts. Found by reading t
 classification order; not reproduced with a real CLI.
 
 **Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.
+
+---
+
+<a id="ki-65"></a>
+
+## KI-65 — init can leave work behind on a signal during error cleanup, and creates files at 0644
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def make_file(`
+
+### What happens
+
+When an ordinary I/O error starts the rollback, a signal arriving before the handlers are set
+to ignore can raise out of the cleanup. The handlers are also installed before the `try` that
+restores them. New files are created at 0644, which drops group write under a shared umask that
+the old `open(..., "x")` honoured.
+
+### Example scenario
+
+A disk error on the third file, then a Ctrl-C, leaves the first two files in place.
+
+### Notes for a fix
+
+Keep signals blocked from the failure until `SIG_IGN` is set, enter the `try` before installing
+handlers, and create files at 0666 under the caller's umask.
+
+**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review passes 4 and 5, project-docs phase, 2026-11-22.
+
+---
+
+<a id="ki-66"></a>
+
+## KI-66 — progress lines can misreport a Gemini run's age and state
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [progress.sh](../skills/external-review/progress.sh) — `*.partial) echo`
+
+### What happens
+
+`progress.sh` dates a streaming Gemini run from its stderr file, so a late diagnostic resets
+the clock. A `.part` left by a killed earlier attempt shows as running beside the next attempt,
+and a failure with no output reads as "answer cut off". An `[agy] print timeout` setting
+announcement would also be taken for a cut-off.
+
+### Example scenario
+
+A run killed after sleep is retried as attempt 2; the update shows attempt 1 still running.
+
+### Notes for a fix
+
+Record each attempt's start and end state, retire an earlier attempt's `.part` when the next
+starts, and match agy's cut-off wording exactly.
+
+**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review passes 4 and 5, project-docs phase, 2026-11-22.
+
+---
+
+<a id="ki-67"></a>
+
+## KI-67 — the first push accepts a phase record inherited from the default branch
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `PHASE RECORD NOT COMMITTED ON`
+
+### What happens
+
+The check reads the branch tip for the branch-name row, which an unchanged record from the
+default branch can carry when a branch name is reused, or a second table can supply.
+
+### Example scenario
+
+A phase branch reuses an old name; the inherited record passes and the branch publishes
+without a new record.
+
+### Notes for a fix
+
+Also require a commit on the phase range that touches the record, and read the first table
+only, as the gate's record check does.
+
+**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review passes 4 and 5, project-docs phase, 2026-11-22.
+
+---
+
+<a id="ki-68"></a>
+
+## KI-68 — the name check can stop on a folder it may not read
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [name_check.py](../skills/project-docs/name_check.py) — `def _read(`
+
+### What happens
+
+`Repo._read` catches read errors, but `path.is_file()` runs before that handler. On a Python
+where it raises on a denied parent folder, the whole run stops before the other docs are
+checked.
+
+### Example scenario
+
+A doc under a folder the user cannot list aborts the check with a traceback.
+
+### Notes for a fix
+
+Run the metadata lookup inside the same handler and test a denied folder beside a real
+finding.
+
+**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review passes 4 and 5, project-docs phase, 2026-11-22.
 
 ---
 

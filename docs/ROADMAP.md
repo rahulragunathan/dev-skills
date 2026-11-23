@@ -50,6 +50,9 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-38](KNOWN_ISSUES.md#ki-38) | An assertion the test expects to fail still grades as did-not-hold | Rare | High |
 | [KI-58](KNOWN_ISSUES.md#ki-58) | `check` misses drift: empty files, fenced anchors, question order, mirrored fields | Rare | High |
 | [KI-59](KNOWN_ISSUES.md#ki-59) | The reference check has gaps in what it reads and where | Rare | High |
+| [KI-62](KNOWN_ISSUES.md#ki-62) | The post-review gate check can miss a rename's source | Rare | High |
+| [KI-63](KNOWN_ISSUES.md#ki-63) | A quoted refusal of the same model can still downshift Codex | Rare | High |
+| [KI-64](KNOWN_ISSUES.md#ki-64) | The Codex probe runs in the caller's folder when ROOT is unset | Rare | High |
 | [KI-49](KNOWN_ISSUES.md#ki-49) | The headline tally mixes two skills | Almost always | Medium |
 | [KI-50](KNOWN_ISSUES.md#ki-50) | S05's fixture contradicts itself | Almost always | Medium |
 | [KI-36](KNOWN_ISSUES.md#ki-36) | A grader quote of a table cell that holds a pipe is refused | Likely | Medium |
@@ -58,6 +61,10 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-51](KNOWN_ISSUES.md#ki-51) | Rejected grading attempts are not retained | Likely | Medium |
 | [KI-41](KNOWN_ISSUES.md#ki-41) | Converting a large sequence to text has no size bound | Rare | Medium |
 | [KI-43](KNOWN_ISSUES.md#ki-43) | A ready reviewer probe reads as TIMEOUT when stderr mentions a timeout | Rare | Medium |
+| [KI-65](KNOWN_ISSUES.md#ki-65) | init can leave work behind on a signal during error cleanup, and creates files at 0644 | Rare | Medium |
+| [KI-66](KNOWN_ISSUES.md#ki-66) | Progress lines can misreport a Gemini run's age and state | Rare | Medium |
+| [KI-67](KNOWN_ISSUES.md#ki-67) | The first push accepts a phase record inherited from the default branch | Rare | Medium |
+| [KI-68](KNOWN_ISSUES.md#ki-68) | The name check can stop on a folder it may not read | Rare | Medium |
 | [KI-44](KNOWN_ISSUES.md#ki-44) | A stale dispatch log gives a misleading replacement message | Rare | Low |
 
 ## Enhancements
@@ -79,6 +86,8 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 | [ENH-32](ENHANCEMENTS.md#enh-32) | Drop explanations of standard tool behaviour from the skills | Low | ~2 hours |
 | [ENH-33](ENHANCEMENTS.md#enh-33) | Check more command spellings in the name check | Low | ~2 hours |
 | [ENH-34](ENHANCEMENTS.md#enh-34) | Tighten the roadmap close tests and template examples | Low | ~2 hours |
+| [ENH-36](ENHANCEMENTS.md#enh-36) | Strengthen the review-loop and ladder tests | Low | ~2 hours |
+| [ENH-37](ENHANCEMENTS.md#enh-37) | Tidy the review record rules and three small doc slips | Low | ~1 hour |
 
 ## Open Questions
 
