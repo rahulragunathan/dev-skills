@@ -52,7 +52,7 @@ FRAGMENT = re.compile(r'(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)', re.S)
 FIELD = re.compile(r'\*\*[^*\n]+:\*\*')
 LINE_ANCHOR = re.compile(r'#L\d+')
 WHERE = "**Where:**"
-WHERE_AT = re.compile(r'(?:^\s*|\*\*[^*\n]+:\*\*[^\n]*·\s*)(\*\*Where:\*\*)')
+WHERE_AT = re.compile(r'^\s*(?:\*\*[^*\n]+:\*\*[^\n]*?·\s*)*(\*\*Where:\*\*)')
 WHERE_LIKE = re.compile(r'^\s*(?:[-+*]\s+|\d+[.)]\s+)?\*\*Where(?::\*\*|\*\*:)')
 Ref = collections.namedtuple("Ref", "target fragment")
 # The rated fields of each kind of entry, in sort-key order. Their levels are
@@ -249,7 +249,7 @@ def reconcile(docs: pathlib.Path, proposed: dict[str, str] | None = None):
                     problems.append(f"  unknown {field}: {eid} ({val})"); ok = False
             if eid in rows:
                 for label, ours, theirs in mirrored(prefix, eid, body, rows[eid]):
-                    if ours != theirs or (label == "Effort" and not ours):
+                    if ours != theirs or not ours:
                         problems.append(f"  mismatch: {eid} {label}"); ok = False
         # Open questions too: the template orders them by Kind.
         for label, ids in [("detail", entries), ("index", rows)]:
@@ -275,7 +275,9 @@ def structure_problems(roadmap: str, details: dict[str, str]) -> list[str]:
             problems.append(f"  structure: ROADMAP.md has no '{heading}' section"); continue
         section = lines[lines.index(heading) + 1:]
         section = section[:next((i for i, l in enumerate(section) if l.startswith("## ")), len(section))]
-        if not any(_cells(l)[:1] == ["ID"] for l in section if l.startswith("|")):
+        if not any(_cells(l)[:1] == ["ID"] and i + 1 < len(section)
+                   and re.fullmatch(r"\|(\s*:?-+:?\s*\|)+", section[i + 1].strip())
+                   for i, l in enumerate(section) if l.startswith("|")):
             problems.append(f"  structure: '{heading}' in ROADMAP.md has no pointer table")
     for name, text in [("ROADMAP.md", roadmap), *details.items()]:
         visible = [l for l, fenced in zip(text.splitlines(), fenced_lines(text)) if not fenced]
@@ -291,11 +293,12 @@ def _title_key(title: str) -> str:
 
 def mirrored(prefix: str, eid: str, body: str, row: dict) -> list[tuple[str, str, str]]:
     """(label, detail value, index value) for each field the index mirrors besides ratings."""
+    body = "\n".join(l for l, fenced in zip(body.splitlines(), fenced_lines(body)) if not fenced)
     heading = re.search(rf'^## {eid} — (.*?)\s*$', body, re.M)
     pairs = [("title", _title_key(heading[1]) if heading else "",
               _title_key(list(row["cells"].values())[1]) if len(row["cells"]) > 1 else "")]
     if prefix == "ENH":
-        effort = re.search(r'\*\*Effort:\*\*\s*([^\n·]+)', body)
+        effort = re.search(r'(?:^|·\s*)\*\*Effort:\*\*\s*([^\n·]+)', body, re.M)
         pairs.append(("Effort", effort[1].strip() if effort else "", row["cells"].get("Effort", "")))
     return pairs
 
@@ -553,6 +556,9 @@ def cmd_close(docs: pathlib.Path, eid: str) -> int:
     added_newline = detail.endswith("\n") and not new_detail.endswith("\n")
     if added_newline:
         new_detail += "\n"
+    stripped_newline = not detail.endswith("\n") and new_detail.endswith("\n")
+    if stripped_newline:
+        new_detail = new_detail[:-1]    # the file had no final newline; keep it so
 
     # The check that matters: every surviving entry must come back byte-identical.
     entries = {k: detail[s:e] for k, (s, e) in spans.items()}
@@ -564,6 +570,8 @@ def cmd_close(docs: pathlib.Path, eid: str) -> int:
     last = max(survivors, key=lambda k: spans[k][0]) if survivors else None
     for k in survivors:
         expected = survivors[k] + ("\n" if added_newline and k == last else "")
+        if stripped_newline and k == last:
+            expected = expected[:-1]
         if reparsed[k] != expected:
             fail(f"refusing: {k} would not survive byte-identical")
 
@@ -595,6 +603,10 @@ def cmd_close(docs: pathlib.Path, eid: str) -> int:
     return 0
 
 
+class Changed(Exception):
+    """A document no longer holds what was read or written; its name is the message."""
+
+
 def install_documents(docs: pathlib.Path, proposed: dict[str, bytes],
                       expected: dict[str, bytes]) -> None:
     """Replace each document with its proposed bytes, or change nothing.
@@ -612,12 +624,17 @@ def install_documents(docs: pathlib.Path, proposed: dict[str, bytes],
     retain_recovery = False
     rolling_back = False
 
-    def replace_from(source, destination):
+    def replace_from(source, destination, must_hold=None):
+        """Stage `source` beside `destination`, then, if `must_hold` is given, check the
+        destination still holds it, and only then rename. The copy happens before the
+        check, so the window left is the check-to-rename one, not the whole copy."""
         fd, staged = tempfile.mkstemp(prefix=".roadmap-", dir=destination.parent)
         os.close(fd)
         candidate = pathlib.Path(staged)
         try:
             shutil.copy2(source, candidate)
+            if must_hold is not None and destination.read_bytes() != must_hold:
+                raise Changed(destination.name)
             os.replace(candidate, destination)
         finally:
             candidate.unlink(missing_ok=True)
@@ -639,34 +656,32 @@ def install_documents(docs: pathlib.Path, proposed: dict[str, bytes],
         for name in proposed:
             mask = signal.pthread_sigmask(signal.SIG_BLOCK, signals)
             try:
-                if (docs / name).read_bytes() != expected[name]:
-                    fail(f"refusing: {name} changed since it was read"
-                         + ("" if landed else "; nothing closed"))
-                replace_from(recovery / name, docs / name)
+                replace_from(recovery / name, docs / name, must_hold=expected[name])
                 landed[name] = proposed[name]
             finally:
                 signal.pthread_sigmask(signal.SIG_SETMASK, mask)
     except BaseException as exc:
         rolling_back = True
-        if isinstance(exc, SystemExit) and not landed:
-            raise
+        if isinstance(exc, Changed) and not landed:
+            fail(f"refusing: {exc} changed since it was read; nothing closed")
         for sig in previous:
             signal.signal(sig, signal.SIG_IGN)
         kept = []
         try:
             for name in reversed(list(landed)):
-                if (docs / name).read_bytes() == landed[name]:
-                    replace_from(recovery / (name + ".original"), docs / name)
-                else:
+                try:
+                    replace_from(recovery / (name + ".original"), docs / name, must_hold=landed[name])
+                except Changed:
                     kept.append(name)
         except BaseException:
             retain_recovery = True
             fail(f"rollback failed; originals retained at {recovery}")
         if kept:
             retain_recovery = True
-            fail(f"installation failed: {exc}; {', '.join(kept)} changed after close wrote it, so it "
+            fail(f"installation failed ({exc}); {', '.join(kept)} changed after close wrote it, so it "
                  f"was left as it is; originals retained at {recovery}")
-        fail(f"installation failed; originals restored: {exc}")
+        cause = f"{exc} changed since it was read" if isinstance(exc, Changed) else str(exc) or type(exc).__name__
+        fail(f"installation failed ({cause}); originals restored")
     finally:
         for sig, handler in previous.items():
             signal.signal(sig, handler)
@@ -757,7 +772,8 @@ def cmd_init(docs: pathlib.Path) -> int:
                 os.close(fd)
 
     try:
-        previous = {sig: signal.signal(sig, interrupted) for sig in signals}
+        for sig in signals:              # one at a time, so none is lost if a signal lands mid-way
+            previous[sig] = signal.signal(sig, interrupted)
         for folder in [*reversed(docs.parents), docs]:
             if not os.path.lexists(folder):
                 guarded(lambda folder=folder: make_folder(folder))

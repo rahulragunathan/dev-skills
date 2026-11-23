@@ -46,7 +46,7 @@ SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*:")
 QUOTE = re.compile(r"^\s*(>\s?)+")
 IGNORE = re.compile(r"<!--\s*name-check:\s*ignore\s+(.+?)\s*-->")
 REFDEF = re.compile(r"^ {0,3}\[[^\]]+\]:\s*<?([^\s>]+)>?")
-REFDEF_LABEL = re.compile(r"^ {0,3}\[([^\]]+)\]:\s*\S")   # a definition has a destination
+REFDEF_LABEL = re.compile(r"^ {0,3}\[([^\]]+)\]:\s*(?!<>\s*$)\S")   # a definition has a destination
 # A full or collapsed reference, [text][label] or [label][]; a shortcut [label] reads as prose.
 REFUSE = re.compile(r"(?<![\w\]])\[([^\[\]\n]+)\]\[([^\[\]\n]*)\]")  # not an index like a[0][1]
 # A script named without a folder: matched against tracked basenames.
@@ -244,12 +244,20 @@ def locate(repo: Repo, token: str | None, doc_dir: str) -> str | None:
     return None
 
 
+def label_key(label: str) -> str:
+    """A reference label as CommonMark compares it: whitespace runs collapsed, case folded."""
+    return re.sub(r"\s+", " ", label.strip()).casefold()
+
+
 def check_doc(repo: Repo, rel: str) -> list[Finding]:
     findings: list[Finding] = []
     doc_dir = os.path.dirname(rel)
     ignored: set[str] = set()
     lines = visible_lines(repo.text(rel) or "")
-    labels = {m[1].strip().lower() for line in lines for m in [REFDEF_LABEL.match(blank_spans(line))] if m}
+    # Matched on the blanked line, so brackets inside code spans are ignored, but read from
+    # the text itself: a backticked label would otherwise blank to "".
+    labels = {label_key(line[m.start(1):m.end(1)]) for line in lines
+              for m in [REFDEF_LABEL.match(blank_spans(line))] if m}
     for number, line in enumerate(lines, 1):
         here, ignored = ignored, set()
         # The directive must sit outside a code span; the names it lists may be
@@ -300,8 +308,10 @@ def check_doc(repo: Repo, rel: str) -> list[Finding]:
         for target in targets:
             found.extend(check_link(repo, target, rel, doc_dir))
         for use in REFUSE.finditer(prose):
-            label = (use[2] or use[1]).strip()
-            if label.lower() not in labels:
+            # [text][label], or [label][] when the second part is empty.
+            group = 2 if use.end(2) > use.start(2) else 1
+            label = line[use.start(group):use.end(group)].strip()
+            if label_key(label) not in labels:
                 found.append(("link", f"[{label}]", "no definition in this doc"))
         findings += [Finding(rel, number, *f) for f in found if f[1] not in here]
     return findings

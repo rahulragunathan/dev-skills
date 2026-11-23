@@ -1581,3 +1581,63 @@ PY
   [ "$status" -eq 0 ] || false
   [ "$(grep -c 'KNOWN_ISSUES.md#ki-02' "$DOCS/ROADMAP.md")" -eq 1 ]
 }
+
+# --- external review pass 2 fixes ----------------------------------------------
+
+@test "close: an edit while the replacement is being staged is not overwritten" {
+  # Fails if the destination is compared before the staging copy, leaving a window the copy spans (pass 2, Codex 2).
+  run python3 - "$RM" "$DOCS" <<'PY'
+import importlib.util, pathlib, shutil, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+d = pathlib.Path(sys.argv[2]); real = m.shutil.copy2; fired = []
+def copy2(src, dst, *a, **kw):
+    out = real(src, dst, *a, **kw)
+    if pathlib.Path(dst).name.startswith(".roadmap-") and not fired:
+        fired.append(1); p = d / "KNOWN_ISSUES.md"; p.write_text(p.read_text() + "\nEDIT-DURING-STAGING\n")
+    return out
+m.shutil.copy2 = copy2
+try: m.cmd_close(d, 'KI-02')
+except SystemExit as e: print('exit', e.code)
+assert fired, 'the staging copy never ran'
+PY
+  [[ "$output" == *"exit 1"* ]] || false
+  grep -q 'EDIT-DURING-STAGING' "$DOCS/KNOWN_ISSUES.md"
+}
+
+@test "close: closing the last entry of a file without a final newline keeps that form" {
+  # Fails if removing the final entry exposes the previous entry's newline (Codex 24, Gemini c4 7).
+  printf '%s' "$(cat "$DOCS/KNOWN_ISSUES.md")" > "$DOCS/KNOWN_ISSUES.md"
+  run python3 "$RM" close KI-03 --docs "$DOCS"
+  [ "$status" -eq 0 ] || false
+  [ "$(grep -c 'SURVIVOR-THREE' "$DOCS/KNOWN_ISSUES.md")" -eq 0 ] || false
+  [ -n "$(tail -c 1 "$DOCS/KNOWN_ISSUES.md")" ]
+}
+
+@test "check: a pointer table needs its delimiter row, and a fenced Effort counts for nothing" {
+  # Fails if `| ID |` alone satisfies the structure, or an example's Effort stands in (Codex 19, Gemini c4 2).
+  sed -i.bak '/^| --- | --- | --- | --- |$/d' "$DOCS/ROADMAP.md"
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"structure"* ]] || false
+  cp "$DOCS/ROADMAP.md.bak" "$DOCS/ROADMAP.md"
+  sed -i.bak 's/ · \*\*Effort:\*\* ~1 hour//' "$DOCS/ENHANCEMENTS.md"
+  printf '\n```markdown\n**Effort:** ~1 hour\n```\n' >> "$DOCS/ENHANCEMENTS.md"
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"ENH-01 Effort"* ]]
+}
+
+@test "check: a Where field quoted in a list item or a table is not read as the entry's" {
+  # Fails if the unanchored second branch finds `· **Where:**` anywhere on a line (Gemini c4 1).
+  # UNK-01 has no Where field; its prose quotes one inside a list item.
+  printf -- '\n- **Priority:** Low · **Where:** [x](nope.md)\n' >> "$DOCS/OPEN_QUESTIONS.md"
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
+
+@test "close: a refused install reports one message with its cause" {
+  # Fails if a refusal inside install_documents is reported a second time as "originals restored: 1".
+  run close_with_replace 'p = d / "ROADMAP.md"; p.write_text(p.read_text() + "\nEDITOR-ROW\n")'
+  [ "$(printf '%s\n' "$output" | grep -c 'refusing\|installation failed')" -eq 1 ]
+}

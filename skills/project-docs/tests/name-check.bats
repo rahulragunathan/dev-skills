@@ -631,3 +631,13 @@ PY
   [ "$status" -eq 1 ] || false
   [[ "$output" == *"missing link [guide]"* ]]
 }
+
+@test "a backticked reference label is read from the text, and an empty <> defines nothing" {
+  # Fails if code spans blank a label to "", so any backticked definition covers every backticked use (pass 2, Gemini c3 1, 2).
+  put ok.md '# Ok'
+  put doc.md "$(printf 'See [the tool][`roadmap.py`] and [x][empty].\n\n[`other.py`]: ok.md\n[empty]: <>\n')"
+  check
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *'missing link [`roadmap.py`]'* ]] || false
+  [[ "$output" == *"missing link [empty]"* ]]
+}
