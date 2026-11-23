@@ -16,7 +16,7 @@ Each class is offered once, at `high`, the user's default: its -high id, else
 its suffix-less id, which the review loop runs with `--effort high`. A class
 with neither is skipped. Orchestrator models, efforts below
 medium (low, minimal, none) and ultra, which delegates the work, are never
-offered. xhigh or medium is used only when the user asks for it (--effort).
+offered. medium, xhigh or max is used only when the user asks for it (--effort).
 """
 from __future__ import annotations
 
@@ -25,7 +25,9 @@ import re
 import sys
 
 # The user's ranking of Gemini families, strongest first.
-FAMILIES = ("carbon", "argon", "neon", "hydrogen")
+# Argon, the first Gemini 4 model, is superseded and ranks with the older lines
+# (pro, flash, lite) after every listed family.
+FAMILIES = ("carbon", "neon", "hydrogen")
 # Within a class, the variant to run for each effort the user can ask for: ""
 # is the suffix-less id, which the review loop runs with --effort high.
 PREFERENCE = {"high": ("high", ""), "xhigh": ("xhigh",), "max": ("max",), "medium": ("medium",)}

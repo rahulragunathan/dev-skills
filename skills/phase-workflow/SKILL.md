@@ -290,7 +290,7 @@ what remains expired.
    - Every finding fixed here gets a failing test first, with its `Red:` line. Run step 3's check on those tests before the next pass, and again before the gate.
 6. **Post-fix drift re-check — narrow, and inside the loop.** Step 5's fixes change code after step 4 declared the docs true, so each round of fixes re-checks what it touched before it is committed for the next pass: the docs and code comments the changed files invalidate, the CHANGELOG entries whose claims moved, and the diagrams if a module moved. That way the next pass reviews them. After the last pass, confirm only that every filing has both its full entry and its ROADMAP pointer row, with ratings that agree, where the roadmap files exist; anything else this finds needs a narrow pass (`external-review`'s [loop](../external-review/SKILL.md#the-loop)). Report what you found, not only what you fixed.
 7. **Present to the user and stop** — the phase gate.
-   - **Include the review record** from step 5 in the hand-off, and put it in the PR description (`gh pr edit "$PR" -R "$REPO" --body-file <file>`) — never in a per-phase review file in the repository. It exists so the user can see every finding and pull any deferred or accepted one back into this phase before signing off.
+   - **Include the review record** from step 5 in the hand-off, and put it in the PR description (`gh pr edit <PR number> -R <repository> --body-file <file>`) — never in a per-phase review file in the repository. It exists so the user can see every finding and pull any deferred or accepted one back into this phase before signing off.
    - **Confirm `docs/PHASE_RECORD.md` is current, and do not take that on trust.** Step 4 brought
      it current, but steps 5 to 7 and every re-gate come after step 4. Check, in the committed
      file, that its first table (this repository's phase) names this PR and the release the
@@ -300,10 +300,14 @@ what remains expired.
      set -euo pipefail
      PR="<this phase's PR number>"
      VERSION="$(git show HEAD:CHANGELOG.md | grep -m1 -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' | tr -d '#[] ' || true)"
-     RECORD="$(git show HEAD:docs/PHASE_RECORD.md | awk '/^\| Key \| Value \|/ {n++} n == 1')"
+     # The first table only: it starts at the first `| Key | Value |` header and ends at the
+     # first line that is not a table row. It must hold one PR row and one Release row.
+     RECORD="$(git show HEAD:docs/PHASE_RECORD.md \
+       | awk '!n && /^\| *Key *\| *Value *\|/ {n = 1} n == 1 {if (/^\|/) print; else exit}')"
+     PRS="$(printf '%s\n' "$RECORD" | awk '/^\| *`PR` *\|/' )"
+     RELEASES="$(printf '%s\n' "$RECORD" | awk '/^\| *Release *\|/' )"
      [ -n "$PR" ] && [ -n "$VERSION" ] \
-       && printf '%s\n' "$RECORD" | grep -qxF "| \`PR\` | $PR |" \
-       && printf '%s\n' "$RECORD" | grep -qxF "| Release | v$VERSION |" \
+       && [ "$PRS" = "| \`PR\` | $PR |" ] && [ "$RELEASES" = "| Release | v$VERSION |" ] \
        || { echo "PHASE RECORD DOES NOT NAME PR $PR AND v$VERSION — update it"; exit 1; }
      ```
 

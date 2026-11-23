@@ -59,7 +59,8 @@ here — the plugin manifest's version is the only record of them.
 ### Fixed
 
 - **The Gemini ladder** put orchestrator models first and `xhigh` last. It now ranks by
-  family (Carbon > Argon > Neon > Hydrogen, then any other line such as flash or lite), then
+  family (Carbon > Neon > Hydrogen, then any other line: superseded Argon, and the older pro,
+  flash and lite), then
   version, newest first, and offers each model once at `high` (its `-high` id, or its suffix-less id run with
   `--effort high`); a model without either is skipped. Efforts below `medium`, and `ultra`, are never offered.
 - **Gemini calls passed `--effort high`**, which `agy` refuses for any model whose id carries

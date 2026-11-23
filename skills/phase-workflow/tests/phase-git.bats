@@ -638,3 +638,23 @@ record_check() {
   run bash "$TEST_TMP/record.sh"
   [ "$status" -eq 0 ]
 }
+
+@test "phase record: only the first table counts, however the next is headed" {
+  # Fails if the check reads past the first table, so a companion table headed differently,
+  # or a second PR row, can satisfy it (F-149).
+  mkdir -p docs
+  printf '## [2.1.0] - 2026-11-22\n' > CHANGELOG.md
+  printf '| Key   | Value |\n| --- | --- |\n| `PR` | 9 |\n| Release | v2.1.0 |\n\nCompanion:\n\n| Field | Value |\n| --- | --- |\n| `PR` | 5 |\n' > docs/PHASE_RECORD.md
+  git add -A && git commit -qm record
+  record_check 5
+  run bash "$TEST_TMP/record.sh"
+  [ "$status" -ne 0 ] || false
+  record_check 9
+  run bash "$TEST_TMP/record.sh"
+  [ "$status" -eq 0 ] || false
+  printf '| Key | Value |\n| --- | --- |\n| `PR` | 9 |\n| `PR` | 5 |\n| Release | v2.1.0 |\n' > docs/PHASE_RECORD.md
+  git commit -qam two-prs
+  record_check 5
+  run bash "$TEST_TMP/record.sh"
+  [ "$status" -ne 0 ]
+}

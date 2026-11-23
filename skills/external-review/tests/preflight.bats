@@ -369,7 +369,7 @@ discovery_script() {
   python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/discover.sh" "$1" "$2" <<'PY'
 import pathlib, re, sys
 blocks = re.findall(r'```bash\n(.*?)```', pathlib.Path(sys.argv[1]).read_text(), re.S)
-block = next(b for b in blocks if 'CODEX_RUNGS="$(codex_ladder)"' in b)
+block = next(b for b in blocks if 'CODEX_RUNGS="$(codex_ladder' in b)
 prelude = ('set -e\n'
            'codex_ladder() { ' + sys.argv[3] + ' }\n'
            'gemini_ladder() { ' + sys.argv[4] + ' }\n')
@@ -572,4 +572,34 @@ printf "%s\\n" "$@" > "$TEST_TMP/agy-args"\
   run bash "$TEST_TMP/gemini.sh"
   [ -e "$TEST_TMP/args-gemini-4-neon-max" ] || false
   ! grep -qx -- '--effort' "$TEST_TMP/args-gemini-4-neon-max"
+}
+
+@test "the documented ladder wrappers pass a requested effort through" {
+  # Fails if codex_ladder or gemini_ladder drops --effort, so a requested max runs at high (F-150).
+  mkdir -p "$TEST_TMP/home/.codex"
+  printf '{"models":[{"slug":"gpt-6-sol","visibility":"list","supported_reasoning_levels":[{"effort":"high"},{"effort":"max"}]}]}' \
+    > "$TEST_TMP/home/.codex/models_cache.json"
+  python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/wrappers.sh" "$TEST_TMP" <<'PY'
+import pathlib, re, sys
+blocks = re.findall(r'```bash\n(.*?)```', pathlib.Path(sys.argv[1]).read_text(), re.S)
+block = next(b for b in blocks if 'codex_ladder() {' in b and 'gemini_ladder() {' in b)
+pathlib.Path(sys.argv[2]).write_text(
+    'agy() { printf "%s\\n" gemini-4-neon-high gemini-4-neon-xhigh; }\n'
+    + block.replace('<scratchpad>', sys.argv[3])
+    + 'codex_ladder --effort max; gemini_ladder --effort xhigh\n')
+PY
+  HOME="$TEST_TMP/home" CLAUDE_PLUGIN_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)" run bash "$TEST_TMP/wrappers.sh"
+  [ "$status" -eq 0 ] || false
+  [ "$output" = "$(printf 'gpt-6-sol:max\ngemini-4-neon-xhigh')" ]
+}
+
+@test "discovery tells an empty Gemini ladder from a failed listing" {
+  # Fails if a successful listing with no model at the requested effort is blamed on agy-models.err (F-156).
+  discovery_script 'echo fixture:high;' 'true;'
+  run bash "$TEST_TMP/discover.sh"
+  [[ "$output" == *"No Gemini model offers"* ]] || false
+  [[ "$output" != *"agy-models.err"* ]] || false
+  discovery_script 'echo fixture:high;' 'false;'
+  run bash "$TEST_TMP/discover.sh"
+  [[ "$output" == *"agy models failed"* ]]
 }

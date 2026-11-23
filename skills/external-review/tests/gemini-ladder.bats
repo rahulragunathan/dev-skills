@@ -12,11 +12,11 @@ setup() {
 # rank <model id>...: the ladder for a list of ids, one per line.
 rank() { printf '%s\n' "$@" | python3 "$LADDER"; }
 
-@test "today's list gives argon-high, neon-high, hydrogen-high" {
+@test "today's list gives neon-high, hydrogen-high, argon-high" {
   # Fails if orchestrators, effort or family are ranked wrongly on the real 2026-11-20 list.
   run python3 "$LADDER" < "$FIXTURE"
   [ "$status" -eq 0 ] || false
-  [ "$output" = "gemini-4-argon-high gemini-4-neon-high gemini-4-hydrogen-high" ]
+  [ "$output" = "gemini-4-neon-high gemini-4-hydrogen-high gemini-4-argon-high" ]
 }
 
 @test "the model class comes first, then its high variant" {
@@ -68,7 +68,7 @@ print(m.rank("gemini-4-boron") < m.rank("gemini-4-cobalt"))' "$LADDER"
 }
 
 @test "carbon outranks argon" {
-  # Fails if the family order Carbon > Argon > Neon > Hydrogen is not applied.
+  # Fails if the family order Carbon > Neon > Hydrogen, then the rest, is not applied.
   run rank gemini-4-argon-high gemini-4-carbon-high
   [ "$output" = "gemini-4-carbon-high gemini-4-argon-high" ]
 }
@@ -156,4 +156,11 @@ print(m.rank("gemini-4-boron") < m.rank("gemini-4-cobalt"))' "$LADDER"
   [ "$output" = "gemini-4-neon-high gemini-4-hydrogen-high" ] || false
   run bash -c 'printf "%s\n" gemini-4-neon-high gemini-4-neon-max | python3 "$LADDER" --effort max'
   [ "$output" = "gemini-4-neon-max" ]
+}
+
+@test "argon, superseded, ranks after hydrogen" {
+  # Fails if Argon keeps a place in the family order above Neon or Hydrogen (the user's order:
+  # Carbon > Neon > Hydrogen).
+  run rank gemini-4-argon-high gemini-4-hydrogen-high gemini-4-neon-high gemini-4-carbon-high
+  [ "$output" = "gemini-4-carbon-high gemini-4-neon-high gemini-4-hydrogen-high" ]
 }

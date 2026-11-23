@@ -62,11 +62,11 @@ publish what they offer, so read it at run time.
 ```bash
 # Codex — codex-ladder.py ranks the cache (see below) and emits slug:effort rungs.
 codex_ladder() { python3 "$CLAUDE_PLUGIN_ROOT/skills/external-review/codex-ladder.py" \
-  "$HOME/.codex/models_cache.json"; }
+  "$HOME/.codex/models_cache.json" "$@"; }
 
 # Gemini — `agy models` publishes no ranking; gemini-ladder.py ranks it (see below).
 gemini_ladder() { agy models 2>"<scratchpad>/agy-models.err" \
-  | python3 "$CLAUDE_PLUGIN_ROOT/skills/external-review/gemini-ladder.py"; }
+  | python3 "$CLAUDE_PLUGIN_ROOT/skills/external-review/gemini-ladder.py" "$@"; }
 ```
 
 **`codex-ladder.py` owns the Codex ranking**, and its docstring states the order; the family order
@@ -101,11 +101,15 @@ or malformed `models_cache.json`, an `agy models` that did not run — record th
 running:
 
 ```bash
-CODEX_RUNGS="$(codex_ladder)" || CODEX_RUNGS=""
+EFFORT_ARGS=()   # high; only when the user asks for another: EFFORT_ARGS=(--effort max)
+CODEX_RUNGS="$(codex_ladder ${EFFORT_ARGS[@]+"${EFFORT_ARGS[@]}"})" || CODEX_RUNGS=""
 IFS=: read -r slug effort <<< "${CODEX_RUNGS%% *}"
-[ -n "$slug" ] && [ -n "$effort" ] || { CODEX_RUNGS=""; echo "Codex ladder discovery returned nothing — record no output for Codex, do not run"; }
-GEMINI_RUNGS="$(set -o pipefail; gemini_ladder)" || GEMINI_RUNGS=""
-[ -n "$GEMINI_RUNGS" ] || echo "Gemini ladder discovery returned nothing — record no output for Gemini, do not run; agy-models.err says why"
+[ -n "$slug" ] && [ -n "$effort" ] || { CODEX_RUNGS=""; echo "No Codex rung at ${EFFORT_ARGS[1]:-high} (no model offers it, or no readable cache) — record no output for Codex, do not run"; }
+if GEMINI_RUNGS="$(set -o pipefail; gemini_ladder ${EFFORT_ARGS[@]+"${EFFORT_ARGS[@]}"})"; then
+  [ -n "$GEMINI_RUNGS" ] || echo "No Gemini model offers ${EFFORT_ARGS[1]:-high} effort — record no output for Gemini, do not run"
+else
+  GEMINI_RUNGS=""; echo "agy models failed — record no output for Gemini, do not run; agy-models.err says why"
+fi
 ```
 
 **If all three rungs fail, that reviewer produces nothing. Never reach past the floor.** A review
@@ -259,7 +263,7 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/preflight.sh" "${PROBE_MODELS[@
 ```
 
 The Codex probe splits each `slug:effort` rung and uses the real pass's effort; a bare
-`--codex-model <slug>` defaults to `high`. The Gemini probe passes no `--effort`, since the model id carries it. Codex console output is
+`--codex-model <slug>` defaults to `high`. The Gemini probe passes `--effort high` for a suffix-less id, as the review does, and no `--effort` for an id that carries its own. Codex console output is
 kept separate from stderr; configuration names containing `timeout` do not indicate a timeout.
 A deadline or explicit incomplete-turn diagnostic still overrides a partial readiness token.
 
