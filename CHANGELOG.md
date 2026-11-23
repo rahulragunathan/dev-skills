@@ -21,8 +21,9 @@ here — the plugin manifest's version is the only record of them.
   after `/code-review high`.
 - **`dependency-scan.py`**, run first at phase end: known vulnerabilities in the committed
   lockfiles, through `osv-scanner`, with a manifest that has no lockfile, a file with no packages
-  and an unpinned requirement reported as coverage gaps rather than clean. It reads a `HEAD`
-  export only, names what a tracked `osv-scanner.toml` ignores, and has an `--offline` mode.
+  and an unpinned requirement reported as coverage gaps rather than clean. It reads only what
+  `HEAD` commits, never follows a symlink, names what a tracked `osv-scanner.toml` ignores, and
+  has an `--offline` mode.
 
 ### Fixed
 
