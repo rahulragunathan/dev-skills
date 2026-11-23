@@ -503,6 +503,78 @@ Parse with `tomllib` where available, report each rule's scope and action, and n
 
 ---
 
+<a id="ki-87"></a>
+
+## KI-87 — the dependency scan still misreads some manifests and scanner answers
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [dependency-scan.py](../skills/phase-workflow/dependency-scan.py) — `def declares_dependencies(`
+
+### What happens
+
+An inline Dart dependency map, a `dependencies:` key followed by a comment, and a Poetry table heading followed by a comment all read as declaring nothing, so a project with no lockfile reports nothing to scan. Scanner stderr is captured and decoded strictly, so a non-UTF-8 diagnostic can raise before the per-file failure is recorded.
+
+### Example scenario
+
+A `pubspec.yaml` with `dependencies: {http: ^1.0.0}` and no `pubspec.lock` reports `no supported dependency files`.
+
+### Notes for a fix
+
+Parse the supported manifest structures instead of matching lines, and send the scanner's stderr to DEVNULL.
+
+**Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 3, dependable-helpers phase, 2026-11-23.
+
+---
+
+<a id="ki-88"></a>
+
+## KI-88 — check's table and metadata rules still differ from Markdown in places
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def structure_problems(`
+
+### What happens
+
+A four-cell header over a one-cell delimiter passes as a pointer table, and a fence between header and delimiter is filtered away; an Effort in a list item after `·`, or on the line after an empty `**Effort:**`, satisfies the field; ratings are still read from the unfiltered body; closing the last entry removes only one exposed newline; `[x]: <>` with a title counts as a definition in the name check.
+
+### Example scenario
+
+A fenced `**Severity:** High` example inside a KI entry supplies its rating.
+
+### Notes for a fix
+
+Read tables and metadata in one section-aware pass over visible lines, with header and delimiter widths checked, and parse reference definitions once.
+
+**Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 3, dependable-helpers phase, 2026-11-23.
+
+---
+
+<a id="ki-90"></a>
+
+## KI-90 — the origin check strips a fetch URL's trailing newline
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [publish-release.sh](../skills/phase-workflow/publish-release.sh) — `have_fetch=`
+
+### What happens
+
+The push listing keeps its final newlines, but the fetch URL is read and compared through command substitution, which strips them, so two local paths differing only in a trailing newline compare equal.
+
+### Example scenario
+
+A fetch path ending in a newline passes the gate as the recorded one.
+
+### Notes for a fix
+
+Read the fetch URL the same way as the push listing, with a sentinel character.
+
+**Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 3, dependable-helpers phase, 2026-11-23.
+
+---
+
 <a id="ki-82"></a>
 
 ## KI-82 — the zsh lint misses traps hidden by quotes and other subscripts
@@ -673,3 +745,51 @@ A branch `feature/x` and a tag `feature/x`; the merged branch is reported as hol
 Compare by full ref names and delete with `git update-ref -d refs/heads/<b>`, as KI-80 proposes.
 
 **Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 2, dependable-helpers phase, 2026-11-23.
+
+---
+
+<a id="ki-89"></a>
+
+## KI-89 — progress calls a finished Gemini attempt running when its answer could not be moved
+
+**Severity:** Low
+**Likelihood:** Rare
+**Where:** [progress.sh](../skills/external-review/progress.sh) — `A final state is authoritative`
+
+### What happens
+
+When the move of a finished answer fails, the loop still writes `done`, and progress, which treats only failed, cut-off and unavailable as final for a `.part`, reports it running. An earlier attempt that left only an `unavailable` state is not marked superseded.
+
+### Example scenario
+
+A full disk fails the move after a complete answer; the update keeps saying running.
+
+### Notes for a fix
+
+Write `done` only after the move succeeds, treat `done` with a `.part` as missing evidence, and apply supersession to state-only attempts.
+
+**Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 3, dependable-helpers phase, 2026-11-23.
+
+---
+
+<a id="ki-91"></a>
+
+## KI-91 — init and close can lose their caller's signal handler while registering their own
+
+**Severity:** Low
+**Likelihood:** Rare
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def cmd_init(`
+
+### What happens
+
+A signal delivered between installing a handler and saving the one it replaced leaves `init`'s or `close`'s handler installed in a caller that imported it; both register handlers the same way.
+
+### Example scenario
+
+A test harness imports `roadmap.py`, sends SIGINT during `cmd_init`, and keeps a handler that raises.
+
+### Notes for a fix
+
+Block the managed signals while registering and recording, then restore the caller's mask.
+
+**Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 3, dependable-helpers phase, 2026-11-23.

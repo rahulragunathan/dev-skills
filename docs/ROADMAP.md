@@ -58,6 +58,9 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-76](KNOWN_ISSUES.md#ki-76) | The probe's error classes still match loose substrings | Rare | Medium |
 | [KI-79](KNOWN_ISSUES.md#ki-79) | A symlinked folder above the docs folder still redirects the roadmap tools | Rare | Medium |
 | [KI-81](KNOWN_ISSUES.md#ki-81) | The osv-scanner configuration is read by pattern, not as TOML | Rare | Medium |
+| [KI-87](KNOWN_ISSUES.md#ki-87) | The dependency scan still misreads some manifests and scanner answers | Rare | Medium |
+| [KI-88](KNOWN_ISSUES.md#ki-88) | Check's table and metadata rules still differ from Markdown in places | Rare | Medium |
+| [KI-90](KNOWN_ISSUES.md#ki-90) | The origin check strips a fetch URL's trailing newline | Rare | Medium |
 | [KI-82](KNOWN_ISSUES.md#ki-82) | The zsh lint misses traps hidden by quotes and other subscripts | Likely | Low |
 | [KI-44](KNOWN_ISSUES.md#ki-44) | A stale dispatch log gives a misleading replacement message | Rare | Low |
 | [KI-78](KNOWN_ISSUES.md#ki-78) | Index rows are not bound to their section | Rare | Low |
@@ -65,6 +68,8 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-84](KNOWN_ISSUES.md#ki-84) | A dependency file whose name differs only in case can overwrite another | Rare | Low |
 | [KI-85](KNOWN_ISSUES.md#ki-85) | The release test reads only plain X.Y.Z headings | Rare | Low |
 | [KI-86](KNOWN_ISSUES.md#ki-86) | Prune refuses a branch whose name a tag also uses | Rare | Low |
+| [KI-89](KNOWN_ISSUES.md#ki-89) | Progress calls a finished Gemini attempt running when its answer could not be moved | Rare | Low |
+| [KI-91](KNOWN_ISSUES.md#ki-91) | Init and close can lose their caller's signal handler while registering their own | Rare | Low |
 
 ## Enhancements
 
@@ -83,6 +88,7 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 | [ENH-28](ENHANCEMENTS.md#enh-28) | Let `publish-release.sh` verify remote presence itself | Medium | ~2 hours |
 | [ENH-38](ENHANCEMENTS.md#enh-38) | Name security in design-review's plan-time checks | Medium | ~2 hours |
 | [ENH-32](ENHANCEMENTS.md#enh-32) | Drop explanations of standard tool behaviour from the skills | Low | ~2 hours |
+| [ENH-39](ENHANCEMENTS.md#enh-39) | Make the tests pass 3 found weak fail for their named reason | Low | ~2 hours |
 
 ## Open Questions
 

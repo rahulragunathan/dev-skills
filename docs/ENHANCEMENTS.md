@@ -254,6 +254,34 @@ the design-review rework, and its new rule needs its own pressure test.
 
 ---
 
+<a id="enh-39"></a>
+
+## ENH-39 — make the tests pass 3 found weak fail for their named reason
+
+**Priority:** Low · **Effort:** ~2 hours
+**Where:** [dependency-scan.bats](../skills/phase-workflow/tests/dependency-scan.bats) — `the committed file never reaches it` · **Regression net:** `skills/*/tests/`
+
+### What it is
+
+Several tests added in this phase's review pass whether or not their fix is in place: the
+include test checks a path the old exporter never passed; the commit test prints a SHA without
+comparing it to a scan; the single-message test counts messages without requiring the cause;
+the bytes test passes under `LC_ALL=C`; the bootstrap v2 assertion was already true; the
+partial-write test fails a mocked `ln` rather than a write.
+
+### Why it matters
+
+A test that cannot fail is false evidence for the behaviour CHANGELOG cites it for.
+
+### Notes for the work
+
+Give each a fixture where the reverted code answers differently, and assert the cause, not only
+the count.
+
+**Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 3, dependable-helpers phase, 2026-11-23.
+
+---
+
 <a id="enh-32"></a>
 
 ## ENH-32 — drop explanations of standard tool behaviour from the skills
