@@ -225,35 +225,6 @@ keep the retain rule: nothing is deleted that was not proven safe.
 
 ---
 
-<a id="enh-29"></a>
-
-## ENH-29 — evaluate every gone branch before reporting
-
-**Priority:** Low · **Effort:** ~1 hour
-**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `while read -r b track; do` §4 step 6 · **Regression net:** `skills/phase-workflow/tests/phase-git.bats`
-
-### What it is
-
-The prune loop exits on the first retained branch, so branches after it in `$GONE` are never
-considered. The previous `echo "$GONE" | xargs git branch -d` attempted all of them.
-
-### Why it matters
-
-Low, because it fails safe: nothing is deleted that should not be, and re-running after dealing
-with the first branch continues. The cost is that an operator with three stale branches learns
-about them one run at a time, and a phase whose cleanup reports one retention looks the same as
-one reporting three.
-
-### Notes for the work
-
-Evaluate every branch, collect the retained ones with their reasons, print them together, and
-exit non-zero at the end if any were retained. A behaviour introduced by the KI-46 fix, not
-present before it.
-
-**Source:** gemini-3.8-flash-high — phase review, phase 1 gate integrity, 2026-09-21.
-
----
-
 <a id="enh-32"></a>
 
 ## ENH-32 — drop explanations of standard tool behaviour from the skills

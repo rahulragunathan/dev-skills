@@ -43,7 +43,6 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | ID | Issue | Likelihood | Severity |
 | ---- | ------- | ---------- | ---------- |
 | [KI-57](KNOWN_ISSUES.md#ki-57) | `roadmap.py close` can lose a concurrent edit and rewrites line endings | Rare | Critical |
-| [KI-70](KNOWN_ISSUES.md#ki-70) | The origin check still lets some helper URLs through, and passes when grep fails | Rare | Critical |
 | [KI-47](KNOWN_ISSUES.md#ki-47) | Grading packets omit information their conditions require | Almost always | High |
 | [KI-48](KNOWN_ISSUES.md#ki-48) | S07's with-skill arm is handed the answer it is graded on | Almost always | High |
 | [KI-60](KNOWN_ISSUES.md#ki-60) | Helper commands need `CLAUDE_PLUGIN_ROOT`, which a Codex install does not set | Almost always | High |
@@ -85,7 +84,6 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 | [ENH-23](ENHANCEMENTS.md#enh-23) | Calibrate graders with blind hand-graded anchors | Medium | ~1 day |
 | [ENH-26](ENHANCEMENTS.md#enh-26) | Test the conversion of a helper's evaluation gap into an opaque call | Medium | ~1 hour |
 | [ENH-28](ENHANCEMENTS.md#enh-28) | Let `publish-release.sh` verify remote presence itself | Medium | ~2 hours |
-| [ENH-29](ENHANCEMENTS.md#enh-29) | Evaluate every gone branch before reporting | Low | ~1 hour |
 | [ENH-32](ENHANCEMENTS.md#enh-32) | Drop explanations of standard tool behaviour from the skills | Low | ~2 hours |
 | [ENH-33](ENHANCEMENTS.md#enh-33) | Check more command spellings in the name check | Low | ~2 hours |
 | [ENH-34](ENHANCEMENTS.md#enh-34) | Tighten the roadmap close tests and template examples | Low | ~2 hours |

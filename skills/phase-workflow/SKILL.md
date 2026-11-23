@@ -487,7 +487,8 @@ Sign-off — as defined at the top of this file — is the only trigger. Once it
 **Resume from recorded state.** Load `ORIGIN_URL`, `ORIGIN_PUSH_URL`, `REPO`, `PR`, `PHASE_BRANCH`, `DEFAULT_BRANCH`, `MERGE_METHOD`, `APPROVED_SHA` and `TAG` from the approved hand-off. `TAG` includes the `v` prefix. Never derive approval from the current PR head. A later head needs a new gate and sign-off.
 
 Run the remote check before resuming. `publish-release.sh --check-origin` validates the
-recorded fetch and push destinations and rejects multiple push destinations without changing
+recorded fetch and push destinations and accepts only ssh, https, scp-style and local-path remotes without credentials, and
+rejects multiple push destinations, without changing
 refs. Use this mode at the gate and before each publication or deletion below; the script owns
 the remote-check logic.
 
@@ -604,15 +605,18 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
    if [ -n "$GONE" ]; then
      # Never -D except at the approved tip already confirmed present on the remote.
      # That tip contains no unpushed commits; use -d for every other branch.
+     RETAINED=""
      for b in $(printf '%s' "$GONE"); do
        if [ "$(git rev-parse "$b")" = "${APPROVED_SHA:-}" ]; then
          git branch -D "$b"
        elif git branch -d "$b"; then
          :
        else
-         echo "RETAINED — $b holds commits absent from ${DEFAULT_BRANCH:-the default branch}"; exit 1
+         echo "RETAINED — $b holds commits absent from ${DEFAULT_BRANCH:-the default branch}"
+         RETAINED="$RETAINED $b"
        fi
      done
+     [ -z "$RETAINED" ] || exit 1   # every gone branch was considered first
    else
      echo "Nothing to clean up."
    fi

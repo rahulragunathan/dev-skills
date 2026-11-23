@@ -22,6 +22,11 @@ here — the plugin manifest's version is the only record of them.
   checks the first table's `REPO`, `PR` and `Release`, so a companion table, a padded row or a
   large record no longer misleads it. The first push refuses a record inherited unchanged from
   the default branch. The review record reaches the PR description only at the gate's head.
+- **The origin check is an allow-list (KI-70).** It accepts ssh, https, scp-style and local-path
+  remotes, refuses every transport helper, unlisted scheme and option-shaped URL, and decides with
+  shell patterns, so no external command can fail open. A push-URL listing that fails refuses.
+- **Branch cleanup reports every retained branch (ENH-29)** before it exits, rather than
+  stopping at the first.
 
 ## [2.1.0] - 2026-11-20 — project-docs and September's rules
 

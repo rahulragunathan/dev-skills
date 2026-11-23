@@ -76,35 +76,6 @@ install. Preserve the newline style, and compare surviving slices without stripp
 
 ---
 
-<a id="ki-70"></a>
-
-## KI-70 — the origin check still lets some helper URLs through, and passes when grep fails
-
-**Severity:** Critical
-**Likelihood:** Rare
-**Where:** [publish-release.sh](../skills/phase-workflow/publish-release.sh) — `TRANSPORT HELPER IN ORIGIN URL`
-
-### What happens
-
-The transport-helper refusal matches only names that start with a letter, so `9p::…`,
-`my_helper::…` or an empty `::…` prefix passes, and git can also hand an unknown `scheme://` to a
-custom helper. A `grep` that fails to run reads as "no match", so the check passes.
-
-### Example scenario
-
-A push URL `9p::https://token@host/r.git` passes `--check-origin`, and phase start records the
-token in `docs/PHASE_RECORD.md`.
-
-### Notes for a fix
-
-Refuse any `::` before the first `/` or single `:`, accept only the schemes a phase needs
-(ssh, https, the scp form), and use the shell's own pattern matching so no external command can
-fail open. Test each case in both URL positions with its exact diagnostic.
-
-**Source:** gpt-6.2-astra:high, gemini-4-neon-high — phase review pass 7, project-docs phase, 2026-11-22.
-
----
-
 <a id="ki-47"></a>
 
 ## KI-47 — grading packets omit information their conditions require

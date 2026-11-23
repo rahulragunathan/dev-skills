@@ -199,7 +199,7 @@ teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/nul
       git remote set-url --push origin "$2"
       run bash "$PUBLISH" --check-origin "$1" "$2"
       [ "$status" -eq 1 ] || false
-      [[ "$output" == *"CREDENTIALS IN ORIGIN URL"* || "$output" == *"TRANSPORT HELPER"* ]] || false
+      [[ "$output" == *"CREDENTIALS IN ORIGIN URL"* || "$output" == *"UNSUPPORTED ORIGIN URL"* ]] || false
       [[ "$output" != *notasecret* ]] || false
     done
   done
@@ -669,7 +669,7 @@ record_check() {
     git remote set-url --push origin "$url"
     run bash "$PUBLISH" --check-origin "$clean" "$url"
     [ "$status" -eq 1 ] || false
-    [[ "$output" == *"CREDENTIALS IN ORIGIN URL"* || "$output" == *"TRANSPORT HELPER"* ]] || false
+    [[ "$output" == *"CREDENTIALS IN ORIGIN URL"* || "$output" == *"UNSUPPORTED ORIGIN URL"* ]] || false
     [[ "$output" != *notasecret* ]] || false
   done
 }
@@ -829,4 +829,87 @@ publish_record() {
   PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/publish.sh"
   [ "$status" -eq 0 ] || false
   grep -q '^pr edit 9 -R fixture/repo --body-file' "$TEST_TMP/gh-calls"
+}
+
+# --- the origin allow-list (KI-70) ------------------------------------------
+
+# origin_refused <url> <message>: the URL is refused with exactly <message>, as the
+# fetch and as the push destination, and never printed.
+origin_refused() {
+  local clean="https://example.invalid/r.git" pair
+  for pair in "$clean|$1" "$1|$clean"; do
+    git remote set-url origin "${pair%%|*}"
+    git remote set-url --push origin "${pair#*|}"
+    run bash "$PUBLISH" --check-origin "${pair%%|*}" "${pair#*|}"
+    [ "$status" -eq 1 ] || { echo "accepted: $pair"; return 1; }
+    [[ "$output" == "$2"* ]] || { echo "message for $pair: $output"; return 1; }
+    [[ "$output" != *"$1"* ]] || { echo "printed: $1"; return 1; }
+  done
+}
+
+@test "origin check: refuses each unsupported form in both positions" {
+  # Fails if a helper, an unlisted scheme or an option-shaped URL passes (KI-70).
+  local url
+  for url in '9p::https://h/r' 'my_helper::x' '::x' 'ext::ssh git@h:r' '9p::git@github.com:o/r' \
+             '-oProxyCommand=x@h:r' 'foo://h/r' 'file:///r' 'http://u@h:80/r' 'git+https://h/r'; do
+    origin_refused "$url" "UNSUPPORTED ORIGIN URL" || false
+  done
+}
+
+@test "origin check: refuses credentials inside an accepted form, with grep absent" {
+  # Fails if the credential check needs an external command and passes when it cannot run.
+  local url
+  mkdir -p "$TEST_TMP/nogrep"
+  for tool in git bash dirname wc tr sed cat; do ln -sf "$(command -v "$tool")" "$TEST_TMP/nogrep/$tool"; done
+  for url in 'https://tok@example.invalid/r.git' 'https://u:tok@example.invalid/r.git' \
+             'https://example.invalid/r.git?tok' 'ssh://me:tok@example.invalid/r.git' 'git:tok@example.invalid:o/r'; do
+    git remote set-url origin "$url"; git remote set-url --push origin "$url"
+    PATH="$TEST_TMP/nogrep" run bash "$PUBLISH" --check-origin "$url" "$url"
+    [ "$status" -eq 1 ] || { echo "accepted: $url"; false; }
+    [[ "$output" == "CREDENTIALS IN ORIGIN URL"* ]] || { echo "$url: $output"; false; }
+  done
+}
+
+@test "origin check: a failed push-URL listing refuses" {
+  # Fails if a push-URL listing that errors counts as one destination.
+  local real_git; real_git="$(command -v git)"
+  mkdir -p "$TEST_TMP/bin"
+  printf '#!/bin/bash\ncase "$*" in *"--push --all"*) exit 128 ;; esac\nexec "%s" "$@"\n' "$real_git" > "$TEST_TMP/bin/git"
+  chmod +x "$TEST_TMP/bin/git"
+  PATH="$TEST_TMP/bin:$PATH" run bash "$PUBLISH" --check-origin "$FETCH_URL" "$PUSH_URL"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"PUSH URL"* ]]
+}
+
+@test "origin check: accepts ssh, git+ssh, ssh+git, https, scp form and a local path" {
+  # Control: the forms a phase uses pass.
+  local url
+  for url in 'ssh://git@example.invalid/r.git' 'git+ssh://git@example.invalid/r.git' \
+             'ssh+git://git@example.invalid/r.git' 'https://example.invalid/r.git' \
+             'git@github.com:owner/r.git' 'github.com:owner/r.git' "$TEST_TMP/fork.git"; do
+    git remote set-url origin "$url"; git remote set-url --push origin "$url"
+    run bash "$PUBLISH" --check-origin "$url" "$url"
+    [ "$status" -eq 0 ] || { echo "refused: $url: $output"; false; }
+  done
+}
+
+@test "prune: reports every retained branch, then exits 1" {
+  # Fails if the loop stops at the first retained branch, leaving later ones unconsidered (ENH-29).
+  ki46_extract_cleanup
+  export APPROVED_SHA="$TASK_SHA"
+  for b in feature/a feature/b; do
+    git checkout -q -b "$b" main; echo "$b" > "${b#feature/}"; git add -A; git commit -qm "$b"
+    git push -q -u origin "$b"
+  done
+  git checkout -q -b feature/c main; echo c > c; git add -A; git commit -qm c
+  git push -q -u origin feature/c
+  git checkout -q main; git merge -q --ff-only feature/c; git push -q origin main
+  for b in feature/a feature/b feature/c; do git push -q origin --delete "$b"; done
+  git fetch -q --prune origin
+  run bash "$TEST_TMP/cleanup.sh"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"RETAINED — feature/a"* ]] || false
+  [[ "$output" == *"RETAINED — feature/b"* ]] || false
+  run git rev-parse --verify -q feature/c
+  [ "$status" -ne 0 ]
 }
