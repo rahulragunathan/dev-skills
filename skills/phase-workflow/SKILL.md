@@ -473,7 +473,7 @@ has a newer one:
 
 ```bash
 # fence: mid-scan
-MID="$(python3 skills/phase-workflow/bats_assertions.py --count-mid skills/*/tests/*.bats)" \
+MID="$(python3 "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/bats_assertions.py" --count-mid skills/*/tests/*.bats)" \
   || { echo "SCAN FAILED — the gate proves nothing"; exit 1; }
 [ "$MID" -eq 0 ] || { echo "MID ASSERTIONS PRESENT: $MID — list them without --count-mid"; exit 1; }
 ```

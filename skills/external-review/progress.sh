@@ -29,6 +29,7 @@ superseded() {
   local stem att f other
   stem="${1%%_a[0-9]*}"
   att="$(printf '%s' "$1" | sed -E 's/.*_c[0-9]+_a([0-9]+)_.*/\1/')"
+  case "$att" in ''|*[!0-9]*) return 1 ;; esac
   for f in "$dir/${stem}"_a*; do
     [ -e "$f" ] || continue
     other="$(basename "$f" | sed -E 's/.*_c[0-9]+_a([0-9]+)_.*/\1/')"
@@ -38,7 +39,7 @@ superseded() {
   return 1
 }
 found=0
-for out in "$dir"/*_p"$pass"_c*.txt "$dir"/*_p"$pass"_c*.part "$dir"/*_p"$pass"_c*.partial; do
+for out in "$dir"/*_p"$pass"_c*.txt "$dir"/*_p"$pass"_c*.part "$dir"/*_p"$pass"_c*.partial "$dir"/*_p"$pass"_c*.state; do
   [ -e "$out" ] || continue
   name="$(basename "$out")"
   case "$name" in *_prompt_*) continue ;; esac
@@ -47,10 +48,16 @@ for out in "$dir"/*_p"$pass"_c*.txt "$dir"/*_p"$pass"_c*.part "$dir"/*_p"$pass"_
   chunk="$(printf '%s' "$name" | sed -E 's/.*_p[0-9]+_(c[0-9]+)_.*/\1/')"
   bytes="$(wc -c < "$out" | tr -d ' ')"
   case "$name" in
+    *.state)
+      # Only an attempt that left nothing else, such as an unavailable rung, is reported from here.
+      base="${out%.state}"
+      [ -e "$base.txt" ] || [ -e "$base.part" ] || [ -e "$base.partial" ] && continue
+      echo "$reviewer $chunk: $(cat "$out" 2>/dev/null || echo unknown)"; continue ;;
     *.partial)
       case "$(cat "${out%.partial}.state" 2>/dev/null)" in
         failed) echo "$reviewer $chunk: failed — $bytes bytes set aside" ;;
-        *) echo "$reviewer $chunk: failed — answer cut off, $bytes bytes set aside" ;;
+        cut-off) echo "$reviewer $chunk: failed — answer cut off, $bytes bytes set aside" ;;
+        *) echo "$reviewer $chunk: failed — $bytes bytes set aside, reason not recorded" ;;
       esac
       continue ;;
     *.part) if superseded "$name"; then

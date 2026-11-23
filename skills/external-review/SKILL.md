@@ -157,7 +157,7 @@ probes. Pin writes off at the tool level:
 
 ```bash
 # fence: codex-loop
-: "${CODEX_RUNGS?run the ladder discovery block first}"
+: "${CODEX_RUNGS?run the ladder discovery block first}" "${ROOT:?prepare the review root with codex-root.sh first}"
 for m in $(printf '%s' "$CODEX_RUNGS"); do
   slug="${m%%:*}"
   case "$m" in *:*) effort="${m#*:}";; *) effort=high;; esac
@@ -179,7 +179,7 @@ for m in $(printf '%s' "$CODEX_RUNGS"); do
     case "$CONFIRMED" in
       UNAVAILABLE*) echo "unavailable: $slug:$effort — trying the next rung"; continue ;;
     esac
-    echo "$slug:$effort failed, and a probe did not confirm it unavailable ($CONFIRMED) — classify per Failure handling"; break
+    echo "$slug:$effort failed, and a probe did not confirm it unavailable (${CONFIRMED:-the probe gave no codex row}) — classify per Failure handling"; break
   fi
   echo "$slug:$effort failed for a reason that is not availability — classify per Failure handling"; break
 done
@@ -213,6 +213,8 @@ for m in $(printf '%s' "$GEMINI_RUNGS"); do
   rm -f "$OUT" "$PART" "${OUT%.txt}.partial" "$ERR" "$STATE"   # never inherit a previous attempt
   PROMPT="$(cat "<scratchpad>/gemini_prompt_p<n>_c<chunk>.txt")" && [ -n "$PROMPT" ] \
     || { echo "no prompt for this chunk — not run"; break; }
+  # agy cuts a longer prompt short and still exits 0 (between 150 KB and 220 KB, 2026-11-23).
+  [ "${#PROMPT}" -le 120000 ] || { echo "prompt over 120000 characters — split the chunk; agy would truncate it"; break; }
   # An id with an effort suffix carries its effort; a suffix-less one is told high.
   case "$m" in *-high|*-xhigh|*-max|*-medium) EFFORT_FLAG=() ;; *) EFFORT_FLAG=(--effort high) ;; esac
   rc=0
@@ -222,16 +224,17 @@ for m in $(printf '%s' "$GEMINI_RUNGS"); do
     # agy's own cut-off notice, not any line that mentions the print timeout.
     cut=0; grep -q '^\[agy\] print timeout after .*returning partial output' "$ERR" || cut=$?   # 0 cut off, 1 finished, 2 unreadable
     if [ "$cut" = 1 ]; then mv "$PART" "$OUT"; echo done > "$STATE"; break; fi
-    mv "$PART" "${OUT%.txt}.partial"   # a cut-off answer is not coverage
+    # The state goes first, so the set-aside answer is never seen without it.
     if [ "$cut" = 0 ]; then echo cut-off > "$STATE"; else echo failed > "$STATE"; fi
+    mv "$PART" "${OUT%.txt}.partial"   # a cut-off answer is not coverage
     echo "$m: incomplete answer (print timeout or unreadable stderr) — the pair is Failed; classify per Failure handling"; break
   fi
   if grep -qiE 'not supported|unknown model|is not available|entitle' "$ERR"; then
     rm -f "$PART"; echo unavailable > "$STATE"
     echo "unavailable: $m — trying the next rung"; continue
   fi
-  mv "$PART" "${OUT%.txt}.partial"     # kept, even empty, so the failed attempt stays visible
   echo failed > "$STATE"
+  mv "$PART" "${OUT%.txt}.partial"     # kept, even empty, so the failed attempt stays visible
   echo "$m failed for a reason that is not availability — classify per Failure handling"; break
 done
 ```
@@ -529,6 +532,7 @@ On empty output or non-zero exit, run a tiny probe before reporting:
 
 ```bash
 # fence: failure-probe
+: "${ROOT:?prepare the review root with codex-root.sh first}"
 m="<same model as the real run>"   # the recorded slug:effort pair
 slug="${m%%:*}"
 case "$m" in *:*) effort="${m#*:}";; *) effort=high;; esac
@@ -698,9 +702,9 @@ and the gate takes the user's recorded decision instead.
 1. **Run the pass and triage it.** Verify every finding and give it a disposition. A finding
    that an earlier pass's fix did not work gets a new row in this pass that names the earlier ID
    (`F-12 — the F-03 fix is partial`), and counts as new at its own severity. Earlier rows keep
-   their pass and finding, and per-pass counts never change. Only a row's Disposition may change
-   later, and only by the user: write it as `<new> — was <old>, the user's call`. A row the user
-   reopens for a fix also gains its Commit and its test evidence.
+   their pass and finding, and per-pass counts never change. Later, only the user changes a row:
+   its Disposition, written as `<new> — was <old>, the user's call`, and, for a row reopened for
+   a fix, its Commit and test evidence.
 2. **Apply the stop rule before fixing anything, and only to a complete pass.** Count verified
    findings only; `Rejected` rows do not count. Stop after pass 3. Stop when a pass, from pass 2
    on, has no new Critical or High and fewer findings than the pass before. Stop when a pass

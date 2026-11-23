@@ -107,3 +107,26 @@ age() { touch -t "$(date -v-"$2"M +%Y%m%d%H%M.%S)" "$1"; }
   [[ "$(printf '%s\n' "$output" | grep 'c1:')" != *"cut off"* ]] || false
   [[ "$(printf '%s\n' "$output" | grep 'c2:')" == *"failed — answer cut off"* ]]
 }
+
+@test "an attempt that only left a state file is reported" {
+  # Fails if a pass whose rungs were all unavailable reads as "no invocations" (pass 1, Codex 21).
+  echo $(date +%s) > "$TEST_TMP/gemini_phase_p2_c1_a1_m.start"
+  echo unavailable > "$TEST_TMP/gemini_phase_p2_c1_a1_m.state"
+  run bash "$PROGRESS" "$TEST_TMP" 2
+  [[ "$output" == *"gemini c1: unavailable"* ]]
+}
+
+@test "a set-aside answer with no state is not called a cut-off" {
+  # Fails if a .partial whose end state was never written is labelled cut off.
+  printf 'x' > "$TEST_TMP/gemini_phase_p2_c1_a1_m.partial"
+  run bash "$PROGRESS" "$TEST_TMP" 2
+  [[ "$output" == *"gemini c1: failed — 1 bytes set aside, reason not recorded"* ]]
+}
+
+@test "a part file without an attempt number is not superseded and raises no error" {
+  # Fails if superseded() compares a missing attempt number and prints an integer error.
+  printf 'x' > "$TEST_TMP/gemini_phase_p2_c1_m.part"
+  run bash "$PROGRESS" "$TEST_TMP" 2
+  [[ "$output" != *"integer"* ]] || false
+  [[ "$output" == *"running"* ]]
+}

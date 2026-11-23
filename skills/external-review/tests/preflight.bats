@@ -786,3 +786,26 @@ PY
   run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected
   [[ "$(printf '%s\n' "$output" | grep '^gemini')" == *READY* ]]
 }
+
+# --- external review pass 1 fixes ----------------------------------------------
+
+@test "the documented Gemini loop refuses a prompt agy would truncate" {
+  # Fails if a prompt over the size agy reads in full is sent, and its cut-off answer counted (pass 1, Gemini 2).
+  head -c 130000 /dev/zero | tr '\0' 'x' > "$TEST_TMP/gemini_prompt_p1_c1.txt"
+  gemini_loop 'touch "$TEST_TMP/AGY-RAN"; echo "No findings.";'
+  run bash "$TEST_TMP/gemini.sh"
+  [ ! -e "$TEST_TMP/AGY-RAN" ] || false
+  [[ "$output" == *"split the chunk"* ]]
+}
+
+@test "the documented Codex loop needs a review root" {
+  # Fails if the loop runs Codex with no ROOT, in whatever folder the shell is in (Gemini 13).
+  python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/loop.sh" <<'PY'
+import pathlib, sys
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+pathlib.Path(sys.argv[2]).write_text('unset ROOT\nCODEX_RUNGS="m1:high"\ncodex() { touch "$TEST_TMP/CODEX-RAN"; }\n' + fence(sys.argv[1], 'codex-loop'))
+PY
+  run bash "$TEST_TMP/loop.sh"
+  [ "$status" -ne 0 ] || false
+  [ ! -e "$TEST_TMP/CODEX-RAN" ]
+}
