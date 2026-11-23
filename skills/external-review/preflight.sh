@@ -2,8 +2,11 @@
 # preflight.sh — ask each reviewer one cheap question before committing a pass.
 #
 # Usage:
-#   preflight.sh [--codex-model SLUG[:EFFORT]] [--gemini-model M] [--authored-by codex|gemini]
-# Codex pairs probe at the supplied effort; a bare slug defaults to high.
+#   preflight.sh [--codex-model SLUG[:EFFORT]]... [--gemini-model M]... --root DIR
+#                [--timeout SECONDS] [--authored-by codex|gemini]
+# Codex pairs probe at the supplied effort; a bare slug defaults to high. Codex
+# probes run in DIR, the prepared review root, which is required whenever a
+# Codex model is given. Gemini ids for efforts the review never uses are refused.
 # The author is probed for diagnostics but disqualified from review coverage.
 #
 # Pass 9 spent about 100 minutes learning, one chunk at a time, that the Gemini
@@ -43,7 +46,9 @@ while [ $# -gt 0 ]; do
       esac
       shift 2 ;;
     --timeout) DEADLINE="${2:?timeout required}"; shift 2 ;;
-    --root) ROOT_ARGS=(-C "${2:?root required}"); shift 2 ;;
+    --root)
+      [ -d "${2:-}" ] || { echo "--root ${2:-} is not a directory — prepare the review root first"; exit 1; }
+      ROOT_ARGS=(-C "$2"); shift 2 ;;
     *) echo "unknown argument: $1"; exit 1 ;;
   esac
 done
@@ -52,6 +57,17 @@ if [ "${#CODEX_MODELS[@]}" -eq 0 ] && [ "${#GEMINI_MODELS[@]}" -eq 0 ]; then
   exit 1
 fi
 case "$DEADLINE" in ''|*[!0-9]*|0) echo "timeout must be a positive integer"; exit 1;; esac
+# Codex reads the folder it runs in, so it is never probed outside the review root.
+if [ "${#CODEX_MODELS[@]}" -gt 0 ] && [ "${#ROOT_ARGS[@]}" -eq 0 ]; then
+  echo "a Codex probe needs --root <the prepared review root>; refusing to probe the current folder"
+  exit 1
+fi
+for m in ${GEMINI_MODELS[@]+"${GEMINI_MODELS[@]}"}; do
+  case "$m" in
+    *-low|*-minimal|*-none|*-ultra)
+      echo "$m refused — the review never runs Gemini at that effort"; exit 1 ;;
+  esac
+done
 RUNNER="$(cd -- "$(dirname -- "$0")" && pwd)/deadline.py"
 
 TMP="$(mktemp -d)" || { echo "CANNOT CREATE TEMP DIR"; exit 1; }
@@ -65,6 +81,9 @@ DOWN=()
 # to a bare exit status and demand opposite responses, so they are separated
 # here rather than at each call site.
 timed_out() { grep -qiE 'probe timeout|print timeout|timed out|turn in progress' "$1"; }
+# A deadline or explicit cut-off, which overrides even a ready answer. A retried
+# request that merely mentions a timeout is not one.
+cut_off() { grep -qiE 'probe timeout|print timeout|turn in progress' "$1"; }
 
 classify_error() {
   local err="$1"
@@ -137,7 +156,7 @@ probe() {
         --print-timeout "${DEADLINE}s" > "$OUT" 2> "$ERR" < /dev/null
     fi
     rc=$?
-    if [ "$rc" = 124 ] || timed_out "$ERR"; then
+    if [ "$rc" = 124 ] || cut_off "$ERR"; then
       result="TIMEOUT — inconclusive"
     elif [ "$rc" = 0 ] && [ "$(tr -d '\r\n' < "$OUT")" = ready ]; then
       result=READY

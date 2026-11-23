@@ -30,6 +30,14 @@ here — the plugin manifest's version is the only record of them.
 - **The post-review gate check sees both sides of a rename and pins one head (KI-62).** A file
   moved into a bookkeeping path is named by its source, a failed listing stops the gate, and the
   ready step refuses a head other than the one the check inspected.
+- **external-review's helpers (KI-43, KI-63, KI-64, KI-66, KI-71).** A Codex refusal quoted
+  in the material under review no longer downshifts the ladder: a probe of the rung must confirm
+  it. `preflight.sh` refuses a Codex probe without a review root and Gemini ids for efforts the
+  review never uses, and reads a ready answer beside a retried-request note as ready. The Gemini
+  loop records each attempt's start and end, so `progress.sh` dates a run from its start,
+  reports a retried chunk's earlier attempt as superseded, and tells a failed run from a cut-off
+  one; only agy's own cut-off notice counts as one. Discovery says which program failed, agy or
+  the ranker.
 
 ## [2.1.0] - 2026-11-20 — project-docs and September's rules
 

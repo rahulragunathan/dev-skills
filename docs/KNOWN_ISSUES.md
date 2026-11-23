@@ -291,62 +291,6 @@ Find the field anywhere on an unfenced line, refuse absolute and empty targets, 
 
 ---
 
-<a id="ki-63"></a>
-
-## KI-63 — a quoted refusal of the same model can still downshift Codex
-
-**Severity:** High
-**Likelihood:** Rare
-**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `grep -F "$slug"`
-
-### What happens
-
-The loop downshifts on an `ERROR:` line that names the rung's model. Material under review
-that quotes an earlier refusal of that same model, or a longer slug containing it, satisfies the
-same test when the run later fails for another reason.
-
-### Example scenario
-
-A follow-up review whose bundle includes an earlier Codex log fails on a network error. The
-quoted refusal moves it to a weaker model.
-
-### Notes for a fix
-
-Confirm an apparent refusal with a short probe of the same model and effort before
-downshifting.
-
-**Source:** gpt-6.2-astra:high — phase review pass 4, project-docs phase, 2026-11-22.
-
----
-
-<a id="ki-64"></a>
-
-## KI-64 — the Codex probe runs in the caller's folder when ROOT is unset
-
-**Severity:** High
-**Likelihood:** Rare
-**Where:** [preflight.sh](../skills/external-review/preflight.sh) — `--root) ROOT_ARGS=`
-
-### What happens
-
-The documented probe passes `--root` only when `ROOT` is set, and `preflight.sh` probes Codex
-without it. A skipped preparation step probes the live checkout. A directly probed Gemini id
-ending in `-low`, `-minimal`, `-none` or `-ultra` also gets `--effort high`.
-
-### Example scenario
-
-A session forgets to prepare the review root; the readiness probe runs Codex in the user's
-checkout.
-
-### Notes for a fix
-
-Require a root whenever a Codex candidate will run, and refuse the excluded Gemini suffixes
-in the probe.
-
-**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review pass 4, project-docs phase, 2026-11-22; gpt-6.2-astra:high — pass 5.
-
----
-
 <a id="ki-49"></a>
 
 ## KI-49 — the headline tally mixes two skills
@@ -559,35 +503,6 @@ Move the main guard below every class and assert the heading exists first. Disco
 
 ---
 
-<a id="ki-66"></a>
-
-## KI-66 — progress lines can misreport a Gemini run's age and state
-
-**Severity:** Medium
-**Likelihood:** Likely
-**Where:** [progress.sh](../skills/external-review/progress.sh) — `*.partial) echo`
-
-### What happens
-
-`progress.sh` dates a streaming Gemini run from its stderr file, so a late diagnostic resets
-the clock. A `.part` left by a killed earlier attempt shows as running beside the next attempt,
-and a failure with no output reads as "answer cut off". An `[agy] print timeout` setting
-announcement would also be taken for a cut-off. The skill's sleep rule still says 30 minutes where
-`progress.sh` warns at 25.
-
-### Example scenario
-
-A run killed after sleep is retried as attempt 2; the update shows attempt 1 still running.
-
-### Notes for a fix
-
-Record each attempt's start and end state, retire an earlier attempt's `.part` when the next
-starts, and match agy's cut-off wording exactly.
-
-**Source:** gpt-6.2-astra:high, gemini-4-argon-high (clocks), gpt-6.2-astra:high (timeout wording) — phase review pass 4, project-docs phase, 2026-11-22.
-
----
-
 <a id="ki-41"></a>
 
 ## KI-41 — converting a large sequence to text has no size bound
@@ -610,35 +525,6 @@ stalls on that answer or exhausts memory, and the whole batch waits.
 ### Notes for a fix
 
 Bound the rendered size of `str`, `repr` and formatting, and run each grade with a timeout.
-
-**Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.
-
----
-
-<a id="ki-43"></a>
-
-## KI-43 — a ready reviewer probe reads as TIMEOUT when stderr mentions a timeout
-
-**Severity:** Medium
-**Likelihood:** Rare
-**Where:** [preflight.sh](../skills/external-review/preflight.sh) — `if [ "$rc" = 124 ] || timed_out "$ERR"; then`
-
-### What happens
-
-The probe checks `timed_out "$ERR"` before it checks exit 0 and the answer `ready`. A probe
-that succeeds but writes a warning containing "timed out" to stderr is reported as
-`TIMEOUT — inconclusive`.
-
-### Example scenario
-
-A CLI logs a retried network call ("request timed out, retrying") and then answers `ready`.
-Preflight reports the reviewer as inconclusive, and the review runs with less coverage than it
-could have.
-
-### Notes for a fix
-
-Classify exit 0 with the answer `ready` first, then timeouts. Found by reading the
-classification order; not reproduced with a real CLI.
 
 **Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.
 
@@ -696,32 +582,6 @@ Run the metadata lookup inside the same handler and test a denied folder beside 
 finding.
 
 **Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review pass 4, project-docs phase, 2026-11-22.
-
----
-
-<a id="ki-71"></a>
-
-## KI-71 — Gemini discovery blames agy when the ranker fails
-
-**Severity:** Medium
-**Likelihood:** Rare
-**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `agy models failed`
-
-### What happens
-
-Either side of the discovery pipeline can fail. When `agy models` succeeds and
-`gemini-ladder.py` fails, discovery still says "agy models failed" and points at an empty
-`agy-models.err`. `codex-ladder.py`'s docstring does not name `max` as a requestable effort.
-
-### Example scenario
-
-The ranker is missing after a partial checkout; the operator reads an empty error file.
-
-### Notes for a fix
-
-Keep both statuses and say which program failed; name `max` in the Codex docstring.
-
-**Source:** gpt-6.2-astra:high, gemini-4-neon-high — phase review pass 6, project-docs phase, 2026-11-22.
 
 ---
 

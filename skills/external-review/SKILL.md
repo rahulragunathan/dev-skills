@@ -68,9 +68,9 @@ publish what they offer, so read it at run time.
 codex_ladder() { python3 "$CLAUDE_PLUGIN_ROOT/skills/external-review/codex-ladder.py" \
   "$HOME/.codex/models_cache.json" "$@"; }
 
-# Gemini — `agy models` publishes no ranking; gemini-ladder.py ranks it (see below).
-gemini_ladder() { agy models 2>"<scratchpad>/agy-models.err" \
-  | python3 "$CLAUDE_PLUGIN_ROOT/skills/external-review/gemini-ladder.py" "$@"; }
+# Gemini — `agy models` publishes no ranking; gemini-ladder.py ranks the listing on its stdin.
+agy_models() { agy models 2>"<scratchpad>/agy-models.err"; }
+gemini_ladder() { python3 "$CLAUDE_PLUGIN_ROOT/skills/external-review/gemini-ladder.py" "$@"; }
 ```
 
 **`codex-ladder.py` owns the Codex ranking**, and its docstring states the order; the family order
@@ -110,8 +110,13 @@ EFFORT=high   # only when the user asks for another: EFFORT=max (or xhigh, mediu
 CODEX_RUNGS="$(codex_ladder --effort "$EFFORT")" || CODEX_RUNGS=""
 IFS=: read -r slug effort <<< "${CODEX_RUNGS%% *}"
 [ -n "$slug" ] && [ -n "$effort" ] || { CODEX_RUNGS=""; echo "No Codex rung at $EFFORT (no model offers it, or no readable cache) — record no output for Codex, do not run"; }
-if GEMINI_RUNGS="$(set -o pipefail; gemini_ladder --effort "$EFFORT")"; then
-  [ -n "$GEMINI_RUNGS" ] || echo "No Gemini model offers $EFFORT effort — record no output for Gemini, do not run"
+# Listing and ranking run apart, so a failure names the program that failed.
+if MODELS="$(agy_models)"; then
+  if GEMINI_RUNGS="$(printf '%s\n' "$MODELS" | gemini_ladder --effort "$EFFORT")"; then
+    [ -n "$GEMINI_RUNGS" ] || echo "No Gemini model offers $EFFORT effort — record no output for Gemini, do not run"
+  else
+    GEMINI_RUNGS=""; echo "gemini-ladder.py failed — record no output for Gemini, do not run"
+  fi
 else
   GEMINI_RUNGS=""; echo "agy models failed — record no output for Gemini, do not run; agy-models.err says why"
 fi
@@ -165,18 +170,28 @@ for m in $(printf '%s' "$CODEX_RUNGS"); do
     -o "$OUT" "<prompt>" > "$LOG" 2>&1 < /dev/null || rc=$?
   [ "$rc" = 0 ] && [ -s "$OUT" ] && break                      # it answered; keep this rung
   if grep -E '^ERROR:' "$LOG" | grep -F "$slug" | grep -qiE 'not supported|unknown model|is not available|entitle'; then
-    echo "unavailable: $slug:$effort — trying the next rung"; continue
+    # The log can quote a refusal from the material under review, so a probe of this rung confirms it.
+    CONFIRMED=""
+    while read -r who model result; do
+      if [ "$who" = codex ] && [ "$model" = "$slug:$effort" ]; then CONFIRMED="$result"; fi
+    done <<< "$(bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/preflight.sh" \
+      --codex-model "$slug:$effort" --root "$ROOT" --timeout 120 2>&1 || true)"
+    case "$CONFIRMED" in
+      UNAVAILABLE*) echo "unavailable: $slug:$effort — trying the next rung"; continue ;;
+    esac
+    echo "$slug:$effort failed, and a probe did not confirm it unavailable ($CONFIRMED) — classify per Failure handling"; break
   fi
   echo "$slug:$effort failed for a reason that is not availability — classify per Failure handling"; break
 done
 ```
 
 - **`-o` captures the final message and nothing else.** A quota, auth or availability failure never reaches it, so the file is absent or empty and says nothing about why. The `.log` beside it holds stderr; the hand-off quotes its error lines verbatim, and the PR copy of the record does not.
-- **Downshift only on an `ERROR:` line that names this rung's own model.** Codex writes the
-  prompt and its whole transcript to stderr, so a run that fails mid-review leaves a log quoting
-  the material under review. Codex's refusal names the model it refused
-  (`ERROR: The '<slug>' model is not supported …`); quoted material almost never names the model
-  that is reading it.
+- **Downshift only on an `ERROR:` line that names this rung's own model, confirmed by a probe.**
+  Codex writes the prompt and its whole transcript to stderr, so a run that fails mid-review
+  leaves a log quoting the material under review, which can hold an earlier refusal of the same
+  model. A refusal names the model it refused (`ERROR: The '<slug>' model is not supported …`);
+  the loop then probes that rung with `preflight.sh` and downshifts only when the probe's own
+  `codex` row says `UNAVAILABLE`.
 - **Codex can exit zero on a quota failure.** Require the output artifact as specified in
   [Coverage classification](#coverage-classification), and retain the diagnostic log.
 - **Name every invocation uniquely: mode, pass, chunk, attempt, model and effort.**
@@ -194,25 +209,29 @@ done
 : "${GEMINI_RUNGS?run the ladder discovery block first}"
 for m in $(printf '%s' "$GEMINI_RUNGS"); do
   OUT="<scratchpad>/gemini_<mode>_p<n>_c<chunk>_a<attempt>_$m.txt"
-  PART="${OUT%.txt}.part"; ERR="${OUT%.txt}.err"
-  rm -f "$OUT" "$PART" "${OUT%.txt}.partial" "$ERR"   # never inherit a previous attempt
+  PART="${OUT%.txt}.part"; ERR="${OUT%.txt}.err"; STATE="${OUT%.txt}.state"
+  rm -f "$OUT" "$PART" "${OUT%.txt}.partial" "$ERR" "$STATE"   # never inherit a previous attempt
   PROMPT="$(cat "<scratchpad>/gemini_prompt_p<n>_c<chunk>.txt")" && [ -n "$PROMPT" ] \
     || { echo "no prompt for this chunk — not run"; break; }
   # An id with an effort suffix carries its effort; a suffix-less one is told high.
   case "$m" in *-high|*-xhigh|*-max|*-medium) EFFORT_FLAG=() ;; *) EFFORT_FLAG=(--effort high) ;; esac
   rc=0
+  date +%s > "${OUT%.txt}.start"   # progress.sh dates the attempt from this, not from stderr
   agy -p "$PROMPT" --model "$m" ${EFFORT_FLAG[@]+"${EFFORT_FLAG[@]}"} --print-timeout 25m > "$PART" 2> "$ERR" || rc=$?
   if [ "$rc" = 0 ] && [ -s "$PART" ]; then
-    cut=0; grep -q '^\[agy\] print timeout' "$ERR" || cut=$?   # 0 cut off, 1 finished, 2 unreadable
-    if [ "$cut" = 1 ]; then mv "$PART" "$OUT"; break; fi
+    # agy's own cut-off notice, not any line that mentions the print timeout.
+    cut=0; grep -q '^\[agy\] print timeout after .*returning partial output' "$ERR" || cut=$?   # 0 cut off, 1 finished, 2 unreadable
+    if [ "$cut" = 1 ]; then mv "$PART" "$OUT"; echo done > "$STATE"; break; fi
     mv "$PART" "${OUT%.txt}.partial"   # a cut-off answer is not coverage
+    if [ "$cut" = 0 ]; then echo cut-off > "$STATE"; else echo failed > "$STATE"; fi
     echo "$m: incomplete answer (print timeout or unreadable stderr) — the pair is Failed; classify per Failure handling"; break
   fi
   if grep -qiE 'not supported|unknown model|is not available|entitle' "$ERR"; then
-    rm -f "$PART"
+    rm -f "$PART"; echo unavailable > "$STATE"
     echo "unavailable: $m — trying the next rung"; continue
   fi
   mv "$PART" "${OUT%.txt}.partial"     # kept, even empty, so the failed attempt stays visible
+  echo failed > "$STATE"
   echo "$m failed for a reason that is not availability — classify per Failure handling"; break
 done
 ```
@@ -220,6 +239,9 @@ done
 - Build each chunk's prompt in its own file (rubric + inlined material), named by pass and
   chunk, so a retry or a parallel run cannot answer another chunk's material. Use the print
   timeout in the invocation above.
+- **Each attempt leaves its start and its end.** The loop writes `.start` (the attempt's
+  epoch) and `.state` (`done`, `cut-off`, `failed` or `unavailable`) beside the output, and
+  `progress.sh` reports from them.
 - **Only a finished answer gets the output name.** `agy` streams its answer, so the loop writes
   to `.part` and renames it when the run ends well; until then `progress.sh` reports the run as
   running. On a print timeout `agy` exits 0 and returns the partial answer, saying so only on
