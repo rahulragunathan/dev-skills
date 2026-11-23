@@ -48,8 +48,10 @@ git rev-parse --git-dir >/dev/null 2>&1 || { echo "NOT A GIT REPOSITORY"; exit 1
 # kind <url>: url, scp, path or refused.
 kind() {
   case "$1" in
-    ''|-*|*[[:space:]]*|*::*) echo refused ;;
-    [Ss][Ss][Hh]://?*|[Gg][Ii][Tt]+[Ss][Ss][Hh]://?*|[Ss][Ss][Hh]+[Gg][Ii][Tt]://?*|[Hh][Tt][Tt][Pp][Ss]://?*) echo url ;;
+    ''|-*|//*|*[[:space:]]*|*::*) echo refused ;;
+    # Lower case only: git picks its built-in transports by exact prefix, and hands
+    # any other spelling to a remote helper.
+    ssh://?*|git+ssh://?*|ssh+git://?*|https://?*) echo url ;;
     *://*) echo refused ;;
     /*) echo path ;;
     *:*)
@@ -70,8 +72,9 @@ has_credentials() {
       case "$authority" in
         *@*)
           local user="${authority%@*}"
-          case "$user" in *:*) return 0 ;; esac
-          case "$1" in [Hh][Tt][Tt][Pp][Ss]://*) return 0 ;; esac ;;
+          # git decodes %-escapes before it splits the user part, so refuse them outright.
+          case "$user" in *:*|*%*) return 0 ;; esac
+          case "$1" in https://*) return 0 ;; esac ;;
       esac ;;
     scp)
       local user_host="${1%%:*}" path="${1#*:}"
@@ -104,11 +107,16 @@ have_push="$(git remote get-url --push origin 2>/dev/null || true)"
   || { echo "ORIGIN PUSH URL CHANGED SINCE THE GATE — refusing"; exit 1; }
 
 # More than one push destination means the check above covers only the first,
-# and a listing that fails proves nothing.
+# and a listing that fails proves nothing. The whole listing must be the one URL.
 all_push="$(git remote get-url --push --all origin 2>/dev/null)" \
   || { echo "CANNOT LIST THE ORIGIN PUSH URLS — refusing"; exit 1; }
-if [ "$(printf '%s\n' "$all_push" | wc -l | tr -d ' ')" -ne 1 ]; then
+if [ "$all_push" != "$WANT_PUSH" ]; then
   echo "ORIGIN HAS MULTIPLE PUSH URLS — refusing; a tag would go to all of them"
+  exit 1
+fi
+# A configured helper replaces the transport the URL names.
+if [ -n "$(git config --get remote.origin.vcs 2>/dev/null || true)" ]; then
+  echo "remote.origin.vcs IS SET — refusing; it hands origin to a remote helper"
   exit 1
 fi
 

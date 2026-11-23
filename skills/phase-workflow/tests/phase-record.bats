@@ -87,3 +87,26 @@ TABLE='| Key | Value |\n| --- | --- |\n| `REPO` | `owner/name` |\n| `PR` | 9 |\n
   [ "$status" -eq 1 ] || false
   [[ "$output" == *"no table"* ]]
 }
+
+# --- external review pass 1 fixes ----------------------------------------------
+
+@test "a first table without leading pipes is the first table" {
+  # Fails if a pipe-less table is skipped and a companion table below answers (Codex 11).
+  run get PR 'Key | Value\n--- | ---\nPR | 8\n\n| Key | Value |\n| --- | --- |\n| PR | 9 |\n'
+  [ "$status" -eq 0 ] || false
+  [ "$output" = 8 ]
+}
+
+@test "a delimiter row of single hyphens marks a table" {
+  # Fails if a GFM table with `| - | - |` is skipped (Gemini 10).
+  run get PR '| Key | Value |\n| - | - |\n| PR | 8 |\n\n| Key | Value |\n| --- | --- |\n| PR | 9 |\n'
+  [ "$status" -eq 0 ] || false
+  [ "$output" = 8 ]
+}
+
+@test "an indented code block is not a table, and an inline triple-backtick span opens no fence" {
+  # Fails if a four-space example counts as the first table, or ```x``` on one line hides what follows.
+  run get PR '    | Key | Value |\n    | --- | --- |\n    | PR | 5 |\n\nUse ```x``` inline.\n\n| Key | Value |\n| --- | --- |\n| PR | 9 |\n'
+  [ "$status" -eq 0 ] || false
+  [ "$output" = 9 ]
+}

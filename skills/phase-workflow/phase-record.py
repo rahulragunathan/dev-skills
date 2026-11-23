@@ -16,7 +16,7 @@ import re
 import sys
 
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
-DELIMITER = re.compile(r"^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$")
+DELIMITER = re.compile(r"^\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$")
 
 
 def cells(line: str) -> list[str]:
@@ -40,15 +40,18 @@ def first_table(lines: list[str]) -> list[list[str]]:
             if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) and not line[m.end():].strip():
                 fence = None
             continue
-        if m:
+        # A backtick run with more backticks after it on the line is an inline span, not a fence.
+        if m and not (m.group(1)[0] == "`" and "`" in line[m.end():]):
             fence = m.group(1)
             continue
-        if line.lstrip().startswith("|") and i + 1 < len(lines) and DELIMITER.match(lines[i + 1].strip()):
-            if cells(line) != ["Key", "Value"]:
+        if line.startswith(("    ", "\t")):
+            continue                     # an indented code block, not a table
+        if "|" in line and i + 1 < len(lines) and DELIMITER.match(lines[i + 1].strip()):
+            if cells(line) != ["Key", "Value"] or len(cells(lines[i + 1])) != 2:
                 raise ValueError("the first table is not a Key | Value table")
             rows = []
             for row in lines[i + 2:]:
-                if not row.lstrip().startswith("|"):
+                if "|" not in row or not row.strip():
                     break
                 parts = cells(row)
                 if len(parts) != 2:
