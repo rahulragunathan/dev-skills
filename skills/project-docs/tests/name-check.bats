@@ -612,3 +612,22 @@ PY
   check
   [ "$status" -eq 0 ]
 }
+
+@test "a plugin-root path is read from the root only, a file directly under it included" {
+  # Fails if a same-named folder beside the doc answers for it, or a root-level file is skipped (pass 1, Codex 25).
+  put docs/skills/a/run.sh 'echo'
+  put skills/b/real.sh 'echo'
+  put docs/x.md 'Run `bash "$CLAUDE_PLUGIN_ROOT/skills/a/run.sh" x` and `bash "$CLAUDE_PLUGIN_ROOT/gone.sh" y`.'
+  check
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"missing command skills/a/run.sh"* ]] || false
+  [[ "$output" == *"missing command gone.sh"* ]]
+}
+
+@test "a reference definition with no destination does not define its label" {
+  # Fails if a bare `[label]:` counts as a definition.
+  put doc.md "$(printf 'See [the guide][guide].\n\n[guide]:\n')"
+  check
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"missing link [guide]"* ]]
+}

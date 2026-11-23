@@ -46,7 +46,7 @@ SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*:")
 QUOTE = re.compile(r"^\s*(>\s?)+")
 IGNORE = re.compile(r"<!--\s*name-check:\s*ignore\s+(.+?)\s*-->")
 REFDEF = re.compile(r"^ {0,3}\[[^\]]+\]:\s*<?([^\s>]+)>?")
-REFDEF_LABEL = re.compile(r"^ {0,3}\[([^\]]+)\]:")
+REFDEF_LABEL = re.compile(r"^ {0,3}\[([^\]]+)\]:\s*\S")   # a definition has a destination
 # A full or collapsed reference, [text][label] or [label][]; a shortcut [label] reads as prose.
 REFUSE = re.compile(r"(?<![\w\]])\[([^\[\]\n]+)\]\[([^\[\]\n]*)\]")  # not an index like a[0][1]
 # A script named without a folder: matched against tracked basenames.
@@ -207,14 +207,21 @@ def visible_lines(text: str) -> list[str]:
     return out
 
 
+# Marks a path written from "$CLAUDE_PLUGIN_ROOT/...": it is read from the root only.
+ROOTED = "\0root/"
+
+
 def path_token(token: str) -> str | None:
     """The path a backticked token names, or None when it is not path-shaped."""
-    token = PLUGIN_ROOT.sub("", SUFFIX.sub("", token.strip("\"'")))
-    if (not token or "/" not in token or token.startswith("/") or "//" in token
+    token = SUFFIX.sub("", token.strip("\"'"))
+    rooted = PLUGIN_ROOT.match(token)
+    if rooted:
+        token = token[rooted.end():]
+    if (not token or ("/" not in token and not rooted) or token.startswith("/") or "//" in token
             or "..." in token.split("/")          # an elided path, `skills/...`
             or SCHEME.match(token) or NOT_A_PATH & set(token)):
         return None
-    return token
+    return ROOTED + token if rooted else token
 
 
 def locate(repo: Repo, token: str | None, doc_dir: str) -> str | None:
@@ -225,6 +232,8 @@ def locate(repo: Repo, token: str | None, doc_dir: str) -> str | None:
     first, then from the root."""
     if not token:
         return None
+    if token.startswith(ROOTED):
+        return os.path.normpath(token[len(ROOTED):])
     first = token.split("/", 1)[0]
     from_doc = os.path.normpath(os.path.join(doc_dir, token))
     if first in (".", "..") or repo.present(os.path.join(doc_dir, first)):

@@ -249,7 +249,7 @@ def reconcile(docs: pathlib.Path, proposed: dict[str, str] | None = None):
                     problems.append(f"  unknown {field}: {eid} ({val})"); ok = False
             if eid in rows:
                 for label, ours, theirs in mirrored(prefix, eid, body, rows[eid]):
-                    if ours != theirs:
+                    if ours != theirs or (label == "Effort" and not ours):
                         problems.append(f"  mismatch: {eid} {label}"); ok = False
         # Open questions too: the template orders them by Kind.
         for label, ids in [("detail", entries), ("index", rows)]:
@@ -269,7 +269,7 @@ def structure_problems(roadmap: str, details: dict[str, str]) -> list[str]:
     """What a set-up from the templates always has: a title in each file, and in
     the index a section with a pointer table for each kind of entry."""
     problems = []
-    lines = roadmap.splitlines()
+    lines = [l for l, fenced in zip(roadmap.splitlines(), fenced_lines(roadmap)) if not fenced]
     for prefix, heading in SECTIONS.items():
         if heading not in lines:
             problems.append(f"  structure: ROADMAP.md has no '{heading}' section"); continue
@@ -278,7 +278,8 @@ def structure_problems(roadmap: str, details: dict[str, str]) -> list[str]:
         if not any(_cells(l)[:1] == ["ID"] for l in section if l.startswith("|")):
             problems.append(f"  structure: '{heading}' in ROADMAP.md has no pointer table")
     for name, text in [("ROADMAP.md", roadmap), *details.items()]:
-        if not any(l.startswith("# ") for l in text.splitlines()):
+        visible = [l for l, fenced in zip(text.splitlines(), fenced_lines(text)) if not fenced]
+        if not any(l.startswith("# ") for l in visible):
             problems.append(f"  structure: {name} has no title")
     return problems
 
@@ -485,7 +486,15 @@ def verify_references(docs: pathlib.Path) -> tuple[bool, list[str]]:
     return ok, problems
 
 
+def refuse_links(docs: pathlib.Path) -> None:
+    """The roadmap files are read and replaced where they are, never through a link."""
+    for path in [docs, *(docs / n for n in ["ROADMAP.md", *FILES.values()])]:
+        if path.is_symlink():
+            fail(f"refusing: {path} is a symlink")
+
+
 def load(docs: pathlib.Path) -> tuple[str, dict[str, tuple[str, dict[str, str]]]]:
+    refuse_links(docs)
     roadmap_p = docs / "ROADMAP.md"
     if not roadmap_p.is_file():
         fail(f"no ROADMAP.md under {docs}")
@@ -558,10 +567,16 @@ def cmd_close(docs: pathlib.Path, eid: str) -> int:
         if reparsed[k] != expected:
             fail(f"refusing: {k} would not survive byte-identical")
 
-    new_roadmap = "".join(l for l in roadmap.splitlines(keepends=True)
-                          if l != rows[eid]["line"])
-    if len(new_roadmap.splitlines()) != len(roadmap.splitlines()) - 1:
-        fail("refusing: removing the index row would change more than one line")
+    # Remove the row by its place, not its text: a fenced example can repeat it.
+    lines = roadmap.splitlines(keepends=True)
+    at = [i for i, (l, fenced) in enumerate(zip(lines, fenced_lines(roadmap)))
+          if not fenced and l == rows[eid]["line"]]
+    if len(at) != 1:
+        fail("refusing: the index row for this entry is not one unfenced line")
+    del lines[at[0]]
+    if at[0] == len(lines) and lines and not roadmap.endswith("\n"):
+        lines[-1] = lines[-1].rstrip("\n")    # the file had no final newline; keep it so
+    new_roadmap = "".join(lines)
 
     # Reconcile the proposed documents before writing either. Writing first and
     # checking after meant a refusal happened with the edits already on disk,
@@ -584,10 +599,11 @@ def install_documents(docs: pathlib.Path, proposed: dict[str, bytes],
                       expected: dict[str, bytes]) -> None:
     """Replace each document with its proposed bytes, or change nothing.
 
-    `expected` is what was read: a file that no longer holds it was edited
-    meanwhile, and nothing is replaced. A rollback restores a file only while it
-    still holds what was installed; one edited since is left as it is, and the
-    originals are kept for inspection.
+    `expected` is what was read: each file is compared with it just before it
+    is replaced, and one edited meanwhile stops the install, rolling back any
+    file already replaced. A rollback restores a file only while it still holds
+    what was installed; one edited since is left as it is, and the originals are
+    kept for inspection. Signals wait while a file is replaced and recorded.
     """
     # Keep recovery copies outside the tree. Each replacement is staged beside
     # its destination so os.replace stays atomic even across filesystem devices.
@@ -611,22 +627,28 @@ def install_documents(docs: pathlib.Path, proposed: dict[str, bytes],
         if not rolling_back:
             raise KeyboardInterrupt(f"signal {signum}")
 
+    signals = {signal.SIGINT, signal.SIGTERM}
     previous = {}
     try:
-        previous = {sig: signal.signal(sig, interrupted) for sig in (signal.SIGINT, signal.SIGTERM)}
+        for sig in signals:              # one at a time, so none is lost if a signal lands mid-way
+            previous[sig] = signal.signal(sig, interrupted)
         for name, body in proposed.items():
             shutil.copy2(docs / name, recovery / (name + ".original"))
             (recovery / name).write_bytes(body)
             shutil.copymode(docs / name, recovery / name)
-        changed = [n for n in proposed if (docs / n).read_bytes() != expected[n]]
-        if changed:
-            fail(f"refusing: {', '.join(changed)} changed since it was read; nothing closed")
         for name in proposed:
-            replace_from(recovery / name, docs / name)
-            landed[name] = proposed[name]
+            mask = signal.pthread_sigmask(signal.SIG_BLOCK, signals)
+            try:
+                if (docs / name).read_bytes() != expected[name]:
+                    fail(f"refusing: {name} changed since it was read"
+                         + ("" if landed else "; nothing closed"))
+                replace_from(recovery / name, docs / name)
+                landed[name] = proposed[name]
+            finally:
+                signal.pthread_sigmask(signal.SIG_SETMASK, mask)
     except BaseException as exc:
         rolling_back = True
-        if isinstance(exc, SystemExit):
+        if isinstance(exc, SystemExit) and not landed:
             raise
         for sig in previous:
             signal.signal(sig, signal.SIG_IGN)
@@ -661,6 +683,9 @@ def cmd_init(docs: pathlib.Path) -> int:
     and each folder it created. A file whose identity it could not read is not
     removed, since another writer may have replaced it, and the message names it."""
     names = ["ROADMAP.md", *FILES.values()]
+    # The folder itself, not its parents: macOS reaches /tmp and /var through links.
+    if docs.is_symlink():
+        fail(f"refusing: {docs} is a symlink")
     if os.path.lexists(docs) and not docs.is_dir():
         fail(f"refusing: {docs} exists and is not a folder")
     missing = [n for n in names if not os.path.lexists(docs / n)]

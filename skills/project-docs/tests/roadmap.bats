@@ -1488,3 +1488,94 @@ PY
   run python3 "$RM" check --docs "$DOCS"
   [ "$status" -eq 0 ]
 }
+
+# --- external review pass 1 fixes ----------------------------------------------
+
+# close_with_replace <python run after the first real os.replace>
+close_with_replace() {
+  python3 - "$RM" "$DOCS" "$1" <<'PY'
+import importlib.util, os, pathlib, signal, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+d = pathlib.Path(sys.argv[2]); real = os.replace; n = []
+def replace(src, dst):
+    real(src, dst); n.append(dst)
+    if len(n) == 1: exec(sys.argv[3], {"d": d, "os": os, "signal": signal})
+m.os.replace = replace
+try: m.cmd_close(d, 'KI-02')
+except BaseException as e: print('exit', getattr(e, 'code', type(e).__name__))
+assert n, 'no replacement happened'
+PY
+}
+
+@test "close: an index edit between the two replacements is kept and the detail restored" {
+  # Fails if the index is checked once, before the first replacement, and then overwritten (pass 1, Codex 2).
+  run close_with_replace 'p = d / "ROADMAP.md"; p.write_text(p.read_text() + "\nEDITOR-ROW\n")'
+  [[ "$output" == *"exit 1"* ]] || false
+  grep -q 'EDITOR-ROW' "$DOCS/ROADMAP.md" || false
+  grep -q 'DOOMED-BODY' "$DOCS/KNOWN_ISSUES.md"
+}
+
+@test "close: a signal right after a replacement still rolls it back" {
+  # Fails if an installed document escapes the rollback because the signal beat its bookkeeping (Codex 3).
+  run close_with_replace 'os.kill(os.getpid(), signal.SIGINT)'
+  [[ "$output" == *"exit 1"* ]] || false
+  grep -q 'DOOMED-BODY' "$DOCS/KNOWN_ISSUES.md" || false
+  grep -q 'KNOWN_ISSUES.md#ki-02' "$DOCS/ROADMAP.md"
+}
+
+@test "check and close refuse a roadmap file that is a symlink" {
+  # Fails if a linked document is read, or written, through its link (Codex 16).
+  mv "$DOCS/KNOWN_ISSUES.md" "$TEST_TMP/elsewhere.md"
+  ln -s "$TEST_TMP/elsewhere.md" "$DOCS/KNOWN_ISSUES.md"
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"symlink"* ]] || false
+  run python3 "$RM" close KI-02 --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  grep -q 'DOOMED-BODY' "$TEST_TMP/elsewhere.md"
+}
+
+@test "init refuses a docs folder that is a symlink" {
+  # Fails if init writes through a linked folder to wherever it points.
+  mkdir -p "$TEST_TMP/target"
+  ln -s "$TEST_TMP/target" "$TEST_TMP/linked"
+  run python3 "$RM" init --docs "$TEST_TMP/linked"
+  [ "$status" -eq 1 ] || false
+  [ -z "$(ls -A "$TEST_TMP/target")" ]
+}
+
+@test "check: a fenced example does not supply the structure" {
+  # Fails if headings and a pointer table inside a fence satisfy the structure check (Codex 23).
+  printf '# Roadmap\n\n```markdown\n## Known Issues\n\n| ID | Issue |\n\n## Enhancements\n\n| ID | Enhancement |\n\n## Open Questions\n\n| ID | Question |\n```\n' > "$DOCS/ROADMAP.md"
+  for f in KNOWN_ISSUES ENHANCEMENTS OPEN_QUESTIONS; do printf '# %s\n' "$f" > "$DOCS/$f.md"; done
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"structure"* ]]
+}
+
+@test "check: an enhancement with no Effort on either side fails" {
+  # Fails if removing Effort from both the entry and its row still reconciles.
+  sed -i.bak 's/ · \*\*Effort:\*\* ~1 hour//' "$DOCS/ENHANCEMENTS.md"
+  sed -i.bak 's/| an enhancement | Low | ~1 hour |/| an enhancement | Low |  |/' "$DOCS/ROADMAP.md"
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"ENH-01 Effort"* ]]
+}
+
+@test "close: an index without a final newline keeps that form when its last row goes" {
+  # Fails if removing the final row exposes the row above's newline (Codex 24).
+  printf '%s' "$(cat "$DOCS/ROADMAP.md")" > "$DOCS/ROADMAP.md"
+  run python3 "$RM" close UNK-01 --docs "$DOCS"
+  [ "$status" -eq 0 ] || false
+  [ "$(tail -c 1 "$DOCS/ROADMAP.md")" = "|" ] || false
+  [ "$(grep -c 'unk-01' "$DOCS/ROADMAP.md")" -eq 0 ]
+}
+
+@test "close: a fenced example identical to the pointer row is left alone" {
+  # Fails if close selects the row by its text and trips over an identical example.
+  printf '\n```markdown\n| [KI-02](KNOWN_ISSUES.md#ki-02) | doomed issue | Likely | Medium |\n```\n' >> "$DOCS/ROADMAP.md"
+  run python3 "$RM" close KI-02 --docs "$DOCS"
+  [ "$status" -eq 0 ] || false
+  [ "$(grep -c 'KNOWN_ISSUES.md#ki-02' "$DOCS/ROADMAP.md")" -eq 1 ]
+}
