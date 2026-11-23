@@ -594,7 +594,7 @@ A reference definition whose destination is on the next line is not read, so its
 
 ### Example scenario
 
-`[guide]:` followed by an indented `docs/guide.md` line reports `[guide]` as undefined.
+`[guide]:` followed by an indented `guide.md` line reports `[guide]` as undefined.
 
 ### Notes for a fix
 
