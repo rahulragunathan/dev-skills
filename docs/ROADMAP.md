@@ -55,7 +55,6 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-51](KNOWN_ISSUES.md#ki-51) | Rejected grading attempts are not retained | Likely | Medium |
 | [KI-73](KNOWN_ISSUES.md#ki-73) | The release-version test is skipped when its file runs directly | Likely | Medium |
 | [KI-41](KNOWN_ISSUES.md#ki-41) | Converting a large sequence to text has no size bound | Rare | Medium |
-| [KI-68](KNOWN_ISSUES.md#ki-68) | The name check can stop on a folder it may not read | Rare | Medium |
 | [KI-44](KNOWN_ISSUES.md#ki-44) | A stale dispatch log gives a misleading replacement message | Rare | Low |
 
 ## Enhancements
@@ -74,7 +73,6 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 | [ENH-26](ENHANCEMENTS.md#enh-26) | Test the conversion of a helper's evaluation gap into an opaque call | Medium | ~1 hour |
 | [ENH-28](ENHANCEMENTS.md#enh-28) | Let `publish-release.sh` verify remote presence itself | Medium | ~2 hours |
 | [ENH-32](ENHANCEMENTS.md#enh-32) | Drop explanations of standard tool behaviour from the skills | Low | ~2 hours |
-| [ENH-33](ENHANCEMENTS.md#enh-33) | Check more command spellings in the name check | Low | ~2 hours |
 | [ENH-36](ENHANCEMENTS.md#enh-36) | Strengthen the review-loop and ladder tests | Low | ~2 hours |
 | [ENH-37](ENHANCEMENTS.md#enh-37) | Tidy the review record rules and three small doc slips | Low | ~1 hour |
 

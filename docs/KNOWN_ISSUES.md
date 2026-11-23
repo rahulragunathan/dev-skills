@@ -439,33 +439,6 @@ Bound the rendered size of `str`, `repr` and formatting, and run each grade with
 
 ---
 
-<a id="ki-68"></a>
-
-## KI-68 — the name check can stop on a folder it may not read
-
-**Severity:** Medium
-**Likelihood:** Rare
-**Where:** [name_check.py](../skills/project-docs/name_check.py) — `def _read(`
-
-### What happens
-
-`Repo._read` catches read errors, but `path.is_file()` runs before that handler. On a Python
-where it raises on a denied parent folder, the whole run stops before the other docs are
-checked.
-
-### Example scenario
-
-A doc under a folder without search (execute) permission aborts the check with a traceback.
-
-### Notes for a fix
-
-Run the metadata lookup inside the same handler and test a denied folder beside a real
-finding.
-
-**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review pass 4, project-docs phase, 2026-11-22.
-
----
-
 <a id="ki-44"></a>
 
 ## KI-44 — a stale dispatch log gives a misleading replacement message

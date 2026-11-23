@@ -255,34 +255,6 @@ nuances people get wrong, such as which diff a review must use.
 
 ---
 
-<a id="enh-33"></a>
-
-## ENH-33 — check more command spellings in the name check
-
-**Priority:** Low · **Effort:** ~2 hours
-**Where:** [name_check.py](../skills/project-docs/name_check.py) — `def check_command(` · **Regression net:** `skills/project-docs/tests/name-check.bats`
-
-### What it is
-
-The name check reads a command only when it is path-shaped. It does not check
-`python3 roadmap.py` (an interpreter and a bare script name), a bare script in its own code span
-beside a flag, a `"$CLAUDE_PLUGIN_ROOT/..."` path, or a missing program followed by a
-subcommand rather than a flag. A reference-style link whose definition was deleted is not
-reported either.
-
-### Why it matters
-
-These are the spellings the skills themselves use most, so a renamed helper can pass.
-
-### Notes for the work
-
-Resolve bare script names against tracked basenames, strip the plugin-root prefix, and resolve
-reference uses against definitions. Keep the false-positive test on real skill prose green.
-
-**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
-
----
-
 <a id="enh-36"></a>
 
 ## ENH-36 — strengthen the review-loop and ladder tests

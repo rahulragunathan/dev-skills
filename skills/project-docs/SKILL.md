@@ -103,10 +103,15 @@ python3 "$CLAUDE_PLUGIN_ROOT/skills/project-docs/name_check.py" --root .
 - **It reads, and never runs, what it checks.** A flag is looked up in the source of the repo
   script whose command names it. Flags of external tools are not checked.
 - **What counts.** A backticked path counts when it has a `/` and starts at `.`, `..`, a folder
-  beside the doc or a top-level entry of the repository; then it must exist. A command counts in three shapes: a path-shaped script, which must exist and define
-  any `--flag` it is given; an interpreter followed by such a script; and a bare program
-  followed by a `--flag`, which must be on `PATH` or named in the repository's code. A bare
-  script name such as `roadmap.py` is not checked. A roadmap ID exists when its own detail
+  beside the doc or a top-level entry of the repository; then it must exist. A path written
+  from `"$CLAUDE_PLUGIN_ROOT/..."` is read from the repository root. A command counts in four
+  shapes: a path-shaped script, which must exist and define any `--flag` it is given; an
+  interpreter followed by such a script; a bare `.py` or `.sh` name, alone or after an
+  interpreter, matched against the tracked files' names (one match is that script, none is a
+  missing command, two are not checked); and a bare program followed by a `--flag`, which must
+  be on `PATH` or named in the repository's code. A bare script name in a span of its own is
+  never reported, but binds the line's lone flags. A full or collapsed reference link,
+  `[text][label]`, needs its `[label]:` definition in the same doc. A roadmap ID exists when its own detail
   file has the entry's anchor, or `CHANGELOG.md` names it; a mention elsewhere does not count.
 - **It skips history and test input:** `CHANGELOG.md`, dated plans and specs, the templates, and
   Markdown under a `tests/` folder other than its README.

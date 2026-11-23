@@ -501,3 +501,107 @@ print([n for n in ("home/id_ecdsa", "home/id_ecdsa.pub", ".pypirc") if not m.cre
   [ "$status" -eq 1 ] || false
   [[ "$output" == *"missing command skills/gone.py"* ]]
 }
+
+# --- KI-68: an unreadable folder -----------------------------------------------
+
+@test "a doc under a folder without search permission is reported, and the rest still checked" {
+  # Fails if a denied folder stops the run before the other docs are checked (KI-68).
+  [ "$(id -u)" -ne 0 ] || skip "root reads every folder"
+  put locked/doc.md 'fine'
+  put other.md 'See `skills/gone.py`.'
+  put skills/real.py 'x = 1'
+  chmod 000 "$REPO/locked"
+  check
+  chmod 755 "$REPO/locked"
+  [ "$status" -eq 2 ] || false
+  [[ "$output" == *"other.md:1: missing path skills/gone.py"* ]] || false
+  [[ "$output" == *"cannot read: locked/doc.md"* ]] || false
+  [[ "$output" != *"Traceback"* ]]
+}
+
+@test "a PermissionError from the metadata lookup is a doc that cannot be read" {
+  # Fails if the lookup raises past the handler on a Python where it does not return False.
+  put doc.md 'fine'
+  put other.md 'See `skills/gone.py`.'
+  put skills/real.py 'x = 1'
+  run python3 - "$NC" "$REPO" <<'PY'
+import importlib.util, pathlib, sys
+spec = importlib.util.spec_from_file_location('name_check', sys.argv[1])
+m = importlib.util.module_from_spec(spec); sys.path.insert(0, str(pathlib.Path(sys.argv[1]).parent)); spec.loader.exec_module(m)
+real = pathlib.Path.is_file
+def is_file(self):
+    if self.name == "doc.md": raise PermissionError(13, "Permission denied")
+    return real(self)
+pathlib.Path.is_file = is_file
+sys.argv = ["name_check.py", "--root", sys.argv[2]]
+print("exit", m.main())
+PY
+  [[ "$output" == *"other.md:1: missing path skills/gone.py"* ]] || false
+  [[ "$output" == *"cannot read: doc.md"* ]] || false
+  [[ "$output" == *"exit 2"* ]]
+}
+
+# --- ENH-33: more command spellings ------------------------------------------------
+
+@test "an interpreter with a bare script name resolves it against tracked basenames" {
+  # Fails if `python3 roadmap.py` is never checked because the script has no folder in it.
+  put tools/roadmap.py 'import argparse; p.add_argument("--docs")'
+  put doc.md 'Run `python3 roadmap.py --docs x` and `python3 roadmap.py --nope`.'
+  check
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"doc.md:1: missing flag --nope"* ]] || false
+  [[ "$output" != *"--docs"* ]]
+}
+
+@test "a bare script name that matches two files is not checked, and one that matches none is" {
+  # Fails if an ambiguous name is guessed at, or a missing script passes.
+  put a/x.py 'pass'
+  put b/x.py 'pass'
+  put doc.md 'Run `python3 x.py --any` and `python3 gone.py --any`.'
+  check
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"missing command gone.py"* ]] || false
+  [[ "$output" != *"--any"* ]]
+}
+
+@test "a lone flag beside a bare script in its own span is checked" {
+  # Fails if `roadmap.py` in one span and `--fake` in another are never paired.
+  put tools/roadmap.py 'p.add_argument("--docs")'
+  put doc.md 'Give `roadmap.py` the flag `--fake`, or `--docs`.'
+  check
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"missing flag --fake"* ]] || false
+  [[ "$output" != *"--docs"* ]]
+}
+
+@test "a plugin-root path is checked from the repository root" {
+  # Fails if "$CLAUDE_PLUGIN_ROOT/..." is skipped because it holds a $.
+  put skills/a/run.sh 'echo --real'
+  put doc.md 'Run `bash "$CLAUDE_PLUGIN_ROOT/skills/a/run.sh" --real` or `bash "$CLAUDE_PLUGIN_ROOT/skills/a/gone.sh" x`; helpers live under `$CLAUDE_PLUGIN_ROOT/skills/...`.'
+  check
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"missing command skills/a/gone.sh"* ]] || false
+  [[ "$output" != *"--real"* ]] || false
+  [[ "$output" != *"skills/..."* ]]
+}
+
+@test "a missing repo script followed by a subcommand is reported" {
+  # Fails if only a following --flag makes a bare script name count as a command.
+  put tools/real.py 'pass'
+  put doc.md 'Use `real.py run` or `gone.py run`, and `git status` as usual.'
+  check
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"missing command gone.py"* ]] || false
+  [[ "$output" != *"real.py"* ]] || false
+  [[ "$output" != *"git"* ]]
+}
+
+@test "a reference use whose definition was deleted is reported" {
+  # Fails if [text][label] with no [label]: definition in the doc passes.
+  put ok.md '# Ok'
+  put doc.md "$(printf 'See [the guide][guide] and [this][kept].\n\n[kept]: ok.md')"
+  check
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"missing link [guide]"* ]] || false
+  [[ "$output" != *"[kept]"* ]]
+}

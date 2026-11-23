@@ -54,6 +54,11 @@ here — the plugin manifest's version is the only record of them.
 - **The roadmap templates fill in cleanly, and the close tests can fail (ENH-34).** A template
   example filled in literally passes `check`; the close tests assert absence by status and
   check that their injected faults fired.
+- **The name check reads more command spellings, and an unreadable folder no longer stops it
+  (KI-68, ENH-33).** `python3 roadmap.py`, a bare script beside a lone flag, a
+  `"$CLAUDE_PLUGIN_ROOT/..."` path, a missing script before a subcommand, and a reference link
+  whose definition was deleted are all checked. A doc it cannot read is listed and the rest are
+  still checked.
 
 ## [2.1.0] - 2026-11-20 — project-docs and September's rules
 
