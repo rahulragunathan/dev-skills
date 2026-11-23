@@ -69,6 +69,8 @@ has_credentials() {
     url)
       local rest="${1#*://}"
       local authority="${rest%%/*}"
+      # git decodes %-escapes in an ssh authority before parsing it, so none may hide a part.
+      case "$authority" in *%*) return 0 ;; esac
       case "$authority" in
         *@*)
           local user="${authority%@*}"
@@ -108,14 +110,18 @@ have_push="$(git remote get-url --push origin 2>/dev/null || true)"
 
 # More than one push destination means the check above covers only the first,
 # and a listing that fails proves nothing. The whole listing must be the one URL.
-all_push="$(git remote get-url --push --all origin 2>/dev/null)" \
+# The trailing x keeps the listing's final newlines, which command substitution would strip.
+all_push="$(git remote get-url --push --all origin 2>/dev/null && printf x)" \
   || { echo "CANNOT LIST THE ORIGIN PUSH URLS — refusing"; exit 1; }
-if [ "$all_push" != "$WANT_PUSH" ]; then
+if [ "$all_push" != "$WANT_PUSH
+x" ]; then
   echo "ORIGIN HAS MULTIPLE PUSH URLS — refusing; a tag would go to all of them"
   exit 1
 fi
 # A configured helper replaces the transport the URL names.
-if [ -n "$(git config --get remote.origin.vcs 2>/dev/null || true)" ]; then
+# Present at all, even empty, it selects a helper; only git's "absent" status (1) passes.
+vcs_rc=0; git config --get remote.origin.vcs >/dev/null 2>&1 || vcs_rc=$?
+if [ "$vcs_rc" -ne 1 ]; then
   echo "remote.origin.vcs IS SET — refusing; it hands origin to a remote helper"
   exit 1
 fi

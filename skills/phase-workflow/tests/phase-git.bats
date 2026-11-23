@@ -1067,3 +1067,47 @@ origin_refused() {
   run git rev-parse --verify -q feature/merged
   [ "$status" -ne 0 ]
 }
+
+# --- external review pass 2 fixes ----------------------------------------------
+
+@test "the record check reads the record at INSPECTED, not at a later HEAD" {
+  # Fails if the check reads HEAD, so a record fixed after the post-review check passes (pass 2, Codex 22).
+  mkdir -p docs
+  printf '## [2.1.0] - 2026-11-22\n' > CHANGELOG.md
+  printf '| Key | Value |\n| --- | --- |\n| `REPO` | `fixture/repo` |\n| `PR` | 5 |\n| Release | v2.1.0 |\n' > docs/PHASE_RECORD.md
+  git add -A && git commit -qm "record at the inspected head"
+  inspected="$(git rev-parse HEAD)"
+  sed -i.bak 's/| `PR` | 5 |/| `PR` | 9 |/' docs/PHASE_RECORD.md && git commit -qam "a later fix"
+  record_check 9
+  sed -i.bak "s|^INSPECTED=.*|INSPECTED=$inspected|" "$TEST_TMP/record.sh"
+  run bash "$TEST_TMP/record.sh"
+  [ "$status" -ne 0 ]
+}
+
+@test "the published record names the head it was reviewed at" {
+  # Fails if a record published onto a moved head cannot be told from a current one (Codex 4).
+  publish_record "$(git rev-parse HEAD)"
+  printf '#!/bin/bash\nprintf "%%s\\n" "$*" >> "%s/gh-calls"\ncase "$*" in *headRefOid*) echo "$FAKE_PR_HEAD" ;; *"pr edit"*) cp "${@: -1}" "%s/published" ;; esac\n' "$TEST_TMP" "$TEST_TMP" > "$TEST_TMP/bin/gh"
+  PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/publish.sh"
+  [ "$status" -eq 0 ] || false
+  grep -q "$(git rev-parse HEAD)" "$TEST_TMP/published"
+}
+
+@test "origin check: an ssh authority holding a %-escape is refused" {
+  # Fails if git's decoding of an ssh authority can hide a user part from the check (Codex 5).
+  local url='ssh://git%40evil:x@example.invalid/r.git'
+  git remote set-url origin "$url"; git remote set-url --push origin "$url"
+  run bash "$PUBLISH" --check-origin "$url" "$url"
+  [ "$status" -eq 1 ] || false
+  url='ssh://example.invalid%2Fx/r.git'
+  git remote set-url origin "$url"; git remote set-url --push origin "$url"
+  run bash "$PUBLISH" --check-origin "$url" "$url"
+  [ "$status" -eq 1 ]
+}
+
+@test "origin check: an empty remote.origin.vcs is still a helper" {
+  # Fails if an explicitly empty setting reads as unset (Codex 6).
+  git config remote.origin.vcs ""
+  run bash "$PUBLISH" --check-origin "$FETCH_URL" "$PUSH_URL"
+  [ "$status" -eq 1 ]
+}

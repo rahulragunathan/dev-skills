@@ -200,6 +200,58 @@ could-not-evaluate. The behaviour predates the overnight QC passes.
 
 ---
 
+<a id="ki-77"></a>
+
+## KI-77 — a root lockfile covers every manifest below it
+
+**Severity:** High
+**Likelihood:** Rare
+**Where:** [dependency-scan.py](../skills/phase-workflow/dependency-scan.py) — `declares dependencies and has no lockfile`
+
+### What happens
+
+A manifest counts as covered when its ecosystem's lockfile sits in its folder or any folder
+above it. An independent project nested under a repository with a root lockfile is then never
+reported, though nothing locks its versions.
+
+### Example scenario
+
+`tools/web/package.json` declares dependencies and has no lockfile; the root
+`package-lock.json` belongs to another app. The scan reports nothing missing.
+
+### Notes for a fix
+
+Decide coverage from workspace membership (npm and pnpm workspaces, Cargo and uv workspaces) or
+the lockfile's own contents, not from folder position.
+
+**Source:** gpt-6.2-astra:high — phase review pass 1, dependable-helpers phase, 2026-11-23.
+
+---
+
+<a id="ki-80"></a>
+
+## KI-80 — first push and prune act on a branch name that can move after the check
+
+**Severity:** High
+**Likelihood:** Rare
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `FORK="$(git merge-base`
+
+### What happens
+
+The first push checks HEAD's record and then pushes the branch by name; prune compares a branch with the approved tip and then force-deletes it by name. A branch that moves in between is pushed unchecked, or deleted with unapproved work.
+
+### Example scenario
+
+A second shell commits to the branch between prune's comparison and its `git branch -D`.
+
+### Notes for a fix
+
+Push the inspected commit itself, and delete with `git update-ref -d refs/heads/<b> <expected>`, keeping the check that no worktree has the branch checked out.
+
+**Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 2, dependable-helpers phase, 2026-11-23.
+
+---
+
 <a id="ki-49"></a>
 
 ## KI-49 — the headline tally mixes two skills
@@ -385,8 +437,7 @@ Bound the rendered size of `str`, `repr` and formatting, and run each grade with
 
 ### What happens
 
-`classify_error` reads any `is not available` as a model refusal and any `turn in progress`
-as a timeout, wherever it appears in stderr. A refusal from another service, or a successful probe
+`classify_error` reads any `is not available` as a model refusal, and `cut_off`, which `probe` checks before a ready answer, reads any `turn in progress` as a timeout, wherever either appears in stderr. A refusal from another service, or a successful probe
 whose stderr mentions a turn, is misread, and the Codex loop's confirming probe inherits the
 error.
 
@@ -404,31 +455,75 @@ real classifier in one downshift test.
 
 ---
 
-<a id="ki-77"></a>
+<a id="ki-79"></a>
 
-## KI-77 — a root lockfile covers every manifest below it
+## KI-79 — a symlinked folder above the docs folder still redirects the roadmap tools
 
 **Severity:** Medium
 **Likelihood:** Rare
-**Where:** [dependency-scan.py](../skills/phase-workflow/dependency-scan.py) — `declares dependencies and has no lockfile`
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def refuse_links(`
 
 ### What happens
 
-A manifest counts as covered when its ecosystem's lockfile sits in its folder or any folder
-above it. An independent project nested under a repository with a root lockfile is then never
-reported, though nothing locks its versions.
+`refuse_links` checks the docs folder and the four files, not the folders above them, and the files are then opened by path. A link in a repository folder above `--docs` sends `check`, `close` and `init` outside the repository.
 
 ### Example scenario
 
-`tools/web/package.json` declares dependencies and has no lockfile; the root
-`package-lock.json` belongs to another app. The scan reports nothing missing.
+`project/docs` is reached through `project` linked elsewhere; `init` writes there.
 
 ### Notes for a fix
 
-Decide coverage from workspace membership (npm and pnpm workspaces, Cargo and uv workspaces) or
-the lockfile's own contents, not from folder position.
+Anchor at the repository root, check each component below it, and open files relative to a verified folder without following links; macOS's own `/var` link is above the root.
 
-**Source:** gpt-6.2-astra:high — phase review pass 1, dependable-helpers phase, 2026-11-23.
+**Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 2, dependable-helpers phase, 2026-11-23.
+
+---
+
+<a id="ki-81"></a>
+
+## KI-81 — the osv-scanner configuration is read by pattern, not as TOML
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [dependency-scan.py](../skills/phase-workflow/dependency-scan.py) — `IGNORED_ID = re.compile(`
+
+### What happens
+
+The report of what a tracked `osv-scanner.toml` can suppress matches `id = ...` and `PackageOverrides` by pattern. A commented-out id is counted, a quoted key is missed, and the scope of an override (one package or an ecosystem) is not shown.
+
+### Example scenario
+
+A suppression written as `"id" = "PYSEC-1"` is reported as nothing recognised.
+
+### Notes for a fix
+
+Parse with `tomllib` where available, report each rule's scope and action, and name a configuration the helper cannot read.
+
+**Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 2, dependable-helpers phase, 2026-11-23.
+
+---
+
+<a id="ki-82"></a>
+
+## KI-82 — the zsh lint misses traps hidden by quotes and other subscripts
+
+**Severity:** Low
+**Likelihood:** Likely
+**Where:** [test_skill_text.py](../tests/test_skill_text.py) — `def unquoted(`
+
+### What happens
+
+`unquoted` blanks text between any two apostrophes, including ones inside double quotes, so code between them is not linted; `${A[$i]}`, `A[0]=` and a variable after the first word of a `for` list are not flagged.
+
+### Example scenario
+
+`echo "can't"; for m in $RUNGS; do echo "it's"; done` passes the lint.
+
+### Notes for a fix
+
+Track quote state per character, and widen the subscript and word-list patterns, with fixtures for each.
+
+**Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 2, dependable-helpers phase, 2026-11-23.
 
 ---
 
@@ -482,3 +577,99 @@ A KI row pasted into the Enhancements table passes `check`.
 Read rows per section, and refuse a row whose prefix does not belong to its section's table.
 
 **Source:** gpt-6.2-astra:high — phase review pass 1, dependable-helpers phase, 2026-11-23.
+
+---
+
+<a id="ki-83"></a>
+
+## KI-83 — the name check misses multi-line reference definitions and counts test fixtures as scripts
+
+**Severity:** Low
+**Likelihood:** Rare
+**Where:** [name_check.py](../skills/project-docs/name_check.py) — `REFDEF_LABEL = re.compile(`
+
+### What happens
+
+A reference definition whose destination is on the next line is not read, so its uses are reported. Bare script names resolve against every tracked file, test fixtures included, and a name with two matches leaves the line's lone flags unchecked.
+
+### Example scenario
+
+`[guide]:` followed by an indented `docs/guide.md` line reports `[guide]` as undefined.
+
+### Notes for a fix
+
+Join a definition with its continuation line; leave fixture folders out of the basename map.
+
+**Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 2, dependable-helpers phase, 2026-11-23.
+
+---
+
+<a id="ki-84"></a>
+
+## KI-84 — a dependency file whose name differs only in case can overwrite another
+
+**Severity:** Low
+**Likelihood:** Rare
+**Where:** [dependency-scan.py](../skills/phase-workflow/dependency-scan.py) — `def export_head(`
+
+### What happens
+
+On a case-insensitive file system two committed paths that differ only in case are written to the same place, and one is scanned twice while the other is not.
+
+### Example scenario
+
+`web/Package.json` and `web/package.json` are both committed.
+
+### Notes for a fix
+
+Detect a case collision while exporting and report both paths as a gap.
+
+**Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 2, dependable-helpers phase, 2026-11-23.
+
+---
+
+<a id="ki-85"></a>
+
+## KI-85 — the release test reads only plain X.Y.Z headings
+
+**Severity:** Low
+**Likelihood:** Rare
+**Where:** [test_plugin_name.py](../tests/test_plugin_name.py) — `class ReleaseVersionTest`
+
+### What happens
+
+A pre-release heading such as `## [2.2.0-rc.1]` is skipped, so the test compares the manifest with the release below it.
+
+### Example scenario
+
+plugin.json keeps 2.1.0 while CHANGELOG prepares 2.2.0-rc.1; the test passes.
+
+### Notes for a fix
+
+Read the first heading that is not `[Unreleased]` and compare its full version.
+
+**Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 2, dependable-helpers phase, 2026-11-23.
+
+---
+
+<a id="ki-86"></a>
+
+## KI-86 — prune refuses a branch whose name a tag also uses
+
+**Severity:** Low
+**Likelihood:** Rare
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `refname:lstrip=2`
+
+### What happens
+
+With a tag of the same name, `git branch -d` warns that the name is ambiguous and refuses the merged branch, so prune retains it.
+
+### Example scenario
+
+A branch `feature/x` and a tag `feature/x`; the merged branch is reported as holding work.
+
+### Notes for a fix
+
+Compare by full ref names and delete with `git update-ref -d refs/heads/<b>`, as KI-80 proposes.
+
+**Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 2, dependable-helpers phase, 2026-11-23.

@@ -809,3 +809,22 @@ PY
   [ "$status" -ne 0 ] || false
   [ ! -e "$TEST_TMP/CODEX-RAN" ]
 }
+
+@test "the documented Gemini loop measures the prompt in bytes" {
+  # Fails if a multibyte prompt under the character limit but over the byte limit is sent (pass 2, Codex 8).
+  python3 -c "open('$TEST_TMP/gemini_prompt_p1_c1.txt','w',encoding='utf-8').write('é'*70000)"
+  gemini_loop 'touch "$TEST_TMP/AGY-RAN"; echo "No findings.";'
+  run bash "$TEST_TMP/gemini.sh"
+  [ ! -e "$TEST_TMP/AGY-RAN" ]
+}
+
+@test "the documented Codex loop with an empty ladder needs no root" {
+  # Fails if a run with no Codex rung aborts on ROOT before the Gemini half (Codex 17).
+  python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/loop.sh" <<'PY'
+import pathlib, sys
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+pathlib.Path(sys.argv[2]).write_text('unset ROOT\nCODEX_RUNGS=""\n' + fence(sys.argv[1], 'codex-loop') + 'echo AFTER-LOOP\n')
+PY
+  run bash "$TEST_TMP/loop.sh"
+  [[ "$output" == *"AFTER-LOOP"* ]]
+}

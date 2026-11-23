@@ -110,3 +110,10 @@ TABLE='| Key | Value |\n| --- | --- |\n| `REPO` | `owner/name` |\n| `PR` | 9 |\n
   [ "$status" -eq 0 ] || false
   [ "$output" = 9 ]
 }
+
+@test "a one-column first table is still the first table" {
+  # Fails if a table one cell wide is invisible and a later Key | Value table answers (pass 2, Codex 9).
+  run get PR '| Note |\n| --- |\n| hello |\n\n| Key | Value |\n| --- | --- |\n| PR | 9 |\n'
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"Key | Value"* ]]
+}

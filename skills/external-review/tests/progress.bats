@@ -130,3 +130,20 @@ age() { touch -t "$(date -v-"$2"M +%Y%m%d%H%M.%S)" "$1"; }
   [[ "$output" != *"integer"* ]] || false
   [[ "$output" == *"running"* ]]
 }
+
+@test "a .part whose state is already final is not reported as running" {
+  # Fails if the process stopped after writing its state but before moving .part (pass 2, Codex 17).
+  printf 'x' > "$TEST_TMP/gemini_phase_p2_c1_a1_m.part"
+  echo failed > "$TEST_TMP/gemini_phase_p2_c1_a1_m.state"
+  run bash "$PROGRESS" "$TEST_TMP" 2
+  [[ "$output" != *"running"* ]] || false
+  [[ "$output" == *"gemini c1: failed"* ]]
+}
+
+@test "a retried chunk's earlier failed attempt is superseded too" {
+  # Fails if only a .part is checked for a later attempt (Gemini c1 1).
+  printf 'x' > "$TEST_TMP/gemini_phase_p2_c1_a1_m.partial"; echo failed > "$TEST_TMP/gemini_phase_p2_c1_a1_m.state"
+  printf 'x' > "$TEST_TMP/gemini_phase_p2_c1_a2_m.part"
+  run bash "$PROGRESS" "$TEST_TMP" 2
+  [[ "$output" == *"gemini c1 a1: superseded by a later attempt"* ]]
+}

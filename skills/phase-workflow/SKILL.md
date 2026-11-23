@@ -424,8 +424,11 @@ what remains expired.
      pr_head() { gh pr view "$PR" -R "$REPO" --json headRefOid --jq .headRefOid; }
      [ "$(git rev-parse HEAD)" = "$GATE_SHA" ] && [ "$(pr_head)" = "$GATE_SHA" ] \
        || { echo "HEAD MOVED SINCE THE GATE — stop"; exit 1; }
-     gh pr edit "$PR" -R "$REPO" --body-file "<review record file>"
-     [ "$(pr_head)" = "$GATE_SHA" ] || { echo "PR HEAD MOVED WHILE THE RECORD WAS PUBLISHED — check it"; exit 1; }
+     # The body names the head it was reviewed at, so a later push shows the record is stale.
+     BODY="$(mktemp)"; { printf 'Review record for %s.\n\n' "$GATE_SHA"; cat "<review record file>"; } > "$BODY"
+     gh pr edit "$PR" -R "$REPO" --body-file "$BODY"
+     # Detection, not prevention: a push during the edit is found here, after the body is up.
+     [ "$(pr_head)" = "$GATE_SHA" ] || { echo "PR HEAD MOVED WHILE THE RECORD WAS PUBLISHED — the record is stale"; exit 1; }
      ```
 
      Second, **the reviewer artifacts exist on disk**. Apply
@@ -624,7 +627,7 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
    # fence: prune
    set -euo pipefail
    git fetch --prune origin
-   BRANCHES="$(git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads/)"
+   BRANCHES="$(git for-each-ref --format='%(refname:lstrip=2) %(upstream:track)' refs/heads/)"   # lstrip, not short: short can prefix heads/ to an ambiguous name
    CURRENT="$(git symbolic-ref --quiet --short HEAD || true)"
    GONE=""   # space-separated: a branch name holds no space or pattern character
    while read -r b track; do
@@ -635,7 +638,7 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
      # That tip contains no unpushed commits; use -d for every other branch.
      RETAINED=""
      for b in $(printf '%s' "$GONE"); do
-       if [ "$(git rev-parse "$b")" = "${APPROVED_SHA:-}" ]; then
+       if [ "$(git rev-parse "refs/heads/$b")" = "${APPROVED_SHA:-}" ]; then
          git branch -D "$b" || { echo "RETAINED — $b could not be deleted (see git's message above)"; RETAINED="$RETAINED $b"; }
        elif git branch -d "$b"; then
          :

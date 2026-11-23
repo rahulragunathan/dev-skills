@@ -40,8 +40,8 @@ here — the plugin manifest's version is the only record of them.
 - **The origin check is an allow-list (KI-70).** It accepts `ssh://`, `git+ssh://`,
   `ssh+git://` and `https://` in lower case, the scp form and an absolute local path without
   spaces; it refuses every transport helper, any other scheme or spelling, an option-shaped URL,
-  a `%`-escape in a user part, a configured `remote.origin.vcs`, and an ssh URL holding an IPv6
-  literal. It decides with shell patterns, so no external command can fail open, and the push
+  a `%`-escape in a user part, a configured `remote.origin.vcs` (even an empty one), and an ssh URL holding a compressed IPv6
+  literal (`::`). It decides with shell patterns, so no external command can fail open, and the push
   list must be exactly the approved URL.
 - **Branch cleanup reports every retained branch (ENH-29)** before it exits, rather than
   stopping at the first.
@@ -56,10 +56,11 @@ here — the plugin manifest's version is the only record of them.
   reports a retried chunk's earlier attempt as superseded, and tells a failed run from a cut-off
   one; only agy's own cut-off notice counts as one. Discovery says which program failed, agy or
   the ranker.
-- **`roadmap.py close` never loses an edit and keeps the file's own bytes (KI-57).** It refuses
-  when either file changed after it read them, a rollback leaves a file someone edited
-  meanwhile as they wrote it, and the closed entry is cut out byte for byte, so CRLF line
-  endings, trailing whitespace and a missing final newline survive.
+- **`roadmap.py close` keeps an edit made before its final check (KI-57).** It stages each
+  replacement first, then refuses if the file changed since it read it; a rollback leaves a file
+  someone edited meanwhile as they wrote it. Only an edit in the instant between that check and
+  the rename can still be lost. The closed entry is cut out byte for byte, so CRLF line endings,
+  trailing whitespace and a missing final newline survive.
 - **`roadmap.py check` sees more drift (KI-58, KI-59).** Blank files, an anchor in a fenced
   example, open questions out of Kind order, a displayed `KI-01-extra`, and titles or an
   Effort that differ between index and detail are all reported. A `**Where:**` field after

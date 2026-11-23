@@ -16,7 +16,8 @@ import re
 import sys
 
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
-DELIMITER = re.compile(r"^\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$")
+# One cell or more; a row with no pipe at all is a thematic break, not a delimiter.
+DELIMITER = re.compile(r"^(?=.*\|)\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$")
 
 
 def cells(line: str) -> list[str]:

@@ -54,6 +54,10 @@ for out in "$dir"/*_p"$pass"_c*.txt "$dir"/*_p"$pass"_c*.part "$dir"/*_p"$pass"_
       [ -e "$base.txt" ] || [ -e "$base.part" ] || [ -e "$base.partial" ] && continue
       echo "$reviewer $chunk: $(cat "$out" 2>/dev/null || echo unknown)"; continue ;;
     *.partial)
+      if superseded "$name"; then
+        echo "$reviewer $chunk $(printf '%s' "$name" | sed -E 's/.*_c[0-9]+_(a[0-9]+)_.*/\1/'): superseded by a later attempt"
+        continue
+      fi
       case "$(cat "${out%.partial}.state" 2>/dev/null)" in
         failed) echo "$reviewer $chunk: failed — $bytes bytes set aside" ;;
         cut-off) echo "$reviewer $chunk: failed — answer cut off, $bytes bytes set aside" ;;
@@ -64,6 +68,11 @@ for out in "$dir"/*_p"$pass"_c*.txt "$dir"/*_p"$pass"_c*.part "$dir"/*_p"$pass"_
               echo "$reviewer $chunk $(printf '%s' "$name" | sed -E 's/.*_c[0-9]+_(a[0-9]+)_.*/\1/'): superseded by a later attempt"
               continue
             fi
+            # A final state is authoritative: the run stopped before moving its answer aside.
+            state="$(cat "${out%.part}.state" 2>/dev/null || true)"
+            case "$state" in failed|cut-off|unavailable)
+              echo "$reviewer $chunk: $state — $bytes bytes left in .part"; continue ;;
+            esac
             err="${out%.part}.err"
             ran="$(started "${out%.part}" "$([ -e "$err" ] && echo "$err" || echo "$out")")"
             line="$reviewer $chunk: running ${ran}m, last write $(mins "$out")m ago, $bytes bytes so far"

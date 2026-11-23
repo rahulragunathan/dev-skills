@@ -157,7 +157,8 @@ probes. Pin writes off at the tool level:
 
 ```bash
 # fence: codex-loop
-: "${CODEX_RUNGS?run the ladder discovery block first}" "${ROOT:?prepare the review root with codex-root.sh first}"
+: "${CODEX_RUNGS?run the ladder discovery block first}"
+[ -z "$CODEX_RUNGS" ] || : "${ROOT:?prepare the review root with codex-root.sh first}"
 for m in $(printf '%s' "$CODEX_RUNGS"); do
   slug="${m%%:*}"
   case "$m" in *:*) effort="${m#*:}";; *) effort=high;; esac
@@ -213,8 +214,9 @@ for m in $(printf '%s' "$GEMINI_RUNGS"); do
   rm -f "$OUT" "$PART" "${OUT%.txt}.partial" "$ERR" "$STATE"   # never inherit a previous attempt
   PROMPT="$(cat "<scratchpad>/gemini_prompt_p<n>_c<chunk>.txt")" && [ -n "$PROMPT" ] \
     || { echo "no prompt for this chunk — not run"; break; }
-  # agy cuts a longer prompt short and still exits 0 (between 150 KB and 220 KB, 2026-11-23).
-  [ "${#PROMPT}" -le 120000 ] || { echo "prompt over 120000 characters — split the chunk; agy would truncate it"; break; }
+  # agy cuts a longer prompt short and still exits 0; measured in bytes, as the limit is.
+  [ "$(wc -c < "<scratchpad>/gemini_prompt_p<n>_c<chunk>.txt")" -le 120000 ] \
+    || { echo "prompt over 120000 bytes — split the chunk; agy would truncate it"; break; }
   # An id with an effort suffix carries its effort; a suffix-less one is told high.
   case "$m" in *-high|*-xhigh|*-max|*-medium) EFFORT_FLAG=() ;; *) EFFORT_FLAG=(--effort high) ;; esac
   rc=0
