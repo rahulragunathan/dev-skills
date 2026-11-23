@@ -118,5 +118,5 @@ setup() {
   # Fails if a scan that could not read its input reports a count, which reads as clean.
   run python3 "$SCRIPT" --count-mid "$FIX/no-such-file.bats"
   [ "$status" -ne 0 ] || false
-  [[ "$output" != 0 ]]
+  [ "$(printf '%s\n' "$output" | grep -cx '[0-9][0-9]*')" = 0 ]
 }
