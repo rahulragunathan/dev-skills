@@ -256,8 +256,8 @@ SH
   chmod +x "$BIN/codex"
   python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/probe.sh" <<'PY'
 import pathlib, re, sys
-text = pathlib.Path(sys.argv[1]).read_text().split('## Failure handling', 1)[1]
-code = re.search(r'```bash\n(.*?)```', text, re.S)[1]
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+code = fence(sys.argv[1], 'failure-probe')
 pathlib.Path(sys.argv[2]).write_text(code.replace('<same model as the real run>', 'selected'))
 PY
   ROOT="$TEST_TMP" run bash "$TEST_TMP/probe.sh"
@@ -353,11 +353,11 @@ for a in "$@"; do [ "$a" = --effort ] \&\& { echo "error: --model x conflicts wi
     > "$TEST_TMP/plugin/skills/external-review/preflight.sh"
   python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/probe.sh" <<'PY'
 import pathlib, re, sys
-blocks = re.findall(r'```bash\n(.*?)```', pathlib.Path(sys.argv[1]).read_text(), re.S)
-block = next(b for b in blocks if 'PROBE_MODELS=()' in b)
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+block = fence(sys.argv[1], 'probe')
 pathlib.Path(sys.argv[2]).write_text('CODEX_RUNGS="fixture:high"\nGEMINI_RUNGS=""\n' + block)
 PY
-  CLAUDE_PLUGIN_ROOT="$TEST_TMP/plugin" run bash "$TEST_TMP/probe.sh"
+  ROOT="$TEST_TMP" CLAUDE_PLUGIN_ROOT="$TEST_TMP/plugin" run bash "$TEST_TMP/probe.sh"
   [ -f "$TEST_TMP/probe-args" ] || false
   grep -Fx 'fixture:high' "$TEST_TMP/probe-args"
 }
@@ -368,8 +368,8 @@ PY
 discovery_script() {
   python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/discover.sh" "$1" "$2" <<'PY'
 import pathlib, re, sys
-blocks = re.findall(r'```bash\n(.*?)```', pathlib.Path(sys.argv[1]).read_text(), re.S)
-block = next(b for b in blocks if 'CODEX_RUNGS="$(codex_ladder' in b)
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+block = fence(sys.argv[1], 'discovery')
 prelude = ('set -e\n'
            'codex_ladder() { ' + sys.argv[3] + ' }\n'
            'gemini_ladder() { ' + sys.argv[4] + ' }\n')
@@ -406,8 +406,8 @@ PY
 @test "the documented Gemini loop does not accept a partial answer as coverage" {
   python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/gemini.sh" "$TEST_TMP" <<'PY'
 import pathlib, re, sys
-blocks = re.findall(r'```bash\n(.*?)```', pathlib.Path(sys.argv[1]).read_text(), re.S)
-block = next(b for b in blocks if 'for m in ${GEMINI_RUNGS' in b and 'agy -p' in b)
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+block = fence(sys.argv[1], 'gemini-loop')
 prelude = ('GEMINI_RUNGS="gemini-4-neon-high"\n'
            'agy() { echo "1. **[High]** a finding cut off mid"; '
            'echo "[agy] print timeout after 25m0s with turn in progress; returning partial output" >&2; return 0; }\n')
@@ -427,8 +427,8 @@ PY
 @test "the documented Gemini loop reads a prompt file per chunk" {
   python3 - "$BATS_TEST_DIRNAME/../SKILL.md" <<'PY'
 import pathlib, re, sys
-blocks = re.findall(r'```bash\n(.*?)```', pathlib.Path(sys.argv[1]).read_text(), re.S)
-block = next(b for b in blocks if 'for m in ${GEMINI_RUNGS' in b and 'agy -p' in b)
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+block = fence(sys.argv[1], 'gemini-loop')
 assert 'gemini_prompt_p<n>_c<chunk>.txt' in block, block
 PY
 }
@@ -438,8 +438,8 @@ PY
 gemini_loop() {
   python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/gemini.sh" "$TEST_TMP" "$1" <<'PY'
 import pathlib, re, sys
-blocks = re.findall(r'```bash\n(.*?)```', pathlib.Path(sys.argv[1]).read_text(), re.S)
-block = next(b for b in blocks if 'for m in ${GEMINI_RUNGS' in b and 'agy -p' in b)
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+block = fence(sys.argv[1], 'gemini-loop')
 prelude = 'GEMINI_RUNGS="gemini-4-neon-high gemini-4-argon-high"\nagy() { ' + sys.argv[4] + ' }\n'
 block = (block.replace('<scratchpad>', sys.argv[3]).replace('<mode>', 'phase')
          .replace('<n>', '1').replace('<chunk>', '1').replace('<attempt>', '1'))
@@ -581,8 +581,8 @@ printf "%s\\n" "$@" > "$TEST_TMP/agy-args"\
     > "$TEST_TMP/home/.codex/models_cache.json"
   python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/wrappers.sh" "$TEST_TMP" <<'PY'
 import pathlib, re, sys
-blocks = re.findall(r'```bash\n(.*?)```', pathlib.Path(sys.argv[1]).read_text(), re.S)
-block = next(b for b in blocks if 'codex_ladder() {' in b and 'gemini_ladder() {' in b)
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+block = fence(sys.argv[1], 'ladder-wrappers')
 pathlib.Path(sys.argv[2]).write_text(
     'agy() { printf "%s\\n" gemini-4-neon-high gemini-4-neon-xhigh; }\n'
     + block.replace('<scratchpad>', sys.argv[3])
@@ -602,4 +602,92 @@ PY
   discovery_script 'echo fixture:high;' 'false;'
   run bash "$TEST_TMP/discover.sh"
   [[ "$output" == *"agy models failed"* ]]
+}
+
+# --- the documented fences under each shell (KI-74) -------------------------
+# The Bash tool runs the user's login shell, often zsh. Each check below runs
+# under bash and, in its own test, under zsh -f.
+
+# gemini_rungs_in <shell...>: two rungs, the first unavailable.
+gemini_rungs_in() {
+  printf 'prompt' > "$TEST_TMP/gemini_prompt_p1_c1.txt"
+  gemini_loop 'printf "%s\n" "$4" >> "$TEST_TMP/models"; if [ "$4" = gemini-4-neon-high ]; then echo "model is not supported" >&2; return 1; fi; echo "No findings.";'
+  run "$@" "$TEST_TMP/gemini.sh"
+  [ "$(cat "$TEST_TMP/models")" = "$(printf 'gemini-4-neon-high\ngemini-4-argon-high')" ]
+}
+
+@test "bash: the documented Gemini loop tries each rung in turn" {
+  # Fails if the loop does not walk the rungs one model at a time under bash.
+  gemini_rungs_in bash
+}
+
+@test "zsh: the documented Gemini loop tries each rung in turn" {
+  # Fails if zsh reads the rung list as one word and the loop runs once.
+  command -v zsh >/dev/null || skip "zsh is not installed"
+  gemini_rungs_in zsh -f
+}
+
+# discovery_effort_in <shell...>: the user asks for max; both ladders get it,
+# and the empty-ladder messages name it.
+discovery_effort_in() {
+  discovery_script 'printf "%s\n" "$@" > "$TEST_TMP/codex-ladder-args";' 'printf "%s\n" "$@" > "$TEST_TMP/gemini-ladder-args";'
+  grep -q '^EFFORT=high' "$TEST_TMP/discover.sh" || false
+  sed -i.bak 's/^EFFORT=high/EFFORT=max/' "$TEST_TMP/discover.sh"
+  run "$@" "$TEST_TMP/discover.sh"
+  [ "$(cat "$TEST_TMP/codex-ladder-args")" = "$(printf -- '--effort\nmax')" ] || false
+  [ "$(cat "$TEST_TMP/gemini-ladder-args")" = "$(printf -- '--effort\nmax')" ] || false
+  [[ "$output" == *"No Codex rung at max"* ]] || false
+  [[ "$output" == *"No Gemini model offers max"* ]]
+}
+
+@test "bash: discovery passes the requested effort to both ladders and names it" {
+  # Fails if a requested effort is dropped, or the messages name something else.
+  discovery_effort_in bash
+}
+
+@test "zsh: discovery passes the requested effort to both ladders and names it" {
+  # Fails if zsh's 1-based arrays make the messages name "--effort" instead of the effort.
+  command -v zsh >/dev/null || skip "zsh is not installed"
+  discovery_effort_in zsh -f
+}
+
+# probe_args_in <shell...>: the documented probe block with a review root whose
+# path holds a space; the fake preflight.sh records its argument vector.
+probe_args_in() {
+  mkdir -p "$TEST_TMP/plugin/skills/external-review" "$TEST_TMP/my root"
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$@" > "%s/probe-args"\n' "$TEST_TMP" \
+    > "$TEST_TMP/plugin/skills/external-review/preflight.sh"
+  python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/probe.sh" <<'PY'
+import pathlib, sys
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+pathlib.Path(sys.argv[2]).write_text('CODEX_RUNGS="m1:high"\nGEMINI_RUNGS="gemini-4-neon-high"\n' + fence(sys.argv[1], 'probe'))
+PY
+  ROOT="$TEST_TMP/my root" CLAUDE_PLUGIN_ROOT="$TEST_TMP/plugin" run "$@" "$TEST_TMP/probe.sh"
+  [ "$(cat "$TEST_TMP/probe-args")" = "$(printf -- '--codex-model\nm1:high\n--gemini-model\ngemini-4-neon-high\n--timeout\n120\n--root\n%s' "$TEST_TMP/my root")" ]
+}
+
+@test "bash: the documented probe passes --root and its value as two arguments" {
+  # Fails if the root reaches preflight.sh as anything but its own argument.
+  probe_args_in bash
+}
+
+@test "zsh: the documented probe passes --root and its value as two arguments" {
+  # Fails if zsh keeps "--root <path>" as one word.
+  command -v zsh >/dev/null || skip "zsh is not installed"
+  probe_args_in zsh -f
+}
+
+@test "the documented probe refuses to probe Codex without a review root" {
+  # Fails if the probe runs Codex in the caller's folder when ROOT is unset (KI-64).
+  mkdir -p "$TEST_TMP/plugin/skills/external-review"
+  printf '#!/usr/bin/env bash\ntouch "%s/PROBED"\n' "$TEST_TMP" > "$TEST_TMP/plugin/skills/external-review/preflight.sh"
+  python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/probe.sh" <<'PY'
+import pathlib, sys
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+pathlib.Path(sys.argv[2]).write_text('unset ROOT\nCODEX_RUNGS="m1:high"\nGEMINI_RUNGS=""\n' + fence(sys.argv[1], 'probe'))
+PY
+  CLAUDE_PLUGIN_ROOT="$TEST_TMP/plugin" run bash "$TEST_TMP/probe.sh"
+  [ "$status" -ne 0 ] || false
+  [ ! -e "$TEST_TMP/PROBED" ] || false
+  [[ "$output" == *"ROOT"* ]]
 }

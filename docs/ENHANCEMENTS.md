@@ -230,7 +230,7 @@ keep the retain rule: nothing is deleted that was not proven safe.
 ## ENH-29 — evaluate every gone branch before reporting
 
 **Priority:** Low · **Effort:** ~1 hour
-**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `$2 == "[gone]" && $1 != current` §4 step 7 · **Regression net:** `skills/phase-workflow/tests/phase-git.bats`
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `while read -r b track; do` §4 step 6 · **Regression net:** `skills/phase-workflow/tests/phase-git.bats`
 
 ### What it is
 

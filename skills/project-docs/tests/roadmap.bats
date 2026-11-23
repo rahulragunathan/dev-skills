@@ -368,10 +368,8 @@ PY
   # Fails if the SOP has no executable close/check path, or if that path ignores failure.
   python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/commands.sh" <<'PY'
 import pathlib, re, sys
-text = pathlib.Path(sys.argv[1]).read_text()
-blocks = [b for b in re.findall(r'```bash\n(.*?)```', text, re.S) if 'roadmap.py" close' in b]
-assert len(blocks) == 1, 'SOP must invoke the tested roadmap close and check commands in one block'
-pathlib.Path(sys.argv[2]).write_text(blocks[0].replace('<entry-id>', 'KI-02'))
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+pathlib.Path(sys.argv[2]).write_text(fence(sys.argv[1], 'roadmap-close').replace('<entry-id>', 'KI-02'))
 PY
   cd "$TEST_TMP"
   CLAUDE_PLUGIN_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)" run bash "$TEST_TMP/commands.sh"

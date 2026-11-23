@@ -30,14 +30,9 @@ setup() {
   export PUSH_URL="$(git remote get-url --push origin)"
 }
 
-# Extract one executable fence from SKILL.md by a substring it contains.
-# Three tests needed this and the copies were drifting apart.
-extract_fence() {   # $1 = selector, $2 = destination, $3 = SKILL.md path
-  python3 - "$3" "$2" "$1" <<'FENCE_PY'
-import pathlib,re,sys
-blocks=re.findall(r'```bash\n(.*?)```',pathlib.Path(sys.argv[1]).read_text(),re.S)
-pathlib.Path(sys.argv[2]).write_text(next(b for b in blocks if sys.argv[3] in b))
-FENCE_PY
+# Extract one executable fence from SKILL.md by its `# fence: <name>` marker.
+extract_fence() {   # $1 = marker name, $2 = destination, $3 = SKILL.md path
+  python3 "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/tests/fence.py" "$3" "$1" > "$2"
 }
 
 
@@ -311,7 +306,7 @@ EOF
 }
 
 @test "adversarial: documented cleanup returns failure when fetch fails" {
-  extract_fence 'GONE=' "$TEST_TMP/cleanup.sh" "$(dirname "$PUBLISH")/SKILL.md"
+  extract_fence prune "$TEST_TMP/cleanup.sh" "$(dirname "$PUBLISH")/SKILL.md"
   mkdir "$TEST_TMP/bin"
   printf '#!/bin/sh\nexit 128\n' > "$TEST_TMP/bin/git"
   chmod +x "$TEST_TMP/bin/git"
@@ -333,7 +328,7 @@ prepare_documented_release() {
 case "$*" in *mergeCommit*) echo "$MERGE_SHA" ;; *) echo "$APPROVED_SHA" ;; esac
 SH
   chmod +x "$TEST_TMP/bin/gh"
-  extract_fence 'REMOTE_TAG=' "$TEST_TMP/release.sh" "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/SKILL.md"
+  extract_fence release-tag "$TEST_TMP/release.sh" "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/SKILL.md"
 }
 
 @test "documented release: publishes the merge commit rather than the approved PR head" {
@@ -395,7 +390,7 @@ SH
 # whose parents are upstream reports nothing though it carries unique work.
 # ---------------------------------------------------------------------------
 
-ki46_extract_cleanup() { extract_fence 'GONE=' "$TEST_TMP/cleanup.sh" "$(dirname "$PUBLISH")/SKILL.md"; }
+ki46_extract_cleanup() { extract_fence prune "$TEST_TMP/cleanup.sh" "$(dirname "$PUBLISH")/SKILL.md"; }
 
 # Publish a branch, land it on main by $2, then orphan its upstream so the
 # prune fence considers it at all.
@@ -541,7 +536,7 @@ ki46_squash_branch() {          # leaves feature squash-merged, tip in $1
 
 # first_push <skill>: the documented first-push fence, for feature/x.
 first_push() {
-  extract_fence 'PHASE RECORD NOT COMMITTED ON' "$TEST_TMP/push.sh" "$1"
+  extract_fence first-push "$TEST_TMP/push.sh" "$1"
   sed -i.bak '1i\
 PHASE_BRANCH=feature/x DEFAULT_BRANCH=main
 ' "$TEST_TMP/push.sh"
@@ -577,7 +572,7 @@ PHASE_BRANCH=feature/x DEFAULT_BRANCH=main
 
 # after_review: the documented post-review check, with REVIEWED bound to $1.
 after_review() {
-  extract_fence 'CHANGED AFTER REVIEW' "$TEST_TMP/after.sh" "$BATS_TEST_DIRNAME/../SKILL.md"
+  extract_fence after-review "$TEST_TMP/after.sh" "$BATS_TEST_DIRNAME/../SKILL.md"
   sed -i.bak "s|^\( *\)REVIEWED=.*|\1REVIEWED=$1|" "$TEST_TMP/after.sh"
 }
 
@@ -616,7 +611,7 @@ after_review() {
 
 # record_check <pr>: the documented phase-record check, for PR <pr>.
 record_check() {
-  extract_fence 'PHASE RECORD DOES NOT NAME PR' "$TEST_TMP/record.sh" "$BATS_TEST_DIRNAME/../SKILL.md"
+  extract_fence record-check "$TEST_TMP/record.sh" "$BATS_TEST_DIRNAME/../SKILL.md"
   if grep -q '^ *PR=' "$TEST_TMP/record.sh"; then
     sed -i.bak "s|^\\( *\\)PR=.*|\\1PR=$1|" "$TEST_TMP/record.sh"
   else
@@ -672,4 +667,74 @@ record_check() {
     [[ "$output" == *"CREDENTIALS IN ORIGIN URL"* || "$output" == *"TRANSPORT HELPER"* ]] || false
     [[ "$output" != *notasecret* ]] || false
   done
+}
+
+# --- the rewritten fences under each shell (KI-74, KI-75) -------------------
+# These fences lost their awk field programs, which skill arguments overwrote.
+# Each runs under bash and, in its own test, under zsh -f.
+
+# release_resumes_in <annotated|lightweight> <shell...>: the remote already holds
+# the tag at the merge commit; the fence must accept it rather than conflict.
+release_resumes_in() {
+  local kind="$1"; shift
+  prepare_documented_release
+  if [ "$kind" = annotated ]; then git tag -a -m release "$TAG" "$MERGE_SHA"; else git tag "$TAG" "$MERGE_SHA"; fi
+  git push -q origin "refs/tags/$TAG"
+  git tag -d "$TAG" >/dev/null
+  [ "$kind" != annotated ] || [ "$(git --git-dir="$FORK" cat-file -t "refs/tags/$TAG")" = tag ] || false
+  PATH="$TEST_TMP/bin:$PATH" run "$@" "$TEST_TMP/release.sh"
+  [ "$status" -eq 0 ] || false
+  [[ "$output" == *"TAG VERIFIED AND PUBLISHED: $TAG at $MERGE_SHA"* ]]
+}
+
+@test "bash: the release fence accepts an annotated remote tag at the merge commit" {
+  # Fails if the parser compares the tag object, not the commit it peels to.
+  release_resumes_in annotated bash
+}
+
+@test "zsh: the release fence accepts an annotated remote tag at the merge commit" {
+  # Fails if the peeled-commit parser reads differently under zsh.
+  command -v zsh >/dev/null || skip "zsh is not installed"
+  release_resumes_in annotated zsh -f
+}
+
+@test "bash: the release fence accepts a lightweight remote tag at the merge commit" {
+  # Fails if a tag with no peeled line is not read from its direct line.
+  release_resumes_in lightweight bash
+}
+
+@test "zsh: the release fence accepts a lightweight remote tag at the merge commit" {
+  # Fails if the direct-line fallback reads differently under zsh.
+  command -v zsh >/dev/null || skip "zsh is not installed"
+  release_resumes_in lightweight zsh -f
+}
+
+# prune_in <shell...>: one gone branch already merged, one still tracking; only
+# the gone one is pruned.
+prune_in() {
+  ki46_extract_cleanup
+  git checkout -q -b feature/done; echo d > d1; git add -A; git commit -qm done
+  git checkout -q main; git merge -q --ff-only feature/done
+  git checkout -q -b feature/live; echo l > l1; git add -A; git commit -qm live
+  git push -q -u origin feature/live
+  git checkout -q main
+  export APPROVED_SHA="$TASK_SHA"
+  ki46_orphan feature/done
+  [ "$(git for-each-ref --format='%(upstream:track)' refs/heads/feature/live)" != '[gone]' ] || false
+  run "$@" "$TEST_TMP/cleanup.sh"
+  [ "$status" -eq 0 ] || false
+  run git rev-parse --verify -q feature/done
+  [ "$status" -ne 0 ] || false
+  git rev-parse --verify -q feature/live >/dev/null
+}
+
+@test "bash: prune removes only the branch whose upstream is gone" {
+  # Fails if the branch and track fields are misread, so the wrong branch goes.
+  prune_in bash
+}
+
+@test "zsh: prune removes only the branch whose upstream is gone" {
+  # Fails if the field reading differs under zsh.
+  command -v zsh >/dev/null || skip "zsh is not installed"
+  prune_in zsh -f
 }

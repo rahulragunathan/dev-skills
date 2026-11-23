@@ -96,3 +96,27 @@ setup() {
   [ "$status" -eq 0 ]
   [ "$(printf '%s\n' "$output" | awk -F'\t' '$4=="mid"' | grep -c .)" -eq 0 ]
 }
+
+# --count-mid: the gate's count, so the skill needs no awk field (KI-75) and a
+# clean count of 0 is not a failed grep.
+
+@test "--count-mid prints 0 for a file with no mid assertion" {
+  # Fails if the count is missing, or a clean scan exits non-zero.
+  run python3 "$SCRIPT" --count-mid "$FIX/trailing-helper.bats"
+  [ "$status" -eq 0 ] || false
+  [ "$output" = 0 ]
+}
+
+@test "--count-mid prints the number of mid assertions" {
+  # Fails if mid rows are not counted.
+  run python3 "$SCRIPT" --count-mid "$FIX/brace.bats"
+  [ "$status" -eq 0 ] || false
+  [ "$output" = 1 ]
+}
+
+@test "--count-mid fails on an unreadable input instead of printing a count" {
+  # Fails if a scan that could not read its input reports a count, which reads as clean.
+  run python3 "$SCRIPT" --count-mid "$FIX/no-such-file.bats"
+  [ "$status" -ne 0 ] || false
+  [[ "$output" != 0 ]]
+}

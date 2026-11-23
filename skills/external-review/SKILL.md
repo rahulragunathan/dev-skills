@@ -16,6 +16,9 @@ rung or reasoning effort does not remove the disqualification.
 
 ## Preflight — check the CLIs first
 
+The blocks in this skill run under bash or zsh, the shell Claude Code's Bash tool may use, so
+they avoid the constructs the two read differently.
+
 ```bash
 command -v codex; command -v agy
 ```
@@ -60,6 +63,7 @@ signed-in account, and model generations turn over faster than this file gets ed
 publish what they offer, so read it at run time.
 
 ```bash
+# fence: ladder-wrappers
 # Codex — codex-ladder.py ranks the cache (see below) and emits slug:effort rungs.
 codex_ladder() { python3 "$CLAUDE_PLUGIN_ROOT/skills/external-review/codex-ladder.py" \
   "$HOME/.codex/models_cache.json" "$@"; }
@@ -101,12 +105,13 @@ or malformed `models_cache.json`, an `agy models` that did not run — record th
 running:
 
 ```bash
-EFFORT_ARGS=()   # high; only when the user asks for another: EFFORT_ARGS=(--effort max)
-CODEX_RUNGS="$(codex_ladder ${EFFORT_ARGS[@]+"${EFFORT_ARGS[@]}"})" || CODEX_RUNGS=""
+# fence: discovery
+EFFORT=high   # only when the user asks for another: EFFORT=max (or xhigh, medium)
+CODEX_RUNGS="$(codex_ladder --effort "$EFFORT")" || CODEX_RUNGS=""
 IFS=: read -r slug effort <<< "${CODEX_RUNGS%% *}"
-[ -n "$slug" ] && [ -n "$effort" ] || { CODEX_RUNGS=""; echo "No Codex rung at ${EFFORT_ARGS[1]:-high} (no model offers it, or no readable cache) — record no output for Codex, do not run"; }
-if GEMINI_RUNGS="$(set -o pipefail; gemini_ladder ${EFFORT_ARGS[@]+"${EFFORT_ARGS[@]}"})"; then
-  [ -n "$GEMINI_RUNGS" ] || echo "No Gemini model offers ${EFFORT_ARGS[1]:-high} effort — record no output for Gemini, do not run"
+[ -n "$slug" ] && [ -n "$effort" ] || { CODEX_RUNGS=""; echo "No Codex rung at $EFFORT (no model offers it, or no readable cache) — record no output for Codex, do not run"; }
+if GEMINI_RUNGS="$(set -o pipefail; gemini_ladder --effort "$EFFORT")"; then
+  [ -n "$GEMINI_RUNGS" ] || echo "No Gemini model offers $EFFORT effort — record no output for Gemini, do not run"
 else
   GEMINI_RUNGS=""; echo "agy models failed — record no output for Gemini, do not run; agy-models.err says why"
 fi
@@ -146,7 +151,9 @@ a different rung or effort from the authoring run, record those separately.
 probes. Pin writes off at the tool level:
 
 ```bash
-for m in ${CODEX_RUNGS?run the ladder discovery block first}; do
+# fence: codex-loop
+: "${CODEX_RUNGS?run the ladder discovery block first}"
+for m in $(printf '%s' "$CODEX_RUNGS"); do
   slug="${m%%:*}"
   case "$m" in *:*) effort="${m#*:}";; *) effort=high;; esac
   OUT="<scratchpad>/codex_<mode>_p<n>_c<chunk>_a<attempt>_${slug}_${effort}.txt"
@@ -183,16 +190,18 @@ done
 **Gemini (`agy -p`) is one-shot print mode — it cannot prompt for tool permissions.** Any prompt asking it to "review this repository" gets its tool calls auto-denied and fails. **Always inline the material in the prompt** and state: *"REVIEW ONLY: do not attempt to use any tools; answer purely from the text below."*
 
 ```bash
-for m in ${GEMINI_RUNGS?run the ladder discovery block first}; do
+# fence: gemini-loop
+: "${GEMINI_RUNGS?run the ladder discovery block first}"
+for m in $(printf '%s' "$GEMINI_RUNGS"); do
   OUT="<scratchpad>/gemini_<mode>_p<n>_c<chunk>_a<attempt>_$m.txt"
   PART="${OUT%.txt}.part"; ERR="${OUT%.txt}.err"
   rm -f "$OUT" "$PART" "${OUT%.txt}.partial" "$ERR"   # never inherit a previous attempt
   PROMPT="$(cat "<scratchpad>/gemini_prompt_p<n>_c<chunk>.txt")" && [ -n "$PROMPT" ] \
     || { echo "no prompt for this chunk — not run"; break; }
   # An id with an effort suffix carries its effort; a suffix-less one is told high.
-  case "$m" in *-high|*-xhigh|*-max|*-medium) EFFORT=() ;; *) EFFORT=(--effort high) ;; esac
+  case "$m" in *-high|*-xhigh|*-max|*-medium) EFFORT_FLAG=() ;; *) EFFORT_FLAG=(--effort high) ;; esac
   rc=0
-  agy -p "$PROMPT" --model "$m" ${EFFORT[@]+"${EFFORT[@]}"} --print-timeout 25m > "$PART" 2> "$ERR" || rc=$?
+  agy -p "$PROMPT" --model "$m" ${EFFORT_FLAG[@]+"${EFFORT_FLAG[@]}"} --print-timeout 25m > "$PART" 2> "$ERR" || rc=$?
   if [ "$rc" = 0 ] && [ -s "$PART" ]; then
     cut=0; grep -q '^\[agy\] print timeout' "$ERR" || cut=$?   # 0 cut off, 1 finished, 2 unreadable
     if [ "$cut" = 1 ]; then mv "$PART" "$OUT"; break; fi
@@ -236,7 +245,7 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/progress.sh" "<scratchpad>" <n>
 ```
 
 It reports each invocation as done with its byte count, or running with its elapsed minutes and
-when its log last changed, and flags a run past the 30-minute print timeout. In Claude Code, start
+when its log last changed, and flags a run past the 25-minute print timeout. In Claude Code, start
 a Monitor that runs it every 300 seconds until no invocation is running; elsewhere, check at that
 interval. Change it in `progress.sh` and verify it with `tests/progress.bats`.
 
@@ -250,16 +259,22 @@ and run it again as the next attempt only when its process is gone, or it is pas
 **Probe each reviewer before committing a pass.**
 
 ```bash
-PROBE_MODELS=()
-for m in ${CODEX_RUNGS?run the ladder discovery block first}; do
+# fence: probe
+: "${CODEX_RUNGS?run the ladder discovery block first}" "${GEMINI_RUNGS?run the ladder discovery block first}"
+PROBE_ARGS=()
+for m in $(printf '%s' "$CODEX_RUNGS"); do
   slug="${m%%:*}"
   case "$m" in *:*) effort="${m#*:}";; *) effort=high;; esac
-  PROBE_MODELS+=(--codex-model "$slug:$effort")
+  PROBE_ARGS+=(--codex-model "$slug:$effort")
 done
-for m in ${GEMINI_RUNGS?run the ladder discovery block first}; do PROBE_MODELS+=(--gemini-model "$m"); done
-[ "${#PROBE_MODELS[@]}" -gt 0 ] || { echo "No discovered models to probe"; exit 1; }
-bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/preflight.sh" "${PROBE_MODELS[@]}" --timeout 120 \
-  ${ROOT:+--root "$ROOT"}   # Codex probes in the prepared review root
+for m in $(printf '%s' "$GEMINI_RUNGS"); do PROBE_ARGS+=(--gemini-model "$m"); done
+[ "${#PROBE_ARGS[@]}" -gt 0 ] || { echo "No discovered models to probe"; exit 1; }
+PROBE_ARGS+=(--timeout 120)
+if [ -n "$CODEX_RUNGS" ]; then   # Codex probes in the prepared review root, never the caller's folder
+  [ -n "${ROOT:-}" ] || { echo "ROOT is not set — prepare the review root with codex-root.sh first"; exit 1; }
+  PROBE_ARGS+=(--root "$ROOT")
+fi
+bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/preflight.sh" "${PROBE_ARGS[@]}"
 ```
 
 The Codex probe splits each `slug:effort` rung and uses the real pass's effort; a bare
@@ -476,6 +491,7 @@ apply [Coverage classification](#coverage-classification) to every required pair
 On empty output or non-zero exit, run a tiny probe before reporting:
 
 ```bash
+# fence: failure-probe
 m="<same model as the real run>"   # the recorded slug:effort pair
 slug="${m%%:*}"
 case "$m" in *:*) effort="${m#*:}";; *) effort=high;; esac

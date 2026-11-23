@@ -164,3 +164,10 @@ print(m.rank("gemini-4-boron") < m.rank("gemini-4-cobalt"))' "$LADDER"
   run rank gemini-4-argon-high gemini-4-hydrogen-high gemini-4-neon-high gemini-4-carbon-high
   [ "$output" = "gemini-4-carbon-high gemini-4-neon-high gemini-4-hydrogen-high" ]
 }
+
+@test "an id holding a shell pattern character is never offered" {
+  # Fails if an id such as gemini-4-*-high reaches the loops, whose word list a shell could expand.
+  run rank 'gemini-4-*-high' 'gemini-4-ne?n-high' 'gemini-4-[x]-high' gemini-4-hydrogen-high
+  [ "$status" -eq 0 ] || false
+  [ "$output" = "gemini-4-hydrogen-high" ]
+}

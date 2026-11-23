@@ -26,10 +26,9 @@ setup() {
 # differed only in the stub's output.
 write_invoke_script() {   # $1 = ladder output, $2 = destination, $3 = optional codex() body
   python3 - "$CODEX_ROOT" "$2" "$TEST_TMP" "$1" "${3:-}" <<'INVOKE_PY'
-import pathlib,re,sys
-text=pathlib.Path(sys.argv[1]).with_name('SKILL.md').read_text()
-block=next(b for b in re.findall(r'```bash\n(.*?)```',text,re.S)
-           if 'for m in ${CODEX_RUNGS' in b and 'codex exec' in b)
+import pathlib,sys
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+block=fence(pathlib.Path(sys.argv[1]).with_name('SKILL.md'), 'codex-loop')
 body=sys.argv[5] or 'printf "%s\\n" "$@" > "$ARGS"; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2";'
 prelude=('CODEX_RUNGS="' + sys.argv[4] + '"\n'
          'codex() { ' + body + ' }\n')
@@ -320,4 +319,37 @@ PY
     'echo "${8}" >> "$TEST_TMP/models"; if [ "${8}" = first ]; then { echo "ERROR: The '"'"'first'"'"' model is not supported when using Codex with a ChatGPT account."; for i in 1 2 3 4 5 6; do echo "shutdown $i"; done; } >&2; return 1; fi; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2";'
   run bash "$TEST_TMP/invoke.sh"
   [ "$(tr '\n' ' ' < "$TEST_TMP/models")" = "first second " ]
+}
+
+# --- the loop under each shell (KI-74) --------------------------------------
+# The Bash tool runs the user's login shell, often zsh, and zsh does not split
+# an unquoted variable into words: the loop would run once, with all three rung
+# names as one model.
+
+# codex_rungs_in <shell>: three rungs, the first two refused by name.
+codex_rungs_in() {
+  cat > "$TEST_TMP/fake-codex" <<'SH'
+#!/bin/bash
+while [ "$1" != -m ]; do shift; done; model="$2"
+printf '%s\n' "$model" >> "$TEST_TMP/models"
+if [ "$model" = m3 ]; then
+  while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2"; exit 0
+fi
+echo "ERROR: The '$model' model is not supported when using Codex" >&2; exit 1
+SH
+  chmod +x "$TEST_TMP/fake-codex"
+  write_invoke_script 'm1:high m2:high m3:high' "$TEST_TMP/invoke.sh" '"$TEST_TMP/fake-codex" "$@";'
+  run "$@" "$TEST_TMP/invoke.sh"
+  [ "$(cat "$TEST_TMP/models")" = "$(printf 'm1\nm2\nm3')" ]
+}
+
+@test "bash: the documented Codex loop tries each rung in turn" {
+  # Fails if the loop does not walk the rungs one model at a time under bash.
+  codex_rungs_in bash
+}
+
+@test "zsh: the documented Codex loop tries each rung in turn" {
+  # Fails if zsh reads the rung list as one word and the loop runs once.
+  command -v zsh >/dev/null || skip "zsh is not installed"
+  codex_rungs_in zsh -f
 }

@@ -41,6 +41,7 @@ named detail entry and pointer together, preserving the surviving entries. After
 edit, run its reconciliation check for IDs, destinations, ratings and ordering:
 
 ```bash
+# fence: roadmap-close
 python3 "$CLAUDE_PLUGIN_ROOT/skills/project-docs/roadmap.py" close "<entry-id>" || exit 1
 python3 "$CLAUDE_PLUGIN_ROOT/skills/project-docs/roadmap.py" check || exit 1
 ```

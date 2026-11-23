@@ -45,7 +45,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 
 ## 2. Phase start (plan approved)
 
-1. **Preflight before any phase-start mutation.** Use Bash for these blocks. Replace angle-bracket placeholders before running them. Run from the repo root. Stop on any failed command.
+1. **Preflight before any phase-start mutation.** The blocks in this skill run under bash or zsh, so they avoid the constructs the two read differently. Replace angle-bracket placeholders before running them. Run from the repo root. Stop on any failed command.
 
    **Initial discovery.** Run this block once at phase start. Later sections load the recorded values from `docs/PHASE_RECORD.md`; they do not re-run discovery. `gh` must be installed and able to read the repository and its merge settings. Resolve the repository from `origin`, not an upstream setting.
 
@@ -79,10 +79,11 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    Now write `docs/PHASE_RECORD.md` (step 3) and commit it on the branch. Then publish:
 
    ```bash
+   # fence: first-push
    set -euo pipefail
    [ "$(git symbolic-ref --quiet --short HEAD)" = "$PHASE_BRANCH" ] || { echo "WRONG BRANCH — stop"; exit 1; }
    git diff --quiet HEAD -- docs/PHASE_RECORD.md \
-     && git show "$PHASE_BRANCH:docs/PHASE_RECORD.md" 2>/dev/null | grep -qF "| \`PHASE_BRANCH\` | \`$PHASE_BRANCH\` |" \
+     && git show "${PHASE_BRANCH}:docs/PHASE_RECORD.md" 2>/dev/null | grep -qF "| \`PHASE_BRANCH\` | \`$PHASE_BRANCH\` |" \
      || { echo "PHASE RECORD NOT COMMITTED ON $PHASE_BRANCH — stop"; exit 1; }
    git push -u origin "$PHASE_BRANCH"
    ```
@@ -297,6 +298,7 @@ what remains expired.
      CHANGELOG prepares; a companion repository's table below it does not count:
 
      ```bash
+     # fence: record-check
      set -euo pipefail
      PR="<this phase's PR number>"
      VERSION="$(git show HEAD:CHANGELOG.md | grep -m1 -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' | tr -d '#[] ' || true)"
@@ -330,6 +332,7 @@ what remains expired.
    - **Before marking the PR ready, check what landed after review**, and run the full suite on `HEAD`. Only bookkeeping may follow the last pass: new roadmap entries with their pointer rows, and the phase record's `PR` and `Release` rows (`external-review`'s [loop](../external-review/SKILL.md#the-loop)). Check the paths first, then read the patch of those files only:
 
      ```bash
+     # fence: after-review
      set -euo pipefail
      REVIEWED="<commit the last pass reviewed>"
      git merge-base --is-ancestor "$REVIEWED" HEAD || { echo "REVIEWED COMMIT REWRITTEN — run a full pass"; exit 1; }
@@ -345,6 +348,7 @@ what remains expired.
      Load the phase's recorded `ORIGIN_URL`, `ORIGIN_PUSH_URL`, `REPO`, `DEFAULT_BRANCH`, `PHASE_BRANCH` and `MERGE_METHOD`. Preserve the §2 URL values in the hand-off; do not refresh them from the current remote. Set `PR` to this phase's PR number. This workflow uses a same-repository PR.
 
      ```bash
+     # fence: gate
      set -euo pipefail
      TREE_STATE="$(git status --porcelain=v1 --untracked-files=all)"
      [ -z "$TREE_STATE" ] || { echo "UNCOMMITTED WORK — commit it before the gate"; exit 1; }
@@ -356,7 +360,7 @@ what remains expired.
      [ "$(gh repo view "$ORIGIN_URL" --json nameWithOwner --jq .nameWithOwner)" = "$REPO" ] \
        && [ "$(gh repo view "$REPO" --json defaultBranchRef --jq .defaultBranchRef.name)" = "$DEFAULT_BRANCH" ] \
        || { echo "REPOSITORY OR BASE CHANGED — stop"; exit 1; }
-     REMOTE_SHA="$(git ls-remote --exit-code --heads origin "refs/heads/$PHASE_BRANCH" | awk '{print $1}')"
+     REMOTE_SHA="$(git ls-remote --exit-code --heads origin "refs/heads/$PHASE_BRANCH" | cut -f1)"
      PR_SHA="$(gh pr view "$PR" -R "$REPO" --json headRefOid --jq .headRefOid)"
      [ "$LOCAL_SHA" = "$REMOTE_SHA" ] && [ "$LOCAL_SHA" = "$PR_SHA" ] \
        || { echo "HEAD MISMATCH — local, origin and PR must agree"; exit 1; }
@@ -424,20 +428,18 @@ assertion that went in unguarded — vacuous on stock bash even when the machine
 has a newer one:
 
 ```bash
-python3 skills/phase-workflow/bats_assertions.py \
-  skills/*/tests/*.bats \
-  > "$TMPDIR/scan.tsv" || { echo "SCAN FAILED — the gate proves nothing"; exit 1; }
-MID="$(set -o pipefail; awk -F'\t' '$4=="mid"' "$TMPDIR/scan.tsv" | tee /dev/stderr | wc -l | tr -d ' ')" \
-  || { echo "COUNTING FAILED — the gate proves nothing"; exit 1; }
-[ "$MID" -eq 0 ] || { echo "MID ASSERTIONS PRESENT: $MID"; exit 1; }
+# fence: mid-scan
+MID="$(python3 skills/phase-workflow/bats_assertions.py --count-mid skills/*/tests/*.bats)" \
+  || { echo "SCAN FAILED — the gate proves nothing"; exit 1; }
+[ "$MID" -eq 0 ] || { echo "MID ASSERTIONS PRESENT: $MID — list them without --count-mid"; exit 1; }
 ```
 
-**Check the scanner ran before reading its count.** Piping the scanner straight into `awk`
-prints nothing when the scanner fails outright, and nothing is exactly what a clean result looks
-like.
+**The count comes from the scanner itself**, which fails rather than print a count when it cannot
+read an input: a count piped from a failed scan would read as clean.
 
-The fourth column is `mid` for an unguarded assertion followed by more commands, and `final` for
-either the last command or an assertion already ending in `|| false`.
+Without `--count-mid`, the scanner prints one row per assertion. The fourth column is `mid` for an
+unguarded assertion followed by more commands, and `final` for either the last command or an
+assertion already ending in `|| false`.
 
 **Convert by appending `|| false`, not by rewriting.** `[[ ... ]] || false` is load-bearing and
 leaves the expression untouched, so the assertion cannot quietly come to mean something else.
@@ -515,6 +517,7 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
 5. **Confirm the completed merge and publish its tag.** This stage can be retried after a fetch, tag or push failure. An existing local or remote tag is accepted only when it resolves to this PR's merge commit. Never replace a conflicting tag.
 
    ```bash
+   # fence: release-tag
    set -euo pipefail
    CURRENT_SHA="$(gh pr view "$PR" -R "$REPO" --json headRefOid --jq .headRefOid)"
    [ "$CURRENT_SHA" = "$APPROVED_SHA" ] || { echo "SIGN-OFF INVALID — PR HEAD CHANGED"; exit 1; }
@@ -529,7 +532,11 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
    TAG_REF="refs/tags/$TAG"
    REMOTE_TAG="$(git ls-remote origin "$TAG_REF" "$TAG_REF^{}")"
    if [ -n "$REMOTE_TAG" ]; then
-     REMOTE_TAG_SHA="$(printf '%s\n' "$REMOTE_TAG" | awk '$2 ~ /\^\{\}$/ {peeled=$1} $2 !~ /\^\{\}$/ {direct=$1} END {print (peeled != "" ? peeled : direct)}')"
+     PEELED="" DIRECT=""
+     while IFS=$'\t' read -r sha ref; do
+       case "$ref" in *'^{}') PEELED="$sha" ;; *) DIRECT="$sha" ;; esac
+     done <<< "$REMOTE_TAG"
+     REMOTE_TAG_SHA="${PEELED:-$DIRECT}"   # an annotated tag's commit is on its peeled line
      [ "$REMOTE_TAG_SHA" = "$SHA" ] || { echo "REMOTE TAG CONFLICT — stop"; exit 1; }
    fi
    if git show-ref --verify --quiet "$TAG_REF"; then
@@ -552,11 +559,12 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
 6. **Clean up only after merge and tag confirmation.** Delete the remote phase branch only if it still points to the approved SHA. If auto-deletion already removed it, continue. A changed branch is retained for inspection.
 
    ```bash
+   # fence: branch-cleanup
    set -euo pipefail
    MERGED_HEAD="$(gh pr view "$PR" -R "$REPO" --json state,headRefOid --jq 'if .state == "MERGED" then .headRefOid else empty end')"
    [ "$MERGED_HEAD" = "$APPROVED_SHA" ] || { echo "APPROVED MERGE NOT CONFIRMED — retain branch"; exit 1; }
    [ "$PHASE_BRANCH" != "$DEFAULT_BRANCH" ] || { echo "REFUSE DEFAULT BRANCH DELETION"; exit 1; }
-   REMOTE_HEAD="$(git ls-remote --heads origin "refs/heads/$PHASE_BRANCH" | awk '{print $1}')"
+   REMOTE_HEAD="$(git ls-remote --heads origin "refs/heads/$PHASE_BRANCH" | cut -f1)"
    if [ -n "$REMOTE_HEAD" ]; then
      [ "$REMOTE_HEAD" = "$APPROVED_SHA" ] || { echo "BRANCH ADVANCED — retain it"; exit 1; }
      bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
@@ -568,15 +576,19 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
    Then prune the local branches whose upstream is gone. **Run these commands rather than a shell alias** — the workflow must not depend on the user's `~/.zshrc`, which a fresh machine, a subagent or a non-interactive shell may not have loaded.
 
    ```bash
+   # fence: prune
    set -euo pipefail
    git fetch --prune origin
    BRANCHES="$(git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads/)"
    CURRENT="$(git symbolic-ref --quiet --short HEAD || true)"
-   GONE="$(printf '%s\n' "$BRANCHES" | awk -v current="$CURRENT" '$2 == "[gone]" && $1 != current {print $1}')"
+   GONE=""   # space-separated: a branch name holds no space or pattern character
+   while read -r b track; do
+     if [ "$track" = "[gone]" ] && [ "$b" != "$CURRENT" ]; then GONE="$GONE $b"; fi
+   done <<< "$BRANCHES"
    if [ -n "$GONE" ]; then
      # Never -D except at the approved tip already confirmed present on the remote.
      # That tip contains no unpushed commits; use -d for every other branch.
-     while IFS= read -r b; do
+     for b in $(printf '%s' "$GONE"); do
        if [ "$(git rev-parse "$b")" = "${APPROVED_SHA:-}" ]; then
          git branch -D "$b"
        elif git branch -d "$b"; then
@@ -584,7 +596,7 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
        else
          echo "RETAINED — $b holds commits absent from ${DEFAULT_BRANCH:-the default branch}"; exit 1
        fi
-     done <<< "$GONE"
+     done
    else
      echo "Nothing to clean up."
    fi
