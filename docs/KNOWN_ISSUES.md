@@ -599,6 +599,102 @@ Read the fetch URL the same way as the push listing, with a sentinel character.
 
 ---
 
+<a id="ki-92"></a>
+
+## KI-92 — requirements reading still differs from pip in markers, extras, encodings and hash lists
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [dependency-scan.py](../skills/phase-workflow/dependency-scan.py) — `def read_requirements(`
+
+### What happens
+
+A marker after `;` is not parsed, and an extra may end in `.`, `_` or `-`, so a pin pip rejects is still sent as `name==version`. A BOM is stripped before the encoding declaration is read, and an indented declaration counts, where pip gives the BOM precedence and reads only a line starting with `#`. A pin carrying more than 4,096 characters of options, such as 52 or more SHA-256 hashes, is reported as a gap and not scanned.
+
+### Example scenario
+
+A `pip-compile --generate-hashes` file pins `numpy` with 60 wheel hashes; the scan reports the line as an option it does not read and never checks `numpy`.
+
+### Notes for a fix
+
+Parse the marker and extras grammars, or report a gap for what cannot be validated; apply pip's BOM-then-declaration order; bound each option token rather than the whole option text, and read repeated hashes one by one.
+
+**Source:** gpt-6.2-astra:high, gemini-4-neon-high — phase review pass 6, dependable-helpers phase, 2026-11-23.
+
+---
+
+<a id="ki-93"></a>
+
+## KI-93 — one unreadable part of a scanner answer still hides readable advisories
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [dependency-scan.py](../skills/phase-workflow/dependency-scan.py) — `def package_findings(`
+
+### What happens
+
+One byte that is not UTF-8 anywhere in the scanner's JSON makes the whole file's answer unreadable, so its readable advisories are not printed. One blank id or alias in a group drops the group's readable ids. Both exit 2, so the scan is never reported clean.
+
+### Example scenario
+
+A lockfile's answer holds one damaged advisory beside a real one; the report says the output is unreadable and names neither.
+
+### Notes for a fix
+
+Decode per string where the JSON still parses, keep each readable id, and record each malformed field as its own error.
+
+**Source:** gpt-6.2-astra:high — phase review pass 6, dependable-helpers phase, 2026-11-23.
+
+---
+
+<a id="ki-94"></a>
+
+## KI-94 — report lines that start with a committed path can pass for findings
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [dependency-scan.py](../skills/phase-workflow/dependency-scan.py) — `def shown(`
+
+### What happens
+
+The configuration line starts with the path of a committed `osv-scanner.toml`, so a folder named `FINDING x` makes it match a `^FINDING` reader. Escaping is not reversible: a literal backslash followed by `n` and a real line break print the same.
+
+### Example scenario
+
+A committed `FINDING GHSA-x (…) p 1 a/osv-scanner.toml` folder yields a line a script counts as a finding.
+
+### Notes for a fix
+
+Give every line a fixed prefix of its kind, and escape paths reversibly, backslashes included.
+
+**Source:** gpt-6.2-astra:high — phase review pass 6, dependable-helpers phase, 2026-11-23.
+
+---
+
+<a id="ki-95"></a>
+
+## KI-95 — publish-record still reads a short hex answer as a moved head
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `# fence: publish-record`
+
+### What happens
+
+A head that is lowercase hex but not a full object ID, such as `abc` or `502`, is reported as a confirmed push rather than an unreadable head. The record is read after the last check before the edit, so a head that moves during the read is found only after the body is replaced. Command substitution drops the record's trailing newlines, so the published copy can differ from the file at its end.
+
+### Example scenario
+
+`gh` answers `502` after the edit; the step says the PR head moved, and the operator looks for a push that never happened.
+
+### Notes for a fix
+
+Require the full width of `GATE_SHA` before reporting movement, read the record before the pre-edit checks, and keep the record's bytes as they are.
+
+**Source:** gpt-6.2-astra:high, gemini-4-neon-high — phase review pass 6, dependable-helpers phase, 2026-11-23.
+
+---
+
 <a id="ki-82"></a>
 
 ## KI-82 — the zsh lint misses traps hidden by quotes and other subscripts
@@ -745,6 +841,30 @@ A full disk fails the move after a complete answer; the update keeps saying runn
 Write `done` only after the move succeeds, treat `done` with a `.part` as missing evidence, and apply supersession to state-only attempts.
 
 **Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 3, dependable-helpers phase, 2026-11-23.
+
+---
+
+<a id="ki-96"></a>
+
+## KI-96 — the Gemini prompt measurement can still accept a count it should refuse
+
+**Severity:** Low
+**Likelihood:** Rare
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `# fence: gemini-loop`
+
+### What happens
+
+The loop does not set `pipefail`, so a failed producer before a successful `wc` still gives a count, and removing all whitespace turns two fields such as `1 2` into `12`. The precheck example reports a failed measurement through `echo`, which succeeds.
+
+### Example scenario
+
+A `wc` shim that prints `1 2` lets a prompt through as 12 bytes.
+
+### Notes for a fix
+
+Measure in one checked step that requires every stage to succeed and exactly one decimal field, and use it in both places. The comment explaining pipeline status is an ENH-32 case.
+
+**Source:** gpt-6.2-astra:high — phase review pass 6, dependable-helpers phase, 2026-11-23.
 
 ---
 

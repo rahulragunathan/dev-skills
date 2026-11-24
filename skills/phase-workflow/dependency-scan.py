@@ -66,17 +66,22 @@ MANIFESTS = {"package.json": "npm", "Cargo.toml": "cargo", "Gemfile": "ruby",
 # optional trailing comma), as bare text or in parentheses, then an optional non-empty marker.
 # ASCII only, as the grammars are. Each part is matched once, so a long malformed line costs
 # linear time.
+_EXTRA = r"[A-Za-z0-9][A-Za-z0-9._-]*"
+# No two whitespace runs can meet: each optional part carries its own trailing space.
 PINNED = re.compile(r"^(?P<name>[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)"
-                    r"(?:\s*\[\s*(?:[A-Za-z0-9][A-Za-z0-9._-]*(?:\s*,\s*[A-Za-z0-9][A-Za-z0-9._-]*)*)?\s*\])?\s*"
-                    r"(?:==\s*(?P<bare>[^\s;()=*$,]+)\s*,?|\(\s*==\s*(?P<paren>[^\s;()=*$,]+)\s*,?\s*\))"
-                    r"\s*(?:;\s*\S.*)?$", re.ASCII)
+                    rf"(?:\s*\[\s*(?:{_EXTRA}(?:\s*,\s*{_EXTRA})*\s*)?\])?\s*"
+                    r"(?:==\s*(?P<bare>[^\s;()=*$,]+)\s*(?:,\s*)?"
+                    r"|\(\s*==\s*(?P<paren>[^\s;()=*$,]+)\s*(?:,\s*)?\)\s*)"
+                    r"(?:;\s*\S.*)?$", re.ASCII)
 # PEP 440's public and local versions; a leading v is allowed and dropped.
 VERSION = re.compile(r"^v?((?:\d+!)?\d+(?:\.\d+)*(?:[-_.]?(?:a|b|rc|alpha|beta|pre|preview|c)[-_.]?\d*)?"
                      r"(?:-\d+|[-_.]?(?:post|rev|r)[-_.]?\d*)?(?:[-_.]?dev[-_.]?\d*)?(?:\+[a-z0-9]+(?:[-_.][a-z0-9]+)*)?)$",
                      re.I | re.ASCII)
 # PEP 263's declaration, which pip honours in a requirements file's first two lines.
 CODING = re.compile(rb"^[ \t\f]*#.*?coding[:=][ \t]*([-\w.]+)", re.M)
-HASH = re.compile(r"^[a-z0-9]+:[0-9a-fA-F]+$", re.ASCII)
+# The algorithms pip's hash checking accepts, and pip's KEY=VALUE for config settings.
+HASH = re.compile(r"^(?:sha256|sha384|sha512):[0-9a-fA-F]+$", re.ASCII)
+CONFIG_SETTING = re.compile(r"^[^=\s]+=", re.ASCII)
 # Longer option text than any real index URL or hash list is not tokenized at all.
 OPTIONS_LIMIT = 4096
 # pip's own rules (req_file.py): a comment starts at a # that begins the line or follows
@@ -90,7 +95,7 @@ WHOLE_LINE_COMMENT = re.compile(r"^\s*#")
 GLOBAL_FLAGS = {"--no-index", "--pre", "--prefer-binary", "--require-hashes"}
 GLOBAL_VALUES = dict.fromkeys(("-i", "--index-url", "--extra-index-url", "-f", "--find-links",
                                "--trusted-host", "--only-binary", "--no-binary"))
-PIN_VALUES = {"--hash": HASH, "--config-settings": None}
+PIN_VALUES = {"--hash": HASH, "--config-settings": CONFIG_SETTING}
 IGNORED_ID = re.compile(r"""(?<![\w-])id\s*=\s*(?:"([^"]+)"|'([^']+)')""")
 OVERRIDE = re.compile(r"^\s*\[\[\s*PackageOverrides\s*\]\]|PackageOverrides\s*=", re.M)
 INSTALL_HINT = "brew install osv-scanner"

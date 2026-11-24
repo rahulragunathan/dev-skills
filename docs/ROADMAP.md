@@ -62,12 +62,17 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-81](KNOWN_ISSUES.md#ki-81) | The osv-scanner configuration is read by pattern, not as TOML | Rare | Medium |
 | [KI-88](KNOWN_ISSUES.md#ki-88) | Check's table and metadata rules still differ from Markdown in places | Rare | Medium |
 | [KI-90](KNOWN_ISSUES.md#ki-90) | The origin check strips a fetch URL's trailing newline | Rare | Medium |
+| [KI-92](KNOWN_ISSUES.md#ki-92) | Requirements reading still differs from pip in markers, extras, encodings and hash lists | Rare | Medium |
+| [KI-93](KNOWN_ISSUES.md#ki-93) | One unreadable part of a scanner answer still hides readable advisories | Rare | Medium |
+| [KI-94](KNOWN_ISSUES.md#ki-94) | Report lines that start with a committed path can pass for findings | Rare | Medium |
+| [KI-95](KNOWN_ISSUES.md#ki-95) | Publish-record still reads a short hex answer as a moved head | Rare | Medium |
 | [KI-82](KNOWN_ISSUES.md#ki-82) | The zsh lint misses traps hidden by quotes and other subscripts | Likely | Low |
 | [KI-44](KNOWN_ISSUES.md#ki-44) | A stale dispatch log gives a misleading replacement message | Rare | Low |
 | [KI-78](KNOWN_ISSUES.md#ki-78) | Index rows are not bound to their section | Rare | Low |
 | [KI-83](KNOWN_ISSUES.md#ki-83) | The name check misses multi-line reference definitions and counts test fixtures as scripts | Rare | Low |
 | [KI-85](KNOWN_ISSUES.md#ki-85) | The release test reads only plain X.Y.Z headings | Rare | Low |
 | [KI-89](KNOWN_ISSUES.md#ki-89) | Progress calls a finished Gemini attempt running when its answer could not be moved | Rare | Low |
+| [KI-96](KNOWN_ISSUES.md#ki-96) | The Gemini prompt measurement can still accept a count it should refuse | Rare | Low |
 | [KI-91](KNOWN_ISSUES.md#ki-91) | Init and close can lose their caller's signal handler while registering their own | Rare | Low |
 
 ## Enhancements

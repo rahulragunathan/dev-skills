@@ -540,8 +540,9 @@ answer() {
 }
 
 @test "a long malformed requirement line or option is read in linear time" {
-  # Fails if the pin or comment patterns backtrack over a long run of whitespace, or a long
-  # option value is tokenized without a bound (pass 4, Codex 10; pass 5, Codex 15). The parser
+  # Fails if the pin or comment patterns backtrack over a long run of whitespace, after a name,
+  # an opening bracket or a version, or a long option value is tokenized without a bound
+  # (pass 4, Codex 10; pass 5, Codex 15; pass 6, Codex 1, Gemini 1). The parser
   # runs alone, under a deadline, so git and the interpreter's start are not timed.
   run python3 - "$SCAN" <<'PY'
 import importlib.util, signal, sys
@@ -549,7 +550,8 @@ spec = importlib.util.spec_from_file_location("scan", sys.argv[1])
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 signal.alarm(3)
 for text in ("a" + " " * 200000 + "x\n", "--index-url " + "x" * 200000 + "\n",
-             "six==1.0 --hash=sha256:" + "a" * 200000 + "\n", "a" + " " * 200000 + "# c\n"):
+             "six==1.0 --hash=sha256:" + "a" * 200000 + "\n", "a" + " " * 200000 + "# c\n",
+             "a==1" + " " * 200000 + "x\n", "a(==1" + " " * 200000 + "x\n", "a[" + " " * 200000 + "x\n"):
     pins, gaps = m.read_requirements(text)
     assert gaps and not pins, (pins, gaps)
 print("in time")
@@ -713,4 +715,17 @@ FINDING FORGED/uv.lock"
   [ "$status" -eq 1 ] || false
   [ "$(printf '%s\n' "$output" | grep -c '^FINDING')" = 1 ] || false
   [[ "$output" == *'a\nFINDING FORGED/uv.lock'* ]]
+}
+
+# --- external review pass 6 ----------------------------------------------------
+
+@test "a pin's --config-settings must be KEY=VALUE, and its hash a pip algorithm" {
+  # Fails if an option value pip rejects leaves the pin looking clean (pass 6, Codex 2).
+  put requirements.txt "$(printf 'a==1 --config-settings=abc\nb==1 --hash=md5:abcd\nc==1 --config-settings k=v\nd==1 --hash sha256:ab\n')"
+  spy
+  scan
+  [ "$status" -eq 3 ] || false
+  [ "$(cat "$TEST_TMP/scanned")" = "$(printf 'c==1\nd==1')" ] || false
+  [[ "$output" == *"line 1 has an option"* ]] || false
+  [[ "$output" == *"line 2 has an option"* ]]
 }
