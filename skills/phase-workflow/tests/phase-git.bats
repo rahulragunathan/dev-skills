@@ -1138,6 +1138,18 @@ origin_refused() {
   [ ! -e "$(cat "$TEST_TMP/body-path")" ]
 }
 
+@test "zsh: a publish-record step stopped by TERM leaves no copy of its body" {
+  # Fails if the body's cleanup hangs on an EXIT trap alone, which zsh skips when a signal
+  # kills the shell (pass 4, Gemini 4).
+  command -v zsh >/dev/null || skip "zsh is not installed"
+  publish_record "$(git rev-parse HEAD)"
+  printf '#!/bin/bash\ncase "$*" in *headRefOid*) echo "$FAKE_PR_HEAD" ;; *"pr edit"*) printf "%%s" "${@: -1}" > "%s/body-path"; kill -TERM "$PPID"; sleep 1 ;; esac\n' "$TEST_TMP" > "$TEST_TMP/bin/gh"
+  PATH="$TEST_TMP/bin:$PATH" run zsh -f "$TEST_TMP/publish.sh"
+  [ "$status" -ne 0 ] || false
+  [ -s "$TEST_TMP/body-path" ] || false
+  [ ! -e "$(cat "$TEST_TMP/body-path")" ]
+}
+
 @test "origin check: an ssh authority holding a %-escape is refused" {
   # Fails if git's decoding of an ssh authority can hide a user part from the check (Codex 5).
   local url='ssh://git%40evil:x@example.invalid/r.git'

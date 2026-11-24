@@ -1259,7 +1259,9 @@ except SystemExit as e: print('exit', e.code)
 assert fired, 'the fault never fired'
 PY
   [[ "$output" == *"exit 1"* ]] || false
-  [[ "$output" == *"installation failed (ROADMAP.md changed since it was read)"* ]]
+  [[ "$output" == *"installation failed (ROADMAP.md changed since it was read)"* ]] || false
+  [[ "$output" == *"was left as it is"* ]] || false
+  grep -q EDITOR-REWRITE "$DOCS/KNOWN_ISSUES.md"
 }
 
 @test "close: CRLF line endings and trailing whitespace survive byte for byte" {

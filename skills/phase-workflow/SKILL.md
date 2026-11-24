@@ -425,7 +425,8 @@ what remains expired.
      [ "$(git rev-parse HEAD)" = "$GATE_SHA" ] && [ "$(pr_head)" = "$GATE_SHA" ] \
        || { echo "HEAD MOVED SINCE THE GATE — stop"; exit 1; }
      # The body names the head it was reviewed at, so a later push shows the record is stale.
-     BODY="$(mktemp)"; trap 'rm -f "$BODY"' EXIT
+     # zsh skips an EXIT trap when a signal kills it, so the signals exit through it.
+     BODY="$(mktemp)"; trap 'rm -f "$BODY"' EXIT; trap 'exit 130' INT; trap 'exit 143' TERM
      { printf 'Review record for %s.\n\n' "$GATE_SHA"; cat "<review record file>"; } > "$BODY"
      gh pr edit "$PR" -R "$REPO" --body-file "$BODY"
      # Detection, not prevention: a push during the edit is found here, after the body is up.

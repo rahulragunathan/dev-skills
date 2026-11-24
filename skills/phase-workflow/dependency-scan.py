@@ -189,7 +189,8 @@ def findings_in(stdout: str, rel: str) -> list[str]:
             # One row per advisory group: its ids and aliases name one vulnerability.
             for group in pkg.get("groups", []):
                 ids = group.get("ids") if isinstance(group, dict) else None
-                aliases = group.get("aliases", []) if isinstance(group, dict) else None
+                aliases = group.get("aliases") if isinstance(group, dict) else None
+                aliases = [] if isinstance(group, dict) and aliases is None else aliases   # Go writes an empty slice as null
                 if not (isinstance(ids, list) and ids and isinstance(aliases, list)
                         and all(isinstance(i, str) and i for i in ids + aliases)):
                     raise ValueError("a group without usable ids")

@@ -487,3 +487,12 @@ answer() {
     [[ "$output" == *"unreadable output for uv.lock"* ]] || false
   done
 }
+
+@test "a group whose aliases are null is still a finding" {
+  # Fails if "aliases": null, which Go writes for an empty slice, is read as unusable (pass 4, Gemini 1).
+  put uv.lock 'clean'
+  answer '{"results": [{"packages": [{"package": {"name": "a", "version": "1"}, "groups": [{"ids": ["GHSA-ok"], "aliases": null}], "vulnerabilities": [{"id": "GHSA-ok"}]}]}]}'
+  scan
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"FINDING GHSA-ok () a 1 uv.lock"* ]]
+}
