@@ -9,18 +9,21 @@ tree (so export-ignore attributes drop nothing, and no other file is copied
 out), so an untracked or ignored file and an untracked osv-scanner.toml cannot
 change the verdict. A committed symlink is never followed; one named like a
 dependency file is a coverage gap. A requirements file is never handed to the
-scanner as it is: the scanner gets a copy holding only the lines pinned to an
-exact version, and every other line (an include, a range, an editable or a
-version from a variable) is reported as a gap by its number. A tracked osv-scanner.toml is honoured, and the output
-names what it can suppress. Each supported file is scanned on its own, so its
-own exit status counts. Nothing is installed: lockfiles are read as they are.
+scanner as it is. Its lines are joined and its comments removed as pip does, and
+the scanner gets only the lines pinned to one exact version of a valid name, as
+name==version. Every other line (an include, a range, an editable, an option the
+scan does not know, or a version from a variable) is reported as a gap by its
+number. A tracked osv-scanner.toml is passed to the scanner by name, so one it
+cannot load fails the scan, and the output names what it can suppress. Each
+supported file is scanned on its own, so its own exit status counts. Nothing is
+installed: lockfiles are read as they are.
 
 Package names and versions, never source, go to the OSV database (api.osv.dev);
 a private package name can still identify an internal service. --offline uses a
 local database downloaded beforehand instead, and fails without one.
 
-Output: the commit scanned, a FINDING line per advisory group (its first id, its aliases, the
-package, the version, the file), a NOT SCANNED line per coverage gap, then a
+Output: the commit scanned, a FINDING line per advisory group (its first id, its other ids and
+aliases, the package, the version, the file) and per vulnerability no group lists, a NOT SCANNED line per coverage gap, then a
 summary.
 
 Exit 0 every file scanned and clean, or nothing to scan; 1 findings; 2 the
@@ -34,12 +37,13 @@ import fnmatch
 import json
 import pathlib
 import re
+import shlex
 import shutil
 import subprocess
 import tempfile
 
 # The lockfiles osv-scanner reads exactly, by ecosystem. requirements*.txt is
-# best effort: the scanner skips any line that is not pinned.
+# best effort: only its exactly pinned lines are scanned, and the rest are gaps.
 LOCKFILES = {
     "npm": ("package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock"),
     "python": ("uv.lock", "poetry.lock", "Pipfile.lock", "pdm.lock"),
@@ -57,15 +61,27 @@ REQUIREMENTS = "requirements*.txt"
 # folder or a folder above it, or the versions it runs with are unknown.
 MANIFESTS = {"package.json": "npm", "Cargo.toml": "cargo", "Gemfile": "ruby",
              "composer.json": "php", "pyproject.toml": "python", "pubspec.yaml": "dart"}
-PINNED = re.compile(r"^(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)\s*(\[[^\]]*\])?\s*===?\s*(?P<version>[^\s;,\\*$]+)\s*(;.*)?$")
-# A version the scanner is given: digits first, then only the characters PEP 440 uses.
-# Anything else, such as a URL in an arbitrary-equality pin, stays out of the query.
-VERSION = re.compile(r"^(\d+!)?\d[A-Za-z0-9.+_-]*$")
-# pip ends a line at a comment even when it ends in a backslash.
+# A pin the scan vouches for: a PEP 508 name, optional extras, == and one version, as bare
+# text or in parentheses, then an optional marker. Each part is matched once, so a long
+# malformed line costs linear time.
+PINNED = re.compile(r"^(?P<name>[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)(?:\s*\[[^\]]*\])?\s*"
+                    r"(?:==\s*(?P<bare>[^\s;()=*$]+)|\(\s*==\s*(?P<paren>[^\s;()=*$]+)\s*\))\s*(?:;.*)?$")
+# PEP 440's public and local versions; a leading v is allowed and dropped.
+VERSION = re.compile(r"^v?((?:\d+!)?\d+(?:\.\d+)*(?:[-_.]?(?:a|b|rc|alpha|beta|pre|preview|c)[-_.]?\d*)?"
+                     r"(?:-\d+|[-_.]?(?:post|rev|r)[-_.]?\d*)?(?:[-_.]?dev[-_.]?\d*)?(?:\+[a-z0-9]+(?:[-_.][a-z0-9]+)*)?)$",
+                     re.I)
+# pip's own rules (req_file.py): a comment starts at a # that begins the line or follows
+# whitespace, and only a whole-line comment stops a trailing backslash joining the next line.
+# pip writes the first as (^|\s+)#.*$; one \s matches the same text without its quadratic cost.
 COMMENT = re.compile(r"(^|\s)#.*$")
-INCLUDE = re.compile(r"^\s*(-r|-c|--requirement|--constraint)")
-# pip-compile --generate-hashes adds options and continuation lines after a pin.
-OPTIONS = re.compile(r"\s+--[\w-]+(\s*=\s*\S+|\s+(?!-)\S+)?")
+WHOLE_LINE_COMMENT = re.compile(r"^\s*#")
+# Options pip reads on a line of their own that name no package and fetch nothing the scan
+# would miss. Any other option, abbreviations included, is a gap.
+GLOBAL_FLAGS = {"--no-index", "--pre", "--prefer-binary", "--require-hashes"}
+GLOBAL_VALUES = {"-i", "--index-url", "--extra-index-url", "-f", "--find-links",
+                 "--trusted-host", "--only-binary", "--no-binary"}
+INCLUDE = re.compile(r"^(-[rc]|--req|--con)")
+EDITABLE = re.compile(r"^(-e|--ed)")
 IGNORED_ID = re.compile(r"""(?<![\w-])id\s*=\s*(?:"([^"]+)"|'([^']+)')""")
 OVERRIDE = re.compile(r"^\s*\[\[\s*PackageOverrides\s*\]\]|PackageOverrides\s*=", re.M)
 INSTALL_HINT = "brew install osv-scanner"
@@ -136,67 +152,130 @@ def declares_dependencies(name: str, text: str) -> bool:
     return True
 
 
-def read_requirements(text: str) -> tuple[list[str], list[str]]:
-    """(the pins to scan, as name==version, and the gaps by line number). Lines are joined
-    and comments removed as pip does; a line is named by number, never by its text, since
-    a URL requirement can carry a credential."""
-    logical, start, buf = [], None, ""
+def logical_lines(text: str) -> list[tuple[int, str]]:
+    """pip's join_lines and ignore_comments: (first line number, line) for each requirement."""
+    out, start, parts = [], None, []
     for number, line in enumerate(text.splitlines(), 1):
-        start = start or number
-        if line.rstrip().endswith("\\") and not COMMENT.search(line):
-            buf += line.rstrip()[:-1] + " "
+        if line.endswith("\\") and not WHOLE_LINE_COMMENT.match(line):
+            start = start or number
+            parts.append(line.strip("\\"))
             continue
-        logical.append((start, buf + line)); start, buf = None, ""
-    if buf:
-        logical.append((start, buf))
+        if WHOLE_LINE_COMMENT.match(line):
+            line = " " + line         # as pip does, so the comment is removed below
+        out.append((start or number, "".join(parts + [line]))); start, parts = None, []
+    if parts:
+        out.append((start, "".join(parts)))
+    stripped = [(n, COMMENT.sub("", line).strip()) for n, line in out]
+    return [(n, line) for n, line in stripped if line]
+
+
+def option_gap(tokens: list[str], allowed: set[str], values: set[str]) -> str | None:
+    """Why these option tokens stop the scan vouching for the line, or None."""
+    expect_value = False
+    for token in tokens:
+        if expect_value:
+            expect_value = False
+            continue
+        if INCLUDE.match(token):
+            return "includes another file, not followed"
+        if EDITABLE.match(token):
+            return "is not pinned (editable)"
+        flag, eq, _ = token.partition("=")
+        if flag in allowed and not eq:
+            continue
+        if flag in values:
+            expect_value = not eq
+            continue
+        return "has an option the scan does not read"
+    return "has an option the scan does not read" if expect_value else None
+
+
+def read_requirements(text: str) -> tuple[list[str], list[str]]:
+    """(the pins to scan, as name==version, and the gaps by line number). Lines are joined,
+    commented and split into requirement and options as pip does; anything the scan cannot
+    vouch for is a gap. A line is named by number, never by its text, since a URL
+    requirement can carry a credential."""
     pins, gaps = [], []
-    for number, line in logical:
-        line = COMMENT.sub("", line).strip()
-        if not line:
+    for number, line in logical_lines(text):
+        # pip's break_args_options: the requirement runs up to the first word starting "-".
+        words = line.split(" ")
+        cut = next((i for i, w in enumerate(words) if w.startswith("-")), len(words))
+        requirement, options = " ".join(words[:cut]).strip(), " ".join(words[cut:])
+        try:
+            tokens = shlex.split(options)
+        except ValueError:
+            gaps.append(f"line {number} has an option the scan does not read")
             continue
-        # Directives first: option stripping below would erase an indented one.
-        if INCLUDE.match(line):
-            gaps.append(f"line {number} includes another file, not followed")
+        if requirement:
+            why = option_gap(tokens, set(), {"--hash"})
+        else:
+            why = option_gap(tokens, GLOBAL_FLAGS, GLOBAL_VALUES)
+        if why or not requirement:
+            if why:
+                gaps.append(f"line {number} {why}")
             continue
-        if line.startswith("-") and not line.startswith(("-e", "--editable")):
-            continue                      # other pip options name no package
-        pin = PINNED.match(OPTIONS.sub("", line).strip())
+        pin = PINNED.match(requirement)
+        version = VERSION.match((pin["bare"] or pin["paren"]) if pin else "")
         if not pin:
             gaps.append(f"line {number} is not pinned")
-        elif "${" in line or not VERSION.match(pin["version"]):
+        elif not version or "${" in line:
             gaps.append(f"line {number} has a version or variable the scan cannot use")
         else:
-            pins.append(f"{pin['name']}=={pin['version']}")
+            pins.append(f"{pin['name']}=={version[1]}")
     return pins, gaps
 
 
-def findings_in(stdout: str, rel: str) -> list[str]:
-    """The FINDING lines in osv-scanner's JSON; ValueError for anything not shaped as its answer."""
+def readable(value) -> bool:
+    """A string fit for one line of the report: not empty, no control characters."""
+    return isinstance(value, str) and bool(value) and value.isprintable()
+
+
+def findings_in(stdout: str, rel: str) -> tuple[list[str], list[str]]:
+    """(the FINDING lines in osv-scanner's JSON, the parts it could not read). A package
+    that cannot be read is named as such and the rest are still reported."""
     results = json.loads(stdout).get("results") if stdout.strip() else None
     if not isinstance(results, list):
-        raise ValueError("no results list")
-    out = []
+        return [], ["no results list"]
+    out, errors = [], []
     for result in results:
         # Every result names its packages, each with a name and a version, as the recorded answers do.
         if not isinstance(result, dict) or not isinstance(result.get("packages"), list):
-            raise ValueError("a result without packages")
+            errors.append("a result without packages")
+            continue
         for pkg in result["packages"]:
-            p = pkg.get("package") if isinstance(pkg, dict) else None
-            if not isinstance(p, dict) or not p.get("name") or not isinstance(pkg.get("groups", []), list):
-                raise ValueError("a package without a name")
-            if pkg.get("vulnerabilities") and not pkg.get("groups"):
-                raise ValueError("a vulnerable package without groups")
-            # One row per advisory group: its ids and aliases name one vulnerability.
-            for group in pkg.get("groups", []):
-                ids = group.get("ids") if isinstance(group, dict) else None
-                aliases = group.get("aliases") if isinstance(group, dict) else None
-                aliases = [] if isinstance(group, dict) and aliases is None else aliases   # Go writes an empty slice as null
-                if not (isinstance(ids, list) and ids and isinstance(aliases, list)
-                        and all(isinstance(i, str) and i for i in ids + aliases)):
-                    raise ValueError("a group without usable ids")
-                aliases = sorted(set(aliases) - {ids[0]})
-                out.append(f"FINDING {ids[0]} ({', '.join(aliases)}) {p.get('name')} {p.get('version')} {rel}")
-    return out
+            try:
+                out += package_findings(pkg, rel)
+            except ValueError as exc:
+                errors.append(str(exc))
+    return out, errors
+
+
+def package_findings(pkg, rel: str) -> list[str]:
+    """One row per advisory group, its other ids and aliases in brackets, and one per
+    vulnerability no group lists; ValueError for anything not shaped as osv-scanner's answer."""
+    p = pkg.get("package") if isinstance(pkg, dict) else None
+    if not isinstance(p, dict) or not readable(p.get("name")) or not readable(str(p.get("version"))):
+        raise ValueError("a package without a name")
+    groups, vulns = pkg.get("groups") or [], pkg.get("vulnerabilities") or []
+    if not (isinstance(groups, list) and isinstance(vulns, list)):
+        raise ValueError("a package whose groups cannot be read")
+    rows, grouped = [], set()
+    for group in groups:
+        ids = group.get("ids") if isinstance(group, dict) else None
+        aliases = group.get("aliases") if isinstance(group, dict) else None
+        aliases = [] if isinstance(group, dict) and aliases is None else aliases   # Go writes an empty slice as null
+        if not (isinstance(ids, list) and ids and isinstance(aliases, list)
+                and all(readable(i) for i in ids + aliases)):
+            raise ValueError("a group without usable ids")
+        grouped |= set(ids) | set(aliases)
+        rows.append((ids[0], sorted(set(ids[1:] + aliases) - {ids[0]})))
+    for vuln in vulns:
+        vid = vuln.get("id") if isinstance(vuln, dict) else None
+        if not readable(vid):
+            raise ValueError("a vulnerability without a usable id")
+        if vid not in grouped:
+            rows.append((vid, [])); grouped.add(vid)
+    return [f"FINDING {first} ({', '.join(rest)}) {p['name']} {p.get('version')} {rel}" for first, rest in rows]
 
 
 def scan(root: pathlib.Path, offline: bool) -> int:
@@ -262,8 +341,12 @@ def scan(root: pathlib.Path, offline: bool) -> int:
                 source.write_text("\n".join(pins) + "\n")
             # The parser prefix keeps a colon in the path from being read as one.
             parser = "requirements.txt" if rel in requirements else names[rel]
+            # The scanner reads only the config in the file's own folder, and drops one it
+            # cannot load without failing; named, a config it cannot load stops the scan.
+            config = source.parent / "osv-scanner.toml"
             cmd = [scanner, "scan", "source", "--format", "json", "--no-resolve",
-                   *(["--offline"] if offline else []), "-L", f"{parser}:{source}"]
+                   *(["--offline"] if offline else []),
+                   *(["--config", str(config)] if config.is_file() else []), "-L", f"{parser}:{source}"]
             run = subprocess.run(cmd, capture_output=True, text=True, cwd=tree)
             if run.returncode == 128:
                 gaps.append(f"NOT SCANNED {rel}: no packages found")
@@ -273,9 +356,12 @@ def scan(root: pathlib.Path, offline: bool) -> int:
                 failed.append(f"osv-scanner failed on {rel} (exit {run.returncode}); rerun it by hand to see why")
                 continue
             try:
-                found = findings_in(run.stdout, rel)
+                found, unreadable = findings_in(run.stdout, rel)
             except (ValueError, AttributeError, TypeError):
+                found, unreadable = [], ["not JSON"]
+            if unreadable:
                 failed.append(f"osv-scanner gave unreadable output for {rel}")
+                findings += found
                 continue
             if run.returncode == 1 and not found:
                 # Exit 1 means it found something; an answer we cannot read is not clean.

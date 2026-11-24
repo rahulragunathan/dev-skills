@@ -23,8 +23,11 @@ here — the plugin manifest's version is the only record of them.
   lockfiles, through `osv-scanner`, with a manifest that has no lockfile, a file with no packages
   and an unpinned requirement reported as coverage gaps rather than clean. It reads only what
   `HEAD` commits, never follows a symlink, names what a tracked `osv-scanner.toml` ignores, and
-  has an `--offline` mode. A requirements file reaches the scanner only as checked `name==version`
-  pins, in its own folder so its `osv-scanner.toml` still applies.
+  has an `--offline` mode. A requirements file is read as pip reads it and reaches the scanner
+  only as checked `name==version` pins; an include, an unknown option or an invalid name is a gap.
+  A folder's `osv-scanner.toml` is passed by name, so one the scanner cannot load fails the scan.
+  Every advisory in a package is reported, grouped or not, and one unreadable package leaves the
+  others' findings in the report.
 
 ### Fixed
 

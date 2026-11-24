@@ -474,11 +474,12 @@ answer() {
 }
 
 @test "an advisory the scan cannot name is a scanner failure, even beside a readable one" {
-  # Fails if a vulnerable package with no groups, a string ids, or an empty group is dropped or
-  # misread while another package's finding passes the exit-1 check (pass 3, Codex 4, Gemini 10).
+  # Fails if groups that are not a list, a string ids, or an empty group is dropped or misread
+  # while another package's finding passes the exit-1 check (pass 3, Codex 4, Gemini 10; a
+  # vulnerability no group lists is now its own finding, pass 4, Codex 4).
   put uv.lock 'clean'
   ok='{"package": {"name": "a", "version": "1"}, "groups": [{"ids": ["GHSA-ok"]}], "vulnerabilities": [{"id": "GHSA-ok"}]}'
-  for bad in '{"package": {"name": "b", "version": "1"}, "vulnerabilities": [{"id": "GHSA-lost"}]}' \
+  for bad in '{"package": {"name": "b", "version": "1"}, "groups": "GHSA-lost", "vulnerabilities": [{"id": "GHSA-lost"}]}' \
              '{"package": {"name": "b", "version": "1"}, "groups": [{"ids": "GHSA-str"}]}' \
              '{"package": {"name": "b", "version": "1"}, "groups": [{}]}'; do
     answer "{\"results\": [{\"packages\": [$ok, $bad]}]}"
@@ -495,4 +496,98 @@ answer() {
   scan
   [ "$status" -eq 1 ] || false
   [[ "$output" == *"FINDING GHSA-ok () a 1 uv.lock"* ]]
+}
+
+# --- external review pass 4 (Codex) --------------------------------------------
+
+@test "an option line that carries an include or an unknown option is a gap" {
+  # Fails if a line pip reads as options lets an include or an option the scan cannot vouch
+  # for pass silently, so one clean pin makes the file look scanned (pass 4, Codex 1).
+  put requirements.txt "$(printf 'six==1.17.0\n--no-index -r sub.txt\n--index-url https://x.example/simple\n--use-feature=x\n-rother.txt\n')"
+  spy
+  scan
+  [ "$status" -eq 3 ] || false
+  [ "$(cat "$TEST_TMP/scanned")" = "six==1.17.0" ] || false
+  [[ "$output" == *"line 2 includes another file"* ]] || false
+  [[ "$output" != *"line 3"* ]] || false
+  [[ "$output" == *"line 4 has an option the scan does not read"* ]] || false
+  [[ "$output" == *"line 5 includes another file"* ]]
+}
+
+@test "lines join and comments end as pip reads them" {
+  # Fails if a pin after a commented continuation reaches the scanner, which pip reads as part
+  # of the comment, or a pin split inside its version is lost (pass 4, Codex 2).
+  put requirements.txt "$(printf 'one==1.0 # note \\\ntwo==2.0\nsix==1.\\\n17.0\n')"
+  spy
+  scan
+  [ "$status" -eq 0 ] || false
+  [ "$(cat "$TEST_TMP/scanned")" = "$(printf 'one==1.0\nsix==1.17.0')" ]
+}
+
+@test "an invalid name, a malformed version or arbitrary equality is a gap; v and parentheses are read" {
+  # Fails if a pin the scanner would skip silently reaches it beside a valid one, or a valid
+  # spelling of a pin is reported as a gap (pass 4, Codex 3).
+  put requirements.txt "$(printf 'six-==1.0\nbad==1...\nc===1.0\nd==v1.2\ne (==2.0)\nok==1.0\n')"
+  spy
+  scan
+  [ "$status" -eq 3 ] || false
+  [ "$(cat "$TEST_TMP/scanned")" = "$(printf 'd==1.2\ne==2.0\nok==1.0')" ] || false
+  [[ "$output" == *"line 1 "* ]] || false
+  [[ "$output" == *"line 2 "* ]] || false
+  [[ "$output" == *"line 3 "* ]] || false
+  [[ "$output" != *"line 4 "* ]] || false
+  [[ "$output" != *"line 5 "* ]]
+}
+
+@test "a long malformed requirement line is read in linear time" {
+  # Fails if the pin pattern backtracks over a long run of whitespace (pass 4, Codex 10).
+  put requirements.txt "$(python3 -c 'print("six==1.17.0\na" + " " * 120000 + "x")')"
+  SECONDS=0
+  scan
+  [ "$status" -eq 3 ] || false
+  [ "$SECONDS" -lt 4 ]
+}
+
+@test "every advisory in a package is named, grouped or not" {
+  # Fails if a second id of a group, or a vulnerability no group lists, is left out (pass 4, Codex 4).
+  put uv.lock 'clean'
+  answer '{"results": [{"packages": [{"package": {"name": "p", "version": "1"}, "groups": [{"ids": ["A", "B"], "aliases": null}], "vulnerabilities": [{"id": "A"}, {"id": "B"}, {"id": "C"}]}]}]}'
+  scan
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"FINDING A (B) p 1 uv.lock"* ]] || false
+  [[ "$output" == *"FINDING C () p 1 uv.lock"* ]]
+}
+
+@test "an unreadable package leaves the readable findings in the report" {
+  # Fails if one malformed group, or an id holding a line break, discards the file's readable
+  # findings or injects a line into the report (pass 4, Codex 4 and 5).
+  put uv.lock 'clean'
+  ok='{"package": {"name": "a", "version": "1"}, "groups": [{"ids": ["GHSA-ok"]}], "vulnerabilities": [{"id": "GHSA-ok"}]}'
+  for bad in '{"package": {"name": "b", "version": "1"}, "groups": [{}]}' \
+             '{"package": {"name": "b", "version": "1"}, "groups": [{"ids": ["GHSA-x\nFINDING FAKE"]}], "vulnerabilities": [{"id": "GHSA-x\nFINDING FAKE"}]}'; do
+    answer "{\"results\": [{\"packages\": [$ok, $bad]}]}"
+    scan
+    [ "$status" -eq 2 ] || false
+    [[ "$output" == *"FINDING GHSA-ok () a 1 uv.lock"* ]] || false
+    [[ "$output" == *"unreadable output for uv.lock"* ]] || false
+    [[ "$output" != *"FINDING FAKE"* ]] || false
+  done
+}
+
+@test "a folder's tracked osv-scanner.toml is passed to the scanner, so one it cannot load fails" {
+  # Fails if the config is left to the scanner's own discovery, which ignores an invalid one
+  # and scans without it (pass 4, Codex 6).
+  put sub/requirements.txt 'six==1.17.0'
+  put sub/uv.lock 'clean'
+  put other/uv.lock 'clean'
+  put sub/osv-scanner.toml "$(printf '[[IgnoredVulns]]\nid = "GHSA-1"\n')"
+  scan
+  [ "$status" -eq 0 ] || false
+  [ "$(grep -c -- '--config [^ ]*/sub/osv-scanner.toml' "$TEST_TMP/calls")" = 2 ] || false
+  [ "$(grep -c -- '--config' "$TEST_TMP/calls")" = 2 ] || false
+  # The real scanner exits 127 on a config it cannot load, when the config is named.
+  printf '#!/bin/bash\ncase " $* " in *" --config "*) echo "Failed to read config file" >&2; exit 127 ;; esac\ncat "%s/clean.json"\n' "$OSV" > "$BIN/osv-scanner"
+  scan
+  [ "$status" -eq 2 ] || false
+  [[ "$output" == *"osv-scanner failed on sub/uv.lock"* ]]
 }
