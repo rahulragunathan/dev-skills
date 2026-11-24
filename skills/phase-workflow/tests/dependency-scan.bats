@@ -43,7 +43,7 @@ put() {
 
 scan() { run python3 "$SCAN" --root "$REPO" "$@"; }
 
-@test "no dependency files: one line, exit 0, scanner not called" {
+@test "no dependency files: says so, exit 0, scanner not called" {
   # Control: a repository with nothing to scan says so and runs nothing.
   put README.md 'hello'
   scan
@@ -417,4 +417,73 @@ SH
   put uv.lock 'clean'
   scan
   [[ "$output" == *"scanned commit $(git -C "$REPO" rev-parse HEAD)"* ]]
+}
+
+# spy: a fake scanner that copies what it was given, notes whether a config sat beside it,
+# and answers clean.
+spy() {
+  cat > "$BIN/osv-scanner" <<'SH'
+#!/bin/bash
+prev=""; for a in "$@"; do
+  if [ "$prev" = -L ]; then f="${a#*:}"; cp "$f" "$TEST_TMP/scanned"
+    [ -f "$(dirname "$f")/osv-scanner.toml" ] && echo beside > "$TEST_TMP/config"; fi
+  prev="$a"; done
+cat "$OSV/clean.json"; exit 0
+SH
+  chmod +x "$BIN/osv-scanner"
+}
+
+@test "an indented include or editable line is a gap, and a comment never swallows the next pin" {
+  # Fails if leading whitespace lets option stripping erase a directive, or a comment ending in a
+  # backslash joins the next requirement into the comment (pass 3, Codex 1, Gemini 2).
+  put requirements.txt "$(printf 'six==1.17.0\n  --requirement other.txt\n  --editable ./local\n# note \\\nreq==1.0\n')"
+  spy
+  scan
+  [ "$status" -eq 3 ] || false
+  [ "$(cat "$TEST_TMP/scanned")" = "$(printf 'six==1.17.0\nreq==1.0')" ] || false
+  [[ "$output" == *"line 2 includes another file"* ]] || false
+  [[ "$output" == *"NOT SCANNED requirements.txt: line 3"* ]]
+}
+
+@test "the scanner gets only a name and a checked version, never a URL or a variable" {
+  # Fails if a URL-shaped version, a marker, or a \${...} variable reaches the scanner (pass 3, Codex 2).
+  put requirements.txt "$(printf 'six==1.17.0 ; python_version >= "3"\na===https://x.example/p?tok=SECRET\nb==1.0 ; extra == "${X}"\n')"
+  spy
+  scan
+  [ "$status" -eq 3 ] || false
+  [ "$(cat "$TEST_TMP/scanned")" = "six==1.17.0" ] || false
+  [[ "$output" == *"line 2"* ]] || false
+  [[ "$output" == *"line 3"* ]] || false
+  [[ "$output" != *SECRET* ]]
+}
+
+@test "a requirements file is scanned beside its tracked osv-scanner.toml" {
+  # Fails if the checked copy is scanned from a folder the file's own config does not reach (pass 3, Codex 3).
+  put sub/requirements.txt 'six==1.17.0'
+  put sub/osv-scanner.toml "$(printf '[[IgnoredVulns]]\nid = "GHSA-1"\n')"
+  spy
+  scan
+  [ "$status" -eq 0 ] || false
+  [ "$(cat "$TEST_TMP/config")" = beside ]
+}
+
+# answer <json>: a fake scanner that prints <json> and exits 1, as when it found something.
+answer() {
+  printf '#!/bin/bash\ncat <<"JSON"\n%s\nJSON\nexit 1\n' "$1" > "$BIN/osv-scanner"
+  chmod +x "$BIN/osv-scanner"
+}
+
+@test "an advisory the scan cannot name is a scanner failure, even beside a readable one" {
+  # Fails if a vulnerable package with no groups, a string ids, or an empty group is dropped or
+  # misread while another package's finding passes the exit-1 check (pass 3, Codex 4, Gemini 10).
+  put uv.lock 'clean'
+  ok='{"package": {"name": "a", "version": "1"}, "groups": [{"ids": ["GHSA-ok"]}], "vulnerabilities": [{"id": "GHSA-ok"}]}'
+  for bad in '{"package": {"name": "b", "version": "1"}, "vulnerabilities": [{"id": "GHSA-lost"}]}' \
+             '{"package": {"name": "b", "version": "1"}, "groups": [{"ids": "GHSA-str"}]}' \
+             '{"package": {"name": "b", "version": "1"}, "groups": [{}]}'; do
+    answer "{\"results\": [{\"packages\": [$ok, $bad]}]}"
+    scan
+    [ "$status" -eq 2 ] || false
+    [[ "$output" == *"unreadable output for uv.lock"* ]] || false
+  done
 }

@@ -57,7 +57,12 @@ REQUIREMENTS = "requirements*.txt"
 # folder or a folder above it, or the versions it runs with are unknown.
 MANIFESTS = {"package.json": "npm", "Cargo.toml": "cargo", "Gemfile": "ruby",
              "composer.json": "php", "pyproject.toml": "python", "pubspec.yaml": "dart"}
-PINNED = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*(\[[^\]]*\])?\s*===?\s*[^\s;,\\*$]+\s*(;.*)?$")
+PINNED = re.compile(r"^(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)\s*(\[[^\]]*\])?\s*===?\s*(?P<version>[^\s;,\\*$]+)\s*(;.*)?$")
+# A version the scanner is given: digits first, then only the characters PEP 440 uses.
+# Anything else, such as a URL in an arbitrary-equality pin, stays out of the query.
+VERSION = re.compile(r"^(\d+!)?\d[A-Za-z0-9.+_-]*$")
+# pip ends a line at a comment even when it ends in a backslash.
+COMMENT = re.compile(r"(^|\s)#.*$")
 INCLUDE = re.compile(r"^\s*(-r|-c|--requirement|--constraint)")
 # pip-compile --generate-hashes adds options and continuation lines after a pin.
 OPTIONS = re.compile(r"\s+--[\w-]+(\s*=\s*\S+|\s+(?!-)\S+)?")
@@ -132,13 +137,13 @@ def declares_dependencies(name: str, text: str) -> bool:
 
 
 def read_requirements(text: str) -> tuple[list[str], list[str]]:
-    """(the pinned requirement specs, the gaps by line number). Continuation lines are
-    joined first, as pip and the scanner join them; a line is named by number, never
-    by its text, since a URL requirement can carry a credential."""
+    """(the pins to scan, as name==version, and the gaps by line number). Lines are joined
+    and comments removed as pip does; a line is named by number, never by its text, since
+    a URL requirement can carry a credential."""
     logical, start, buf = [], None, ""
     for number, line in enumerate(text.splitlines(), 1):
         start = start or number
-        if line.rstrip().endswith("\\"):
+        if line.rstrip().endswith("\\") and not COMMENT.search(line):
             buf += line.rstrip()[:-1] + " "
             continue
         logical.append((start, buf + line)); start, buf = None, ""
@@ -146,17 +151,22 @@ def read_requirements(text: str) -> tuple[list[str], list[str]]:
         logical.append((start, buf))
     pins, gaps = [], []
     for number, line in logical:
-        line = OPTIONS.sub("", re.split(r"\s#", line, maxsplit=1)[0]).strip()
-        if not line or line.startswith("#"):
+        line = COMMENT.sub("", line).strip()
+        if not line:
             continue
+        # Directives first: option stripping below would erase an indented one.
         if INCLUDE.match(line):
             gaps.append(f"line {number} includes another file, not followed")
-        elif line.startswith("-") and not line.startswith(("-e", "--editable")):
+            continue
+        if line.startswith("-") and not line.startswith(("-e", "--editable")):
             continue                      # other pip options name no package
-        elif PINNED.match(line):
-            pins.append(line)
-        else:
+        pin = PINNED.match(OPTIONS.sub("", line).strip())
+        if not pin:
             gaps.append(f"line {number} is not pinned")
+        elif "${" in line or not VERSION.match(pin["version"]):
+            gaps.append(f"line {number} has a version or variable the scan cannot use")
+        else:
+            pins.append(f"{pin['name']}=={pin['version']}")
     return pins, gaps
 
 
@@ -174,10 +184,16 @@ def findings_in(stdout: str, rel: str) -> list[str]:
             p = pkg.get("package") if isinstance(pkg, dict) else None
             if not isinstance(p, dict) or not p.get("name") or not isinstance(pkg.get("groups", []), list):
                 raise ValueError("a package without a name")
+            if pkg.get("vulnerabilities") and not pkg.get("groups"):
+                raise ValueError("a vulnerable package without groups")
             # One row per advisory group: its ids and aliases name one vulnerability.
             for group in pkg.get("groups", []):
-                ids = group.get("ids") or ["?"]
-                aliases = sorted(set(group.get("aliases", [])) - {ids[0]})
+                ids = group.get("ids") if isinstance(group, dict) else None
+                aliases = group.get("aliases", []) if isinstance(group, dict) else None
+                if not (isinstance(ids, list) and ids and isinstance(aliases, list)
+                        and all(isinstance(i, str) and i for i in ids + aliases)):
+                    raise ValueError("a group without usable ids")
+                aliases = sorted(set(aliases) - {ids[0]})
                 out.append(f"FINDING {ids[0]} ({', '.join(aliases)}) {p.get('name')} {p.get('version')} {rel}")
     return out
 
@@ -235,14 +251,13 @@ def scan(root: pathlib.Path, offline: bool) -> int:
         for rel in sorted(lockfiles):
             source = tree / rel
             if rel in requirements:
-                # The scanner gets only the validated pins, so it can follow no include.
+                # The scanner gets only the checked pins, so it can follow no include. They
+                # replace the exported copy in place, beside any osv-scanner.toml it obeys.
                 pins, lines = read_requirements(source.read_text(errors="replace"))
                 gaps += [f"NOT SCANNED {rel}: {line}" for line in lines]
                 if not pins:
                     gaps.append(f"NOT SCANNED {rel}: no pinned requirement")
                     continue
-                source = pathlib.Path(tmp) / "pins" / rel
-                source.parent.mkdir(parents=True, exist_ok=True)
                 source.write_text("\n".join(pins) + "\n")
             # The parser prefix keeps a colon in the path from being read as one.
             parser = "requirements.txt" if rel in requirements else names[rel]
