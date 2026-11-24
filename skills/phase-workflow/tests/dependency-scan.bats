@@ -591,3 +591,14 @@ answer() {
   [ "$status" -eq 2 ] || false
   [[ "$output" == *"osv-scanner failed on sub/uv.lock"* ]]
 }
+
+@test "a scanner diagnostic that is not UTF-8 does not stop the scan" {
+  # Fails if the scanner's stderr is decoded strictly, so a byte it cannot decode raises before
+  # the file's result is recorded (pass 3, KI-87).
+  put uv.lock 'clean'
+  printf '#!/bin/bash\nprintf "\\377\\376 bad bytes\\n" >&2\ncat "%s/clean.json"\n' "$OSV" > "$BIN/osv-scanner"
+  chmod +x "$BIN/osv-scanner"
+  scan
+  [ "$status" -eq 0 ] || false
+  [[ "$output" == *"1 file scanned: no known vulnerabilities"* ]]
+}

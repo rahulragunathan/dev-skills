@@ -827,6 +827,19 @@ PY
   [ -e "$TEST_TMP/AGY-RAN" ]
 }
 
+@test "zsh: the documented Gemini loop does not send a prompt it could not measure" {
+  # Fails if a failed byte count reads as 0, which zsh's [ accepts, so an oversized prompt
+  # reaches agy (pass 4, Codex 8).
+  command -v zsh >/dev/null || skip "zsh is not installed"
+  printf 'small prompt\n' > "$TEST_TMP/gemini_prompt_p1_c1.txt"
+  mkdir -p "$TEST_TMP/failbin"
+  printf '#!/bin/sh\nexit 1\n' > "$TEST_TMP/failbin/wc" && chmod +x "$TEST_TMP/failbin/wc"
+  gemini_loop 'touch "$TEST_TMP/AGY-RAN"; echo "No findings.";'
+  PATH="$TEST_TMP/failbin:$PATH" run zsh -f "$TEST_TMP/gemini.sh"
+  [ ! -e "$TEST_TMP/AGY-RAN" ] || false
+  [[ "$output" == *"cannot measure the prompt"* ]]
+}
+
 @test "the documented Codex loop with an empty ladder needs no root" {
   # Fails if a run with no Codex rung aborts on ROOT before the Gemini half (Codex 17).
   python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/loop.sh" <<'PY'

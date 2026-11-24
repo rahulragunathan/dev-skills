@@ -50,6 +50,7 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-38](KNOWN_ISSUES.md#ki-38) | An assertion the test expects to fail still grades as did-not-hold | Rare | High |
 | [KI-77](KNOWN_ISSUES.md#ki-77) | A root lockfile covers every manifest below it | Rare | High |
 | [KI-84](KNOWN_ISSUES.md#ki-84) | A dependency file whose name differs only in case can overwrite another | Rare | High |
+| [KI-87](KNOWN_ISSUES.md#ki-87) | The dependency scan still misreads some manifests | Rare | High |
 | [KI-49](KNOWN_ISSUES.md#ki-49) | The headline tally mixes two skills | Almost always | Medium |
 | [KI-50](KNOWN_ISSUES.md#ki-50) | S05's fixture contradicts itself | Almost always | Medium |
 | [KI-51](KNOWN_ISSUES.md#ki-51) | Rejected grading attempts are not retained | Likely | Medium |
@@ -59,7 +60,6 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-76](KNOWN_ISSUES.md#ki-76) | The probe's error classes still match loose substrings | Rare | Medium |
 | [KI-79](KNOWN_ISSUES.md#ki-79) | A symlinked folder above the docs folder still redirects the roadmap tools | Rare | Medium |
 | [KI-81](KNOWN_ISSUES.md#ki-81) | The osv-scanner configuration is read by pattern, not as TOML | Rare | Medium |
-| [KI-87](KNOWN_ISSUES.md#ki-87) | The dependency scan still misreads some manifests and scanner answers | Rare | Medium |
 | [KI-88](KNOWN_ISSUES.md#ki-88) | Check's table and metadata rules still differ from Markdown in places | Rare | Medium |
 | [KI-90](KNOWN_ISSUES.md#ki-90) | The origin check strips a fetch URL's trailing newline | Rare | Medium |
 | [KI-82](KNOWN_ISSUES.md#ki-82) | The zsh lint misses traps hidden by quotes and other subscripts | Likely | Low |

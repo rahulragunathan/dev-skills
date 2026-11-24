@@ -347,7 +347,9 @@ def scan(root: pathlib.Path, offline: bool) -> int:
             cmd = [scanner, "scan", "source", "--format", "json", "--no-resolve",
                    *(["--offline"] if offline else []),
                    *(["--config", str(config)] if config.is_file() else []), "-L", f"{parser}:{source}"]
-            run = subprocess.run(cmd, capture_output=True, text=True, cwd=tree)
+            # Its stderr is never read (it can quote a token), so it is never decoded either.
+            run = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+                                 errors="replace", cwd=tree)
             if run.returncode == 128:
                 gaps.append(f"NOT SCANNED {rel}: no packages found")
                 continue

@@ -10,7 +10,9 @@
 setup() {
   export TEST_TMP="$(mktemp -d)"
   export DOCS="$TEST_TMP/docs"
-  mkdir -p "$DOCS"
+  # roadmap.py keeps recovery copies in the temporary folder; this one is cleaned up.
+  export TMPDIR="$TEST_TMP/tmp"
+  mkdir -p "$DOCS" "$TMPDIR"
   local here; here="$(cd "$(dirname "$BATS_TEST_FILENAME")" && pwd)"
   export RM="$(dirname "$here")/roadmap.py"
 
@@ -1217,51 +1219,51 @@ PY
   grep -q 'DOOMED-BODY' "$DOCS/KNOWN_ISSUES.md"
 }
 
-@test "close: rollback never overwrites an edit made after the first replacement" {
-  # Fails if rollback restores the original over a file an editor changed after close replaced it.
-  run python3 - "$RM" "$DOCS" <<'PY'
+# close_after_first <action>: run close with os.replace wrapped so that, once the first file
+# has really been replaced, an editor rewrites it and <action> runs; prints the exit code
+# and the detail file.
+close_after_first() {
+  python3 - "$RM" "$DOCS" "$1" <<'PY'
 import importlib.util, os, pathlib, sys
 spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 d = pathlib.Path(sys.argv[2]); real = os.replace; fired = []
 def replace(src, dst):
-    if pathlib.Path(dst).name == "ROADMAP.md":
+    if pathlib.Path(dst).name == "ROADMAP.md" and sys.argv[3] == "fail":
+        raise OSError("injected failure on the second file")
+    real(src, dst)
+    if pathlib.Path(dst).name == "KNOWN_ISSUES.md":
         (d / "KNOWN_ISSUES.md").write_text("EDITOR-REWRITE\n")
-        fired.append(1); raise OSError("injected failure on the second file")
-    return real(src, dst)
+        if sys.argv[3] == "edit-index":
+            p = d / "ROADMAP.md"; p.write_text(p.read_text() + "EDITOR-ROW\n")
+        fired.append(1)
 m.os.replace = replace
 try: m.cmd_close(d, 'KI-02')
 except SystemExit as e: print('exit', e.code)
 assert fired, 'the fault never fired'
 print('detail:', (d / "KNOWN_ISSUES.md").read_text().strip())
 PY
+}
+
+@test "close: rollback never overwrites an edit made after the first replacement" {
+  # Fails if rollback restores the original over a file an editor changed after close replaced
+  # it, or keeps its recovery copies where the test's cleanup cannot reach them.
+  run close_after_first fail
   [[ "$output" == *"exit 1"* ]] || false
   [[ "$output" == *"detail: EDITOR-REWRITE"* ]] || false
-  [[ "$output" == *"retained"* ]]
+  [[ "$output" == *"retained at $TEST_TMP/"* ]]
 }
 
 @test "close: a refusal whose rollback keeps an edit still names its cause" {
   # Fails if the kept-edit message prints the bare exception, "(ROADMAP.md)", instead of saying
-  # ROADMAP.md changed since it was read (pass 3, Gemini 11).
-  run python3 - "$RM" "$DOCS" <<'PY'
-import importlib.util, os, pathlib, sys
-spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
-m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-d = pathlib.Path(sys.argv[2]); real = os.replace; fired = []
-def replace(src, dst):
-    if pathlib.Path(dst).name == "ROADMAP.md":
-        (d / "KNOWN_ISSUES.md").write_text("EDITOR-REWRITE\n")
-        fired.append(1); raise m.Changed("ROADMAP.md")
-    return real(src, dst)
-m.os.replace = replace
-try: m.cmd_close(d, 'KI-02')
-except SystemExit as e: print('exit', e.code)
-assert fired, 'the fault never fired'
-PY
+  # ROADMAP.md changed since it was read (pass 3, Gemini 11). The index really changes, so the
+  # check that detects it runs too (pass 4, Codex 14).
+  run close_after_first edit-index
   [[ "$output" == *"exit 1"* ]] || false
   [[ "$output" == *"installation failed (ROADMAP.md changed since it was read)"* ]] || false
   [[ "$output" == *"was left as it is"* ]] || false
-  grep -q EDITOR-REWRITE "$DOCS/KNOWN_ISSUES.md"
+  [[ "$output" == *"detail: EDITOR-REWRITE"* ]] || false
+  grep -q EDITOR-ROW "$DOCS/ROADMAP.md"
 }
 
 @test "close: CRLF line endings and trailing whitespace survive byte for byte" {

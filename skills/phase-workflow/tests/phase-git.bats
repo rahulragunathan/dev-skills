@@ -762,16 +762,19 @@ prune_in() {
 }
 
 @test "prune deletes a merged branch whose upstream is gone though a tag shares its name" {
-  # Fails if a same-named tag makes prune retain a merged branch (KI-86's claim, re-tested in pass 4).
+  # Fails if a same-named tag makes prune retain a merged branch, or delete the tag instead.
+  # A control: this already worked before KI-86's fix, which is the checked-out case above.
   ki46_extract_cleanup
   git checkout -q -b feature/x; echo x > x1; git add -A; git commit -qm x
   git checkout -q main; git merge -q --ff-only feature/x
   ki46_orphan feature/x
-  git tag feature/x refs/heads/feature/x
+  tagged="$(git rev-list --max-parents=0 HEAD)"
+  git tag feature/x "$tagged"
   export APPROVED_SHA=""
   run bash "$TEST_TMP/cleanup.sh"
   [ "$status" -eq 0 ] || false
-  ! git rev-parse --verify -q refs/heads/feature/x >/dev/null
+  ! git rev-parse --verify -q refs/heads/feature/x >/dev/null || false
+  [ "$(git rev-parse refs/tags/feature/x)" = "$tagged" ]
 }
 
 # --- the phase record's first table (KI-67, KI-69) --------------------------
@@ -1115,39 +1118,62 @@ origin_refused() {
 @test "the published record names the head it was reviewed at" {
   # Fails if a record published onto a moved head cannot be told from a current one (Codex 4).
   publish_record "$(git rev-parse HEAD)"
-  printf '#!/bin/bash\nprintf "%%s\\n" "$*" >> "%s/gh-calls"\ncase "$*" in *headRefOid*) echo "$FAKE_PR_HEAD" ;; *"pr edit"*) cp "${@: -1}" "%s/published" ;; esac\n' "$TEST_TMP" "$TEST_TMP" > "$TEST_TMP/bin/gh"
+  printf '#!/bin/bash\nprintf "%%s\\n" "$*" >> "%s/gh-calls"\ncase "$*" in *headRefOid*) echo "$FAKE_PR_HEAD" ;; *"pr edit"*) if [ "${@: -1}" = - ]; then cat > "%s/published"; else cp "${@: -1}" "%s/published"; fi ;; esac\n' "$TEST_TMP" "$TEST_TMP" "$TEST_TMP" > "$TEST_TMP/bin/gh"
   PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/publish.sh"
   [ "$status" -eq 0 ] || false
   grep -q "$(git rev-parse HEAD)" "$TEST_TMP/published"
 }
 
-@test "publishing the record leaves no copy of its body, and a push during the edit is reported" {
-  # Fails if the body's temporary copy outlives the step, or a head that moves during
-  # gh pr edit goes unreported (pass 3, Codex 19, Gemini 15).
-  publish_record "$(git rev-parse HEAD)"
-  # The fake notes the body file it was given; with MOVE set, the PR head moves once edited.
-  printf '#!/bin/bash\ncase "$*" in *headRefOid*) [ -n "$MOVE" ] && [ -e "%s/edited" ] && echo moved || echo "$FAKE_PR_HEAD" ;; *"pr edit"*) printf "%%s" "${@: -1}" > "%s/body-path"; touch "%s/edited" ;; esac\n' "$TEST_TMP" "$TEST_TMP" "$TEST_TMP" > "$TEST_TMP/bin/gh"
-  PATH="$TEST_TMP/bin:$PATH" MOVE= run bash "$TEST_TMP/publish.sh"
-  [ "$status" -eq 0 ] || false
-  [ -s "$TEST_TMP/body-path" ] || false
-  [ ! -e "$(cat "$TEST_TMP/body-path")" ] || false
-  rm -f "$TEST_TMP/edited" "$TEST_TMP/body-path"
-  PATH="$TEST_TMP/bin:$PATH" MOVE=1 run bash "$TEST_TMP/publish.sh"
-  [ "$status" -ne 0 ] || false
-  [[ "$output" == *"PR HEAD MOVED WHILE THE RECORD WAS PUBLISHED"* ]] || false
-  [ ! -e "$(cat "$TEST_TMP/body-path")" ]
+# publish_fake: gh that answers the head (moved once edited, when MOVE is set; unreadable
+# once edited, when NOVIEW is set) and keeps a body sent on stdin as $TEST_TMP/published.
+publish_fake() {
+  cat > "$TEST_TMP/bin/gh" <<SH
+#!/bin/bash
+case "\$*" in
+  *headRefOid*) if [ -e "$TEST_TMP/edited" ] && [ -n "\$NOVIEW" ]; then exit 1; fi
+                if [ -e "$TEST_TMP/edited" ] && [ -n "\$MOVE" ]; then echo moved; else echo "\$FAKE_PR_HEAD"; fi ;;
+  *"pr edit"*) if [ "\${@: -1}" = - ]; then cat > "$TEST_TMP/published"; else touch "$TEST_TMP/body-file"; fi
+               touch "$TEST_TMP/edited" ;;
+esac
+SH
+  chmod +x "$TEST_TMP/bin/gh"
 }
 
-@test "zsh: a publish-record step stopped by TERM leaves no copy of its body" {
-  # Fails if the body's cleanup hangs on an EXIT trap alone, which zsh skips when a signal
-  # kills the shell (pass 4, Gemini 4).
+@test "publishing the record sends its body on stdin, keeps the caller's traps, and reports a push" {
+  # Fails if the step writes the body to a file, replaces a trap of the shell it runs in, or
+  # misses a head that moves during gh pr edit (pass 3, Codex 19, Gemini 15; pass 4, Codex 9).
+  publish_record "$(git rev-parse HEAD)"
+  publish_fake
+  PATH="$TEST_TMP/bin:$PATH" MOVE= NOVIEW= run bash -c 'trap "echo CALLER-EXIT" EXIT; . "$1"' _ "$TEST_TMP/publish.sh"
+  [ "$status" -eq 0 ] || false
+  [[ "$output" == *CALLER-EXIT* ]] || false
+  [ ! -e "$TEST_TMP/body-file" ] || false
+  grep -q "Review record for $(git rev-parse HEAD)" "$TEST_TMP/published" || false
+  grep -q '^record$' "$TEST_TMP/published" || false
+  rm -f "$TEST_TMP/edited"
+  PATH="$TEST_TMP/bin:$PATH" MOVE=1 NOVIEW= run bash "$TEST_TMP/publish.sh"
+  [ "$status" -ne 0 ] || false
+  [[ "$output" == *"PR HEAD MOVED WHILE THE RECORD WAS PUBLISHED"* ]]
+}
+
+@test "zsh: publish-record sends its body on stdin" {
+  # Fails if the step's pipe into gh pr edit does not carry the body under zsh.
   command -v zsh >/dev/null || skip "zsh is not installed"
   publish_record "$(git rev-parse HEAD)"
-  printf '#!/bin/bash\ncase "$*" in *headRefOid*) echo "$FAKE_PR_HEAD" ;; *"pr edit"*) printf "%%s" "${@: -1}" > "%s/body-path"; kill -TERM "$PPID"; sleep 1 ;; esac\n' "$TEST_TMP" > "$TEST_TMP/bin/gh"
-  PATH="$TEST_TMP/bin:$PATH" run zsh -f "$TEST_TMP/publish.sh"
+  publish_fake
+  PATH="$TEST_TMP/bin:$PATH" MOVE= NOVIEW= run zsh -f "$TEST_TMP/publish.sh"
+  [ "$status" -eq 0 ] || false
+  grep -q "Review record for $(git rev-parse HEAD)" "$TEST_TMP/published"
+}
+
+@test "a PR head that cannot be read after publishing is reported as unverified, not as moved" {
+  # Fails if a failed gh pr view after the edit is reported as a confirmed push (pass 4, Codex 9).
+  publish_record "$(git rev-parse HEAD)"
+  publish_fake
+  PATH="$TEST_TMP/bin:$PATH" MOVE= NOVIEW=1 run bash "$TEST_TMP/publish.sh"
   [ "$status" -ne 0 ] || false
-  [ -s "$TEST_TMP/body-path" ] || false
-  [ ! -e "$(cat "$TEST_TMP/body-path")" ]
+  [[ "$output" == *"CANNOT READ THE PR HEAD AFTER PUBLISHING"* ]] || false
+  [[ "$output" != *MOVED* ]]
 }
 
 @test "origin check: an ssh authority holding a %-escape is refused" {

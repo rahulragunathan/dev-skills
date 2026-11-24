@@ -60,7 +60,7 @@ The first push checks HEAD's record and then pushes the branch by name; prune co
 
 ### Example scenario
 
-A second shell commits to the branch between prune's comparison and its `git branch -D`.
+Between prune's comparison and its `git branch -D`, a second worktree checks the branch out, commits to it, and switches away, so the branch is not checked out anywhere when it is deleted.
 
 ### Notes for a fix
 
@@ -262,17 +262,41 @@ the lockfile's own contents, not from folder position.
 
 ### What happens
 
-On a case-insensitive file system two committed paths that differ only in case are written to the same place, and one is scanned twice while the other is not.
+On a case-insensitive file system two committed paths that differ only in case are written to the same place. The second overwrites the first, so the scan reads one file and the other is never read.
 
 ### Example scenario
 
-`Web/package.json` and `web/package.json` are both committed. Both names are dependency files, so both are exported, to one place, and the scan reports one of them clean without reading the other.
+`Web/package-lock.json` and `web/package-lock.json` are both committed. Both are exported to one place, so the scan reports one lockfile clean and never reads the other.
 
 ### Notes for a fix
 
 Detect a case collision while exporting and report both paths as a gap.
 
 **Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 2, dependable-helpers phase, 2026-11-23.
+
+---
+
+<a id="ki-87"></a>
+
+## KI-87 — the dependency scan still misreads some manifests
+
+**Severity:** High
+**Likelihood:** Rare
+**Where:** [dependency-scan.py](../skills/phase-workflow/dependency-scan.py) — `def declares_dependencies(`
+
+### What happens
+
+An inline Dart dependency map, a `dependencies:` key followed by a comment, and a Poetry table heading followed by a comment all read as declaring nothing, so a project with no lockfile reports nothing to scan: exit 0, with nothing to tell the operator a scan was missed.
+
+### Example scenario
+
+A `pubspec.yaml` with `dependencies: {http: ^1.0.0}` and no `pubspec.lock` reports `no supported dependency files`.
+
+### Notes for a fix
+
+Parse the supported manifest structures instead of matching lines.
+
+**Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 3, dependable-helpers phase, 2026-11-23.
 
 ---
 
@@ -524,30 +548,6 @@ A suppression written as `"id" = "PYSEC-1"` is reported as nothing recognised.
 Parse with `tomllib` where available, report each rule's scope and action, and name a configuration the helper cannot read.
 
 **Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 2, dependable-helpers phase, 2026-11-23.
-
----
-
-<a id="ki-87"></a>
-
-## KI-87 — the dependency scan still misreads some manifests and scanner answers
-
-**Severity:** Medium
-**Likelihood:** Rare
-**Where:** [dependency-scan.py](../skills/phase-workflow/dependency-scan.py) — `def declares_dependencies(`
-
-### What happens
-
-An inline Dart dependency map, a `dependencies:` key followed by a comment, and a Poetry table heading followed by a comment all read as declaring nothing, so a project with no lockfile reports nothing to scan. Scanner stderr is captured and decoded strictly, so a non-UTF-8 diagnostic can raise before the per-file failure is recorded.
-
-### Example scenario
-
-A `pubspec.yaml` with `dependencies: {http: ^1.0.0}` and no `pubspec.lock` reports `no supported dependency files`.
-
-### Notes for a fix
-
-Parse the supported manifest structures instead of matching lines, and send the scanner's stderr to DEVNULL.
-
-**Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 3, dependable-helpers phase, 2026-11-23.
 
 ---
 

@@ -41,7 +41,9 @@ here — the plugin manifest's version is the only record of them.
   checks the first table's `REPO`, `PR` and `Release`, so a companion table, a padded row or a
   large record no longer misleads it. The first push refuses a record inherited unchanged from
   the default branch. The review record is published after the gate, headed by the SHA it was
-  reviewed at; a push during publication is reported afterwards, not prevented.
+  reviewed at and sent on stdin, so no copy is left on disk. A push during publication is
+  reported afterwards, not prevented, and a head that cannot be read afterwards is reported as
+  unverified.
 - **The origin check is an allow-list (KI-70).** It accepts `ssh://`, `git+ssh://`,
   `ssh+git://` and `https://` in lower case, the scp form and an absolute local path without
   spaces; it refuses every transport helper, any other scheme or spelling, an option-shaped URL,
@@ -49,8 +51,7 @@ here — the plugin manifest's version is the only record of them.
   literal (`::`). It decides with shell patterns, so no external command can fail open, and the push
   list must be exactly the approved URL.
 - **Branch cleanup reports every retained branch (ENH-29)** before it exits, rather than
-  stopping at the first. It skips the checked-out branch, and deletes a merged one, when a tag shares
-  the branch's name (KI-86).
+  stopping at the first. It skips the checked-out branch when a tag shares its name (KI-86).
 - **The post-review gate check sees both sides of a rename and pins one head (KI-62).** A file
   moved into a bookkeeping path is named by its source, a failed listing stops the gate, and the
   ready step refuses a head other than the one the check inspected.
