@@ -214,8 +214,8 @@ for m in $(printf '%s' "$GEMINI_RUNGS"); do
   rm -f "$OUT" "$PART" "${OUT%.txt}.partial" "$ERR" "$STATE"   # never inherit a previous attempt
   PROMPT="$(cat "<scratchpad>/gemini_prompt_p<n>_c<chunk>.txt")" && [ -n "$PROMPT" ] \
     || { echo "no prompt for this chunk — not run"; break; }
-  # agy cuts a longer prompt short and still exits 0; measured in bytes, as the limit is.
-  [ "$(wc -c < "<scratchpad>/gemini_prompt_p<n>_c<chunk>.txt")" -le 120000 ] \
+  # agy cuts a longer prompt short and still exits 0. Measure what is sent, in bytes.
+  [ "$(printf '%s' "$PROMPT" | wc -c)" -le 120000 ] \
     || { echo "prompt over 120000 bytes — split the chunk; agy would truncate it"; break; }
   # An id with an effort suffix carries its effort; a suffix-less one is told high.
   case "$m" in *-high|*-xhigh|*-max|*-medium) EFFORT_FLAG=() ;; *) EFFORT_FLAG=(--effort high) ;; esac
@@ -516,11 +516,13 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/capture.sh" repo "<scratchpad>"
 Same outputs, same exclusions, same symlink, binary and read-failure handling as `phase`. One
 capture procedure serves every mode; none rolls its own.
 
-**Measure before sending and chunk large bundles.** Keep each chunk near **120,000 characters**
-and use the timeout in the Gemini invocation above. A timeout can leave no answer.
+**Measure before sending and chunk large bundles.** Keep each complete prompt, with its rubric
+and repeated context, at **120,000 bytes** or less; the Gemini loop refuses a larger one, since
+`agy` cuts it short without an error. Use the timeout in the Gemini invocation above. A timeout
+can leave no answer.
 
 ```bash
-wc -c "$BUNDLE"    # split by directory or concern if this is over ~120000
+wc -c "<scratchpad>/gemini_prompt_p<n>_c<chunk>.txt"   # split by directory or concern if over 120000
 ```
 
 **Split on a seam, and repeat the shared context in every chunk.** Cross-file contradiction is the main thing a review of prose is for, and chunking is exactly what hides it — so the files every other file must agree with (the project instructions file, `AGENTS.md` or `CLAUDE.md`, then `README.md` and `docs/ARCHITECTURE.md`) go into *each* chunk, and each prompt says which chunk it is and that the others cover the rest, so nothing is reported missing merely because it is elsewhere.

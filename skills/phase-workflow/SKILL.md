@@ -134,7 +134,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 | "This phase was small / it's just docs" | Size is not a listed exemption. Only *both* CLIs missing is, and only in writing. |
 | "The structure is obvious, I'll skip the table" | The table is what makes it obvious to someone who was not in the conversation. It is also what the external reviewers read. |
 | "I'll run the review after they sign off" | Sign-off is a decision made *on* the findings. After is too late. |
-| "This repo has no dependencies worth scanning" | The scan says so itself, in one line. Run it. |
+| "This repo has no dependencies worth scanning" | The scan says so itself. Run it. |
 | "The tests pass, so they test the right thing" | Passing is what a test does when the bug is absent *and* when the test is vacuous. Step 3 is what tells them apart: a recorded red, or a mutation. |
 
 1. **Confidence check:** explicitly answer "what am I least confident about right now?" (untested edge cases, quota/API assumptions, auth corners) and use it to direct extra tests/verification.
@@ -425,7 +425,8 @@ what remains expired.
      [ "$(git rev-parse HEAD)" = "$GATE_SHA" ] && [ "$(pr_head)" = "$GATE_SHA" ] \
        || { echo "HEAD MOVED SINCE THE GATE — stop"; exit 1; }
      # The body names the head it was reviewed at, so a later push shows the record is stale.
-     BODY="$(mktemp)"; { printf 'Review record for %s.\n\n' "$GATE_SHA"; cat "<review record file>"; } > "$BODY"
+     BODY="$(mktemp)"; trap 'rm -f "$BODY"' EXIT
+     { printf 'Review record for %s.\n\n' "$GATE_SHA"; cat "<review record file>"; } > "$BODY"
      gh pr edit "$PR" -R "$REPO" --body-file "$BODY"
      # Detection, not prevention: a push during the edit is found here, after the body is up.
      [ "$(pr_head)" = "$GATE_SHA" ] || { echo "PR HEAD MOVED WHILE THE RECORD WAS PUBLISHED — the record is stale"; exit 1; }
@@ -628,7 +629,7 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
    set -euo pipefail
    git fetch --prune origin
    BRANCHES="$(git for-each-ref --format='%(refname:lstrip=2) %(upstream:track)' refs/heads/)"   # lstrip, not short: short can prefix heads/ to an ambiguous name
-   CURRENT="$(git symbolic-ref --quiet --short HEAD || true)"
+   CURRENT="$(git symbolic-ref --quiet HEAD || true)"; CURRENT="${CURRENT#refs/heads/}"   # stripped, as above
    GONE=""   # space-separated: a branch name holds no space or pattern character
    while read -r b track; do
      if [ "$track" = "[gone]" ] && [ "$b" != "$CURRENT" ]; then GONE="$GONE $b"; fi

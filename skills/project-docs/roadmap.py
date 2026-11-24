@@ -676,11 +676,11 @@ def install_documents(docs: pathlib.Path, proposed: dict[str, bytes],
         except BaseException:
             retain_recovery = True
             fail(f"rollback failed; originals retained at {recovery}")
+        cause = f"{exc} changed since it was read" if isinstance(exc, Changed) else str(exc) or type(exc).__name__
         if kept:
             retain_recovery = True
-            fail(f"installation failed ({exc}); {', '.join(kept)} changed after close wrote it, so it "
+            fail(f"installation failed ({cause}); {', '.join(kept)} changed after close wrote it, so it "
                  f"was left as it is; originals retained at {recovery}")
-        cause = f"{exc} changed since it was read" if isinstance(exc, Changed) else str(exc) or type(exc).__name__
         fail(f"installation failed ({cause}); originals restored")
     finally:
         for sig, handler in previous.items():

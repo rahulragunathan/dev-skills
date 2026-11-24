@@ -818,6 +818,15 @@ PY
   [ ! -e "$TEST_TMP/AGY-RAN" ]
 }
 
+@test "the documented Gemini loop measures the prompt it sends, not a second read of the file" {
+  # Fails if the size check reads the file again instead of the captured prompt: here the file is
+  # over the limit only by trailing newlines the capture drops (pass 3, Codex 13).
+  { head -c 119990 /dev/zero | tr '\0' 'x'; head -c 20 /dev/zero | tr '\0' '\n'; } > "$TEST_TMP/gemini_prompt_p1_c1.txt"
+  gemini_loop 'touch "$TEST_TMP/AGY-RAN"; echo "No findings.";'
+  run bash "$TEST_TMP/gemini.sh"
+  [ -e "$TEST_TMP/AGY-RAN" ]
+}
+
 @test "the documented Codex loop with an empty ladder needs no root" {
   # Fails if a run with no Codex rung aborts on ROOT before the Gemini half (Codex 17).
   python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/loop.sh" <<'PY'

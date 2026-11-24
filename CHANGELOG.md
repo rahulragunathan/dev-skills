@@ -23,7 +23,8 @@ here — the plugin manifest's version is the only record of them.
   lockfiles, through `osv-scanner`, with a manifest that has no lockfile, a file with no packages
   and an unpinned requirement reported as coverage gaps rather than clean. It reads only what
   `HEAD` commits, never follows a symlink, names what a tracked `osv-scanner.toml` ignores, and
-  has an `--offline` mode.
+  has an `--offline` mode. A requirements file reaches the scanner only as checked `name==version`
+  pins, in its own folder so its `osv-scanner.toml` still applies.
 
 ### Fixed
 
@@ -36,15 +37,17 @@ here — the plugin manifest's version is the only record of them.
 - **The phase record is read by a tested parser, `phase-record.py` (KI-67, KI-69).** The gate
   checks the first table's `REPO`, `PR` and `Release`, so a companion table, a padded row or a
   large record no longer misleads it. The first push refuses a record inherited unchanged from
-  the default branch. The review record reaches the PR description only at the gate's head.
+  the default branch. The review record is published after the gate, headed by the SHA it was
+  reviewed at; a push during publication is reported afterwards, not prevented.
 - **The origin check is an allow-list (KI-70).** It accepts `ssh://`, `git+ssh://`,
   `ssh+git://` and `https://` in lower case, the scp form and an absolute local path without
   spaces; it refuses every transport helper, any other scheme or spelling, an option-shaped URL,
-  a `%`-escape in a user part, a configured `remote.origin.vcs` (even an empty one), and an ssh URL holding a compressed IPv6
+  a `%`-escape anywhere in a URL's authority, a configured `remote.origin.vcs` (even an empty one), and an ssh URL holding a compressed IPv6
   literal (`::`). It decides with shell patterns, so no external command can fail open, and the push
   list must be exactly the approved URL.
 - **Branch cleanup reports every retained branch (ENH-29)** before it exits, rather than
-  stopping at the first.
+  stopping at the first. It skips the checked-out branch, and deletes a merged one, when a tag shares
+  the branch's name (KI-86).
 - **The post-review gate check sees both sides of a rename and pins one head (KI-62).** A file
   moved into a bookkeeping path is named by its source, a failed listing stops the gate, and the
   ready step refuses a head other than the one the check inspected.

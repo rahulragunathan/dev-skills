@@ -42,13 +42,14 @@ Most severe first, and within a severity the most likely first. Both scales and 
 
 | ID | Issue | Likelihood | Severity |
 | ---- | ------- | ---------- | ---------- |
+| [KI-80](KNOWN_ISSUES.md#ki-80) | First push and prune act on a branch name that can move after the check | Rare | Critical |
 | [KI-47](KNOWN_ISSUES.md#ki-47) | Grading packets omit information their conditions require | Almost always | High |
 | [KI-48](KNOWN_ISSUES.md#ki-48) | S07's with-skill arm is handed the answer to the condition it is graded on | Almost always | High |
 | [KI-60](KNOWN_ISSUES.md#ki-60) | Helper commands need `CLAUDE_PLUGIN_ROOT`, which a Codex install does not set | Almost always | High |
 | [KI-37](KNOWN_ISSUES.md#ki-37) | A replaced evidence slot keeps its old grade | Rare | High |
 | [KI-38](KNOWN_ISSUES.md#ki-38) | An assertion the test expects to fail still grades as did-not-hold | Rare | High |
 | [KI-77](KNOWN_ISSUES.md#ki-77) | A root lockfile covers every manifest below it | Rare | High |
-| [KI-80](KNOWN_ISSUES.md#ki-80) | First push and prune act on a branch name that can move after the check | Rare | High |
+| [KI-84](KNOWN_ISSUES.md#ki-84) | A dependency file whose name differs only in case can overwrite another | Rare | High |
 | [KI-49](KNOWN_ISSUES.md#ki-49) | The headline tally mixes two skills | Almost always | Medium |
 | [KI-50](KNOWN_ISSUES.md#ki-50) | S05's fixture contradicts itself | Almost always | Medium |
 | [KI-51](KNOWN_ISSUES.md#ki-51) | Rejected grading attempts are not retained | Likely | Medium |
@@ -65,9 +66,7 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-44](KNOWN_ISSUES.md#ki-44) | A stale dispatch log gives a misleading replacement message | Rare | Low |
 | [KI-78](KNOWN_ISSUES.md#ki-78) | Index rows are not bound to their section | Rare | Low |
 | [KI-83](KNOWN_ISSUES.md#ki-83) | The name check misses multi-line reference definitions and counts test fixtures as scripts | Rare | Low |
-| [KI-84](KNOWN_ISSUES.md#ki-84) | A dependency file whose name differs only in case can overwrite another | Rare | Low |
 | [KI-85](KNOWN_ISSUES.md#ki-85) | The release test reads only plain X.Y.Z headings | Rare | Low |
-| [KI-86](KNOWN_ISSUES.md#ki-86) | Prune refuses a branch whose name a tag also uses | Rare | Low |
 | [KI-89](KNOWN_ISSUES.md#ki-89) | Progress calls a finished Gemini attempt running when its answer could not be moved | Rare | Low |
 | [KI-91](KNOWN_ISSUES.md#ki-91) | Init and close can lose their caller's signal handler while registering their own | Rare | Low |
 

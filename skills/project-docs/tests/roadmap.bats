@@ -1240,6 +1240,28 @@ PY
   [[ "$output" == *"retained"* ]]
 }
 
+@test "close: a refusal whose rollback keeps an edit still names its cause" {
+  # Fails if the kept-edit message prints the bare exception, "(ROADMAP.md)", instead of saying
+  # ROADMAP.md changed since it was read (pass 3, Gemini 11).
+  run python3 - "$RM" "$DOCS" <<'PY'
+import importlib.util, os, pathlib, sys
+spec = importlib.util.spec_from_file_location('roadmap', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+d = pathlib.Path(sys.argv[2]); real = os.replace; fired = []
+def replace(src, dst):
+    if pathlib.Path(dst).name == "ROADMAP.md":
+        (d / "KNOWN_ISSUES.md").write_text("EDITOR-REWRITE\n")
+        fired.append(1); raise m.Changed("ROADMAP.md")
+    return real(src, dst)
+m.os.replace = replace
+try: m.cmd_close(d, 'KI-02')
+except SystemExit as e: print('exit', e.code)
+assert fired, 'the fault never fired'
+PY
+  [[ "$output" == *"exit 1"* ]] || false
+  [[ "$output" == *"installation failed (ROADMAP.md changed since it was read)"* ]]
+}
+
 @test "close: CRLF line endings and trailing whitespace survive byte for byte" {
   # Fails if close rebuilds line boundaries, turning CRLF into LF or trimming a survivor.
   sed -i.bak 's/^SURVIVOR-ONE$/SURVIVOR-ONE  /' "$DOCS/KNOWN_ISSUES.md"

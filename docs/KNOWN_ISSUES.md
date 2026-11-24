@@ -46,6 +46,30 @@ rating hides which you are looking at. Both still get fixed.
 
 ---
 
+<a id="ki-80"></a>
+
+## KI-80 — first push and prune act on a branch name that can move after the check
+
+**Severity:** Critical
+**Likelihood:** Rare
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `FORK="$(git merge-base`
+
+### What happens
+
+The first push checks HEAD's record and then pushes the branch by name; prune compares a branch with the approved tip and then force-deletes it by name. A branch that moves in between is pushed unchecked, or deleted with unapproved work.
+
+### Example scenario
+
+A second shell commits to the branch between prune's comparison and its `git branch -D`.
+
+### Notes for a fix
+
+Push the inspected commit itself, and delete with `git update-ref -d refs/heads/<b> <expected>`, keeping the check that no worktree has the branch checked out.
+
+**Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 2, dependable-helpers phase, 2026-11-23.
+
+---
+
 <a id="ki-47"></a>
 
 ## KI-47 — grading packets omit information their conditions require
@@ -228,25 +252,25 @@ the lockfile's own contents, not from folder position.
 
 ---
 
-<a id="ki-80"></a>
+<a id="ki-84"></a>
 
-## KI-80 — first push and prune act on a branch name that can move after the check
+## KI-84 — a dependency file whose name differs only in case can overwrite another
 
 **Severity:** High
 **Likelihood:** Rare
-**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `FORK="$(git merge-base`
+**Where:** [dependency-scan.py](../skills/phase-workflow/dependency-scan.py) — `def export_head(`
 
 ### What happens
 
-The first push checks HEAD's record and then pushes the branch by name; prune compares a branch with the approved tip and then force-deletes it by name. A branch that moves in between is pushed unchecked, or deleted with unapproved work.
+On a case-insensitive file system two committed paths that differ only in case are written to the same place, and one is scanned twice while the other is not.
 
 ### Example scenario
 
-A second shell commits to the branch between prune's comparison and its `git branch -D`.
+`Web/package.json` and `web/package.json` are both committed. Both names are dependency files, so both are exported, to one place, and the scan reports one of them clean without reading the other.
 
 ### Notes for a fix
 
-Push the inspected commit itself, and delete with `git update-ref -d refs/heads/<b> <expected>`, keeping the check that no worktree has the branch checked out.
+Detect a case collision while exporting and report both paths as a gap.
 
 **Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 2, dependable-helpers phase, 2026-11-23.
 
@@ -676,30 +700,6 @@ Join a definition with its continuation line; leave fixture folders out of the b
 
 ---
 
-<a id="ki-84"></a>
-
-## KI-84 — a dependency file whose name differs only in case can overwrite another
-
-**Severity:** Low
-**Likelihood:** Rare
-**Where:** [dependency-scan.py](../skills/phase-workflow/dependency-scan.py) — `def export_head(`
-
-### What happens
-
-On a case-insensitive file system two committed paths that differ only in case are written to the same place, and one is scanned twice while the other is not.
-
-### Example scenario
-
-`web/Package.json` and `web/package.json` are both committed.
-
-### Notes for a fix
-
-Detect a case collision while exporting and report both paths as a gap.
-
-**Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 2, dependable-helpers phase, 2026-11-23.
-
----
-
 <a id="ki-85"></a>
 
 ## KI-85 — the release test reads only plain X.Y.Z headings
@@ -719,30 +719,6 @@ plugin.json keeps 2.1.0 while CHANGELOG prepares 2.2.0-rc.1; the test passes.
 ### Notes for a fix
 
 Read the first heading that is not `[Unreleased]` and compare its full version.
-
-**Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 2, dependable-helpers phase, 2026-11-23.
-
----
-
-<a id="ki-86"></a>
-
-## KI-86 — prune refuses a branch whose name a tag also uses
-
-**Severity:** Low
-**Likelihood:** Rare
-**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `refname:lstrip=2`
-
-### What happens
-
-With a tag of the same name, `git branch -d` warns that the name is ambiguous and refuses the merged branch, so prune retains it.
-
-### Example scenario
-
-A branch `feature/x` and a tag `feature/x`; the merged branch is reported as holding work.
-
-### Notes for a fix
-
-Compare by full ref names and delete with `git update-ref -d refs/heads/<b>`, as KI-80 proposes.
 
 **Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 2, dependable-helpers phase, 2026-11-23.
 

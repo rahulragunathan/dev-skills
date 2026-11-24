@@ -746,6 +746,34 @@ prune_in() {
   prune_in zsh -f
 }
 
+@test "prune skips the checked-out branch when a tag shares its name" {
+  # Fails if CURRENT is read with --short, which prefixes heads/ to an ambiguous name, so
+  # prune tries to delete the branch it stands on and reports it retained (pass 3, Codex 20, Gemini 5).
+  ki46_extract_cleanup
+  git checkout -q -b feature/cur; echo c > c1; git add -A; git commit -qm cur
+  ki46_orphan feature/cur
+  git checkout -q feature/cur
+  git tag feature/cur
+  export APPROVED_SHA=""
+  run bash "$TEST_TMP/cleanup.sh"
+  [ "$status" -eq 0 ] || false
+  [[ "$output" != *RETAINED* ]] || false
+  git rev-parse --verify -q refs/heads/feature/cur >/dev/null
+}
+
+@test "prune deletes a merged branch whose upstream is gone though a tag shares its name" {
+  # Fails if a same-named tag makes prune retain a merged branch (KI-86's claim, re-tested in pass 4).
+  ki46_extract_cleanup
+  git checkout -q -b feature/x; echo x > x1; git add -A; git commit -qm x
+  git checkout -q main; git merge -q --ff-only feature/x
+  ki46_orphan feature/x
+  git tag feature/x refs/heads/feature/x
+  export APPROVED_SHA=""
+  run bash "$TEST_TMP/cleanup.sh"
+  [ "$status" -eq 0 ] || false
+  ! git rev-parse --verify -q refs/heads/feature/x >/dev/null
+}
+
 # --- the phase record's first table (KI-67, KI-69) --------------------------
 
 @test "phase record: a companion table with the same PR and release is not this repository's" {
@@ -1091,6 +1119,23 @@ origin_refused() {
   PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/publish.sh"
   [ "$status" -eq 0 ] || false
   grep -q "$(git rev-parse HEAD)" "$TEST_TMP/published"
+}
+
+@test "publishing the record leaves no copy of its body, and a push during the edit is reported" {
+  # Fails if the body's temporary copy outlives the step, or a head that moves during
+  # gh pr edit goes unreported (pass 3, Codex 19, Gemini 15).
+  publish_record "$(git rev-parse HEAD)"
+  # The fake notes the body file it was given; with MOVE set, the PR head moves once edited.
+  printf '#!/bin/bash\ncase "$*" in *headRefOid*) [ -n "$MOVE" ] && [ -e "%s/edited" ] && echo moved || echo "$FAKE_PR_HEAD" ;; *"pr edit"*) printf "%%s" "${@: -1}" > "%s/body-path"; touch "%s/edited" ;; esac\n' "$TEST_TMP" "$TEST_TMP" "$TEST_TMP" > "$TEST_TMP/bin/gh"
+  PATH="$TEST_TMP/bin:$PATH" MOVE= run bash "$TEST_TMP/publish.sh"
+  [ "$status" -eq 0 ] || false
+  [ -s "$TEST_TMP/body-path" ] || false
+  [ ! -e "$(cat "$TEST_TMP/body-path")" ] || false
+  rm -f "$TEST_TMP/edited" "$TEST_TMP/body-path"
+  PATH="$TEST_TMP/bin:$PATH" MOVE=1 run bash "$TEST_TMP/publish.sh"
+  [ "$status" -ne 0 ] || false
+  [[ "$output" == *"PR HEAD MOVED WHILE THE RECORD WAS PUBLISHED"* ]] || false
+  [ ! -e "$(cat "$TEST_TMP/body-path")" ]
 }
 
 @test "origin check: an ssh authority holding a %-escape is refused" {
