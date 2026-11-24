@@ -24,7 +24,9 @@ here — the plugin manifest's version is the only record of them.
   and an unpinned requirement reported as coverage gaps rather than clean. It reads only what
   `HEAD` commits, never follows a symlink, names what a tracked `osv-scanner.toml` ignores, and
   has an `--offline` mode. A requirements file is read as pip reads it and reaches the scanner
-  only as checked `name==version` pins; an include, an unknown option or an invalid name is a gap.
+  only as checked `name==version` pins; an include, an unknown option, a variable, an invalid
+  name or version, or a file that is not UTF-8 is a gap. Every report line has its control
+  characters escaped, so a committed path cannot forge one.
   A folder's `osv-scanner.toml` is passed by name, so one the scanner cannot load fails the scan.
   Every advisory in a package is reported, grouped or not, and one unreadable package leaves the
   others' findings in the report.
@@ -41,8 +43,9 @@ here — the plugin manifest's version is the only record of them.
   checks the first table's `REPO`, `PR` and `Release`, so a companion table, a padded row or a
   large record no longer misleads it. The first push refuses a record inherited unchanged from
   the default branch. The review record is published after the gate, headed by the SHA it was
-  reviewed at and sent on stdin, so no copy is left on disk. A push during publication is
-  reported afterwards, not prevented, and a head that cannot be read afterwards is reported as
+  reviewed at. The record is read whole before the edit starts, so a failed read publishes
+  nothing, and it is sent on stdin, so no copy is left on disk. A PR head that differs from the
+  gate's afterwards is reported, not prevented, and one that cannot be read is reported as
   unverified.
 - **The origin check is an allow-list (KI-70).** It accepts `ssh://`, `git+ssh://`,
   `ssh+git://` and `https://` in lower case, the scp form and an absolute local path without

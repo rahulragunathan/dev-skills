@@ -214,9 +214,11 @@ for m in $(printf '%s' "$GEMINI_RUNGS"); do
   rm -f "$OUT" "$PART" "${OUT%.txt}.partial" "$ERR" "$STATE"   # never inherit a previous attempt
   PROMPT="$(cat "<scratchpad>/gemini_prompt_p<n>_c<chunk>.txt")" && [ -n "$PROMPT" ] \
     || { echo "no prompt for this chunk — not run"; break; }
-  # agy cuts a longer prompt short and still exits 0. Measure what is sent, in bytes;
-  # zsh's [ reads an empty count as 0, so a count that is not a number stops the run.
-  SIZE="$(printf '%s' "$PROMPT" | wc -c | tr -d ' ')"
+  # agy cuts a longer prompt short and still exits 0. Measure what is sent, in bytes. wc
+  # ends the pipeline, so its status is the one checked; zsh's [ reads an empty count as 0,
+  # so a count that is not a number stops the run too.
+  SIZE="$(printf '%s' "$PROMPT" | wc -c)" || SIZE=""
+  SIZE="${SIZE//[[:space:]]/}"
   case "$SIZE" in ''|*[!0-9]*) echo "cannot measure the prompt — not run"; break ;; esac
   [ "$SIZE" -le 120000 ] \
     || { echo "prompt over 120000 bytes — split the chunk; agy would truncate it"; break; }
@@ -526,8 +528,8 @@ can leave no answer.
 
 ```bash
 # What the loop sends: the capture drops trailing newlines, so measure it, not the file.
-PROMPT="$(cat "<scratchpad>/gemini_prompt_p<n>_c<chunk>.txt")"
-printf '%s' "$PROMPT" | wc -c   # split by directory or concern if over 120000
+PROMPT="$(cat "<scratchpad>/gemini_prompt_p<n>_c<chunk>.txt")" && [ -n "$PROMPT" ] \
+  && printf '%s' "$PROMPT" | wc -c || echo "cannot read or measure the prompt"   # split if over 120000
 ```
 
 **Split on a seam, and repeat the shared context in every chunk.** Cross-file contradiction is the main thing a review of prose is for, and chunking is exactly what hides it — so the files every other file must agree with (the project instructions file, `AGENTS.md` or `CLAUDE.md`, then `README.md` and `docs/ARCHITECTURE.md`) go into *each* chunk, and each prompt says which chunk it is and that the others cover the rest, so nothing is reported missing merely because it is elsewhere.

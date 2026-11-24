@@ -12,8 +12,9 @@ dependency file is a coverage gap. A requirements file is never handed to the
 scanner as it is. Its lines are joined and its comments removed as pip does, and
 the scanner gets only the lines pinned to one exact version of a valid name, as
 name==version. Every other line (an include, a range, an editable, an option the
-scan does not know, or a version from a variable) is reported as a gap by its
-number. A tracked osv-scanner.toml is passed to the scanner by name, so one it
+scan does not know, or a variable) is reported as a gap by its number, and a file
+that is not UTF-8 is a gap as a whole. Every output line has its control
+characters escaped. A tracked osv-scanner.toml is passed to the scanner by name, so one it
 cannot load fails the scan, and the output names what it can suppress. Each
 supported file is scanned on its own, so its own exit status counts. Nothing is
 installed: lockfiles are read as they are.
@@ -61,27 +62,35 @@ REQUIREMENTS = "requirements*.txt"
 # folder or a folder above it, or the versions it runs with are unknown.
 MANIFESTS = {"package.json": "npm", "Cargo.toml": "cargo", "Gemfile": "ruby",
              "composer.json": "php", "pyproject.toml": "python", "pubspec.yaml": "dart"}
-# A pin the scan vouches for: a PEP 508 name, optional extras, == and one version, as bare
-# text or in parentheses, then an optional marker. Each part is matched once, so a long
-# malformed line costs linear time.
-PINNED = re.compile(r"^(?P<name>[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)(?:\s*\[[^\]]*\])?\s*"
-                    r"(?:==\s*(?P<bare>[^\s;()=*$]+)|\(\s*==\s*(?P<paren>[^\s;()=*$]+)\s*\))\s*(?:;.*)?$")
+# A pin the scan vouches for: a PEP 508 name, optional extras, == and one version (with pip's
+# optional trailing comma), as bare text or in parentheses, then an optional non-empty marker.
+# ASCII only, as the grammars are. Each part is matched once, so a long malformed line costs
+# linear time.
+PINNED = re.compile(r"^(?P<name>[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)"
+                    r"(?:\s*\[\s*(?:[A-Za-z0-9][A-Za-z0-9._-]*(?:\s*,\s*[A-Za-z0-9][A-Za-z0-9._-]*)*)?\s*\])?\s*"
+                    r"(?:==\s*(?P<bare>[^\s;()=*$,]+)\s*,?|\(\s*==\s*(?P<paren>[^\s;()=*$,]+)\s*,?\s*\))"
+                    r"\s*(?:;\s*\S.*)?$", re.ASCII)
 # PEP 440's public and local versions; a leading v is allowed and dropped.
 VERSION = re.compile(r"^v?((?:\d+!)?\d+(?:\.\d+)*(?:[-_.]?(?:a|b|rc|alpha|beta|pre|preview|c)[-_.]?\d*)?"
                      r"(?:-\d+|[-_.]?(?:post|rev|r)[-_.]?\d*)?(?:[-_.]?dev[-_.]?\d*)?(?:\+[a-z0-9]+(?:[-_.][a-z0-9]+)*)?)$",
-                     re.I)
+                     re.I | re.ASCII)
+# PEP 263's declaration, which pip honours in a requirements file's first two lines.
+CODING = re.compile(rb"^[ \t\f]*#.*?coding[:=][ \t]*([-\w.]+)", re.M)
+HASH = re.compile(r"^[a-z0-9]+:[0-9a-fA-F]+$", re.ASCII)
+# Longer option text than any real index URL or hash list is not tokenized at all.
+OPTIONS_LIMIT = 4096
 # pip's own rules (req_file.py): a comment starts at a # that begins the line or follows
 # whitespace, and only a whole-line comment stops a trailing backslash joining the next line.
 # pip writes the first as (^|\s+)#.*$; one \s matches the same text without its quadratic cost.
 COMMENT = re.compile(r"(^|\s)#.*$")
 WHOLE_LINE_COMMENT = re.compile(r"^\s*#")
 # Options pip reads on a line of their own that name no package and fetch nothing the scan
-# would miss. Any other option, abbreviations included, is a gap.
+# would miss, and the options a pin may carry that change no package. Any other option,
+# abbreviations included, is a gap. Each value option maps to the pattern its value must fit.
 GLOBAL_FLAGS = {"--no-index", "--pre", "--prefer-binary", "--require-hashes"}
-GLOBAL_VALUES = {"-i", "--index-url", "--extra-index-url", "-f", "--find-links",
-                 "--trusted-host", "--only-binary", "--no-binary"}
-INCLUDE = re.compile(r"^(-[rc]|--req|--con)")
-EDITABLE = re.compile(r"^(-e|--ed)")
+GLOBAL_VALUES = dict.fromkeys(("-i", "--index-url", "--extra-index-url", "-f", "--find-links",
+                               "--trusted-host", "--only-binary", "--no-binary"))
+PIN_VALUES = {"--hash": HASH, "--config-settings": None}
 IGNORED_ID = re.compile(r"""(?<![\w-])id\s*=\s*(?:"([^"]+)"|'([^']+)')""")
 OVERRIDE = re.compile(r"^\s*\[\[\s*PackageOverrides\s*\]\]|PackageOverrides\s*=", re.M)
 INSTALL_HINT = "brew install osv-scanner"
@@ -169,25 +178,53 @@ def logical_lines(text: str) -> list[tuple[int, str]]:
     return [(n, line) for n, line in stripped if line]
 
 
-def option_gap(tokens: list[str], allowed: set[str], values: set[str]) -> str | None:
-    """Why these option tokens stop the scan vouching for the line, or None."""
-    expect_value = False
+def names(token: str, short: str, long: str) -> bool:
+    """Whether pip could read `token` as option `short`/`long`: the short form with its value
+    attached, or the long form or an abbreviation of it."""
+    flag = token.partition("=")[0]
+    return (token.startswith(short) and not token.startswith("--")) or (len(flag) > 3 and long.startswith(flag))
+
+
+def option_gap(tokens: list[str], flags: set[str], values: dict) -> str | None:
+    """Why these option tokens stop the scan vouching for the line, or None. Known options
+    are matched whole first, so --require-hashes is never read as --requirement."""
+    pending = None                      # the value option whose value comes next
     for token in tokens:
-        if expect_value:
-            expect_value = False
+        if pending is not None:
+            if values[pending] and not values[pending].match(token):
+                return "has an option the scan does not read"
+            pending = None
             continue
-        if INCLUDE.match(token):
-            return "includes another file, not followed"
-        if EDITABLE.match(token):
-            return "is not pinned (editable)"
-        flag, eq, _ = token.partition("=")
-        if flag in allowed and not eq:
+        flag, eq, value = token.partition("=")
+        if flag in flags and not eq:
             continue
         if flag in values:
-            expect_value = not eq
+            if eq and values[flag] and not values[flag].match(value):
+                return "has an option the scan does not read"
+            pending = None if eq else flag
             continue
+        if names(token, "-r", "--requirement") or names(token, "-c", "--constraint"):
+            return "includes another file, not followed"
+        if names(token, "-e", "--editable"):
+            return "is not pinned (editable)"
         return "has an option the scan does not read"
-    return "has an option the scan does not read" if expect_value else None
+    return "has an option the scan does not read" if pending else None
+
+
+def requirements_text(data: bytes) -> tuple[str | None, str]:
+    """The file as pip would decode it, or None and why. Only UTF-8, with or without a BOM,
+    is read: replacing a byte could move a line boundary pip sees."""
+    if data.startswith(b"\xef\xbb\xbf"):
+        data = data[3:]
+    elif data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return None, "not UTF-8"
+    declared = CODING.search(b"\n".join(data.split(b"\n")[:2]))
+    if declared and declared[1].decode("ascii").lower().replace("_", "-") not in ("utf-8", "utf8"):
+        return None, "declares an encoding other than UTF-8"
+    try:
+        return data.decode("utf-8"), ""
+    except UnicodeDecodeError:
+        return None, "not UTF-8"
 
 
 def read_requirements(text: str) -> tuple[list[str], list[str]]:
@@ -201,13 +238,19 @@ def read_requirements(text: str) -> tuple[list[str], list[str]]:
         words = line.split(" ")
         cut = next((i for i, w in enumerate(words) if w.startswith("-")), len(words))
         requirement, options = " ".join(words[:cut]).strip(), " ".join(words[cut:])
+        if not requirement and "${" in line:
+            # pip expands it before reading the options, so it can hold an include.
+            gaps.append(f"line {number} has a version or variable the scan cannot use")
+            continue
         try:
+            if len(options) > OPTIONS_LIMIT:
+                raise ValueError("too long")
             tokens = shlex.split(options)
         except ValueError:
             gaps.append(f"line {number} has an option the scan does not read")
             continue
         if requirement:
-            why = option_gap(tokens, set(), {"--hash"})
+            why = option_gap(tokens, set(), PIN_VALUES)
         else:
             why = option_gap(tokens, GLOBAL_FLAGS, GLOBAL_VALUES)
         if why or not requirement:
@@ -226,13 +269,19 @@ def read_requirements(text: str) -> tuple[list[str], list[str]]:
 
 
 def readable(value) -> bool:
-    """A string fit for one line of the report: not empty, no control characters."""
-    return isinstance(value, str) and bool(value) and value.isprintable()
+    """A string fit for one line of the report: not blank, no control characters."""
+    return isinstance(value, str) and bool(value.strip()) and value.isprintable()
+
+
+def shown(line: str) -> str:
+    """A report line with every non-printable character escaped, so repository text such as
+    a path holding a line break cannot forge another line."""
+    return "".join(c if c.isprintable() else repr(c)[1:-1] for c in line)
 
 
 def findings_in(stdout: str, rel: str) -> tuple[list[str], list[str]]:
-    """(the FINDING lines in osv-scanner's JSON, the parts it could not read). A package
-    that cannot be read is named as such and the rest are still reported."""
+    """(the FINDING lines in osv-scanner's JSON, the parts it could not read). What cannot be
+    read is named as such, and everything else is still reported."""
     results = json.loads(stdout).get("results") if stdout.strip() else None
     if not isinstance(results, list):
         return [], ["no results list"]
@@ -243,39 +292,51 @@ def findings_in(stdout: str, rel: str) -> tuple[list[str], list[str]]:
             errors.append("a result without packages")
             continue
         for pkg in result["packages"]:
-            try:
-                out += package_findings(pkg, rel)
-            except ValueError as exc:
-                errors.append(str(exc))
+            rows, problems = package_findings(pkg, rel)
+            out += rows; errors += problems
     return out, errors
 
 
-def package_findings(pkg, rel: str) -> list[str]:
-    """One row per advisory group, its other ids and aliases in brackets, and one per
-    vulnerability no group lists; ValueError for anything not shaped as osv-scanner's answer."""
+def listed(pkg: dict, key: str):
+    """The list at `key`; absent or null is empty, any other type is None."""
+    value = pkg.get(key)
+    return [] if value is None else value if isinstance(value, list) else None
+
+
+def package_findings(pkg, rel: str) -> tuple[list[str], list[str]]:
+    """(one row per advisory group, its other ids and aliases in brackets, and one per
+    vulnerability no group lists; what could not be read). A bad group or vulnerability is
+    an error of its own and the rest of the package is still reported."""
     p = pkg.get("package") if isinstance(pkg, dict) else None
-    if not isinstance(p, dict) or not readable(p.get("name")) or not readable(str(p.get("version"))):
-        raise ValueError("a package without a name")
-    groups, vulns = pkg.get("groups") or [], pkg.get("vulnerabilities") or []
-    if not (isinstance(groups, list) and isinstance(vulns, list)):
-        raise ValueError("a package whose groups cannot be read")
-    rows, grouped = [], set()
-    for group in groups:
+    if not isinstance(p, dict) or not readable(p.get("name")) or not readable(p.get("version")):
+        return [], ["a package without a name and version"]
+    groups, vulns = listed(pkg, "groups"), listed(pkg, "vulnerabilities")
+    rows, errors, grouped = [], [], set()
+    if groups is None or vulns is None:
+        errors.append("a package whose groups or vulnerabilities are not lists")
+    for group in groups or []:
         ids = group.get("ids") if isinstance(group, dict) else None
         aliases = group.get("aliases") if isinstance(group, dict) else None
         aliases = [] if isinstance(group, dict) and aliases is None else aliases   # Go writes an empty slice as null
         if not (isinstance(ids, list) and ids and isinstance(aliases, list)
                 and all(readable(i) for i in ids + aliases)):
-            raise ValueError("a group without usable ids")
+            errors.append("a group without usable ids")
+            continue
         grouped |= set(ids) | set(aliases)
         rows.append((ids[0], sorted(set(ids[1:] + aliases) - {ids[0]})))
-    for vuln in vulns:
+    for vuln in vulns or []:
         vid = vuln.get("id") if isinstance(vuln, dict) else None
         if not readable(vid):
-            raise ValueError("a vulnerability without a usable id")
-        if vid not in grouped:
+            errors.append("a vulnerability without a usable id")
+        elif vid not in grouped:
             rows.append((vid, [])); grouped.add(vid)
-    return [f"FINDING {first} ({', '.join(rest)}) {p['name']} {p.get('version')} {rel}" for first, rest in rows]
+    return ([f"FINDING {first} ({', '.join(rest)}) {p['name']} {p['version']} {rel}" for first, rest in rows],
+            errors)
+
+
+def say(line: str) -> None:
+    """Print one report line; every line passes through shown(), whatever text it holds."""
+    print(shown(line))
 
 
 def scan(root: pathlib.Path, offline: bool) -> int:
@@ -285,14 +346,14 @@ def scan(root: pathlib.Path, offline: bool) -> int:
         head = subprocess.run(["git", "-C", str(root), "rev-parse", "--verify", "HEAD^{commit}"],
                               capture_output=True, text=True)
         if head.returncode != 0:
-            print(f"cannot read HEAD of {root}")
+            say(f"cannot read HEAD of {root}")
             return 2
         commit = head.stdout.strip()
-        print(f"scanned commit {commit}")
+        say(f"scanned commit {commit}")
         try:
             links = export_head(root, commit, tree)
         except (RuntimeError, OSError) as exc:
-            print(f"cannot read {commit} of {root}: {exc}")
+            say(f"cannot read {commit} of {root}: {exc}")
             return 2
         files = sorted(p.relative_to(tree).as_posix() for p in tree.rglob("*") if p.is_file())
         names = {rel: rel.rsplit("/", 1)[-1] for rel in files}
@@ -314,17 +375,17 @@ def scan(root: pathlib.Path, offline: bool) -> int:
                 text = (tree / rel).read_text(errors="replace")
                 what = [a or b for a, b in IGNORED_ID.findall(text)]
                 what += ["a package override"] * len(OVERRIDE.findall(text))
-                print(f"{rel} can suppress findings: {', '.join(what) if what else 'nothing recognised'}")
+                say(f"{rel} can suppress findings: {', '.join(what) if what else 'nothing recognised'}")
 
         if not lockfiles:
             for line in gaps or ["no supported dependency files"]:
-                print(line)
+                say(line)
             return 3 if gaps else 0
         scanner = shutil.which("osv-scanner")
         if not scanner:
-            print(f"osv-scanner is not installed — {INSTALL_HINT}")
+            say(f"osv-scanner is not installed — {INSTALL_HINT}")
             for line in gaps:
-                print(line)
+                say(line)
             return 2
 
         scanned = 0
@@ -333,7 +394,11 @@ def scan(root: pathlib.Path, offline: bool) -> int:
             if rel in requirements:
                 # The scanner gets only the checked pins, so it can follow no include. They
                 # replace the exported copy in place, beside any osv-scanner.toml it obeys.
-                pins, lines = read_requirements(source.read_text(errors="replace"))
+                text, why = requirements_text(source.read_bytes())
+                if text is None:
+                    gaps.append(f"NOT SCANNED {rel}: {why}, not read")
+                    continue
+                pins, lines = read_requirements(text)
                 gaps += [f"NOT SCANNED {rel}: {line}" for line in lines]
                 if not pins:
                     gaps.append(f"NOT SCANNED {rel}: no pinned requirement")
@@ -348,8 +413,7 @@ def scan(root: pathlib.Path, offline: bool) -> int:
                    *(["--offline"] if offline else []),
                    *(["--config", str(config)] if config.is_file() else []), "-L", f"{parser}:{source}"]
             # Its stderr is never read (it can quote a token), so it is never decoded either.
-            run = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
-                                 errors="replace", cwd=tree)
+            run = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, cwd=tree)
             if run.returncode == 128:
                 gaps.append(f"NOT SCANNED {rel}: no packages found")
                 continue
@@ -358,8 +422,9 @@ def scan(root: pathlib.Path, offline: bool) -> int:
                 failed.append(f"osv-scanner failed on {rel} (exit {run.returncode}); rerun it by hand to see why")
                 continue
             try:
-                found, unreadable = findings_in(run.stdout, rel)
-            except (ValueError, AttributeError, TypeError):
+                # Strict: a byte replaced in the JSON could pass for a readable advisory id.
+                found, unreadable = findings_in(run.stdout.decode("utf-8"), rel)
+            except (ValueError, AttributeError, TypeError):   # UnicodeDecodeError is a ValueError
                 found, unreadable = [], ["not JSON"]
             if unreadable:
                 failed.append(f"osv-scanner gave unreadable output for {rel}")
@@ -372,9 +437,9 @@ def scan(root: pathlib.Path, offline: bool) -> int:
             findings += found
             scanned += 1
         for line in failed + findings + gaps:
-            print(line)
+            say(line)
         if scanned and not (failed or findings):
-            print(f"{scanned} file{'' if scanned == 1 else 's'} scanned: no known vulnerabilities")
+            say(f"{scanned} file{'' if scanned == 1 else 's'} scanned: no known vulnerabilities")
         return 2 if failed else 1 if findings else 3 if gaps else 0
 
 

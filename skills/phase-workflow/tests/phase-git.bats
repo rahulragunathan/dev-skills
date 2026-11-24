@@ -1131,7 +1131,7 @@ publish_fake() {
 #!/bin/bash
 case "\$*" in
   *headRefOid*) if [ -e "$TEST_TMP/edited" ] && [ -n "\$NOVIEW" ]; then exit 1; fi
-                if [ -e "$TEST_TMP/edited" ] && [ -n "\$MOVE" ]; then echo moved; else echo "\$FAKE_PR_HEAD"; fi ;;
+                if [ -e "$TEST_TMP/edited" ] && [ -n "\$MOVE" ]; then echo ffffffffffffffffffffffffffffffffffffffff; else echo "\$FAKE_PR_HEAD"; fi ;;
   *"pr edit"*) if [ "\${@: -1}" = - ]; then cat > "$TEST_TMP/published"; else touch "$TEST_TMP/body-file"; fi
                touch "$TEST_TMP/edited" ;;
 esac
@@ -1170,6 +1170,30 @@ SH
   # Fails if a failed gh pr view after the edit is reported as a confirmed push (pass 4, Codex 9).
   publish_record "$(git rev-parse HEAD)"
   publish_fake
+  PATH="$TEST_TMP/bin:$PATH" MOVE= NOVIEW=1 run bash "$TEST_TMP/publish.sh"
+  [ "$status" -ne 0 ] || false
+  [[ "$output" == *"CANNOT READ THE PR HEAD AFTER PUBLISHING"* ]] || false
+  [[ "$output" != *MOVED* ]]
+}
+
+@test "a record that cannot be read never reaches the PR" {
+  # Fails if gh pr edit starts before the record is read, so a failed read publishes the
+  # heading alone over the PR description (pass 5, Codex 1, Gemini 1).
+  publish_record "$(git rev-parse HEAD)"
+  publish_fake
+  rm -f "$TEST_TMP/record.md"
+  PATH="$TEST_TMP/bin:$PATH" MOVE= NOVIEW= run bash "$TEST_TMP/publish.sh"
+  [ "$status" -ne 0 ] || false
+  [ ! -e "$TEST_TMP/edited" ] || false
+  [ ! -e "$TEST_TMP/published" ]
+}
+
+@test "an empty PR head after publishing is reported as unverified, not as moved" {
+  # Fails if gh answering status 0 with no SHA is read as a confirmed push (pass 5, Codex 12).
+  publish_record "$(git rev-parse HEAD)"
+  publish_fake
+  sed -i.bak 's|exit 1; fi$|echo; exit 0; fi|' "$TEST_TMP/bin/gh"
+  grep -q 'echo; exit 0; fi' "$TEST_TMP/bin/gh" || false
   PATH="$TEST_TMP/bin:$PATH" MOVE= NOVIEW=1 run bash "$TEST_TMP/publish.sh"
   [ "$status" -ne 0 ] || false
   [[ "$output" == *"CANNOT READ THE PR HEAD AFTER PUBLISHING"* ]] || false

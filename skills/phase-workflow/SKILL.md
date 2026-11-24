@@ -415,7 +415,7 @@ what remains expired.
 
      Record these SHAs, the repository, PR number and link, base branch, phase branch, merge method and release tag in the hand-off. Give the phase diff command: `git diff "origin/$DEFAULT_BRANCH"..."$GATE_SHA"`. The user signs off on `GATE_SHA`. Set `APPROVED_SHA` to that recorded value only after approval; never refresh it from a later HEAD.
 
-     Then put the review record in the PR description. The step checks the PR head before and after the edit, so a push in between is reported, not prevented:
+     Then put the review record in the PR description. The step checks the PR head before and after the edit, so a head that differs from the gate's afterwards is reported, not prevented:
 
      ```bash
      # fence: publish-record
@@ -425,12 +425,17 @@ what remains expired.
      [ "$(git rev-parse HEAD)" = "$GATE_SHA" ] && [ "$(pr_head)" = "$GATE_SHA" ] \
        || { echo "HEAD MOVED SINCE THE GATE — stop"; exit 1; }
      # The body names the head it was reviewed at, so a later push shows the record is stale.
-     # It goes on stdin: no copy on disk, and no trap to replace in the shell running this.
-     { printf 'Review record for %s.\n\n' "$GATE_SHA"; cat "<review record file>"; } \
-       | gh pr edit "$PR" -R "$REPO" --body-file -
-     # Detection, not prevention: a push during the edit is found here, after the body is up.
-     AFTER="$(pr_head)" || { echo "CANNOT READ THE PR HEAD AFTER PUBLISHING — check by hand whether the record is stale"; exit 1; }
-     [ "$AFTER" = "$GATE_SHA" ] || { echo "PR HEAD MOVED WHILE THE RECORD WAS PUBLISHED — the record is stale"; exit 1; }
+     # It is read whole before gh starts, so a failed read publishes nothing, and goes on
+     # stdin: no copy on disk, and no trap to replace in the shell running this.
+     RECORD="$(cat "<review record file>")" && [ -n "$RECORD" ] || { echo "CANNOT READ THE REVIEW RECORD — nothing published"; exit 1; }
+     printf 'Review record for %s.\n\n%s\n' "$GATE_SHA" "$RECORD" | gh pr edit "$PR" -R "$REPO" --body-file -
+     # Detection, not prevention: a head that differs from the gate's afterwards is reported.
+     AFTER="$(pr_head)" || AFTER=""
+     case "$AFTER" in
+       "$GATE_SHA") ;;
+       *[!0-9a-f]*|'') echo "CANNOT READ THE PR HEAD AFTER PUBLISHING — check by hand whether the record is stale"; exit 1 ;;
+       *) echo "PR HEAD MOVED WHILE THE RECORD WAS PUBLISHED — the record is stale"; exit 1 ;;
+     esac
      ```
 
      Second, **the reviewer artifacts exist on disk**. Apply

@@ -539,13 +539,23 @@ answer() {
   [[ "$output" != *"line 5 "* ]]
 }
 
-@test "a long malformed requirement line is read in linear time" {
-  # Fails if the pin pattern backtracks over a long run of whitespace (pass 4, Codex 10).
-  put requirements.txt "$(python3 -c 'print("six==1.17.0\na" + " " * 120000 + "x")')"
-  SECONDS=0
-  scan
-  [ "$status" -eq 3 ] || false
-  [ "$SECONDS" -lt 4 ]
+@test "a long malformed requirement line or option is read in linear time" {
+  # Fails if the pin or comment patterns backtrack over a long run of whitespace, or a long
+  # option value is tokenized without a bound (pass 4, Codex 10; pass 5, Codex 15). The parser
+  # runs alone, under a deadline, so git and the interpreter's start are not timed.
+  run python3 - "$SCAN" <<'PY'
+import importlib.util, signal, sys
+spec = importlib.util.spec_from_file_location("scan", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+signal.alarm(3)
+for text in ("a" + " " * 200000 + "x\n", "--index-url " + "x" * 200000 + "\n",
+             "six==1.0 --hash=sha256:" + "a" * 200000 + "\n", "a" + " " * 200000 + "# c\n"):
+    pins, gaps = m.read_requirements(text)
+    assert gaps and not pins, (pins, gaps)
+print("in time")
+PY
+  [ "$status" -eq 0 ] || false
+  [[ "$output" == *"in time"* ]]
 }
 
 @test "every advisory in a package is named, grouped or not" {
@@ -601,4 +611,106 @@ answer() {
   scan
   [ "$status" -eq 0 ] || false
   [[ "$output" == *"1 file scanned: no known vulnerabilities"* ]]
+}
+
+# --- external review pass 5 ----------------------------------------------------
+
+@test "--require-hashes is a known option, and an option that changes no package keeps its pin" {
+  # Fails if --require-hashes is read as an include, or --config-settings on a pin discards it
+  # (pass 5, Codex 10, Gemini 2).
+  put requirements.txt "$(printf -- '--require-hashes\nsix==1.17.0 --hash=sha256:abcd\nidna==3.7 --config-settings=k=v\n')"
+  spy
+  scan
+  [ "$status" -eq 0 ] || false
+  [ "$(cat "$TEST_TMP/scanned")" = "$(printf 'six==1.17.0\nidna==3.7')" ]
+}
+
+@test "a variable on an option-only line is a gap" {
+  # Fails if \${VAR} on an option line passes, though pip expands it into options that can
+  # include another file (pass 5, Codex 3, Gemini 3).
+  put requirements.txt "$(printf 'six==1.17.0\n--extra-index-url ${EXTRA}\n')"
+  scan
+  [ "$status" -eq 3 ] || false
+  [[ "$output" == *"line 2 has a version or variable the scan cannot use"* ]]
+}
+
+@test "pins pip would reject are gaps, and a trailing comma is read" {
+  # Fails if bad extras, an empty marker, a malformed hash or a non-ASCII digit becomes a clean
+  # pin, or pip's "name==1," is refused (pass 5, Codex 5 and 10, Gemini 4).
+  put requirements.txt "$(printf 'a[bad extra]==1\nb==1;\nc==1 --hash=wrong\nd==\xd9\xa1\ne==1,\nok==1.0\n')"
+  spy
+  scan
+  [ "$status" -eq 3 ] || false
+  [ "$(cat "$TEST_TMP/scanned")" = "$(printf 'e==1\nok==1.0')" ] || false
+  local n
+  for n in 1 2 3 4; do [[ "$output" == *"line $n "* ]] || { echo "line $n: $output"; false; }; done
+}
+
+@test "a requirements file that is not UTF-8, or declares another encoding, is not read; a BOM is" {
+  # Fails if bytes are replaced and parsed, so a pin pip reads is lost or a comment is misread
+  # (pass 5, Codex 4).
+  printf 'six==1.17.0\n\xff\n' > "$REPO/requirements.txt"
+  printf '# -*- coding: latin-1 -*-\nsix==1.17.0\n' > "$REPO/requirements-dev.txt"
+  printf '\xef\xbb\xbfidna==3.7\n' > "$REPO/requirements-bom.txt"
+  git -C "$REPO" add -A && git -C "$REPO" commit -qm reqs
+  spy
+  scan
+  [ "$status" -eq 3 ] || false
+  [[ "$output" == *"NOT SCANNED requirements.txt: not UTF-8, not read"* ]] || false
+  [[ "$output" == *"NOT SCANNED requirements-dev.txt: declares an encoding other than UTF-8, not read"* ]] || false
+  [ "$(cat "$TEST_TMP/scanned")" = "idna==3.7" ]
+}
+
+@test "a malformed group leaves its own package's other advisories in the report" {
+  # Fails if one bad group discards the readable groups and vulnerabilities of the same
+  # package (pass 5, Codex 8, Gemini 5).
+  put uv.lock 'clean'
+  answer '{"results": [{"packages": [{"package": {"name": "p", "version": "1"}, "groups": [{"ids": ["A"]}, {}], "vulnerabilities": [{"id": "A"}, {"id": "C"}]}]}]}'
+  scan
+  [ "$status" -eq 2 ] || false
+  [[ "$output" == *"FINDING A () p 1 uv.lock"* ]] || false
+  [[ "$output" == *"FINDING C () p 1 uv.lock"* ]] || false
+  [[ "$output" == *"unreadable output for uv.lock"* ]]
+}
+
+@test "groups, vulnerabilities, a version or an id of the wrong type is unreadable" {
+  # Fails if {} or false is taken for an empty list, a missing version prints as None, or a
+  # blank id is a finding (pass 5, Codex 6, Gemini 5).
+  put uv.lock 'clean'
+  local bad
+  for bad in '{"package": {"name": "p", "version": "1"}, "groups": {}, "vulnerabilities": [{"id": "A"}]}' \
+             '{"package": {"name": "p", "version": "1"}, "groups": [], "vulnerabilities": false}' \
+             '{"package": {"name": "p"}, "groups": [{"ids": ["A"]}], "vulnerabilities": [{"id": "A"}]}' \
+             '{"package": {"name": "p", "version": "1"}, "groups": [{"ids": ["  "]}], "vulnerabilities": []}'; do
+    answer "{\"results\": [{\"packages\": [$bad]}]}"
+    scan
+    [ "$status" -eq 2 ] || { echo "$bad: $status $output"; false; }
+    [[ "$output" != *"None"* ]] || false
+  done
+}
+
+@test "scanner output that is not UTF-8 is unreadable, not repaired" {
+  # Fails if invalid bytes in the JSON are replaced and the advisory published as read (pass 5,
+  # Codex 9, Gemini 6).
+  put uv.lock 'clean'
+  printf '#!/bin/bash\nprintf %s\nexit 1\n' "'{\"results\": [{\"packages\": [{\"package\": {\"name\": \"p\", \"version\": \"1\"}, \"groups\": [{\"ids\": [\"GHSA-\\xff\"]}], \"vulnerabilities\": [{\"id\": \"GHSA-\\xff\"}]}]}]}'" > "$BIN/osv-scanner"
+  chmod +x "$BIN/osv-scanner"
+  scan
+  [ "$status" -eq 2 ] || false
+  [[ "$output" == *"unreadable output for uv.lock"* ]]
+}
+
+@test "a committed path holding a line break reaches the report as one line" {
+  # Fails if a repository-controlled path is printed raw, so it can forge a report line
+  # (pass 5, Codex 7).
+  mkdir -p "$REPO/a
+FINDING FORGED"
+  printf 'clean\n' > "$REPO/a
+FINDING FORGED/uv.lock"
+  git -C "$REPO" add -A && git -C "$REPO" commit -qm odd
+  answer '{"results": [{"packages": [{"package": {"name": "p", "version": "1"}, "groups": [{"ids": ["A"]}], "vulnerabilities": [{"id": "A"}]}]}]}'
+  scan
+  [ "$status" -eq 1 ] || false
+  [ "$(printf '%s\n' "$output" | grep -c '^FINDING')" = 1 ] || false
+  [[ "$output" == *'a\nFINDING FORGED/uv.lock'* ]]
 }

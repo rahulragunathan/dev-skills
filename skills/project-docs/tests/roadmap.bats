@@ -1232,7 +1232,7 @@ def replace(src, dst):
     if pathlib.Path(dst).name == "ROADMAP.md" and sys.argv[3] == "fail":
         raise OSError("injected failure on the second file")
     real(src, dst)
-    if pathlib.Path(dst).name == "KNOWN_ISSUES.md":
+    if pathlib.Path(dst).name == "KNOWN_ISSUES.md" and not fired:   # once: never after a rollback
         (d / "KNOWN_ISSUES.md").write_text("EDITOR-REWRITE\n")
         if sys.argv[3] == "edit-index":
             p = d / "ROADMAP.md"; p.write_text(p.read_text() + "EDITOR-ROW\n")
@@ -1249,8 +1249,9 @@ PY
   # Fails if rollback restores the original over a file an editor changed after close replaced
   # it, or keeps its recovery copies where the test's cleanup cannot reach them.
   run close_after_first fail
+  [ "$status" -eq 0 ] || false
   [[ "$output" == *"exit 1"* ]] || false
-  [[ "$output" == *"detail: EDITOR-REWRITE"* ]] || false
+  [ "$(cat "$DOCS/KNOWN_ISSUES.md")" = EDITOR-REWRITE ] || false
   [[ "$output" == *"retained at $TEST_TMP/"* ]]
 }
 
@@ -1259,10 +1260,11 @@ PY
   # ROADMAP.md changed since it was read (pass 3, Gemini 11). The index really changes, so the
   # check that detects it runs too (pass 4, Codex 14).
   run close_after_first edit-index
+  [ "$status" -eq 0 ] || false
   [[ "$output" == *"exit 1"* ]] || false
   [[ "$output" == *"installation failed (ROADMAP.md changed since it was read)"* ]] || false
   [[ "$output" == *"was left as it is"* ]] || false
-  [[ "$output" == *"detail: EDITOR-REWRITE"* ]] || false
+  [ "$(cat "$DOCS/KNOWN_ISSUES.md")" = EDITOR-REWRITE ] || false
   grep -q EDITOR-ROW "$DOCS/ROADMAP.md"
 }
 
