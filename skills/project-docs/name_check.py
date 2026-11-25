@@ -27,15 +27,11 @@ import sys
 import urllib.parse
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from roadmap import FILES, FRAGMENT, LINK, fenced_lines  # noqa: E402
+# SECRET_NAMES is re-exported for the test that keeps it equal to capture.sh's list.
+from roadmap import FILES, FRAGMENT, LINK, SECRET_NAMES, credential_shaped, fenced_lines  # noqa: E402,F401
 
 Finding = collections.namedtuple("Finding", "path line kind name reason")
 
-# The credential-shaped names external-review's capture.sh withholds; a test
-# keeps the two lists equal.
-SECRET_NAMES = ("*.env", "*.env.*", "*.pem", "*.key", "*.p12", "*.pfx", "*.crt", "*id_rsa*",
-                "*id_ed25519*", "*id_ecdsa*", "*.pypirc", "*credentials*", "*.netrc", "*.npmrc",
-                "*.sqlite", "*.sqlite3")
 INTERPRETERS = {"python3", "python", "bash", "sh", "node"}
 ID = re.compile(rf"({'|'.join(FILES)})-\d+")
 # An ID is declared by its entry's anchor in a detail file, or named in CHANGELOG.
@@ -50,6 +46,13 @@ SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*:")
 QUOTE = re.compile(r"^\s*(>\s?)+")
 IGNORE = re.compile(r"<!--\s*name-check:\s*ignore\s+(.+?)\s*-->")
 REFDEF = re.compile(r"^ {0,3}\[[^\]]+\]:\s*<?([^\s>]+)>?")
+REFDEF_LABEL = re.compile(r"^ {0,3}\[([^\]]+)\]:\s*(?!<>\s*$)\S")   # a definition has a destination
+# A full or collapsed reference, [text][label] or [label][]; a shortcut [label] reads as prose.
+REFUSE = re.compile(r"(?<![\w\]])\[([^\[\]\n]+)\]\[([^\[\]\n]*)\]")  # not an index like a[0][1]
+# A script named without a folder: matched against tracked basenames.
+SCRIPT_NAME = re.compile(r"[\w.-]+\.(?:py|sh)")
+# The plugin's own root, as the skills spell it in commands.
+PLUGIN_ROOT = re.compile(r"^\$\{?CLAUDE_PLUGIN_ROOT\}?/")
 HEADING = re.compile(r"^ {0,3}#{1,6}\s+(.*?)\s*#*\s*$")
 HTML_ID = re.compile(r"""\b(?:id|name)=["']([^"']+)["']""")
 DETAIL_FILES = {prefix: f"docs/{name}" for prefix, name in FILES.items()}
@@ -70,16 +73,6 @@ def in_scope(rel: str) -> bool:
             and not rel.startswith(("docs/superpowers/plans/", "docs/superpowers/specs/")))
 
 
-def credential_shaped(rel: str) -> bool:
-    """The rule capture.sh applies: the path or any folder above it matches."""
-    path = rel.lower()
-    while path:
-        if any(fnmatch.fnmatch(path, p) for p in SECRET_NAMES):
-            return True
-        path = path.rsplit("/", 1)[0] if "/" in path else ""
-    return False
-
-
 def flag_name(word: str) -> str | None:
     m = FLAG.fullmatch(word)
     return m[1] if m else None
@@ -95,7 +88,10 @@ class Repo:
             raise NotARepo(f"not a git repository: {root}")
         self.tracked = [p for p in out.stdout.split("\0") if p]
         self.tops = {p.split("/", 1)[0] for p in self.tracked}
-        self.basenames = {p.rsplit("/", 1)[-1] for p in self.tracked}
+        self.by_basename: dict[str, list[str]] = collections.defaultdict(list)
+        for p in self.tracked:
+            self.by_basename[p.rsplit("/", 1)[-1]].append(p)
+        self.basenames = set(self.by_basename)
         self._text: dict[str, str | None] = {}
         self._anchors: dict[str, set[str]] = {}
         self._code: str | None = None
@@ -127,17 +123,22 @@ class Repo:
     def _read(self, rel: str) -> str | None:
         path = self.root / rel
         # Any symlink on the way, not only the last one, could lead to a
-        # credential-shaped folder under a harmless name.
-        if (not self.inside(rel) or credential_shaped(rel)
-                or os.path.realpath(path) != os.path.abspath(path) or not path.is_file()):
-            return None
+        # credential-shaped folder under a harmless name. The metadata lookups
+        # can fail too, on a folder without search permission.
         try:
+            if (not self.inside(rel) or credential_shaped(rel)
+                    or os.path.realpath(path) != os.path.abspath(path) or not path.is_file()):
+                return None
             data = path.read_bytes()
         except OSError:
             return None
         if b"\0" in data[:8192]:
             return None
         return data.decode("utf-8", errors="replace")
+
+    def scripts_named(self, name: str) -> list[str]:
+        """Tracked files with this basename."""
+        return self.by_basename.get(name, [])
 
     def code(self) -> str:
         """The text of every readable tracked file that is not Markdown, which
@@ -206,13 +207,21 @@ def visible_lines(text: str) -> list[str]:
     return out
 
 
+# Marks a path written from "$CLAUDE_PLUGIN_ROOT/...": it is read from the root only.
+ROOTED = "\0root/"
+
+
 def path_token(token: str) -> str | None:
     """The path a backticked token names, or None when it is not path-shaped."""
-    token = SUFFIX.sub("", token)
-    if (not token or "/" not in token or token.startswith("/") or "//" in token
+    token = SUFFIX.sub("", token.strip("\"'"))
+    rooted = PLUGIN_ROOT.match(token)
+    if rooted:
+        token = token[rooted.end():]
+    if (not token or ("/" not in token and not rooted) or token.startswith("/") or "//" in token
+            or "..." in token.split("/")          # an elided path, `skills/...`
             or SCHEME.match(token) or NOT_A_PATH & set(token)):
         return None
-    return token
+    return ROOTED + token if rooted else token
 
 
 def locate(repo: Repo, token: str | None, doc_dir: str) -> str | None:
@@ -223,6 +232,8 @@ def locate(repo: Repo, token: str | None, doc_dir: str) -> str | None:
     first, then from the root."""
     if not token:
         return None
+    if token.startswith(ROOTED):
+        return os.path.normpath(token[len(ROOTED):])
     first = token.split("/", 1)[0]
     from_doc = os.path.normpath(os.path.join(doc_dir, token))
     if first in (".", "..") or repo.present(os.path.join(doc_dir, first)):
@@ -233,11 +244,21 @@ def locate(repo: Repo, token: str | None, doc_dir: str) -> str | None:
     return None
 
 
+def label_key(label: str) -> str:
+    """A reference label as CommonMark compares it: whitespace runs collapsed, case folded."""
+    return re.sub(r"\s+", " ", label.strip()).casefold()
+
+
 def check_doc(repo: Repo, rel: str) -> list[Finding]:
     findings: list[Finding] = []
     doc_dir = os.path.dirname(rel)
     ignored: set[str] = set()
-    for number, line in enumerate(visible_lines(repo.text(rel) or ""), 1):
+    lines = visible_lines(repo.text(rel) or "")
+    # Matched on the blanked line, so brackets inside code spans are ignored, but read from
+    # the text itself: a backticked label would otherwise blank to "".
+    labels = {label_key(line[m.start(1):m.end(1)]) for line in lines
+              for m in [REFDEF_LABEL.match(blank_spans(line))] if m}
+    for number, line in enumerate(lines, 1):
         here, ignored = ignored, set()
         # The directive must sit outside a code span; the names it lists may be
         # backticked, so they are read from the same place in the raw line.
@@ -261,6 +282,13 @@ def check_doc(repo: Repo, rel: str) -> list[Finding]:
                     found.append(("id", words[0], ""))
             elif flag := flag_name(words[0]):
                 lone_flags.append(flag)
+            elif SCRIPT_NAME.fullmatch(words[0]):
+                # A bare script name is never reported missing on its own, since
+                # prose names files in other projects; one that resolves binds the
+                # line's lone flags.
+                named = repo.scripts_named(words[0])
+                if len(named) == 1:
+                    scripts.append(named[0])
             else:
                 path = locate(repo, path_token(words[0]), doc_dir)
                 if path and not repo.inside(path):
@@ -279,6 +307,12 @@ def check_doc(repo: Repo, rel: str) -> list[Finding]:
             targets.append(ref[1])
         for target in targets:
             found.extend(check_link(repo, target, rel, doc_dir))
+        for use in REFUSE.finditer(prose):
+            # [text][label], or [label][] when the second part is empty.
+            group = 2 if use.end(2) > use.start(2) else 1
+            label = line[use.start(group):use.end(group)].strip()
+            if label_key(label) not in labels:
+                found.append(("link", f"[{label}]", "no definition in this doc"))
         findings += [Finding(rel, number, *f) for f in found if f[1] not in here]
     return findings
 
@@ -294,6 +328,18 @@ def check_command(repo, words, doc_dir, found) -> str | None:
         operand = locate(repo, path_token(words[1]), doc_dir)
         if operand:
             first, script, args = words[1], operand, words[2:]
+        elif SCRIPT_NAME.fullmatch(words[1]):
+            first, args = words[1], words[2:]
+    if not script and SCRIPT_NAME.fullmatch(first):
+        # `python3 roadmap.py` or `roadmap.py run`: one tracked file of that name is
+        # the script; none is a missing command; two cannot be told apart.
+        named = repo.scripts_named(first)
+        if not named:
+            found.append(("command", first, ""))
+            return None
+        if len(named) > 1:
+            return None
+        script = named[0]
     if not script:
         if (BARE.fullmatch(first) and words[1].startswith("--") and not shutil.which(first)
                 and first not in repo.basenames

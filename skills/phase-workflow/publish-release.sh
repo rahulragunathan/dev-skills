@@ -40,23 +40,59 @@ fi
 
 git rev-parse --git-dir >/dev/null 2>&1 || { echo "NOT A GIT REPOSITORY"; exit 1; }
 
-# A URL carrying credentials would be copied into the committed phase record
-# and the review bundle. Refuse it, and never print it.
-# Any user part in a URL with a scheme, except a bare user over ssh (ssh://git@host),
-# and any query or fragment, which a remote has no use for.
-has_credentials() {
-  printf '%s' "$1" | grep -qiE '^[a-z][a-z0-9+.-]*://[^/]*:[^/@]*@|^[a-z][a-z0-9+.-]*://.*[?#]' && return 0
-  printf '%s' "$1" | grep -qiE '^[a-z][a-z0-9+.-]*://[^/]*@' \
-    && ! printf '%s' "$1" | grep -qiE '^(ssh|git\+ssh|ssh\+git)://'
+# The origin URLs are copied into the committed phase record and the review
+# bundle, so only the forms a phase needs are accepted, and a credential in one
+# is refused without being printed. Shell patterns decide, not an external
+# command, so a tool that cannot run cannot make a URL pass.
+
+# kind <url>: url, scp, path or refused.
+kind() {
+  case "$1" in
+    ''|-*|//*|*[[:space:]]*|*::*) echo refused ;;
+    # Lower case only: git picks its built-in transports by exact prefix, and hands
+    # any other spelling to a remote helper.
+    ssh://?*|git+ssh://?*|ssh+git://?*|https://?*) echo url ;;
+    *://*) echo refused ;;
+    /*) echo path ;;
+    *:*)
+      # scp form: [user@]host:path, with no slash before the first colon.
+      case "${1%%:*}" in ''|*/*|*@|@*) echo refused ;; *) echo scp ;; esac ;;
+    *) echo refused ;;
+  esac
 }
-# A transport-helper URL (`http::…`, `ext::…`) can carry a credential in forms no
-# pattern can parse, and a normal remote never needs one, so it is refused.
+
+# has_credentials <url> <kind>: a password, token or query in an accepted form.
+# A bare user is allowed over ssh (ssh://git@host) and in the scp form.
+has_credentials() {
+  case "$2:$1" in url:*'?'*|url:*'#'*|scp:*'?'*|scp:*'#'*) return 0 ;; esac
+  case "$2" in
+    url)
+      local rest="${1#*://}"
+      local authority="${rest%%/*}"
+      # git decodes %-escapes in an ssh authority before parsing it, so none may hide a part.
+      case "$authority" in *%*) return 0 ;; esac
+      case "$authority" in
+        *@*)
+          local user="${authority%@*}"
+          # git decodes %-escapes before it splits the user part, so refuse them outright.
+          case "$user" in *:*|*%*) return 0 ;; esac
+          case "$1" in https://*) return 0 ;; esac ;;
+      esac ;;
+    scp)
+      local user_host="${1%%:*}" path="${1#*:}"
+      case "$user_host" in *@*@*) return 0 ;; esac
+      case "${path%%/*}" in *@*) return 0 ;; esac ;;
+  esac
+  return 1
+}
+
 for url in "$WANT_FETCH" "$WANT_PUSH"; do
-  if printf '%s' "$url" | grep -qE '^[A-Za-z][A-Za-z0-9+.-]*::'; then
-    echo "TRANSPORT HELPER IN ORIGIN URL — refusing; use an ssh or https remote, and do not record the URL"
+  url_kind="$(kind "$url")"
+  if [ "$url_kind" = refused ]; then
+    echo "UNSUPPORTED ORIGIN URL — refusing; use an ssh, https or scp-style remote or a local path, and do not record the URL"
     exit 1
   fi
-  if has_credentials "$url"; then
+  if has_credentials "$url" "$url_kind"; then
     echo "CREDENTIALS IN ORIGIN URL — refusing; use SSH or a credential helper, and do not record the URL"
     exit 1
   fi
@@ -72,9 +108,21 @@ have_push="$(git remote get-url --push origin 2>/dev/null || true)"
 [ "$have_push" = "$WANT_PUSH" ] \
   || { echo "ORIGIN PUSH URL CHANGED SINCE THE GATE — refusing"; exit 1; }
 
-# More than one push destination means the check above covers only the first.
-if [ "$(git remote get-url --push --all origin 2>/dev/null | wc -l | tr -d ' ')" -gt 1 ]; then
+# More than one push destination means the check above covers only the first,
+# and a listing that fails proves nothing. The whole listing must be the one URL.
+# The trailing x keeps the listing's final newlines, which command substitution would strip.
+all_push="$(git remote get-url --push --all origin 2>/dev/null && printf x)" \
+  || { echo "CANNOT LIST THE ORIGIN PUSH URLS — refusing"; exit 1; }
+if [ "$all_push" != "$WANT_PUSH
+x" ]; then
   echo "ORIGIN HAS MULTIPLE PUSH URLS — refusing; a tag would go to all of them"
+  exit 1
+fi
+# A configured helper replaces the transport the URL names.
+# Present at all, even empty, it selects a helper; only git's "absent" status (1) passes.
+vcs_rc=0; git config --get remote.origin.vcs >/dev/null 2>&1 || vcs_rc=$?
+if [ "$vcs_rc" -ne 1 ]; then
+  echo "remote.origin.vcs IS SET — refusing; it hands origin to a remote helper"
   exit 1
 fi
 

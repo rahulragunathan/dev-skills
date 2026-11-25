@@ -26,10 +26,9 @@ setup() {
 # differed only in the stub's output.
 write_invoke_script() {   # $1 = ladder output, $2 = destination, $3 = optional codex() body
   python3 - "$CODEX_ROOT" "$2" "$TEST_TMP" "$1" "${3:-}" <<'INVOKE_PY'
-import pathlib,re,sys
-text=pathlib.Path(sys.argv[1]).with_name('SKILL.md').read_text()
-block=next(b for b in re.findall(r'```bash\n(.*?)```',text,re.S)
-           if 'for m in ${CODEX_RUNGS' in b and 'codex exec' in b)
+import pathlib,sys
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+block=fence(pathlib.Path(sys.argv[1]).with_name('SKILL.md'), 'codex-loop')
 body=sys.argv[5] or 'printf "%s\\n" "$@" > "$ARGS"; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2";'
 prelude=('CODEX_RUNGS="' + sys.argv[4] + '"\n'
          'codex() { ' + body + ' }\n')
@@ -282,7 +281,8 @@ PY
 @test "an ERROR line naming an unsupported model moves to the next rung" {
   write_invoke_script 'first:high second:high' "$TEST_TMP/invoke.sh" \
     'echo "${8}" >> "$TEST_TMP/models"; if [ "${8}" = first ]; then echo "ERROR: The '"'"'first'"'"' model is not supported when using Codex with a ChatGPT account." >&2; return 1; fi; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2";'
-  run bash "$TEST_TMP/invoke.sh"
+  fake_confirmation UNAVAILABLE   # the probe confirms the refusal
+  CLAUDE_PLUGIN_ROOT="$TEST_TMP/plugin" run bash "$TEST_TMP/invoke.sh"
   [ "$(tr '\n' ' ' < "$TEST_TMP/models")" = "first second " ]
 }
 
@@ -300,7 +300,8 @@ PY
 @test "the documented Codex loop still downshifts under errexit" {
   write_invoke_script 'first:high second:high' "$TEST_TMP/invoke.sh" \
     'echo "${8}" >> "$TEST_TMP/models"; if [ "${8}" = first ]; then echo "ERROR: The first model is not supported when using Codex with a ChatGPT account." >&2; return 1; fi; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2";'
-  run bash -e "$TEST_TMP/invoke.sh"
+  fake_confirmation UNAVAILABLE   # the probe confirms the refusal
+  CLAUDE_PLUGIN_ROOT="$TEST_TMP/plugin" run bash -e "$TEST_TMP/invoke.sh"
   [ "$(tr '\n' ' ' < "$TEST_TMP/models")" = "first second " ]
 }
 
@@ -318,6 +319,95 @@ PY
 @test "a refusal naming this rung's model downshifts even with lines after it" {
   write_invoke_script 'first:high second:high' "$TEST_TMP/invoke.sh" \
     'echo "${8}" >> "$TEST_TMP/models"; if [ "${8}" = first ]; then { echo "ERROR: The '"'"'first'"'"' model is not supported when using Codex with a ChatGPT account."; for i in 1 2 3 4 5 6; do echo "shutdown $i"; done; } >&2; return 1; fi; while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2";'
-  run bash "$TEST_TMP/invoke.sh"
+  fake_confirmation UNAVAILABLE   # the probe confirms the refusal
+  CLAUDE_PLUGIN_ROOT="$TEST_TMP/plugin" run bash "$TEST_TMP/invoke.sh"
   [ "$(tr '\n' ' ' < "$TEST_TMP/models")" = "first second " ]
+}
+
+# --- the loop under each shell (KI-74) --------------------------------------
+# The Bash tool runs the user's login shell, often zsh, and zsh does not split
+# an unquoted variable into words: the loop would run once, with all three rung
+# names as one model.
+
+# fake_confirmation <status>: a preflight.sh under $TEST_TMP/plugin that answers
+# every Codex probe with <status>, as preflight's own row, and logs its arguments.
+fake_confirmation() {
+  mkdir -p "$TEST_TMP/plugin/skills/external-review"
+  cat > "$TEST_TMP/plugin/skills/external-review/preflight.sh" <<SH
+#!/bin/bash
+printf '%s\\n' "\$*" >> "$TEST_TMP/probes"
+while [ "\$1" != --codex-model ]; do shift; done
+printf '%-8s %-24s %s\\n' codex "\$2" "$1"
+printf '%-8s %-24s %s\\n' gemini — "UNAVAILABLE — no discovered candidates supplied"
+exit 1
+SH
+}
+
+# codex_rungs_in <shell>: three rungs, the first two refused by name.
+codex_rungs_in() {
+  cat > "$TEST_TMP/fake-codex" <<'SH'
+#!/bin/bash
+while [ "$1" != -m ]; do shift; done; model="$2"
+printf '%s\n' "$model" >> "$TEST_TMP/models"
+if [ "$model" = m3 ]; then
+  while [ "$1" != -o ]; do shift; done; echo "No findings." > "$2"; exit 0
+fi
+echo "ERROR: The '$model' model is not supported when using Codex" >&2; exit 1
+SH
+  chmod +x "$TEST_TMP/fake-codex"
+  fake_confirmation UNAVAILABLE
+  write_invoke_script 'm1:high m2:high m3:high' "$TEST_TMP/invoke.sh" '"$TEST_TMP/fake-codex" "$@";'
+  CLAUDE_PLUGIN_ROOT="$TEST_TMP/plugin" run "$@" "$TEST_TMP/invoke.sh"
+  [ "$(cat "$TEST_TMP/models")" = "$(printf 'm1\nm2\nm3')" ]
+}
+
+@test "bash: the documented Codex loop tries each rung in turn" {
+  # Fails if the loop does not walk the rungs one model at a time under bash.
+  codex_rungs_in bash
+}
+
+@test "zsh: the documented Codex loop tries each rung in turn" {
+  # Fails if zsh reads the rung list as one word and the loop runs once.
+  command -v zsh >/dev/null || skip "zsh is not installed"
+  codex_rungs_in zsh -f
+}
+
+# --- KI-63: a quoted refusal is confirmed before the loop downshifts ---------
+
+# quoted_refusal <probe status>: m1's run fails for another reason, its log
+# quoting a refusal of m1; the confirmation probe answers <probe status>.
+quoted_refusal() {
+  cat > "$TEST_TMP/fake-codex" <<'SH'
+#!/bin/bash
+while [ "$1" != -m ]; do shift; done; printf '%s\n' "$2" >> "$TEST_TMP/models"
+echo "reviewing: the earlier log said"
+echo "ERROR: The 'm1' model is not supported when using Codex"
+echo "ERROR: stream disconnected before completion" >&2; exit 1
+SH
+  chmod +x "$TEST_TMP/fake-codex"
+  fake_confirmation "$1"
+  write_invoke_script 'm1:high m2:high' "$TEST_TMP/invoke.sh" '"$TEST_TMP/fake-codex" "$@";'
+  CLAUDE_PLUGIN_ROOT="$TEST_TMP/plugin" run bash "$TEST_TMP/invoke.sh"
+}
+
+@test "a quoted refusal does not downshift when the probe answers" {
+  # Fails if material quoting a refusal of the same model moves the review to a weaker one (KI-63).
+  quoted_refusal READY
+  [ "$(cat "$TEST_TMP/models")" = m1 ] || false
+  [ "$(wc -l < "$TEST_TMP/probes" | tr -d ' ')" = 1 ] || false
+  grep -q -- "--codex-model m1:high" "$TEST_TMP/probes" || false
+  grep -q -- "--root $ROOT" "$TEST_TMP/probes" || false
+  [[ "$output" == *"did not confirm it unavailable (READY)"* ]]
+}
+
+@test "a probe timeout does not downshift" {
+  # Fails if an inconclusive probe is read as unavailable.
+  quoted_refusal "TIMEOUT — inconclusive"
+  [ "$(cat "$TEST_TMP/models")" = m1 ]
+}
+
+@test "a refusal the probe confirms downshifts" {
+  # Control: a real refusal still moves to the next rung.
+  quoted_refusal UNAVAILABLE
+  [ "$(cat "$TEST_TMP/models")" = "$(printf 'm1\nm2')" ]
 }

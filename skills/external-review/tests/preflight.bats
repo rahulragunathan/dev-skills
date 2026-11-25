@@ -61,7 +61,7 @@ EOF
 
 @test "both reviewers ready: reports both and exits 0" {
   fake_codex_ready; fake_agy_ready
-  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected
   [ "$status" -eq 0 ]
   [[ "$output" == *"codex"*"READY"* ]] || false
   [[ "$output" == *"gemini"*"READY"* ]]
@@ -71,7 +71,7 @@ EOF
   # THE finding. Quota is account-wide and availability is per model, so the
   # two demand different responses: downshift for one, wait for the other.
   fake_codex_ready; fake_agy_quota
-  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected
   [[ "$output" == *"gemini"*"QUOTA"* ]] || false
   [[ "$output" != *"gemini"*"UNAVAILABLE"* ]]
 }
@@ -80,20 +80,20 @@ EOF
   # Red if the probe reports only pass/fail: the caller needs to know whether
   # to wait an hour or five days before planning the pass.
   fake_codex_ready; fake_agy_quota
-  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected
   [[ "$output" == *"110h19m32s"* ]]
 }
 
 @test "an availability error is UNAVAILABLE, so the caller downshifts instead of waiting" {
   fake_codex_ready; fake_agy_unavailable
-  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected
   [[ "$output" == *"gemini"*"UNAVAILABLE"* ]] || false
   [[ "$output" != *"gemini"*"QUOTA"* ]]
 }
 
 @test "one reviewer ready is exit 0: the pass runs with partial coverage" {
   fake_codex_ready; fake_agy_quota
-  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected
   [ "$status" -eq 0 ]
   [[ "$output" == *"PARTIAL"* ]]
 }
@@ -101,19 +101,19 @@ EOF
 @test "no reviewer able to answer is exit 1" {
   fake_agy_quota
   printf '#!/usr/bin/env bash\necho "error: quota" >&2\nexit 1\n' > "$BIN/codex"; chmod +x "$BIN/codex"
-  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected
   [ "$status" -eq 1 ]
 }
 
 @test "a missing CLI is MISSING, and is not confused with a failing one" {
   fake_agy_ready
-  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected
   [[ "$output" == *"codex"*"MISSING"* ]] || false
   [ "$status" -eq 0 ]
 }
 
 @test "both CLIs missing is exit 1 and says so" {
-  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected
   [ "$status" -eq 1 ]
   [[ "$output" == *"codex"*"MISSING"* ]] || false
   [[ "$output" == *"gemini"*"MISSING"* ]]
@@ -123,7 +123,7 @@ EOF
   # Codex exits 0 on some quota failures and writes no -o file. Exit status
   # alone cannot tell a finished review from an exhausted account.
   fake_codex_silent_zero; fake_agy_ready
-  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected
   # Scoped to the codex line: a bare glob spans newlines, so *"codex"*"READY"*
   # also matches codex on one line and gemini's READY on the next.
   [[ "$(printf '%s\n' "$output" | grep '^codex')" != *"READY"* ]] || false
@@ -141,7 +141,7 @@ echo "[agy] print timeout after 2m0s with turn in progress; returning partial ou
 exit 0
 EOF
   chmod +x "$BIN/agy"
-  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected
   [[ "$output" == *"gemini"*"TIMEOUT"* ]] || false
   [[ "$output" != *"gemini"*"QUOTA"* ]] || false
   [[ "$output" != *"gemini"*"READY"* ]]
@@ -157,7 +157,7 @@ echo "error: Individual quota reached. Resets in 110h19m32s." >&2
 exit 0
 EOF
   chmod +x "$BIN/agy"
-  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected
   [[ "$output" == *"gemini"*"QUOTA"* ]] || false
   [[ "$output" == *"110h19m32s"* ]]
 }
@@ -173,7 +173,7 @@ EOF
   fake_codex_ready
   printf '#!/bin/sh\necho ready\necho "print timeout: turn in progress" >&2\n' > "$BIN/agy"
   chmod +x "$BIN/agy"
-  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected
   [[ "$output" == *"gemini"*"TIMEOUT"* ]] || false
   [[ "$output" != *"gemini"*"READY"* ]]
 }
@@ -182,7 +182,7 @@ EOF
   fake_codex_ready
   printf '#!/bin/sh\necho thinking\n' > "$BIN/agy"
   chmod +x "$BIN/agy"
-  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected
   [[ "$output" == *"gemini"*"NO ANSWER"* ]]
 }
 
@@ -191,7 +191,7 @@ EOF
   printf '#!/bin/sh\nsleep 20 &\necho $! > "%s"\nwait\n' "$TEST_TMP/child" > "$BIN/codex"
   chmod +x "$BIN/codex"
   local started=$SECONDS
-  PREFLIGHT_TIMEOUT=1 run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
+  PREFLIGHT_TIMEOUT=1 run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected
   [ "$status" -eq 0 ]
   [ "$((SECONDS - started))" -lt 8 ]
   [[ "$output" == *"codex"*"TIMEOUT"* ]] || false
@@ -213,14 +213,14 @@ echo "$model" >> "$TEST_TMP/models"
 echo ready > "$out"
 SH
   chmod +x "$BIN/codex"
-  run bash "$PREFLIGHT" --codex-model unavailable --codex-model discovered --gemini-model selected
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model unavailable --codex-model discovered --gemini-model selected
   [[ "$output" == *"codex"*"discovered"*"READY"* ]] || false
   [ "$(cat "$TEST_TMP/models")" = $'unavailable\ndiscovered' ]
 }
 
 @test "one discovered ladder still reports a missing other reviewer" {
   fake_codex_ready
-  run bash "$PREFLIGHT" --codex-model selected
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected
   [ "$status" -eq 0 ]
   [[ "$output" == *"gemini"*"MISSING"* ]] || false
   [[ "$output" == *"PARTIAL COVERAGE"* ]]
@@ -232,7 +232,7 @@ SH
 echo stream_idle_timeout_ms=300000\
 echo stream_idle_timeout_ms=300000 >&2\
 ' "$BIN/codex"
-  run bash "$PREFLIGHT" --codex-model selected
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected
   [ "$status" -eq 0 ]
   [[ "$output" == *"codex"*"READY"* ]]
 }
@@ -242,7 +242,7 @@ echo stream_idle_timeout_ms=300000 >&2\
   sed -i.bak '2i\
 printf "%s\\n" "$@" > "$TEST_TMP/codex-args"\
 ' "$BIN/codex"
-  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected
   [ "$status" -eq 0 ]
   grep -Fx 'model_reasoning_effort=high' "$TEST_TMP/codex-args"
 }
@@ -256,8 +256,8 @@ SH
   chmod +x "$BIN/codex"
   python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/probe.sh" <<'PY'
 import pathlib, re, sys
-text = pathlib.Path(sys.argv[1]).read_text().split('## Failure handling', 1)[1]
-code = re.search(r'```bash\n(.*?)```', text, re.S)[1]
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+code = fence(sys.argv[1], 'failure-probe')
 pathlib.Path(sys.argv[2]).write_text(code.replace('<same model as the real run>', 'selected'))
 PY
   ROOT="$TEST_TMP" run bash "$TEST_TMP/probe.sh"
@@ -282,7 +282,7 @@ PY
   sed -i.bak '2i\
 printf "%s\\n" "$@" > "$TEST_TMP/codex-args"\
 ' "$BIN/codex"
-  run bash "$PREFLIGHT" --codex-model selected:medium --gemini-model selected
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected:medium --gemini-model selected
   [ "$status" -eq 0 ]
   grep -Fx 'model_reasoning_effort=medium' "$TEST_TMP/codex-args"
   run grep -Fx 'model_reasoning_effort=high' "$TEST_TMP/codex-args"
@@ -308,7 +308,7 @@ printf "%s\\n" "$@" > "$TEST_TMP/codex-args"\
 # line, so the assertion has to look for the line rather than for its lack.
 @test "an authoring reviewer does not count toward coverage" {
   fake_codex_ready; fake_agy_ready          # BOTH answer
-  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected --authored-by codex
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected --authored-by codex
   [ "$status" -eq 0 ]
   printf '%s\n' "$output" | grep -q 'PARTIAL COVERAGE'
 }
@@ -316,7 +316,7 @@ printf "%s\\n" "$@" > "$TEST_TMP/codex-args"\
 # Fails if excluding the only answering reviewer still reports coverage.
 @test "excluding the only answering reviewer leaves no coverage" {
   fake_codex_ready; fake_agy_unavailable
-  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected --authored-by codex
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected --authored-by codex
   [ "$status" -ne 0 ]
   printf '%s\n' "$output" | grep -q 'NO REVIEWER CAN ANSWER'
 }
@@ -326,7 +326,7 @@ printf "%s\\n" "$@" > "$TEST_TMP/codex-args"\
 # operator cannot tell a broken CLI from a disqualified author.
 @test "an excluded reviewer is reported as the author, not as unable to answer" {
   fake_codex_ready; fake_agy_ready
-  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected --authored-by codex
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected --authored-by codex
   # Require a completed pass first: without this the assertions below are
   # satisfied by the "unknown argument: --authored-by" rejection, which
   # contains the string "author" and would pass with the flag unimplemented.
@@ -353,11 +353,11 @@ for a in "$@"; do [ "$a" = --effort ] \&\& { echo "error: --model x conflicts wi
     > "$TEST_TMP/plugin/skills/external-review/preflight.sh"
   python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/probe.sh" <<'PY'
 import pathlib, re, sys
-blocks = re.findall(r'```bash\n(.*?)```', pathlib.Path(sys.argv[1]).read_text(), re.S)
-block = next(b for b in blocks if 'PROBE_MODELS=()' in b)
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+block = fence(sys.argv[1], 'probe')
 pathlib.Path(sys.argv[2]).write_text('CODEX_RUNGS="fixture:high"\nGEMINI_RUNGS=""\n' + block)
 PY
-  CLAUDE_PLUGIN_ROOT="$TEST_TMP/plugin" run bash "$TEST_TMP/probe.sh"
+  ROOT="$TEST_TMP" CLAUDE_PLUGIN_ROOT="$TEST_TMP/plugin" run bash "$TEST_TMP/probe.sh"
   [ -f "$TEST_TMP/probe-args" ] || false
   grep -Fx 'fixture:high' "$TEST_TMP/probe-args"
 }
@@ -365,14 +365,15 @@ PY
 # discovery_script <codex_ladder body> <gemini_ladder body>: the documented
 # discovery block with both ladder functions stubbed, under errexit, ending
 # with a line that prints both rung lists.
-discovery_script() {
-  python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/discover.sh" "$1" "$2" <<'PY'
+discovery_script() {   # $3 = agy_models body, default: one model listed
+  python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/discover.sh" "$1" "$2" "${3:-echo gemini-4-neon-high;}" "$TEST_TMP" <<'PY'
 import pathlib, re, sys
-blocks = re.findall(r'```bash\n(.*?)```', pathlib.Path(sys.argv[1]).read_text(), re.S)
-block = next(b for b in blocks if 'CODEX_RUNGS="$(codex_ladder' in b)
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+block = fence(sys.argv[1], 'discovery').replace('<scratchpad>', sys.argv[6])
 prelude = ('set -e\n'
            'codex_ladder() { ' + sys.argv[3] + ' }\n'
-           'gemini_ladder() { ' + sys.argv[4] + ' }\n')
+           'gemini_ladder() { ' + sys.argv[4] + ' }\n'
+           'agy_models() { ' + sys.argv[5] + ' }\n')
 pathlib.Path(sys.argv[2]).write_text(prelude + block + 'echo "codex=[$CODEX_RUNGS] gemini=[$GEMINI_RUNGS]"\n')
 PY
 }
@@ -386,8 +387,8 @@ PY
 }
 
 @test "a Gemini listing that fails after printing an id gives an empty ladder" {
-  # Fails if a failed agy models still yields rungs, because the pipeline's status is lost.
-  discovery_script 'echo fixture:high;' '{ echo gemini-4-neon-high; false; } | cat;'
+  # Fails if a failed agy models still yields rungs, because its status is lost.
+  discovery_script 'echo fixture:high;' 'cat;' 'echo gemini-4-neon-high; return 1;'
   run bash "$TEST_TMP/discover.sh"
   [ "$status" -eq 0 ] || false
   [[ "$output" == *"codex=[fixture:high] gemini=[]"* ]]
@@ -406,8 +407,8 @@ PY
 @test "the documented Gemini loop does not accept a partial answer as coverage" {
   python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/gemini.sh" "$TEST_TMP" <<'PY'
 import pathlib, re, sys
-blocks = re.findall(r'```bash\n(.*?)```', pathlib.Path(sys.argv[1]).read_text(), re.S)
-block = next(b for b in blocks if 'for m in ${GEMINI_RUNGS' in b and 'agy -p' in b)
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+block = fence(sys.argv[1], 'gemini-loop')
 prelude = ('GEMINI_RUNGS="gemini-4-neon-high"\n'
            'agy() { echo "1. **[High]** a finding cut off mid"; '
            'echo "[agy] print timeout after 25m0s with turn in progress; returning partial output" >&2; return 0; }\n')
@@ -427,8 +428,8 @@ PY
 @test "the documented Gemini loop reads a prompt file per chunk" {
   python3 - "$BATS_TEST_DIRNAME/../SKILL.md" <<'PY'
 import pathlib, re, sys
-blocks = re.findall(r'```bash\n(.*?)```', pathlib.Path(sys.argv[1]).read_text(), re.S)
-block = next(b for b in blocks if 'for m in ${GEMINI_RUNGS' in b and 'agy -p' in b)
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+block = fence(sys.argv[1], 'gemini-loop')
 assert 'gemini_prompt_p<n>_c<chunk>.txt' in block, block
 PY
 }
@@ -436,13 +437,13 @@ PY
 # gemini_loop <agy body>: the documented Gemini loop with agy stubbed, one rung,
 # pass 1 chunk 1, writing into $TEST_TMP.
 gemini_loop() {
-  python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/gemini.sh" "$TEST_TMP" "$1" <<'PY'
+  python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/gemini.sh" "$TEST_TMP" "$1" "${2:-1}" <<'PY'
 import pathlib, re, sys
-blocks = re.findall(r'```bash\n(.*?)```', pathlib.Path(sys.argv[1]).read_text(), re.S)
-block = next(b for b in blocks if 'for m in ${GEMINI_RUNGS' in b and 'agy -p' in b)
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+block = fence(sys.argv[1], 'gemini-loop')
 prelude = 'GEMINI_RUNGS="gemini-4-neon-high gemini-4-argon-high"\nagy() { ' + sys.argv[4] + ' }\n'
 block = (block.replace('<scratchpad>', sys.argv[3]).replace('<mode>', 'phase')
-         .replace('<n>', '1').replace('<chunk>', '1').replace('<attempt>', '1'))
+         .replace('<n>', '1').replace('<chunk>', sys.argv[5]).replace('<attempt>', '1'))
 pathlib.Path(sys.argv[2]).write_text(prelude + block)
 PY
 }
@@ -532,8 +533,8 @@ PY
   # Fails if the prompt file is fixed to one chunk rather than following <chunk>.
   printf 'CHUNK-ONE' > "$TEST_TMP/gemini_prompt_p1_c1.txt"
   printf 'CHUNK-TWO' > "$TEST_TMP/gemini_prompt_p1_c2.txt"
-  gemini_loop 'printf "%s" "$2" > "$TEST_TMP/seen"; echo "No findings.";'
-  sed -i.bak 's/_c1\([_.]\)/_c2\1/g' "$TEST_TMP/gemini.sh"
+  # Only the <chunk> placeholder becomes 2, so a chunk number fixed in the fence stays wrong.
+  gemini_loop 'printf "%s" "$2" > "$TEST_TMP/seen"; echo "No findings.";' 2
   run bash "$TEST_TMP/gemini.sh"
   [ "$(cat "$TEST_TMP/seen")" = "CHUNK-TWO" ]
 }
@@ -581,12 +582,12 @@ printf "%s\\n" "$@" > "$TEST_TMP/agy-args"\
     > "$TEST_TMP/home/.codex/models_cache.json"
   python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/wrappers.sh" "$TEST_TMP" <<'PY'
 import pathlib, re, sys
-blocks = re.findall(r'```bash\n(.*?)```', pathlib.Path(sys.argv[1]).read_text(), re.S)
-block = next(b for b in blocks if 'codex_ladder() {' in b and 'gemini_ladder() {' in b)
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+block = fence(sys.argv[1], 'ladder-wrappers')
 pathlib.Path(sys.argv[2]).write_text(
     'agy() { printf "%s\\n" gemini-4-neon-high gemini-4-neon-xhigh; }\n'
     + block.replace('<scratchpad>', sys.argv[3])
-    + 'codex_ladder --effort max; gemini_ladder --effort xhigh\n')
+    + 'codex_ladder --effort max; agy_models | gemini_ladder --effort xhigh\n')
 PY
   HOME="$TEST_TMP/home" CLAUDE_PLUGIN_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)" run bash "$TEST_TMP/wrappers.sh"
   [ "$status" -eq 0 ] || false
@@ -599,7 +600,266 @@ PY
   run bash "$TEST_TMP/discover.sh"
   [[ "$output" == *"No Gemini model offers"* ]] || false
   [[ "$output" != *"agy-models.err"* ]] || false
-  discovery_script 'echo fixture:high;' 'false;'
+  discovery_script 'echo fixture:high;' 'cat;' 'return 1;'
   run bash "$TEST_TMP/discover.sh"
   [[ "$output" == *"agy models failed"* ]]
+}
+
+# --- the documented fences under each shell (KI-74) -------------------------
+# The Bash tool runs the user's login shell, often zsh. Each check below runs
+# under bash and, in its own test, under zsh -f.
+
+# gemini_rungs_in <shell...>: two rungs, the first unavailable.
+gemini_rungs_in() {
+  printf 'prompt' > "$TEST_TMP/gemini_prompt_p1_c1.txt"
+  gemini_loop 'printf "%s\n" "$4" >> "$TEST_TMP/models"; if [ "$4" = gemini-4-neon-high ]; then echo "model is not supported" >&2; return 1; fi; echo "No findings.";'
+  run "$@" "$TEST_TMP/gemini.sh"
+  [ "$(cat "$TEST_TMP/models")" = "$(printf 'gemini-4-neon-high\ngemini-4-argon-high')" ]
+}
+
+@test "bash: the documented Gemini loop tries each rung in turn" {
+  # Fails if the loop does not walk the rungs one model at a time under bash.
+  gemini_rungs_in bash
+}
+
+@test "zsh: the documented Gemini loop tries each rung in turn" {
+  # Fails if zsh reads the rung list as one word and the loop runs once.
+  command -v zsh >/dev/null || skip "zsh is not installed"
+  gemini_rungs_in zsh -f
+}
+
+# discovery_effort_in <shell...>: the user asks for max; both ladders get it,
+# and the empty-ladder messages name it.
+discovery_effort_in() {
+  discovery_script 'printf "%s\n" "$@" > "$TEST_TMP/codex-ladder-args";' 'printf "%s\n" "$@" > "$TEST_TMP/gemini-ladder-args";'
+  grep -q '^EFFORT=high' "$TEST_TMP/discover.sh" || false
+  sed -i.bak 's/^EFFORT=high/EFFORT=max/' "$TEST_TMP/discover.sh"
+  run "$@" "$TEST_TMP/discover.sh"
+  [ "$(cat "$TEST_TMP/codex-ladder-args")" = "$(printf -- '--effort\nmax')" ] || false
+  [ "$(cat "$TEST_TMP/gemini-ladder-args")" = "$(printf -- '--effort\nmax')" ] || false
+  [[ "$output" == *"No Codex rung at max"* ]] || false
+  [[ "$output" == *"No Gemini model offers max"* ]]
+}
+
+@test "bash: discovery passes the requested effort to both ladders and names it" {
+  # Fails if a requested effort is dropped, or the messages name something else.
+  discovery_effort_in bash
+}
+
+@test "zsh: discovery passes the requested effort to both ladders and names it" {
+  # Fails if zsh's 1-based arrays make the messages name "--effort" instead of the effort.
+  command -v zsh >/dev/null || skip "zsh is not installed"
+  discovery_effort_in zsh -f
+}
+
+# probe_args_in <shell...>: the documented probe block with a review root whose
+# path holds a space; the fake preflight.sh records its argument vector.
+probe_args_in() {
+  mkdir -p "$TEST_TMP/plugin/skills/external-review" "$TEST_TMP/my root"
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$@" > "%s/probe-args"\n' "$TEST_TMP" \
+    > "$TEST_TMP/plugin/skills/external-review/preflight.sh"
+  python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/probe.sh" <<'PY'
+import pathlib, sys
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+pathlib.Path(sys.argv[2]).write_text('CODEX_RUNGS="m1:high"\nGEMINI_RUNGS="gemini-4-neon-high"\n' + fence(sys.argv[1], 'probe'))
+PY
+  ROOT="$TEST_TMP/my root" CLAUDE_PLUGIN_ROOT="$TEST_TMP/plugin" run "$@" "$TEST_TMP/probe.sh"
+  [ "$(cat "$TEST_TMP/probe-args")" = "$(printf -- '--codex-model\nm1:high\n--gemini-model\ngemini-4-neon-high\n--timeout\n120\n--root\n%s' "$TEST_TMP/my root")" ]
+}
+
+@test "bash: the documented probe passes --root and its value as two arguments" {
+  # Fails if the root reaches preflight.sh as anything but its own argument.
+  probe_args_in bash
+}
+
+@test "zsh: the documented probe passes --root and its value as two arguments" {
+  # Fails if zsh keeps "--root <path>" as one word.
+  command -v zsh >/dev/null || skip "zsh is not installed"
+  probe_args_in zsh -f
+}
+
+@test "the documented probe refuses to probe Codex without a review root" {
+  # Fails if the probe runs Codex in the caller's folder when ROOT is unset (KI-64).
+  mkdir -p "$TEST_TMP/plugin/skills/external-review"
+  printf '#!/usr/bin/env bash\ntouch "%s/PROBED"\n' "$TEST_TMP" > "$TEST_TMP/plugin/skills/external-review/preflight.sh"
+  python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/probe.sh" <<'PY'
+import pathlib, sys
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+pathlib.Path(sys.argv[2]).write_text('unset ROOT\nCODEX_RUNGS="m1:high"\nGEMINI_RUNGS=""\n' + fence(sys.argv[1], 'probe'))
+PY
+  CLAUDE_PLUGIN_ROOT="$TEST_TMP/plugin" run bash "$TEST_TMP/probe.sh"
+  [ "$status" -ne 0 ] || false
+  [ ! -e "$TEST_TMP/PROBED" ] || false
+  [[ "$output" == *"ROOT"* ]]
+}
+
+# --- KI-43, KI-64, KI-66, KI-71 ---------------------------------------------
+
+@test "a ready answer with an incidental timeout note on stderr is READY" {
+  # Fails if any "timed out" on stderr overrides a probe that answered (KI-43).
+  fake_codex_ready
+  printf '#!/bin/sh\necho ready\necho "request timed out, retrying" >&2\n' > "$BIN/agy"; chmod +x "$BIN/agy"
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected
+  [[ "$(printf '%s\n' "$output" | grep '^gemini')" == *READY* ]]
+}
+
+@test "a ready answer beside a deadline or cut-off line is TIMEOUT" {
+  # Control: an explicit cut-off still overrides a partial readiness token.
+  local msg
+  fake_codex_ready
+  for msg in "print timeout: turn in progress" "[agy] print timeout after 2m0s with turn in progress; returning partial output" "probe timeout"; do
+    printf '#!/bin/sh\necho ready\necho "%s" >&2\n' "$msg" > "$BIN/agy"; chmod +x "$BIN/agy"
+    run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected
+    [[ "$(printf '%s\n' "$output" | grep '^gemini')" == *TIMEOUT* ]] || false
+  done
+}
+
+@test "a Codex probe without --root is refused" {
+  # Fails if Codex is probed in the caller's folder (KI-64).
+  fake_codex_ready; fake_agy_ready
+  run bash "$PREFLIGHT" --codex-model selected --gemini-model selected
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"--root"* ]]
+}
+
+@test "a --root that is not a directory is refused" {
+  # Fails if a missing or file root reaches codex -C.
+  fake_codex_ready; fake_agy_ready
+  : > "$TEST_TMP/afile"
+  run bash "$PREFLIGHT" --codex-model selected --root "$TEST_TMP/afile"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"not a directory"* ]]
+}
+
+@test "a Gemini id ending -low, -minimal, -none or -ultra is refused" {
+  # Fails if the probe runs an effort the review never uses (KI-64).
+  local s
+  fake_agy_ready
+  for s in low minimal none ultra; do
+    run bash "$PREFLIGHT" --gemini-model "gemini-4-neon-$s"
+    [ "$status" -eq 1 ] || { echo "$s: $output"; false; }
+    [[ "$output" == *"gemini-4-neon-$s"*"refused"* ]] || false
+  done
+}
+
+@test "a Gemini-only probe needs no root" {
+  # Control: requiring a root for Codex does not block a Gemini-only probe.
+  fake_agy_ready
+  run bash "$PREFLIGHT" --gemini-model gemini-4-neon-high
+  [ "$status" -eq 0 ] || false
+  [[ "$output" == *"gemini"*"READY"* ]]
+}
+
+@test "discovery names gemini-ladder.py when the ranker fails" {
+  # Fails if a failed ranker is blamed on agy models and its empty error file (KI-71).
+  discovery_script 'echo fixture:high;' 'return 3;' 'echo gemini-4-neon-high;'
+  run bash "$TEST_TMP/discover.sh"
+  [[ "$output" == *"gemini-ladder.py failed"* ]] || false
+  [[ "$output" != *"agy models failed"* ]]
+}
+
+@test "the documented Gemini loop keeps an answer when stderr announces the print timeout setting" {
+  # Fails if an "[agy] print timeout" line that is not agy's cut-off notice discards a finished answer (KI-66).
+  printf 'prompt' > "$TEST_TMP/gemini_prompt_p1_c1.txt"
+  gemini_loop 'echo "No findings."; echo "[agy] print timeout set to 25m0s" >&2; return 0;'
+  run bash "$TEST_TMP/gemini.sh"
+  [ -s "$TEST_TMP/gemini_phase_p1_c1_a1_gemini-4-neon-high.txt" ]
+}
+
+@test "the documented Gemini loop records each attempt's start and end state" {
+  # Fails if progress.sh has only file times to judge a run by (KI-66).
+  printf 'prompt' > "$TEST_TMP/gemini_prompt_p1_c1.txt"
+  gemini_loop 'echo "1. half"; echo "connection reset" >&2; return 1;'
+  run bash "$TEST_TMP/gemini.sh"
+  local base="$TEST_TMP/gemini_phase_p1_c1_a1_gemini-4-neon-high"
+  [[ "$(cat "$base.start")" =~ ^[0-9]+$ ]] || false
+  [ "$(cat "$base.state")" = failed ] || false
+  gemini_loop 'echo "1. half"; echo "[agy] print timeout after 25m0s with turn in progress; returning partial output" >&2; return 0;'
+  run bash "$TEST_TMP/gemini.sh"
+  [ "$(cat "$base.state")" = cut-off ]
+}
+
+@test "a ready answer beside agy's print timeout setting is READY" {
+  # Fails if a line that only announces the print timeout is taken for a cut-off.
+  fake_codex_ready
+  printf '#!/bin/sh\necho ready\necho "[agy] print timeout set to 120s" >&2\n' > "$BIN/agy"; chmod +x "$BIN/agy"
+  run bash "$PREFLIGHT" --root "$TEST_TMP" --codex-model selected --gemini-model selected
+  [[ "$(printf '%s\n' "$output" | grep '^gemini')" == *READY* ]]
+}
+
+# --- external review pass 1 fixes ----------------------------------------------
+
+@test "the documented Gemini loop refuses a prompt agy would truncate" {
+  # Fails if a prompt over the size agy reads in full is sent, and its cut-off answer counted (pass 1, Gemini 2).
+  head -c 130000 /dev/zero | tr '\0' 'x' > "$TEST_TMP/gemini_prompt_p1_c1.txt"
+  gemini_loop 'touch "$TEST_TMP/AGY-RAN"; echo "No findings.";'
+  run bash "$TEST_TMP/gemini.sh"
+  [ ! -e "$TEST_TMP/AGY-RAN" ] || false
+  [[ "$output" == *"split the chunk"* ]]
+}
+
+@test "the documented Codex loop needs a review root" {
+  # Fails if the loop runs Codex with no ROOT, in whatever folder the shell is in (Gemini 13).
+  python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/loop.sh" <<'PY'
+import pathlib, sys
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+pathlib.Path(sys.argv[2]).write_text('unset ROOT\nCODEX_RUNGS="m1:high"\ncodex() { touch "$TEST_TMP/CODEX-RAN"; }\n' + fence(sys.argv[1], 'codex-loop'))
+PY
+  run bash "$TEST_TMP/loop.sh"
+  [ "$status" -ne 0 ] || false
+  [ ! -e "$TEST_TMP/CODEX-RAN" ]
+}
+
+@test "the documented Gemini loop measures the prompt in bytes" {
+  # Fails if a multibyte prompt under the character limit but over the byte limit is sent (pass 2, Codex 8).
+  python3 -c "open('$TEST_TMP/gemini_prompt_p1_c1.txt','w',encoding='utf-8').write('é'*70000)"
+  gemini_loop 'touch "$TEST_TMP/AGY-RAN"; echo "No findings.";'
+  run bash "$TEST_TMP/gemini.sh"
+  [ ! -e "$TEST_TMP/AGY-RAN" ]
+}
+
+@test "the documented Gemini loop measures the prompt it sends, not a second read of the file" {
+  # Fails if the size check reads the file again instead of the captured prompt: here the file is
+  # over the limit only by trailing newlines the capture drops (pass 3, Codex 13).
+  { head -c 119990 /dev/zero | tr '\0' 'x'; head -c 20 /dev/zero | tr '\0' '\n'; } > "$TEST_TMP/gemini_prompt_p1_c1.txt"
+  gemini_loop 'touch "$TEST_TMP/AGY-RAN"; echo "No findings.";'
+  run bash "$TEST_TMP/gemini.sh"
+  [ -e "$TEST_TMP/AGY-RAN" ]
+}
+
+@test "zsh: the documented Gemini loop does not send a prompt it could not measure" {
+  # Fails if a failed byte count reads as 0, which zsh's [ accepts, so an oversized prompt
+  # reaches agy (pass 4, Codex 8).
+  command -v zsh >/dev/null || skip "zsh is not installed"
+  printf 'small prompt\n' > "$TEST_TMP/gemini_prompt_p1_c1.txt"
+  mkdir -p "$TEST_TMP/failbin"
+  printf '#!/bin/sh\nexit 1\n' > "$TEST_TMP/failbin/wc" && chmod +x "$TEST_TMP/failbin/wc"
+  gemini_loop 'touch "$TEST_TMP/AGY-RAN"; echo "No findings.";'
+  PATH="$TEST_TMP/failbin:$PATH" run zsh -f "$TEST_TMP/gemini.sh"
+  [ ! -e "$TEST_TMP/AGY-RAN" ] || false
+  [[ "$output" == *"cannot measure the prompt"* ]]
+}
+
+@test "zsh: the documented Gemini loop does not trust a count from a failed counter" {
+  # Fails if a counter that prints digits and then fails is believed, because a later stage of
+  # the pipeline hides its status (pass 5, Codex 11, Gemini 8).
+  command -v zsh >/dev/null || skip "zsh is not installed"
+  printf 'small prompt\n' > "$TEST_TMP/gemini_prompt_p1_c1.txt"
+  mkdir -p "$TEST_TMP/failbin"
+  printf '#!/bin/sh\necho 5\nexit 1\n' > "$TEST_TMP/failbin/wc" && chmod +x "$TEST_TMP/failbin/wc"
+  gemini_loop 'touch "$TEST_TMP/AGY-RAN"; echo "No findings.";'
+  PATH="$TEST_TMP/failbin:$PATH" run zsh -f "$TEST_TMP/gemini.sh"
+  [ ! -e "$TEST_TMP/AGY-RAN" ] || false
+  [[ "$output" == *"cannot measure the prompt"* ]]
+}
+
+@test "the documented Codex loop with an empty ladder needs no root" {
+  # Fails if a run with no Codex rung aborts on ROOT before the Gemini half (Codex 17).
+  python3 - "$BATS_TEST_DIRNAME/../SKILL.md" "$TEST_TMP/loop.sh" <<'PY'
+import pathlib, sys
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).resolve().parents[2] / 'tests')); from fence import fence
+pathlib.Path(sys.argv[2]).write_text('unset ROOT\nCODEX_RUNGS=""\n' + fence(sys.argv[1], 'codex-loop') + 'echo AFTER-LOOP\n')
+PY
+  run bash "$TEST_TMP/loop.sh"
+  [[ "$output" == *"AFTER-LOOP"* ]]
 }

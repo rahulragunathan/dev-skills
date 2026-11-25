@@ -36,7 +36,7 @@ Most severe first, and within a severity the most likely first. Both scales and 
 
 | ID | Issue | Likelihood | Severity |
 | ---- | ------- | ---------- | ---------- |
-| [KI-01](KNOWN_ISSUES.md#ki-01) | `<title>` | `<likelihood>` | High |
+| [KI-01](KNOWN_ISSUES.md#ki-01) | `<title>` | Almost always / Likely / Rare | Critical / High / Medium / Low |
 
 ## Enhancements
 
@@ -44,7 +44,7 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 
 | ID | Enhancement | Priority | Effort |
 | ---- | ------------- | ---------- | -------- |
-| [ENH-01](ENHANCEMENTS.md#enh-01) | `<title>` | High | ~1 day |
+| [ENH-01](ENHANCEMENTS.md#enh-01) | `<title>` | High / Medium / Low | ~hours / ~days |
 
 ## Open Questions
 
@@ -53,4 +53,4 @@ reasoning behind each in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
 | ID | Question | Kind |
 | ---- | ---------- | ------ |
-| [UNK-01](OPEN_QUESTIONS.md#unk-01) | `<question>` | Decision |
+| [UNK-01](OPEN_QUESTIONS.md#unk-01) | <the question, as a question> | Decision / Verification / Risk |

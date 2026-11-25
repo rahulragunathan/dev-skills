@@ -16,6 +16,9 @@ rung or reasoning effort does not remove the disqualification.
 
 ## Preflight — check the CLIs first
 
+The blocks in this skill run under bash or zsh, the shell Claude Code's Bash tool may use, so
+they avoid the constructs the two read differently.
+
 ```bash
 command -v codex; command -v agy
 ```
@@ -60,13 +63,14 @@ signed-in account, and model generations turn over faster than this file gets ed
 publish what they offer, so read it at run time.
 
 ```bash
+# fence: ladder-wrappers
 # Codex — codex-ladder.py ranks the cache (see below) and emits slug:effort rungs.
 codex_ladder() { python3 "$CLAUDE_PLUGIN_ROOT/skills/external-review/codex-ladder.py" \
   "$HOME/.codex/models_cache.json" "$@"; }
 
-# Gemini — `agy models` publishes no ranking; gemini-ladder.py ranks it (see below).
-gemini_ladder() { agy models 2>"<scratchpad>/agy-models.err" \
-  | python3 "$CLAUDE_PLUGIN_ROOT/skills/external-review/gemini-ladder.py" "$@"; }
+# Gemini — `agy models` publishes no ranking; gemini-ladder.py ranks the listing on its stdin.
+agy_models() { agy models 2>"<scratchpad>/agy-models.err"; }
+gemini_ladder() { python3 "$CLAUDE_PLUGIN_ROOT/skills/external-review/gemini-ladder.py" "$@"; }
 ```
 
 **`codex-ladder.py` owns the Codex ranking**, and its docstring states the order; the family order
@@ -101,12 +105,18 @@ or malformed `models_cache.json`, an `agy models` that did not run — record th
 running:
 
 ```bash
-EFFORT_ARGS=()   # high; only when the user asks for another: EFFORT_ARGS=(--effort max)
-CODEX_RUNGS="$(codex_ladder ${EFFORT_ARGS[@]+"${EFFORT_ARGS[@]}"})" || CODEX_RUNGS=""
+# fence: discovery
+EFFORT=high   # only when the user asks for another: EFFORT=max (or xhigh, medium)
+CODEX_RUNGS="$(codex_ladder --effort "$EFFORT")" || CODEX_RUNGS=""
 IFS=: read -r slug effort <<< "${CODEX_RUNGS%% *}"
-[ -n "$slug" ] && [ -n "$effort" ] || { CODEX_RUNGS=""; echo "No Codex rung at ${EFFORT_ARGS[1]:-high} (no model offers it, or no readable cache) — record no output for Codex, do not run"; }
-if GEMINI_RUNGS="$(set -o pipefail; gemini_ladder ${EFFORT_ARGS[@]+"${EFFORT_ARGS[@]}"})"; then
-  [ -n "$GEMINI_RUNGS" ] || echo "No Gemini model offers ${EFFORT_ARGS[1]:-high} effort — record no output for Gemini, do not run"
+[ -n "$slug" ] && [ -n "$effort" ] || { CODEX_RUNGS=""; echo "No Codex rung at $EFFORT (no model offers it, or no readable cache) — record no output for Codex, do not run"; }
+# Listing and ranking run apart, so a failure names the program that failed.
+if MODELS="$(agy_models)"; then
+  if GEMINI_RUNGS="$(printf '%s\n' "$MODELS" | gemini_ladder --effort "$EFFORT")"; then
+    [ -n "$GEMINI_RUNGS" ] || echo "No Gemini model offers $EFFORT effort — record no output for Gemini, do not run"
+  else
+    GEMINI_RUNGS=""; echo "gemini-ladder.py failed — record no output for Gemini, do not run"
+  fi
 else
   GEMINI_RUNGS=""; echo "agy models failed — record no output for Gemini, do not run; agy-models.err says why"
 fi
@@ -146,7 +156,10 @@ a different rung or effort from the authoring run, record those separately.
 probes. Pin writes off at the tool level:
 
 ```bash
-for m in ${CODEX_RUNGS?run the ladder discovery block first}; do
+# fence: codex-loop
+: "${CODEX_RUNGS?run the ladder discovery block first}"
+[ -z "$CODEX_RUNGS" ] || : "${ROOT:?prepare the review root with codex-root.sh first}"
+for m in $(printf '%s' "$CODEX_RUNGS"); do
   slug="${m%%:*}"
   case "$m" in *:*) effort="${m#*:}";; *) effort=high;; esac
   OUT="<scratchpad>/codex_<mode>_p<n>_c<chunk>_a<attempt>_${slug}_${effort}.txt"
@@ -158,18 +171,28 @@ for m in ${CODEX_RUNGS?run the ladder discovery block first}; do
     -o "$OUT" "<prompt>" > "$LOG" 2>&1 < /dev/null || rc=$?
   [ "$rc" = 0 ] && [ -s "$OUT" ] && break                      # it answered; keep this rung
   if grep -E '^ERROR:' "$LOG" | grep -F "$slug" | grep -qiE 'not supported|unknown model|is not available|entitle'; then
-    echo "unavailable: $slug:$effort — trying the next rung"; continue
+    # The log can quote a refusal from the material under review, so a probe of this rung confirms it.
+    CONFIRMED=""
+    while read -r who model result; do
+      if [ "$who" = codex ] && [ "$model" = "$slug:$effort" ]; then CONFIRMED="$result"; fi
+    done <<< "$(bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/preflight.sh" \
+      --codex-model "$slug:$effort" --root "$ROOT" --timeout 120 2>&1 || true)"
+    case "$CONFIRMED" in
+      UNAVAILABLE*) echo "unavailable: $slug:$effort — trying the next rung"; continue ;;
+    esac
+    echo "$slug:$effort failed, and a probe did not confirm it unavailable (${CONFIRMED:-the probe gave no codex row}) — classify per Failure handling"; break
   fi
   echo "$slug:$effort failed for a reason that is not availability — classify per Failure handling"; break
 done
 ```
 
 - **`-o` captures the final message and nothing else.** A quota, auth or availability failure never reaches it, so the file is absent or empty and says nothing about why. The `.log` beside it holds stderr; the hand-off quotes its error lines verbatim, and the PR copy of the record does not.
-- **Downshift only on an `ERROR:` line that names this rung's own model.** Codex writes the
-  prompt and its whole transcript to stderr, so a run that fails mid-review leaves a log quoting
-  the material under review. Codex's refusal names the model it refused
-  (`ERROR: The '<slug>' model is not supported …`); quoted material almost never names the model
-  that is reading it.
+- **Downshift only on an `ERROR:` line that names this rung's own model, confirmed by a probe.**
+  Codex writes the prompt and its whole transcript to stderr, so a run that fails mid-review
+  leaves a log quoting the material under review, which can hold an earlier refusal of the same
+  model. A refusal names the model it refused (`ERROR: The '<slug>' model is not supported …`);
+  the loop then probes that rung with `preflight.sh` and downshifts only when the probe's own
+  `codex` row says `UNAVAILABLE`.
 - **Codex can exit zero on a quota failure.** Require the output artifact as specified in
   [Coverage classification](#coverage-classification), and retain the diagnostic log.
 - **Name every invocation uniquely: mode, pass, chunk, attempt, model and effort.**
@@ -183,26 +206,41 @@ done
 **Gemini (`agy -p`) is one-shot print mode — it cannot prompt for tool permissions.** Any prompt asking it to "review this repository" gets its tool calls auto-denied and fails. **Always inline the material in the prompt** and state: *"REVIEW ONLY: do not attempt to use any tools; answer purely from the text below."*
 
 ```bash
-for m in ${GEMINI_RUNGS?run the ladder discovery block first}; do
+# fence: gemini-loop
+: "${GEMINI_RUNGS?run the ladder discovery block first}"
+for m in $(printf '%s' "$GEMINI_RUNGS"); do
   OUT="<scratchpad>/gemini_<mode>_p<n>_c<chunk>_a<attempt>_$m.txt"
-  PART="${OUT%.txt}.part"; ERR="${OUT%.txt}.err"
-  rm -f "$OUT" "$PART" "${OUT%.txt}.partial" "$ERR"   # never inherit a previous attempt
+  PART="${OUT%.txt}.part"; ERR="${OUT%.txt}.err"; STATE="${OUT%.txt}.state"
+  rm -f "$OUT" "$PART" "${OUT%.txt}.partial" "$ERR" "$STATE"   # never inherit a previous attempt
   PROMPT="$(cat "<scratchpad>/gemini_prompt_p<n>_c<chunk>.txt")" && [ -n "$PROMPT" ] \
     || { echo "no prompt for this chunk — not run"; break; }
+  # agy cuts a longer prompt short and still exits 0. Measure what is sent, in bytes. wc
+  # ends the pipeline, so its status is the one checked; zsh's [ reads an empty count as 0,
+  # so a count that is not a number stops the run too.
+  SIZE="$(printf '%s' "$PROMPT" | wc -c)" || SIZE=""
+  SIZE="${SIZE//[[:space:]]/}"
+  case "$SIZE" in ''|*[!0-9]*) echo "cannot measure the prompt — not run"; break ;; esac
+  [ "$SIZE" -le 120000 ] \
+    || { echo "prompt over 120000 bytes — split the chunk; agy would truncate it"; break; }
   # An id with an effort suffix carries its effort; a suffix-less one is told high.
-  case "$m" in *-high|*-xhigh|*-max|*-medium) EFFORT=() ;; *) EFFORT=(--effort high) ;; esac
+  case "$m" in *-high|*-xhigh|*-max|*-medium) EFFORT_FLAG=() ;; *) EFFORT_FLAG=(--effort high) ;; esac
   rc=0
-  agy -p "$PROMPT" --model "$m" ${EFFORT[@]+"${EFFORT[@]}"} --print-timeout 25m > "$PART" 2> "$ERR" || rc=$?
+  date +%s > "${OUT%.txt}.start"   # progress.sh dates the attempt from this, not from stderr
+  agy -p "$PROMPT" --model "$m" ${EFFORT_FLAG[@]+"${EFFORT_FLAG[@]}"} --print-timeout 25m > "$PART" 2> "$ERR" || rc=$?
   if [ "$rc" = 0 ] && [ -s "$PART" ]; then
-    cut=0; grep -q '^\[agy\] print timeout' "$ERR" || cut=$?   # 0 cut off, 1 finished, 2 unreadable
-    if [ "$cut" = 1 ]; then mv "$PART" "$OUT"; break; fi
+    # agy's own cut-off notice, not any line that mentions the print timeout.
+    cut=0; grep -q '^\[agy\] print timeout after .*returning partial output' "$ERR" || cut=$?   # 0 cut off, 1 finished, 2 unreadable
+    if [ "$cut" = 1 ]; then mv "$PART" "$OUT"; echo done > "$STATE"; break; fi
+    # The state goes first, so the set-aside answer is never seen without it.
+    if [ "$cut" = 0 ]; then echo cut-off > "$STATE"; else echo failed > "$STATE"; fi
     mv "$PART" "${OUT%.txt}.partial"   # a cut-off answer is not coverage
     echo "$m: incomplete answer (print timeout or unreadable stderr) — the pair is Failed; classify per Failure handling"; break
   fi
   if grep -qiE 'not supported|unknown model|is not available|entitle' "$ERR"; then
-    rm -f "$PART"
+    rm -f "$PART"; echo unavailable > "$STATE"
     echo "unavailable: $m — trying the next rung"; continue
   fi
+  echo failed > "$STATE"
   mv "$PART" "${OUT%.txt}.partial"     # kept, even empty, so the failed attempt stays visible
   echo "$m failed for a reason that is not availability — classify per Failure handling"; break
 done
@@ -211,6 +249,9 @@ done
 - Build each chunk's prompt in its own file (rubric + inlined material), named by pass and
   chunk, so a retry or a parallel run cannot answer another chunk's material. Use the print
   timeout in the invocation above.
+- **Each attempt leaves its start and its end.** The loop writes `.start` (the attempt's
+  epoch) and `.state` (`done`, `cut-off`, `failed` or `unavailable`) beside the output, and
+  `progress.sh` reports from them.
 - **Only a finished answer gets the output name.** `agy` streams its answer, so the loop writes
   to `.part` and renames it when the run ends well; until then `progress.sh` reports the run as
   running. On a print timeout `agy` exits 0 and returns the partial answer, saying so only on
@@ -236,7 +277,7 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/progress.sh" "<scratchpad>" <n>
 ```
 
 It reports each invocation as done with its byte count, or running with its elapsed minutes and
-when its log last changed, and flags a run past the 30-minute print timeout. In Claude Code, start
+when its log last changed, and flags a run past the 25-minute print timeout. In Claude Code, start
 a Monitor that runs it every 300 seconds until no invocation is running; elsewhere, check at that
 interval. Change it in `progress.sh` and verify it with `tests/progress.bats`.
 
@@ -250,16 +291,22 @@ and run it again as the next attempt only when its process is gone, or it is pas
 **Probe each reviewer before committing a pass.**
 
 ```bash
-PROBE_MODELS=()
-for m in ${CODEX_RUNGS?run the ladder discovery block first}; do
+# fence: probe
+: "${CODEX_RUNGS?run the ladder discovery block first}" "${GEMINI_RUNGS?run the ladder discovery block first}"
+PROBE_ARGS=()
+for m in $(printf '%s' "$CODEX_RUNGS"); do
   slug="${m%%:*}"
   case "$m" in *:*) effort="${m#*:}";; *) effort=high;; esac
-  PROBE_MODELS+=(--codex-model "$slug:$effort")
+  PROBE_ARGS+=(--codex-model "$slug:$effort")
 done
-for m in ${GEMINI_RUNGS?run the ladder discovery block first}; do PROBE_MODELS+=(--gemini-model "$m"); done
-[ "${#PROBE_MODELS[@]}" -gt 0 ] || { echo "No discovered models to probe"; exit 1; }
-bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/preflight.sh" "${PROBE_MODELS[@]}" --timeout 120 \
-  ${ROOT:+--root "$ROOT"}   # Codex probes in the prepared review root
+for m in $(printf '%s' "$GEMINI_RUNGS"); do PROBE_ARGS+=(--gemini-model "$m"); done
+[ "${#PROBE_ARGS[@]}" -gt 0 ] || { echo "No discovered models to probe"; exit 1; }
+PROBE_ARGS+=(--timeout 120)
+if [ -n "$CODEX_RUNGS" ]; then   # Codex probes in the prepared review root, never the caller's folder
+  [ -n "${ROOT:-}" ] || { echo "ROOT is not set — prepare the review root with codex-root.sh first"; exit 1; }
+  PROBE_ARGS+=(--root "$ROOT")
+fi
+bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/preflight.sh" "${PROBE_ARGS[@]}"
 ```
 
 The Codex probe splits each `slug:effort` rung and uses the real pass's effort; a bare
@@ -305,18 +352,33 @@ Prompt drift between the two reviewers corrupts the agree/disagree triage. Compo
 3. **Focus list** by mode:
    - *plan*: gaps and missing steps, risks and failure modes, sequencing problems, simpler approaches missed, anything underspecified.
    - *phase / repo*: real bugs (report everything, do not self-filter for severity), silent failures, security issues, design choices that will not hold up, code duplication/consolidation opportunities, genuinely missing test coverage; plus doc-vs-code contradictions (README, ARCHITECTURE, AGENTS.md or CLAUDE.md, the roadmap files where the repo has them, CHANGELOG).
-4. **Test-discrimination question** (*phase / repo* only): *"For each test in the material below, say whether it would still pass with the change it covers reverted. Name any test that asserts on a mock, on a constant, or on something true before the change."* This is a backstop — phase-workflow §3 step 3 already checks that every new test has a recorded red, and **mutates** the named behaviour of a test written after its fix, which a reviewer cannot do. Ask anyway: a reviewer reading the assertion catches a different class than a mutation catches.
-5. **Do-not-read instruction (mandatory, both reviewers):**
+4. **Security (both reviewers, every mode):**
+
+   > **Security.** Look for security problems on purpose, not in passing.
+   > *plan*: trust boundaries and untrusted inputs, including text that reaches another agent's
+   > prompt (bundles, tool output, review records); authentication and authorization; privilege
+   > and sandbox boundaries; where secrets live and where they could leak (logs, bundles,
+   > records, URLs, command lines); data sent to outside services; and any new dependency or
+   > tool the plan adds.
+   > *phase / repo*: trace each untrusted input to the command, file, query, page or outbound
+   > request it reaches, and name the missing control: injection (shell, SQL, path, template,
+   > XSS), SSRF, path traversal and symlink following, unsafe parsing or deserialization, weak
+   > crypto or disabled TLS checks, unsafe file and temp-file permissions, secret exposure, and
+   > missing auth checks. Treat a dependency change (a new or upgraded package, an unpinned
+   > version, an install script) as a prompt to inspect it; report it with a concrete consequence.
+
+5. **Test-discrimination question** (*phase / repo* only): *"For each test in the material below, say whether it would still pass with the change it covers reverted. Name any test that asserts on a mock, on a constant, or on something true before the change."* This is a backstop — phase-workflow §3 step 3 already checks that every new test has a recorded red, and **mutates** the named behaviour of a test written after its fix, which a reviewer cannot do. Ask anyway: a reviewer reading the assertion catches a different class than a mutation catches.
+6. **Do-not-read instruction (mandatory, both reviewers):**
 
    > Do not open `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `credentials*`, `.netrc`, `.npmrc`, `.pypirc`, `id_rsa*`, `id_ed25519*`, `id_ecdsa*`, or anything else shaped like a secret. If a finding depends on one, name the file and say what you would need rather than reading it.
 
-6. **Don't explain the tools:**
+7. **Don't explain the tools:**
 
    > This is a workflow document, not a git tutorial. Flag any passage that explains standard behaviour of `git`, `gh`, `pytest` or the shell rather than stating this project's policy. Genuine nuances that people get wrong are in scope; plain feature descriptions are not.
 
-7. **Suggested remediation:** for each finding, add one or two sentences on how you would fix it. A sketch, not a patch — enough to show what change you have in mind.
+8. **Suggested remediation:** for each finding, add one or two sentences on how you would fix it. A sketch, not a patch — enough to show what change you have in mind.
 
-8. **Output contract — always a list, even an empty one:**
+9. **Output contract — always a list, even an empty one:**
 
    > Return a numbered list of findings, each with file/function references and a severity. Return the list **even when you found nothing**: emit the heading and the single line `No findings.` Never answer with prose instead of the list.
 
@@ -459,11 +521,15 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/capture.sh" repo "<scratchpad>"
 Same outputs, same exclusions, same symlink, binary and read-failure handling as `phase`. One
 capture procedure serves every mode; none rolls its own.
 
-**Measure before sending and chunk large bundles.** Keep each chunk near **120,000 characters**
-and use the timeout in the Gemini invocation above. A timeout can leave no answer.
+**Measure before sending and chunk large bundles.** Keep each complete prompt, with its rubric
+and repeated context, at **120,000 bytes** or less; the Gemini loop refuses a larger one, since
+`agy` cuts it short without an error. Use the timeout in the Gemini invocation above. A timeout
+can leave no answer.
 
 ```bash
-wc -c "$BUNDLE"    # split by directory or concern if this is over ~120000
+# What the loop sends: the capture drops trailing newlines, so measure it, not the file.
+PROMPT="$(cat "<scratchpad>/gemini_prompt_p<n>_c<chunk>.txt")" && [ -n "$PROMPT" ] \
+  && printf '%s' "$PROMPT" | wc -c || echo "cannot read or measure the prompt"   # split if over 120000
 ```
 
 **Split on a seam, and repeat the shared context in every chunk.** Cross-file contradiction is the main thing a review of prose is for, and chunking is exactly what hides it — so the files every other file must agree with (the project instructions file, `AGENTS.md` or `CLAUDE.md`, then `README.md` and `docs/ARCHITECTURE.md`) go into *each* chunk, and each prompt says which chunk it is and that the others cover the rest, so nothing is reported missing merely because it is elsewhere.
@@ -476,6 +542,8 @@ apply [Coverage classification](#coverage-classification) to every required pair
 On empty output or non-zero exit, run a tiny probe before reporting:
 
 ```bash
+# fence: failure-probe
+: "${ROOT:?prepare the review root with codex-root.sh first}"
 m="<same model as the real run>"   # the recorded slug:effort pair
 slug="${m%%:*}"
 case "$m" in *:*) effort="${m#*:}";; *) effort=high;; esac
@@ -645,8 +713,9 @@ and the gate takes the user's recorded decision instead.
 1. **Run the pass and triage it.** Verify every finding and give it a disposition. A finding
    that an earlier pass's fix did not work gets a new row in this pass that names the earlier ID
    (`F-12 — the F-03 fix is partial`), and counts as new at its own severity. Earlier rows keep
-   their pass and finding, and per-pass counts never change. Only a row's Disposition may change
-   later, and only by the user: write it as `<new> — was <old>, the user's call`.
+   their pass and finding, and per-pass counts never change. Later, only the user changes a row:
+   its Disposition, written as `<new> — was <old>, the user's call`, and, for a row reopened for
+   a fix, its Commit and test evidence.
 2. **Apply the stop rule before fixing anything, and only to a complete pass.** Count verified
    findings only; `Rejected` rows do not count. Stop after pass 3. Stop when a pass, from pass 2
    on, has no new Critical or High and fewer findings than the pass before. Stop when a pass
@@ -666,10 +735,10 @@ and the gate takes the user's recorded decision instead.
 **After the last pass, only bookkeeping lands:** new roadmap entries and pointer rows for the
 deferred rows, and the phase record's PR number and release version. Anything else, such as an
 edit to an existing entry, a doc fix or a regenerated diagram, needs a narrow pass of its own. At
-the gate, check that the reviewed commit is an ancestor of `HEAD`
-(`git merge-base --is-ancestor`), then read the patch since it
-(`git diff <commit the last pass reviewed>..HEAD`), not only its file list: a filing and a fix
-can share one file. The hand-off names what landed.
+the gate, run `phase-workflow`'s post-review check (§3 step 7): it lists both sides of every change
+since the reviewed commit, refuses anything outside the bookkeeping files, and prints their patch,
+which is read in full because a filing and a fix can share one file. The hand-off names what
+landed.
 
 ### What the user sees at the gate
 

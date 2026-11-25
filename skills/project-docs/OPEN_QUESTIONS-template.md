@@ -15,7 +15,7 @@ nothing. IDs are never reused.
 ## Kind
 
 `roadmap.py check` reads these levels from the template bundled with `project-docs`, and
-refuses any other Kind; it does not check the order of open questions. In a project's own
+refuses any other Kind, and checks that open questions follow its row order. In a project's own
 copy this table is for reading: editing it changes nothing.
 
 | Kind | Means |
@@ -31,7 +31,7 @@ copy this table is for reading: editing it changes nothing.
 ## UNK-01 — <the question, as a question>
 
 **Kind:** <Decision | Verification | Risk>
-**Where:** [file.py](../file.py)
+**Where:** [file.py](../file.py) — `def the_question(`
 
 <what the code does now, and why it is unsettled>
 

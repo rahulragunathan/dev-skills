@@ -10,6 +10,91 @@ here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-11-23 — dependable helpers
+
+### Added
+
+- **Security in every review.** The external review's shared rubric gains a security item for
+  every mode: trust boundaries, secrets and outside services in a plan; injection, traversal,
+  unsafe parsing, weak crypto, file permissions, secret exposure and missing auth checks in code,
+  each traced from its untrusted input. The phase-end retrospective runs `/security-review`
+  after `/code-review high`.
+- **`dependency-scan.py`**, run first at phase end: known vulnerabilities in the committed
+  lockfiles, through `osv-scanner`, with a manifest that has no lockfile, a file with no packages
+  and an unpinned requirement reported as coverage gaps rather than clean. It reads only what
+  `HEAD` commits, never follows a symlink, names what a tracked `osv-scanner.toml` ignores, and
+  has an `--offline` mode. A requirements file is read as pip reads it and reaches the scanner
+  only as checked `name==version` pins; an include, an unknown option, a variable, an invalid
+  name or version, or a file that is not UTF-8 is a gap. Every report line has its control
+  characters escaped, so a committed path cannot forge one.
+  A folder's `osv-scanner.toml` is passed by name, so one the scanner cannot load fails the scan.
+  Every advisory in a package is reported, grouped or not, and one unreadable package leaves the
+  others' findings in the report.
+
+### Fixed
+
+- **Fences read the same under zsh and bash (KI-74).** Claude Code's Bash tool runs the login
+  shell, often zsh, where the review loops ran once with every rung as one model, the probe passed
+  `--root <path>` as one word, and discovery named `--effort` as the effort.
+- **Skill arguments no longer rewrite `phase-workflow`'s commands (KI-75).** Claude Code replaces
+  `$1`-style text in a skill invoked with arguments; five awk field programs went with it. The
+  `mid` count now comes from `bats_assertions.py --count-mid`.
+- **The phase record is read by a tested parser, `phase-record.py` (KI-67, KI-69).** The gate
+  checks the first table's `REPO`, `PR` and `Release`, so a companion table, a padded row or a
+  large record no longer misleads it. The first push refuses a record inherited unchanged from
+  the default branch. The review record is published after the gate, headed by the SHA it was
+  reviewed at. The record is read whole before the edit starts, so a failed read publishes
+  nothing, and it is sent on stdin, so no copy is left on disk. A PR head that differs from the
+  gate's afterwards is reported, not prevented, and one that cannot be read is reported as
+  unverified.
+- **The origin check is an allow-list (KI-70).** It accepts `ssh://`, `git+ssh://`,
+  `ssh+git://` and `https://` in lower case, the scp form and an absolute local path without
+  spaces; it refuses every transport helper, any other scheme or spelling, an option-shaped URL,
+  a `%`-escape anywhere in a URL's authority, a configured `remote.origin.vcs` (even an empty one), and an ssh URL holding a compressed IPv6
+  literal (`::`). It decides with shell patterns, so no external command can fail open, and the push
+  list must be exactly the approved URL.
+- **Branch cleanup reports every retained branch (ENH-29)** before it exits, rather than
+  stopping at the first. It skips the checked-out branch when a tag shares its name (KI-86).
+- **The post-review gate check sees both sides of a rename and pins one head (KI-62).** A file
+  moved into a bookkeeping path is named by its source, a failed listing stops the gate, and the
+  ready step refuses a head other than the one the check inspected.
+- **external-review's helpers (KI-43, KI-63, KI-64, KI-66, KI-71).** A Codex refusal quoted
+  in the material under review no longer downshifts the ladder: a probe of the rung must confirm
+  it. `preflight.sh` refuses a Codex probe without a review root and Gemini ids for efforts the
+  review never uses, and reads a ready answer beside a retried-request note as ready. The Gemini
+  loop records each attempt's start and end, so `progress.sh` dates a run from its start,
+  reports a retried chunk's earlier attempt as superseded, and tells a failed run from a cut-off
+  one; only agy's own cut-off notice counts as one. Discovery says which program failed, agy or
+  the ranker.
+- **`roadmap.py close` keeps an edit made before its final check (KI-57).** It stages each
+  replacement first, then refuses if the file changed since it read it; a rollback leaves a file
+  someone edited meanwhile as they wrote it. Only an edit in the instant between that check and
+  the rename can still be lost. The closed entry is cut out byte for byte, so CRLF line endings,
+  trailing whitespace and a missing final newline survive.
+- **`roadmap.py check` sees more drift (KI-58, KI-59).** Blank files, an anchor in a fenced
+  example, open questions out of Kind order, a displayed `KI-01-extra`, and titles or an
+  Effort that differ between index and detail are all reported. A `**Where:**` field after
+  another field on its line is checked; an absolute, empty or credential-shaped target is
+  refused, the last without being opened; and source files under `docs/` need a fragment.
+- **`roadmap.py init` under a signal, and its file mode (KI-65, KI-72).** A signal during error
+  cleanup no longer stops the rollback, new files follow the caller's umask, and a file whose
+  ownership could not be confirmed is reported as a skipped removal to inspect. (2.1.0 said
+  `init` leaves nothing behind on failure; such a file is the exception.)
+- **The roadmap templates fill in cleanly, and the close tests can fail (ENH-34).** A template
+  example filled in literally passes `check`; the close tests assert absence by status and
+  check that their injected faults fired.
+- **The name check reads more command spellings, and an unreadable folder no longer stops it
+  (KI-68, ENH-33).** `python3 roadmap.py`, a bare script beside a lone flag, a
+  `"$CLAUDE_PLUGIN_ROOT/..."` path, a missing script before a subcommand, and a reference link
+  whose definition was deleted are all checked. A doc it cannot read is listed and the rest are
+  still checked.
+- **The release test runs when its file runs directly (KI-73)**, and a CHANGELOG with no
+  release heading fails it as an assertion.
+- **Smaller fixes (KI-55, ENH-36, ENH-37).** `phase-workflow` §1 says the plan is drafted
+  outside the repository. Review-loop and ladder tests that could not fail now can, and the
+  origin refusal tests name the exact message. A user-reopened review row gains its Commit and
+  evidence, and the red-evidence rule reads "a `Red:` line or a mutation result" everywhere.
+
 ## [2.1.0] - 2026-11-20 — project-docs and September's rules
 
 ### Added
@@ -1037,7 +1122,8 @@ corrections are recorded here.
 
 ## Reference
 
-[Unreleased]: https://github.com/rahulragunathan/dev-skills/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/rahulragunathan/dev-skills/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/rahulragunathan/dev-skills/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/rahulragunathan/dev-skills/compare/v2.0.1...v2.1.0
 [2.0.1]: https://github.com/rahulragunathan/dev-skills/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/rahulragunathan/dev-skills/compare/v1.12.0...v2.0.0

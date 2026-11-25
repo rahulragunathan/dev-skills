@@ -33,6 +33,8 @@ FAMILIES = ("carbon", "neon", "hydrogen")
 PREFERENCE = {"high": ("high", ""), "xhigh": ("xhigh",), "max": ("max",), "medium": ("medium",)}
 EFFORTS = {"high", "xhigh", "max", "medium", "low", "minimal", "none", "ultra"}
 VERSION = re.compile(r"\d+(?:\.\d+)*")
+# An id is used unquoted as a shell word list, so it may hold no pattern character.
+MODEL_ID = re.compile(r"gemini-[a-z0-9.-]+")
 
 
 def version_key(version: str) -> tuple[int, ...]:
@@ -62,7 +64,7 @@ def ladder(lines, effort: str = "high") -> list[str]:
     ids = {line.split()[0] for line in lines if line.strip()}
     variants: dict[str, dict[str, str]] = {}
     for m in ids:
-        if m.startswith("gemini-") and "orchestrator" not in m:
+        if MODEL_ID.fullmatch(m) and "orchestrator" not in m:
             model_class, suffix = split(m)
             variants.setdefault(model_class, {})[suffix] = m
     rungs = []

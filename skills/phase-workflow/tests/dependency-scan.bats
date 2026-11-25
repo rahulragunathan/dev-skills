@@ -1,0 +1,731 @@
+#!/usr/bin/env bats
+#
+# dependency-scan.py: known vulnerabilities in the committed dependency files.
+# Every test names the condition that turns it red. The fake osv-scanner replays
+# answers recorded from osv-scanner 2.7.1 (fixtures/osv/README.md).
+
+setup() {
+  export TEST_TMP="$(mktemp -d)"
+  export REPO="$TEST_TMP/my repo"
+  export BIN="$TEST_TMP/bin"
+  export SCAN="$BATS_TEST_DIRNAME/../dependency-scan.py"
+  export OSV="$BATS_TEST_DIRNAME/fixtures/osv"
+  mkdir -p "$REPO" "$BIN"
+  git -C "$REPO" init -q -b main .
+  git -C "$REPO" config user.email t@example.invalid
+  git -C "$REPO" config user.name Test
+  # The fake answers by the scanned file's content: VULN, EMPTY, FAIL, or clean.
+  cat > "$BIN/osv-scanner" <<'SH'
+#!/bin/bash
+printf '%s\n' "$*" >> "$TEST_TMP/calls"
+[ "$1 $2" = "scan source" ] || { echo "unknown command: $1" >&2; exit 127; }
+file=""; prev=""
+for a in "$@"; do [ "$prev" = -L ] && file="${a#*:}"; prev="$a"; done
+case " $* " in *" --offline "*) [ -n "${FAKE_NO_DB:-}" ] && { echo "no local database" >&2; exit 127; } ;; esac
+[ -f "$file" ] || { echo "failed to resolve path: $file" >&2; exit 127; }
+if grep -qE "VULN|==2\.19\.0" "$file"; then sed "s|<FILE>|$file|" "$OSV/vuln.json"; exit 1; fi
+if grep -q EMPTY "$file"; then echo "found 0 packages" >&2; exit 128; fi
+if grep -q FAIL "$file"; then echo "boom: the database is unreachable" >&2; exit 127; fi
+sed "s|<FILE>|$file|" "$OSV/clean.json"; exit 0
+SH
+  chmod +x "$BIN/osv-scanner"
+  export PATH="$BIN:/usr/bin:/bin"   # not the real osv-scanner
+}
+
+teardown() { rm -rf "$TEST_TMP"; }
+
+# put <path> <content>: write a file into the fixture repository and commit it.
+put() {
+  mkdir -p "$(dirname "$REPO/$1")"
+  printf '%s\n' "$2" > "$REPO/$1"
+  git -C "$REPO" add -- "$1" && git -C "$REPO" commit -qm "add $1"
+}
+
+scan() { run python3 "$SCAN" --root "$REPO" "$@"; }
+
+@test "no dependency files: says so, exit 0, scanner not called" {
+  # Control: a repository with nothing to scan says so and runs nothing.
+  put README.md 'hello'
+  scan
+  [ "$status" -eq 0 ] || false
+  [[ "$output" == *"no supported dependency files" ]] || false
+  [ ! -e "$TEST_TMP/calls" ]
+}
+
+@test "a clean lockfile is scanned and counted" {
+  # Fails if a supported lockfile is never passed to the scanner.
+  put uv.lock 'clean'
+  scan
+  [ "$status" -eq 0 ] || false
+  [ "$(wc -l < "$TEST_TMP/calls" | tr -d ' ')" = 1 ] || false
+  [[ "$output" == *"1 file scanned: no known vulnerabilities"* ]]
+}
+
+@test "only committed files are scanned, and a tracked symlink is not followed" {
+  # Fails if untracked or ignored files, an untracked config, or a symlink's target reach the scan.
+  put requirements.txt 'six==1.17.0'
+  put uv.lock 'clean'
+  put package-lock.json 'clean'
+  printf 'VULN\n' > "$REPO/poetry.lock"
+  mkdir -p "$REPO/node_modules/x" && printf 'VULN\n' > "$REPO/node_modules/x/package-lock.json"
+  printf 'VULN\n' > "$TEST_TMP/outside.lock"
+  mkdir -p "$REPO/sub" && ln -s "$TEST_TMP/outside.lock" "$REPO/sub/Cargo.lock"
+  git -C "$REPO" add sub/Cargo.lock && git -C "$REPO" commit -qm link
+  scan
+  [ "$status" -eq 3 ] || false              # the symlinked lockfile is a gap, not read
+  [ "$(wc -l < "$TEST_TMP/calls" | tr -d ' ')" = 3 ] || false
+  [[ "$(cat "$TEST_TMP/calls")" != *poetry.lock* ]] || false
+  [[ "$(cat "$TEST_TMP/calls")" != *node_modules* ]] || false
+  [[ "$(cat "$TEST_TMP/calls")" != *Cargo.lock* ]]
+}
+
+@test "a finding prints its advisory group, aliases, package, version and file" {
+  # Fails if a vulnerable lockfile reads as clean or loses what identifies the advisory.
+  put requirements.txt 'requests==2.19.0'
+  scan
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"FINDING PYSEC-2018-28 (CVE-2018-18074, GHSA-x84v-xcm2-53pg) requests 2.19.0 requirements.txt"* ]]
+}
+
+@test "findings and gaps are both printed" {
+  # Fails if a coverage gap hides a finding, or the reverse.
+  put requirements.txt 'requests==2.19.0'
+  put web/package.json '{"dependencies": {"left-pad": "1.3.0"}}'
+  scan
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"FINDING PYSEC-2018-28"* ]] || false
+  [[ "$output" == *"NOT SCANNED web/package.json"* ]]
+}
+
+@test "a manifest with dependencies and no lockfile is NOT SCANNED, exit 3" {
+  # Fails if a project whose dependencies were never resolved reads as clean.
+  put pyproject.toml "$(printf '[project]\nname = "x"\ndependencies = ["requests>=2"]\n')"
+  scan
+  [ "$status" -eq 3 ] || false
+  [[ "$output" == *"NOT SCANNED pyproject.toml: declares dependencies and has no lockfile"* ]]
+}
+
+@test "a workspace package covered by the root lockfile is not a gap" {
+  # Fails if a manifest below a folder holding its ecosystem's lockfile is reported.
+  put package-lock.json 'clean'
+  put packages/a/package.json '{"dependencies": {"x": "1.0.0"}}'
+  scan
+  [ "$status" -eq 0 ] || false
+  [[ "$output" != *"NOT SCANNED"* ]]
+}
+
+@test "a tooling-only pyproject.toml is not a gap" {
+  # Fails if a pyproject.toml holding only tool settings is taken for a project with dependencies.
+  put pyproject.toml "$(printf '[tool.ruff]\nline-length = 100\n')"
+  scan
+  [ "$status" -eq 0 ] || false
+  [[ "$output" == *"no supported dependency files" ]]
+}
+
+@test "a file yielding no packages is NOT SCANNED" {
+  # Fails if exit 128, no packages found, counts as clean.
+  put uv.lock 'EMPTY'
+  scan
+  [ "$status" -eq 3 ] || false
+  [[ "$output" == *"NOT SCANNED uv.lock: no packages found"* ]]
+}
+
+@test "unpinned requirements lines are listed as not scanned" {
+  # Fails if a range the scanner skips silently goes unreported.
+  put requirements.txt "$(printf 'six==1.17.0\nrequests>=2.0\n# a comment\n')"
+  scan
+  [ "$status" -eq 3 ] || false
+  [[ "$output" == *"NOT SCANNED requirements.txt: line 2 is not pinned"* ]] || false
+  [[ "$output" != *"comment"* ]]
+}
+
+@test "a missing scanner exits 2 with the install hint" {
+  # Fails if a scan that could not run reads as clean.
+  put uv.lock 'clean'
+  rm "$BIN/osv-scanner"
+  scan
+  [ "$status" -eq 2 ] || false
+  [[ "$output" == *"osv-scanner is not installed"*"brew install osv-scanner"* ]]
+}
+
+@test "a v1 scanner and a scanner failure each exit 2" {
+  # Fails if an error from the scanner is read as no findings.
+  put uv.lock 'FAIL'
+  scan
+  [ "$status" -eq 2 ] || false
+  [[ "$output" == *"osv-scanner failed on uv.lock (exit 127)"* ]] || false
+  printf '#!/bin/bash\necho "unknown command: scan" >&2; exit 127\n' > "$BIN/osv-scanner"
+  put requirements.txt 'six==1.17.0'
+  scan
+  [ "$status" -eq 2 ]
+}
+
+@test "--offline without a database exits 2" {
+  # Fails if an offline run with nothing to compare against reads as clean.
+  put uv.lock 'clean'
+  FAKE_NO_DB=1 scan --offline
+  [ "$status" -eq 2 ] || false
+  grep -q -- '--offline' "$TEST_TMP/calls"
+}
+
+@test "a tracked osv-scanner.toml is named with what it ignores" {
+  # Fails if a committed suppression changes the verdict without the output saying so.
+  put uv.lock 'clean'
+  put osv-scanner.toml "$(printf '[[IgnoredVulns]]\nid = "PYSEC-2018-28"\nreason = "not reachable"\n')"
+  scan
+  [ "$status" -eq 0 ] || false
+  [[ "$output" == *"osv-scanner.toml can suppress findings: PYSEC-2018-28"* ]]
+}
+
+@test "paths with a space or a colon reach the scanner intact" {
+  # Fails if a path is split or its colon read as the parser separator.
+  put "a:b/c d/uv.lock" 'clean'
+  scan
+  [ "$status" -eq 0 ] || false
+  grep -qF -- "-L uv.lock:" "$TEST_TMP/calls" || false
+  grep -qF "a:b/c d/uv.lock" "$TEST_TMP/calls"
+}
+
+# fence_in <shell...>: the documented dependency-scan fence, run from the repository.
+fence_in() {
+  put uv.lock 'clean'
+  python3 "$BATS_TEST_DIRNAME/../../../tests/fence.py" "$BATS_TEST_DIRNAME/../SKILL.md" dependency-scan > "$TEST_TMP/fence.sh"
+  cd "$REPO"
+  CLAUDE_PLUGIN_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)" run "$@" "$TEST_TMP/fence.sh"
+  [ "$status" -eq 0 ] || false
+  [[ "$output" == *"1 file scanned: no known vulnerabilities"* ]]
+}
+
+@test "bash: the documented fence scans the repository" {
+  # Fails if the fence names the helper wrongly or runs it outside the repository.
+  fence_in bash
+}
+
+@test "zsh: the documented fence scans the repository" {
+  # Fails if the fence reads differently under zsh.
+  command -v zsh >/dev/null || skip "zsh is not installed"
+  fence_in zsh -f
+}
+
+# --- /code-review high fixes ---------------------------------------------------
+
+@test "exit 1 with no readable finding is a scanner failure, not clean" {
+  # Fails if osv-scanner says it found something and the run still reports clean.
+  put uv.lock 'VULNSHAPE'
+  cat > "$BIN/osv-scanner" <<'SH'
+#!/bin/bash
+printf '%s\n' "$*" >> "$TEST_TMP/calls"
+echo '{"results": [{"source": {"path": "x"}, "packages": [{"package": {"name": "x", "version": "1"}, "advisories": []}]}]}'; exit 1
+SH
+  chmod +x "$BIN/osv-scanner"
+  scan
+  [ "$status" -eq 2 ] || false
+  [[ "$output" == *"reported vulnerabilities but none could be read"* ]]
+}
+
+@test "a lockfile marked export-ignore is still scanned" {
+  # Fails if git archive's export-ignore drops a committed lockfile from the scan.
+  put composer.lock 'clean'
+  put .gitattributes 'composer.lock export-ignore'
+  scan
+  [ "$status" -eq 0 ] || false
+  grep -q 'composer.lock' "$TEST_TMP/calls"
+}
+
+@test "a tracked symlink named like a lockfile is a coverage gap" {
+  # Fails if a lockfile that is a symlink is skipped without a word.
+  printf 'VULN\n' > "$TEST_TMP/outside.lock"
+  ln -s "$TEST_TMP/outside.lock" "$REPO/Cargo.lock"
+  git -C "$REPO" add Cargo.lock && git -C "$REPO" commit -qm link
+  scan
+  [ "$status" -eq 3 ] || false
+  [[ "$output" == *"NOT SCANNED Cargo.lock: a symlink, not read"* ]]
+}
+
+@test "hash-pinned requirements are pinned" {
+  # Fails if pip-compile's hash lines are each reported as unpinned.
+  put requirements.txt "$(printf 'six==1.17.0 \\\n    --hash=sha256:abc\nidna==3.7 --hash=sha256:def\n')"
+  scan
+  [ "$status" -eq 0 ] || false
+  [[ "$output" != *"NOT SCANNED"* ]]
+}
+
+@test "dependency groups and optional dependencies count as declared" {
+  # Fails if a pyproject.toml whose dependencies sit in a group is read as tooling-only.
+  local body
+  for body in '[dependency-groups]\ndev = ["requests==2.0"]\n' '[project.optional-dependencies]\nweb = ["flask"]\n' \
+              '[tool.poetry.group.dev-tools.dependencies]\npytest = "^8"\n'; do
+    printf "$body" > "$REPO/pyproject.toml"; git -C "$REPO" add pyproject.toml; git -C "$REPO" commit -qm "$body"
+    scan
+    [ "$status" -eq 3 ] || { echo "$body: $output"; false; }
+  done
+}
+
+# --- external review pass 1 fixes ----------------------------------------------
+
+@test "a requirements file that includes another file is NOT SCANNED and never reaches the scanner" {
+  # Fails if osv-scanner follows a committed -r include, which can reach files outside HEAD.
+  put requirements.txt "$(printf 'six==1.17.0\n-r ../../outside.txt\n')"
+  scan
+  [ "$status" -eq 3 ] || false
+  [[ "$output" == *"NOT SCANNED requirements.txt: line 2 includes another file"* ]] || false
+  [[ "$(cat "$TEST_TMP/calls")" != *"requirements.txt:$REPO"* ]]   # the committed file never reaches it
+}
+
+@test "an unpinned line is named by its number, never its text" {
+  # Fails if a URL requirement carrying credentials is copied into the report.
+  put requirements.txt "$(printf 'six==1.17.0\npkg @ https://user:s3cret@example.invalid/pkg.tar.gz\n')"
+  scan
+  [ "$status" -eq 3 ] || false
+  [[ "$output" == *"NOT SCANNED requirements.txt: line 2 is not pinned"* ]] || false
+  [[ "$output" != *"s3cret"* ]]
+}
+
+@test "scanner errors are printed with credentials masked" {
+  # Fails if a URL with userinfo in osv-scanner's stderr reaches the report.
+  put uv.lock 'clean'
+  printf '#!/bin/bash\necho "fetch https://user:s3cret@db.example.invalid/x failed" >&2; exit 127\n' > "$BIN/osv-scanner"
+  scan
+  [ "$status" -eq 2 ] || false
+  [[ "$output" != *"s3cret"* ]]
+}
+
+@test "a tracked osv-scanner.toml names single-quoted ids and package overrides" {
+  # Fails if a valid suppression is reported as ignoring nothing.
+  put uv.lock 'clean'
+  put osv-scanner.toml "$(printf "[[IgnoredVulns]]\nid = 'PYSEC-1'\n\n[[PackageOverrides]]\nname = \"left-pad\"\nignore = true\n")"
+  scan
+  [[ "$output" == *"osv-scanner.toml can suppress findings: PYSEC-1, a package override"* ]]
+}
+
+@test "only dependency files are read from HEAD" {
+  # Fails if every committed blob is copied out, credential-shaped files included.
+  put uv.lock 'clean'
+  put src/app.py 'print(1)'
+  put .env 'NOT-A-REAL-SECRET'
+  local real_git; real_git="$(command -v git)"
+  printf '#!/bin/bash\nprintf "%%s\\n" "$*" >> "%s/git-calls"\nexec "%s" "$@"\n' "$TEST_TMP" "$real_git" > "$BIN/git"
+  chmod +x "$BIN/git"
+  scan
+  [ "$status" -eq 0 ] || false
+  [ "$(grep -c 'cat-file' "$TEST_TMP/git-calls")" -eq 1 ]
+}
+
+@test "exit 0 with no readable results is a scanner failure" {
+  # Fails if an empty or malformed answer with exit 0 is counted as clean.
+  local body
+  put uv.lock 'clean'
+  for body in '' '{}' '{"results": null}'; do
+    printf '#!/bin/bash\nprintf "%%s" %q; exit 0\n' "$body" > "$BIN/osv-scanner"
+    scan
+    [ "$status" -eq 2 ] || { echo "[$body]: $status $output"; false; }
+  done
+}
+
+@test "wildcard and editable requirements are NOT SCANNED" {
+  # Fails if ==2.* or -e lines pass as pinned.
+  put requirements.txt "$(printf 'six==1.17.0\nrequests==2.*\n-e .\n')"
+  scan
+  [ "$status" -eq 3 ] || false
+  [[ "$output" == *"line 2 is not pinned"* ]] || false
+  [[ "$output" == *"line 3 is not pinned"* ]]
+}
+
+@test "require-dev, peer dependencies, python-dateutil and an indented key count as declared" {
+  # Fails if a manifest whose only dependencies sit in these places is read as tooling-only.
+  local f body
+  for f in composer.json package.json pyproject.toml pyproject.toml; do :; done
+  put composer.json '{"require-dev": {"phpunit/phpunit": "^10"}}'
+  scan; [[ "$output" == *"NOT SCANNED composer.json"* ]] || false
+  git -C "$REPO" rm -q composer.json && git -C "$REPO" commit -qm rm
+  put package.json '{"peerDependencies": {"react": "^18"}}'
+  scan; [[ "$output" == *"NOT SCANNED package.json"* ]] || false
+  git -C "$REPO" rm -q package.json && git -C "$REPO" commit -qm rm
+  put pyproject.toml "$(printf '[tool.poetry.dependencies]\npython-dateutil = "^2"\n')"
+  scan; [[ "$output" == *"NOT SCANNED pyproject.toml"* ]] || false
+  put pyproject.toml "$(printf '[project]\n  dependencies = ["x"]\n')"
+  scan; [[ "$output" == *"NOT SCANNED pyproject.toml"* ]]
+}
+
+@test "a symlinked manifest is a coverage gap" {
+  # Fails if a manifest that is a symlink disappears from the report.
+  printf '{"dependencies": {"x": "1"}}' > "$TEST_TMP/outside.json"
+  ln -s "$TEST_TMP/outside.json" "$REPO/package.json"
+  git -C "$REPO" add package.json && git -C "$REPO" commit -qm link
+  scan
+  [ "$status" -eq 3 ] || false
+  [[ "$output" == *"NOT SCANNED package.json: a symlink, not read"* ]]
+}
+
+@test "other formats osv-scanner reads are scanned" {
+  # Fails if a pubspec.lock or mix.lock reads as nothing to scan.
+  put pubspec.lock 'clean'
+  put mix.lock 'clean'
+  scan
+  [ "$status" -eq 0 ] || false
+  [[ "$output" == *"2 files scanned"* ]]
+}
+
+# --- external review pass 2 fixes ----------------------------------------------
+
+@test "the scanner gets only the validated pins, never the committed requirements file" {
+  # Fails if a continuation-joined or attached include, or an env-var version, reaches the scanner (pass 2, Codex 1, 11).
+  put requirements.txt "$(printf 'six==1.17.0\n-r\\\n  ../../x.txt\n-rother.txt\nreq==${VER}\n')"
+  cat > "$BIN/osv-scanner" <<'SH'
+#!/bin/bash
+prev=""; for a in "$@"; do [ "$prev" = -L ] && cp "${a#*:}" "$TEST_TMP/scanned"; prev="$a"; done
+cat "$OSV/clean.json"; exit 0
+SH
+  chmod +x "$BIN/osv-scanner"
+  scan
+  [ "$status" -eq 3 ] || false
+  [ "$(cat "$TEST_TMP/scanned")" = "six==1.17.0" ] || false
+  [[ "$output" == *"line 2"* ]] || false
+  [[ "$output" == *"line 4"* ]] || false
+  [[ "$output" == *"line 5 is not pinned"* ]]
+}
+
+@test "scanner stderr never reaches the report" {
+  # Fails if any of osv-scanner's own error text, a signed URL or token included, is copied out (Codex 7).
+  put uv.lock 'clean'
+  printf '#!/bin/bash\necho "GET https://db.example.invalid/x?sig=TOPSECRET failed" >&2; exit 127\n' > "$BIN/osv-scanner"
+  scan
+  [ "$status" -eq 2 ] || false
+  [[ "$output" != *"TOPSECRET"* ]] || false
+  [[ "$output" == *"osv-scanner failed on uv.lock (exit 127)"* ]]
+}
+
+@test "a results entry without packages is unreadable output, not clean" {
+  # Fails if {"results":[{}]} counts as a scanned, clean file (Codex 10).
+  put uv.lock 'clean'
+  printf '#!/bin/bash\necho %s; exit 0\n' "'{\"results\": [{}]}'" > "$BIN/osv-scanner"
+  scan
+  [ "$status" -eq 2 ] || false
+}
+
+@test "a later Poetry group and a Dart manifest count as declared" {
+  # Fails if only the first Poetry table is read, or pubspec.yaml is not a manifest (Codex 11).
+  put pyproject.toml "$(printf '[tool.poetry.dependencies]\npython = "^3.11"\n\n[tool.poetry.group.dev.dependencies]\npytest = "^8"\n')"
+  scan; [[ "$output" == *"NOT SCANNED pyproject.toml"* ]] || false
+  git -C "$REPO" rm -q pyproject.toml && git -C "$REPO" commit -qm rm
+  put pubspec.yaml "$(printf 'name: app\ndependencies:\n  http: ^1.0.0\n')"
+  scan; [[ "$output" == *"NOT SCANNED pubspec.yaml"* ]]
+}
+
+@test "the report names the commit it scanned" {
+  # Fails if the scanned commit has to be found separately and may describe another state (Codex 20).
+  put uv.lock 'clean'
+  scan
+  [[ "$output" == *"scanned commit $(git -C "$REPO" rev-parse HEAD)"* ]]
+}
+
+# spy: a fake scanner that copies what it was given, notes whether a config sat beside it,
+# and answers clean.
+spy() {
+  cat > "$BIN/osv-scanner" <<'SH'
+#!/bin/bash
+prev=""; for a in "$@"; do
+  if [ "$prev" = -L ]; then f="${a#*:}"; cp "$f" "$TEST_TMP/scanned"
+    [ -f "$(dirname "$f")/osv-scanner.toml" ] && echo beside > "$TEST_TMP/config"; fi
+  prev="$a"; done
+cat "$OSV/clean.json"; exit 0
+SH
+  chmod +x "$BIN/osv-scanner"
+}
+
+@test "an indented include or editable line is a gap, and a comment never swallows the next pin" {
+  # Fails if leading whitespace lets option stripping erase a directive, or a comment ending in a
+  # backslash joins the next requirement into the comment (pass 3, Codex 1, Gemini 2).
+  put requirements.txt "$(printf 'six==1.17.0\n  --requirement other.txt\n  --editable ./local\n# note \\\nreq==1.0\n')"
+  spy
+  scan
+  [ "$status" -eq 3 ] || false
+  [ "$(cat "$TEST_TMP/scanned")" = "$(printf 'six==1.17.0\nreq==1.0')" ] || false
+  [[ "$output" == *"line 2 includes another file"* ]] || false
+  [[ "$output" == *"NOT SCANNED requirements.txt: line 3"* ]]
+}
+
+@test "the scanner gets only a name and a checked version, never a URL or a variable" {
+  # Fails if a URL-shaped version, a marker, or a \${...} variable reaches the scanner (pass 3, Codex 2).
+  put requirements.txt "$(printf 'six==1.17.0 ; python_version >= "3"\na===https://x.example/p?tok=SECRET\nb==1.0 ; extra == "${X}"\n')"
+  spy
+  scan
+  [ "$status" -eq 3 ] || false
+  [ "$(cat "$TEST_TMP/scanned")" = "six==1.17.0" ] || false
+  [[ "$output" == *"line 2"* ]] || false
+  [[ "$output" == *"line 3"* ]] || false
+  [[ "$output" != *SECRET* ]]
+}
+
+@test "a requirements file is scanned beside its tracked osv-scanner.toml" {
+  # Fails if the checked copy is scanned from a folder the file's own config does not reach (pass 3, Codex 3).
+  put sub/requirements.txt 'six==1.17.0'
+  put sub/osv-scanner.toml "$(printf '[[IgnoredVulns]]\nid = "GHSA-1"\n')"
+  spy
+  scan
+  [ "$status" -eq 0 ] || false
+  [ "$(cat "$TEST_TMP/config")" = beside ]
+}
+
+# answer <json>: a fake scanner that prints <json> and exits 1, as when it found something.
+answer() {
+  printf '#!/bin/bash\ncat <<"JSON"\n%s\nJSON\nexit 1\n' "$1" > "$BIN/osv-scanner"
+  chmod +x "$BIN/osv-scanner"
+}
+
+@test "an advisory the scan cannot name is a scanner failure, even beside a readable one" {
+  # Fails if groups that are not a list, a string ids, or an empty group is dropped or misread
+  # while another package's finding passes the exit-1 check (pass 3, Codex 4, Gemini 10; a
+  # vulnerability no group lists is now its own finding, pass 4, Codex 4).
+  put uv.lock 'clean'
+  ok='{"package": {"name": "a", "version": "1"}, "groups": [{"ids": ["GHSA-ok"]}], "vulnerabilities": [{"id": "GHSA-ok"}]}'
+  for bad in '{"package": {"name": "b", "version": "1"}, "groups": "GHSA-lost", "vulnerabilities": [{"id": "GHSA-lost"}]}' \
+             '{"package": {"name": "b", "version": "1"}, "groups": [{"ids": "GHSA-str"}]}' \
+             '{"package": {"name": "b", "version": "1"}, "groups": [{}]}'; do
+    answer "{\"results\": [{\"packages\": [$ok, $bad]}]}"
+    scan
+    [ "$status" -eq 2 ] || false
+    [[ "$output" == *"unreadable output for uv.lock"* ]] || false
+  done
+}
+
+@test "a group whose aliases are null is still a finding" {
+  # Fails if "aliases": null, which Go writes for an empty slice, is read as unusable (pass 4, Gemini 1).
+  put uv.lock 'clean'
+  answer '{"results": [{"packages": [{"package": {"name": "a", "version": "1"}, "groups": [{"ids": ["GHSA-ok"], "aliases": null}], "vulnerabilities": [{"id": "GHSA-ok"}]}]}]}'
+  scan
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"FINDING GHSA-ok () a 1 uv.lock"* ]]
+}
+
+# --- external review pass 4 (Codex) --------------------------------------------
+
+@test "an option line that carries an include or an unknown option is a gap" {
+  # Fails if a line pip reads as options lets an include or an option the scan cannot vouch
+  # for pass silently, so one clean pin makes the file look scanned (pass 4, Codex 1).
+  put requirements.txt "$(printf 'six==1.17.0\n--no-index -r sub.txt\n--index-url https://x.example/simple\n--use-feature=x\n-rother.txt\n')"
+  spy
+  scan
+  [ "$status" -eq 3 ] || false
+  [ "$(cat "$TEST_TMP/scanned")" = "six==1.17.0" ] || false
+  [[ "$output" == *"line 2 includes another file"* ]] || false
+  [[ "$output" != *"line 3"* ]] || false
+  [[ "$output" == *"line 4 has an option the scan does not read"* ]] || false
+  [[ "$output" == *"line 5 includes another file"* ]]
+}
+
+@test "lines join and comments end as pip reads them" {
+  # Fails if a pin after a commented continuation reaches the scanner, which pip reads as part
+  # of the comment, or a pin split inside its version is lost (pass 4, Codex 2).
+  put requirements.txt "$(printf 'one==1.0 # note \\\ntwo==2.0\nsix==1.\\\n17.0\n')"
+  spy
+  scan
+  [ "$status" -eq 0 ] || false
+  [ "$(cat "$TEST_TMP/scanned")" = "$(printf 'one==1.0\nsix==1.17.0')" ]
+}
+
+@test "an invalid name, a malformed version or arbitrary equality is a gap; v and parentheses are read" {
+  # Fails if a pin the scanner would skip silently reaches it beside a valid one, or a valid
+  # spelling of a pin is reported as a gap (pass 4, Codex 3).
+  put requirements.txt "$(printf 'six-==1.0\nbad==1...\nc===1.0\nd==v1.2\ne (==2.0)\nok==1.0\n')"
+  spy
+  scan
+  [ "$status" -eq 3 ] || false
+  [ "$(cat "$TEST_TMP/scanned")" = "$(printf 'd==1.2\ne==2.0\nok==1.0')" ] || false
+  [[ "$output" == *"line 1 "* ]] || false
+  [[ "$output" == *"line 2 "* ]] || false
+  [[ "$output" == *"line 3 "* ]] || false
+  [[ "$output" != *"line 4 "* ]] || false
+  [[ "$output" != *"line 5 "* ]]
+}
+
+@test "a long malformed requirement line or option is read in linear time" {
+  # Fails if the pin or comment patterns backtrack over a long run of whitespace, after a name,
+  # an opening bracket or a version, or a long option value is tokenized without a bound
+  # (pass 4, Codex 10; pass 5, Codex 15; pass 6, Codex 1, Gemini 1). The parser
+  # runs alone, under a deadline, so git and the interpreter's start are not timed.
+  run python3 - "$SCAN" <<'PY'
+import importlib.util, signal, sys
+spec = importlib.util.spec_from_file_location("scan", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+signal.alarm(3)
+for text in ("a" + " " * 200000 + "x\n", "--index-url " + "x" * 200000 + "\n",
+             "six==1.0 --hash=sha256:" + "a" * 200000 + "\n", "a" + " " * 200000 + "# c\n",
+             "a==1" + " " * 200000 + "x\n", "a(==1" + " " * 200000 + "x\n", "a[" + " " * 200000 + "x\n"):
+    pins, gaps = m.read_requirements(text)
+    assert gaps and not pins, (pins, gaps)
+print("in time")
+PY
+  [ "$status" -eq 0 ] || false
+  [[ "$output" == *"in time"* ]]
+}
+
+@test "every advisory in a package is named, grouped or not" {
+  # Fails if a second id of a group, or a vulnerability no group lists, is left out (pass 4, Codex 4).
+  put uv.lock 'clean'
+  answer '{"results": [{"packages": [{"package": {"name": "p", "version": "1"}, "groups": [{"ids": ["A", "B"], "aliases": null}], "vulnerabilities": [{"id": "A"}, {"id": "B"}, {"id": "C"}]}]}]}'
+  scan
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"FINDING A (B) p 1 uv.lock"* ]] || false
+  [[ "$output" == *"FINDING C () p 1 uv.lock"* ]]
+}
+
+@test "an unreadable package leaves the readable findings in the report" {
+  # Fails if one malformed group, or an id holding a line break, discards the file's readable
+  # findings or injects a line into the report (pass 4, Codex 4 and 5).
+  put uv.lock 'clean'
+  ok='{"package": {"name": "a", "version": "1"}, "groups": [{"ids": ["GHSA-ok"]}], "vulnerabilities": [{"id": "GHSA-ok"}]}'
+  for bad in '{"package": {"name": "b", "version": "1"}, "groups": [{}]}' \
+             '{"package": {"name": "b", "version": "1"}, "groups": [{"ids": ["GHSA-x\nFINDING FAKE"]}], "vulnerabilities": [{"id": "GHSA-x\nFINDING FAKE"}]}'; do
+    answer "{\"results\": [{\"packages\": [$ok, $bad]}]}"
+    scan
+    [ "$status" -eq 2 ] || false
+    [[ "$output" == *"FINDING GHSA-ok () a 1 uv.lock"* ]] || false
+    [[ "$output" == *"unreadable output for uv.lock"* ]] || false
+    [[ "$output" != *"FINDING FAKE"* ]] || false
+  done
+}
+
+@test "a folder's tracked osv-scanner.toml is passed to the scanner, so one it cannot load fails" {
+  # Fails if the config is left to the scanner's own discovery, which ignores an invalid one
+  # and scans without it (pass 4, Codex 6).
+  put sub/requirements.txt 'six==1.17.0'
+  put sub/uv.lock 'clean'
+  put other/uv.lock 'clean'
+  put sub/osv-scanner.toml "$(printf '[[IgnoredVulns]]\nid = "GHSA-1"\n')"
+  scan
+  [ "$status" -eq 0 ] || false
+  [ "$(grep -c -- '--config [^ ]*/sub/osv-scanner.toml' "$TEST_TMP/calls")" = 2 ] || false
+  [ "$(grep -c -- '--config' "$TEST_TMP/calls")" = 2 ] || false
+  # The real scanner exits 127 on a config it cannot load, when the config is named.
+  printf '#!/bin/bash\ncase " $* " in *" --config "*) echo "Failed to read config file" >&2; exit 127 ;; esac\ncat "%s/clean.json"\n' "$OSV" > "$BIN/osv-scanner"
+  scan
+  [ "$status" -eq 2 ] || false
+  [[ "$output" == *"osv-scanner failed on sub/uv.lock"* ]]
+}
+
+@test "a scanner diagnostic that is not UTF-8 does not stop the scan" {
+  # Fails if the scanner's stderr is decoded strictly, so a byte it cannot decode raises before
+  # the file's result is recorded (pass 3, KI-87).
+  put uv.lock 'clean'
+  printf '#!/bin/bash\nprintf "\\377\\376 bad bytes\\n" >&2\ncat "%s/clean.json"\n' "$OSV" > "$BIN/osv-scanner"
+  chmod +x "$BIN/osv-scanner"
+  scan
+  [ "$status" -eq 0 ] || false
+  [[ "$output" == *"1 file scanned: no known vulnerabilities"* ]]
+}
+
+# --- external review pass 5 ----------------------------------------------------
+
+@test "--require-hashes is a known option, and an option that changes no package keeps its pin" {
+  # Fails if --require-hashes is read as an include, or --config-settings on a pin discards it
+  # (pass 5, Codex 10, Gemini 2).
+  put requirements.txt "$(printf -- '--require-hashes\nsix==1.17.0 --hash=sha256:abcd\nidna==3.7 --config-settings=k=v\n')"
+  spy
+  scan
+  [ "$status" -eq 0 ] || false
+  [ "$(cat "$TEST_TMP/scanned")" = "$(printf 'six==1.17.0\nidna==3.7')" ]
+}
+
+@test "a variable on an option-only line is a gap" {
+  # Fails if \${VAR} on an option line passes, though pip expands it into options that can
+  # include another file (pass 5, Codex 3, Gemini 3).
+  put requirements.txt "$(printf 'six==1.17.0\n--extra-index-url ${EXTRA}\n')"
+  scan
+  [ "$status" -eq 3 ] || false
+  [[ "$output" == *"line 2 has a version or variable the scan cannot use"* ]]
+}
+
+@test "pins pip would reject are gaps, and a trailing comma is read" {
+  # Fails if bad extras, an empty marker, a malformed hash or a non-ASCII digit becomes a clean
+  # pin, or pip's "name==1," is refused (pass 5, Codex 5 and 10, Gemini 4).
+  put requirements.txt "$(printf 'a[bad extra]==1\nb==1;\nc==1 --hash=wrong\nd==\xd9\xa1\ne==1,\nok==1.0\n')"
+  spy
+  scan
+  [ "$status" -eq 3 ] || false
+  [ "$(cat "$TEST_TMP/scanned")" = "$(printf 'e==1\nok==1.0')" ] || false
+  local n
+  for n in 1 2 3 4; do [[ "$output" == *"line $n "* ]] || { echo "line $n: $output"; false; }; done
+}
+
+@test "a requirements file that is not UTF-8, or declares another encoding, is not read; a BOM is" {
+  # Fails if bytes are replaced and parsed, so a pin pip reads is lost or a comment is misread
+  # (pass 5, Codex 4).
+  printf 'six==1.17.0\n\xff\n' > "$REPO/requirements.txt"
+  printf '# -*- coding: latin-1 -*-\nsix==1.17.0\n' > "$REPO/requirements-dev.txt"
+  printf '\xef\xbb\xbfidna==3.7\n' > "$REPO/requirements-bom.txt"
+  git -C "$REPO" add -A && git -C "$REPO" commit -qm reqs
+  spy
+  scan
+  [ "$status" -eq 3 ] || false
+  [[ "$output" == *"NOT SCANNED requirements.txt: not UTF-8, not read"* ]] || false
+  [[ "$output" == *"NOT SCANNED requirements-dev.txt: declares an encoding other than UTF-8, not read"* ]] || false
+  [ "$(cat "$TEST_TMP/scanned")" = "idna==3.7" ]
+}
+
+@test "a malformed group leaves its own package's other advisories in the report" {
+  # Fails if one bad group discards the readable groups and vulnerabilities of the same
+  # package (pass 5, Codex 8, Gemini 5).
+  put uv.lock 'clean'
+  answer '{"results": [{"packages": [{"package": {"name": "p", "version": "1"}, "groups": [{"ids": ["A"]}, {}], "vulnerabilities": [{"id": "A"}, {"id": "C"}]}]}]}'
+  scan
+  [ "$status" -eq 2 ] || false
+  [[ "$output" == *"FINDING A () p 1 uv.lock"* ]] || false
+  [[ "$output" == *"FINDING C () p 1 uv.lock"* ]] || false
+  [[ "$output" == *"unreadable output for uv.lock"* ]]
+}
+
+@test "groups, vulnerabilities, a version or an id of the wrong type is unreadable" {
+  # Fails if {} or false is taken for an empty list, a missing version prints as None, or a
+  # blank id is a finding (pass 5, Codex 6, Gemini 5).
+  put uv.lock 'clean'
+  local bad
+  for bad in '{"package": {"name": "p", "version": "1"}, "groups": {}, "vulnerabilities": [{"id": "A"}]}' \
+             '{"package": {"name": "p", "version": "1"}, "groups": [], "vulnerabilities": false}' \
+             '{"package": {"name": "p"}, "groups": [{"ids": ["A"]}], "vulnerabilities": [{"id": "A"}]}' \
+             '{"package": {"name": "p", "version": "1"}, "groups": [{"ids": ["  "]}], "vulnerabilities": []}'; do
+    answer "{\"results\": [{\"packages\": [$bad]}]}"
+    scan
+    [ "$status" -eq 2 ] || { echo "$bad: $status $output"; false; }
+    [[ "$output" != *"None"* ]] || false
+  done
+}
+
+@test "scanner output that is not UTF-8 is unreadable, not repaired" {
+  # Fails if invalid bytes in the JSON are replaced and the advisory published as read (pass 5,
+  # Codex 9, Gemini 6).
+  put uv.lock 'clean'
+  printf '#!/bin/bash\nprintf %s\nexit 1\n' "'{\"results\": [{\"packages\": [{\"package\": {\"name\": \"p\", \"version\": \"1\"}, \"groups\": [{\"ids\": [\"GHSA-\\xff\"]}], \"vulnerabilities\": [{\"id\": \"GHSA-\\xff\"}]}]}]}'" > "$BIN/osv-scanner"
+  chmod +x "$BIN/osv-scanner"
+  scan
+  [ "$status" -eq 2 ] || false
+  [[ "$output" == *"unreadable output for uv.lock"* ]]
+}
+
+@test "a committed path holding a line break reaches the report as one line" {
+  # Fails if a repository-controlled path is printed raw, so it can forge a report line
+  # (pass 5, Codex 7).
+  mkdir -p "$REPO/a
+FINDING FORGED"
+  printf 'clean\n' > "$REPO/a
+FINDING FORGED/uv.lock"
+  git -C "$REPO" add -A && git -C "$REPO" commit -qm odd
+  answer '{"results": [{"packages": [{"package": {"name": "p", "version": "1"}, "groups": [{"ids": ["A"]}], "vulnerabilities": [{"id": "A"}]}]}]}'
+  scan
+  [ "$status" -eq 1 ] || false
+  [ "$(printf '%s\n' "$output" | grep -c '^FINDING')" = 1 ] || false
+  [[ "$output" == *'a\nFINDING FORGED/uv.lock'* ]]
+}
+
+# --- external review pass 6 ----------------------------------------------------
+
+@test "a pin's --config-settings must be KEY=VALUE, and its hash a pip algorithm" {
+  # Fails if an option value pip rejects leaves the pin looking clean (pass 6, Codex 2).
+  put requirements.txt "$(printf 'a==1 --config-settings=abc\nb==1 --hash=md5:abcd\nc==1 --config-settings k=v\nd==1 --hash sha256:ab\n')"
+  spy
+  scan
+  [ "$status" -eq 3 ] || false
+  [ "$(cat "$TEST_TMP/scanned")" = "$(printf 'c==1\nd==1')" ] || false
+  [[ "$output" == *"line 1 has an option"* ]] || false
+  [[ "$output" == *"line 2 has an option"* ]]
+}

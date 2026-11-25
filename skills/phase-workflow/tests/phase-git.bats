@@ -30,14 +30,9 @@ setup() {
   export PUSH_URL="$(git remote get-url --push origin)"
 }
 
-# Extract one executable fence from SKILL.md by a substring it contains.
-# Three tests needed this and the copies were drifting apart.
-extract_fence() {   # $1 = selector, $2 = destination, $3 = SKILL.md path
-  python3 - "$3" "$2" "$1" <<'FENCE_PY'
-import pathlib,re,sys
-blocks=re.findall(r'```bash\n(.*?)```',pathlib.Path(sys.argv[1]).read_text(),re.S)
-pathlib.Path(sys.argv[2]).write_text(next(b for b in blocks if sys.argv[3] in b))
-FENCE_PY
+# Extract one executable fence from SKILL.md by its `# fence: <name>` marker.
+extract_fence() {   # $1 = marker name, $2 = destination, $3 = SKILL.md path
+  python3 "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/tests/fence.py" "$3" "$1" > "$2"
 }
 
 
@@ -194,9 +189,9 @@ teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/nul
 # let phase start copy the token into the committed docs/PHASE_RECORD.md.
 @test "origin check: refuses a URL carrying credentials, without printing it" {
   clean="https://example.invalid/r.git"
-  for url in "https://someone:notasecret@example.invalid/r.git" "HTTPS://notasecret@example.invalid/r.git" \
-             "git+https://notasecret@example.invalid/r.git" "https://example.invalid/r.git?token=notasecret" \
-             "http::https://notasecret@example.invalid/r.git" "ssh://me@mail.example:notasecret@example.invalid/r.git"; do
+  # Forms refused before their credentials are read are in the unsupported-form tests below.
+  for url in "https://someone:notasecret@example.invalid/r.git" "https://notasecret@example.invalid/r.git" \
+             "https://example.invalid/r.git?token=notasecret" "ssh://me@mail.example:notasecret@example.invalid/r.git"; do
     # A clean fetch URL with a bad push URL, then the reverse: each side is checked.
     for pair in "$clean $url" "$url $clean"; do
       set -- $pair
@@ -204,7 +199,7 @@ teardown() { cd /; [ -n "${TEST_TMP:-}" ] && chmod -R u+w "$TEST_TMP" 2>/dev/nul
       git remote set-url --push origin "$2"
       run bash "$PUBLISH" --check-origin "$1" "$2"
       [ "$status" -eq 1 ] || false
-      [[ "$output" == *"CREDENTIALS IN ORIGIN URL"* || "$output" == *"TRANSPORT HELPER"* ]] || false
+      [[ "$output" == "CREDENTIALS IN ORIGIN URL"* ]] || false
       [[ "$output" != *notasecret* ]] || false
     done
   done
@@ -311,7 +306,7 @@ EOF
 }
 
 @test "adversarial: documented cleanup returns failure when fetch fails" {
-  extract_fence 'GONE=' "$TEST_TMP/cleanup.sh" "$(dirname "$PUBLISH")/SKILL.md"
+  extract_fence prune "$TEST_TMP/cleanup.sh" "$(dirname "$PUBLISH")/SKILL.md"
   mkdir "$TEST_TMP/bin"
   printf '#!/bin/sh\nexit 128\n' > "$TEST_TMP/bin/git"
   chmod +x "$TEST_TMP/bin/git"
@@ -333,7 +328,7 @@ prepare_documented_release() {
 case "$*" in *mergeCommit*) echo "$MERGE_SHA" ;; *) echo "$APPROVED_SHA" ;; esac
 SH
   chmod +x "$TEST_TMP/bin/gh"
-  extract_fence 'REMOTE_TAG=' "$TEST_TMP/release.sh" "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/SKILL.md"
+  extract_fence release-tag "$TEST_TMP/release.sh" "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/SKILL.md"
 }
 
 @test "documented release: publishes the merge commit rather than the approved PR head" {
@@ -395,7 +390,7 @@ SH
 # whose parents are upstream reports nothing though it carries unique work.
 # ---------------------------------------------------------------------------
 
-ki46_extract_cleanup() { extract_fence 'GONE=' "$TEST_TMP/cleanup.sh" "$(dirname "$PUBLISH")/SKILL.md"; }
+ki46_extract_cleanup() { extract_fence prune "$TEST_TMP/cleanup.sh" "$(dirname "$PUBLISH")/SKILL.md"; }
 
 # Publish a branch, land it on main by $2, then orphan its upstream so the
 # prune fence considers it at all.
@@ -541,18 +536,25 @@ ki46_squash_branch() {          # leaves feature squash-merged, tip in $1
 
 # first_push <skill>: the documented first-push fence, for feature/x.
 first_push() {
-  extract_fence 'PHASE RECORD NOT COMMITTED ON' "$TEST_TMP/push.sh" "$1"
+  extract_fence first-push "$TEST_TMP/push.sh" "$1"
   sed -i.bak '1i\
 PHASE_BRANCH=feature/x DEFAULT_BRANCH=main
 ' "$TEST_TMP/push.sh"
+  export CLAUDE_PLUGIN_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   git push -q origin main && git fetch -q origin
+}
+
+# write_record <branch>: a phase record whose first table names <branch>.
+write_record() {
+  mkdir -p docs
+  printf '# Phase record\n\n| Key | Value |\n| --- | --- |\n| `REPO` | `fixture/repo` |\n| `PHASE_BRANCH` | `%s` |\n' "$1" > docs/PHASE_RECORD.md
 }
 
 @test "first push: refuses from another branch, and after a commit that drops the record" {
   # Fails if the check reads HEAD while pushing $PHASE_BRANCH, or accepts a deleted record.
   first_push "$BATS_TEST_DIRNAME/../SKILL.md"
   git switch -qc feature/x
-  mkdir -p docs && printf '| `PHASE_BRANCH` | `feature/x` |\n' > docs/PHASE_RECORD.md
+  write_record feature/x
   git add docs && git commit -qm record
   git switch -qc other
   run bash "$TEST_TMP/push.sh"
@@ -568,7 +570,7 @@ PHASE_BRANCH=feature/x DEFAULT_BRANCH=main
   # Control: the fence pushes when the checked-out phase branch carries its record.
   first_push "$BATS_TEST_DIRNAME/../SKILL.md"
   git switch -qc feature/x
-  mkdir -p docs && printf '| `PHASE_BRANCH` | `feature/x` |\n' > docs/PHASE_RECORD.md
+  write_record feature/x
   git add docs && git commit -qm record
   run bash "$TEST_TMP/push.sh"
   [ "$status" -eq 0 ] || false
@@ -577,7 +579,7 @@ PHASE_BRANCH=feature/x DEFAULT_BRANCH=main
 
 # after_review: the documented post-review check, with REVIEWED bound to $1.
 after_review() {
-  extract_fence 'CHANGED AFTER REVIEW' "$TEST_TMP/after.sh" "$BATS_TEST_DIRNAME/../SKILL.md"
+  extract_fence after-review "$TEST_TMP/after.sh" "$BATS_TEST_DIRNAME/../SKILL.md"
   sed -i.bak "s|^\( *\)REVIEWED=.*|\1REVIEWED=$1|" "$TEST_TMP/after.sh"
 }
 
@@ -616,12 +618,12 @@ after_review() {
 
 # record_check <pr>: the documented phase-record check, for PR <pr>.
 record_check() {
-  extract_fence 'PHASE RECORD DOES NOT NAME PR' "$TEST_TMP/record.sh" "$BATS_TEST_DIRNAME/../SKILL.md"
-  if grep -q '^ *PR=' "$TEST_TMP/record.sh"; then
-    sed -i.bak "s|^\\( *\\)PR=.*|\\1PR=$1|" "$TEST_TMP/record.sh"
-  else
-    printf 'PR=%s\n%s\n' "$1" "$(cat "$TEST_TMP/record.sh")" > "$TEST_TMP/record.sh"
-  fi
+  extract_fence record-check "$TEST_TMP/record.sh" "$BATS_TEST_DIRNAME/../SKILL.md"
+  export CLAUDE_PLUGIN_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
+  sed -i.bak -e "s|^\\( *\\)PR=.*|\\1PR=$1|" -e "s|^\\( *\\)REPO=.*|\\1REPO=${2:-fixture/repo}|" "$TEST_TMP/record.sh"
+  grep -q "^ *PR=$1\$" "$TEST_TMP/record.sh" && grep -q "^ *REPO=" "$TEST_TMP/record.sh" || false
+  # The post-review check's head; the record is read at it, not at a later HEAD.
+  printf 'INSPECTED="$(git rev-parse HEAD)"\n%s\n' "$(cat "$TEST_TMP/record.sh")" > "$TEST_TMP/record.sh"
 }
 
 @test "phase record: another repository's PR cannot pair with this release" {
@@ -629,7 +631,7 @@ record_check() {
   # table passes with this repository's v2.1.0.
   mkdir -p docs
   printf '## [2.1.0] - 2026-11-22\n' > CHANGELOG.md
-  printf '| Key | Value |\n| --- | --- |\n| `PR` | 9 |\n| Release | v2.1.0 |\n\nCompanion:\n\n| Key | Value |\n| --- | --- |\n| `PR` | 5 |\n| Release | v1.1.0 |\n' > docs/PHASE_RECORD.md
+  printf '| Key | Value |\n| --- | --- |\n| `REPO` | `fixture/repo` |\n| `PR` | 9 |\n| Release | v2.1.0 |\n\nCompanion:\n\n| Key | Value |\n| --- | --- |\n| `REPO` | `fixture/other` |\n| `PR` | 5 |\n| Release | v1.1.0 |\n' > docs/PHASE_RECORD.md
   git add -A && git commit -qm record
   record_check 5
   run bash "$TEST_TMP/record.sh"
@@ -644,7 +646,7 @@ record_check() {
   # or a second PR row, can satisfy it (F-149).
   mkdir -p docs
   printf '## [2.1.0] - 2026-11-22\n' > CHANGELOG.md
-  printf '| Key   | Value |\n| --- | --- |\n| `PR` | 9 |\n| Release | v2.1.0 |\n\nCompanion:\n\n| Field | Value |\n| --- | --- |\n| `PR` | 5 |\n' > docs/PHASE_RECORD.md
+  printf '| Key   | Value |\n| --- | --- |\n| `REPO` | `fixture/repo` |\n| `PR` | 9 |\n| Release | v2.1.0 |\n\nCompanion:\n\n| Field | Value |\n| --- | --- |\n| `PR` | 5 |\n' > docs/PHASE_RECORD.md
   git add -A && git commit -qm record
   record_check 5
   run bash "$TEST_TMP/record.sh"
@@ -652,7 +654,7 @@ record_check() {
   record_check 9
   run bash "$TEST_TMP/record.sh"
   [ "$status" -eq 0 ] || false
-  printf '| Key | Value |\n| --- | --- |\n| `PR` | 9 |\n| `PR` | 5 |\n| Release | v2.1.0 |\n' > docs/PHASE_RECORD.md
+  printf '| Key | Value |\n| --- | --- |\n| `REPO` | `fixture/repo` |\n| `PR` | 9 |\n| `PR` | 5 |\n| Release | v2.1.0 |\n' > docs/PHASE_RECORD.md
   git commit -qam two-prs
   record_check 5
   run bash "$TEST_TMP/record.sh"
@@ -669,7 +671,550 @@ record_check() {
     git remote set-url --push origin "$url"
     run bash "$PUBLISH" --check-origin "$clean" "$url"
     [ "$status" -eq 1 ] || false
-    [[ "$output" == *"CREDENTIALS IN ORIGIN URL"* || "$output" == *"TRANSPORT HELPER"* ]] || false
+    [[ "$output" == "UNSUPPORTED ORIGIN URL"* ]] || false
     [[ "$output" != *notasecret* ]] || false
   done
+}
+
+# --- the rewritten fences under each shell (KI-74, KI-75) -------------------
+# These fences lost their awk field programs, which skill arguments overwrote.
+# Each runs under bash and, in its own test, under zsh -f.
+
+# release_resumes_in <annotated|lightweight> <shell...>: the remote already holds
+# the tag at the merge commit; the fence must accept it rather than conflict.
+release_resumes_in() {
+  local kind="$1"; shift
+  prepare_documented_release
+  if [ "$kind" = annotated ]; then git tag -a -m release "$TAG" "$MERGE_SHA"; else git tag "$TAG" "$MERGE_SHA"; fi
+  git push -q origin "refs/tags/$TAG"
+  git tag -d "$TAG" >/dev/null
+  [ "$kind" != annotated ] || [ "$(git --git-dir="$FORK" cat-file -t "refs/tags/$TAG")" = tag ] || false
+  PATH="$TEST_TMP/bin:$PATH" run "$@" "$TEST_TMP/release.sh"
+  [ "$status" -eq 0 ] || false
+  [[ "$output" == *"TAG VERIFIED AND PUBLISHED: $TAG at $MERGE_SHA"* ]]
+}
+
+@test "bash: the release fence accepts an annotated remote tag at the merge commit" {
+  # Fails if the parser compares the tag object, not the commit it peels to.
+  release_resumes_in annotated bash
+}
+
+@test "zsh: the release fence accepts an annotated remote tag at the merge commit" {
+  # Fails if the peeled-commit parser reads differently under zsh.
+  command -v zsh >/dev/null || skip "zsh is not installed"
+  release_resumes_in annotated zsh -f
+}
+
+@test "bash: the release fence accepts a lightweight remote tag at the merge commit" {
+  # Fails if a tag with no peeled line is not read from its direct line.
+  release_resumes_in lightweight bash
+}
+
+@test "zsh: the release fence accepts a lightweight remote tag at the merge commit" {
+  # Fails if the direct-line fallback reads differently under zsh.
+  command -v zsh >/dev/null || skip "zsh is not installed"
+  release_resumes_in lightweight zsh -f
+}
+
+# prune_in <shell...>: one gone branch already merged, one still tracking; only
+# the gone one is pruned.
+prune_in() {
+  ki46_extract_cleanup
+  git checkout -q -b feature/done; echo d > d1; git add -A; git commit -qm done
+  git checkout -q main; git merge -q --ff-only feature/done
+  git checkout -q -b feature/live; echo l > l1; git add -A; git commit -qm live
+  git push -q -u origin feature/live
+  git checkout -q main
+  export APPROVED_SHA="$TASK_SHA"
+  ki46_orphan feature/done
+  [ "$(git for-each-ref --format='%(upstream:track)' refs/heads/feature/live)" != '[gone]' ] || false
+  run "$@" "$TEST_TMP/cleanup.sh"
+  [ "$status" -eq 0 ] || false
+  run git rev-parse --verify -q feature/done
+  [ "$status" -ne 0 ] || false
+  git rev-parse --verify -q feature/live >/dev/null
+}
+
+@test "bash: prune removes only the branch whose upstream is gone" {
+  # Fails if the branch and track fields are misread, so the wrong branch goes.
+  prune_in bash
+}
+
+@test "zsh: prune removes only the branch whose upstream is gone" {
+  # Fails if the field reading differs under zsh.
+  command -v zsh >/dev/null || skip "zsh is not installed"
+  prune_in zsh -f
+}
+
+@test "prune skips the checked-out branch when a tag shares its name" {
+  # Fails if CURRENT is read with --short, which prefixes heads/ to an ambiguous name, so
+  # prune tries to delete the branch it stands on and reports it retained (pass 3, Codex 20, Gemini 5).
+  ki46_extract_cleanup
+  git checkout -q -b feature/cur; echo c > c1; git add -A; git commit -qm cur
+  ki46_orphan feature/cur
+  git checkout -q feature/cur
+  git tag feature/cur
+  export APPROVED_SHA=""
+  run bash "$TEST_TMP/cleanup.sh"
+  [ "$status" -eq 0 ] || false
+  [[ "$output" != *RETAINED* ]] || false
+  git rev-parse --verify -q refs/heads/feature/cur >/dev/null
+}
+
+@test "prune deletes a merged branch whose upstream is gone though a tag shares its name" {
+  # Fails if a same-named tag makes prune retain a merged branch, or delete the tag instead.
+  # A control: this already worked before KI-86's fix, which is the checked-out case above.
+  ki46_extract_cleanup
+  git checkout -q -b feature/x; echo x > x1; git add -A; git commit -qm x
+  git checkout -q main; git merge -q --ff-only feature/x
+  ki46_orphan feature/x
+  tagged="$(git rev-list --max-parents=0 HEAD)"
+  git tag feature/x "$tagged"
+  export APPROVED_SHA=""
+  run bash "$TEST_TMP/cleanup.sh"
+  [ "$status" -eq 0 ] || false
+  ! git rev-parse --verify -q refs/heads/feature/x >/dev/null || false
+  [ "$(git rev-parse refs/tags/feature/x)" = "$tagged" ]
+}
+
+# --- the phase record's first table (KI-67, KI-69) --------------------------
+
+@test "phase record: a companion table with the same PR and release is not this repository's" {
+  # Fails if the gate accepts a first table that names another repository (F-05).
+  mkdir -p docs
+  printf '## [2.1.0] - 2026-11-22\n' > CHANGELOG.md
+  printf '| Key | Value |\n| --- | --- |\n| `REPO` | `fixture/other` |\n| `PR` | 9 |\n| Release | v2.1.0 |\n\n| Key | Value |\n| --- | --- |\n| `REPO` | `fixture/repo` |\n| `PR` | 9 |\n| Release | v2.1.0 |\n' > docs/PHASE_RECORD.md
+  git add -A && git commit -qm record
+  record_check 9 fixture/repo
+  run bash "$TEST_TMP/record.sh"
+  [ "$status" -ne 0 ] || false
+  [[ "$output" == *"PHASE RECORD DOES NOT NAME"* ]]
+}
+
+@test "phase record: the gate reads a large record to its end under pipefail" {
+  # Fails if the reader stops early and the producer dies of SIGPIPE, failing a valid gate.
+  mkdir -p docs
+  printf '## [2.1.0] - 2026-11-22\n' > CHANGELOG.md
+  { printf '| Key | Value |\n| --- | --- |\n| `REPO` | `fixture/repo` |\n| `PR` | 9 |\n| Release | v2.1.0 |\n\n'
+    for i in $(seq 1 100000); do echo "padding line $i"; done; } > docs/PHASE_RECORD.md
+  git add -A && git commit -qm record
+  record_check 9
+  run bash "$TEST_TMP/record.sh"
+  [ "$status" -eq 0 ]
+}
+
+@test "first push: refuses a record inherited unchanged from the default branch" {
+  # Fails if a reused branch name lets the default branch's old record pass (KI-67).
+  first_push "$BATS_TEST_DIRNAME/../SKILL.md"
+  write_record feature/x
+  git add docs && git commit -qm "old phase's record"
+  git push -q origin main && git fetch -q origin
+  git switch -qc feature/x
+  run bash "$TEST_TMP/push.sh"
+  [ "$status" -ne 0 ] || false
+  ! git ls-remote --exit-code --heads origin feature/x >/dev/null
+}
+
+@test "first push: refuses a record changed and then reverted on the branch" {
+  # Fails if a commit touching the record counts although the tip matches the default branch.
+  first_push "$BATS_TEST_DIRNAME/../SKILL.md"
+  write_record feature/x
+  git add docs && git commit -qm "old phase's record"
+  git push -q origin main && git fetch -q origin
+  git switch -qc feature/x
+  printf 'edit\n' >> docs/PHASE_RECORD.md && git commit -qam edit
+  git revert --no-edit HEAD >/dev/null
+  run bash "$TEST_TMP/push.sh"
+  [ "$status" -ne 0 ] || false
+  ! git ls-remote --exit-code --heads origin feature/x >/dev/null
+}
+
+@test "first push: refuses a record whose first table names another branch" {
+  # Fails if a PHASE_BRANCH row in a later table satisfies the check.
+  first_push "$BATS_TEST_DIRNAME/../SKILL.md"
+  git switch -qc feature/x
+  write_record feature/old
+  printf '\n| Key | Value |\n| --- | --- |\n| `PHASE_BRANCH` | `feature/x` |\n' >> docs/PHASE_RECORD.md
+  git add docs && git commit -qm record
+  run bash "$TEST_TMP/push.sh"
+  [ "$status" -ne 0 ] || false
+  ! git ls-remote --exit-code --heads origin feature/x >/dev/null
+}
+
+# publish_record <gate sha>: the documented PR-description step, with gh faked.
+publish_record() {
+  extract_fence publish-record "$TEST_TMP/publish.sh" "$BATS_TEST_DIRNAME/../SKILL.md"
+  mkdir -p "$TEST_TMP/bin"
+  printf '#!/bin/bash\nprintf "%%s\\n" "$*" >> "%s/gh-calls"\ncase "$*" in *headRefOid*) echo "$FAKE_PR_HEAD" ;; esac\n' "$TEST_TMP" > "$TEST_TMP/bin/gh"
+  chmod +x "$TEST_TMP/bin/gh"
+  export FAKE_PR_HEAD="$1"
+  printf 'record\n' > "$TEST_TMP/record.md"
+  sed -i.bak "s|<review record file>|$TEST_TMP/record.md|" "$TEST_TMP/publish.sh"
+  printf 'PR=9 REPO=fixture/repo GATE_SHA=%s\n%s\n' "$1" "$(cat "$TEST_TMP/publish.sh")" > "$TEST_TMP/publish.sh"
+}
+
+@test "the review record reaches the PR only at the gate's verified head" {
+  # Fails if the PR description is edited when HEAD is not the SHA the gate verified.
+  publish_record 0000000000000000000000000000000000000000
+  PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/publish.sh"
+  [ "$status" -ne 0 ] || false
+  [ ! -e "$TEST_TMP/gh-calls" ] || false
+  publish_record "$(git rev-parse HEAD)"
+  PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/publish.sh"
+  [ "$status" -eq 0 ] || false
+  grep -q '^pr edit 9 -R fixture/repo --body-file' "$TEST_TMP/gh-calls"
+}
+
+# --- the origin allow-list (KI-70) ------------------------------------------
+
+# origin_refused <url> <message>: the URL is refused with exactly <message>, as the
+# fetch and as the push destination, and never printed.
+origin_refused() {
+  local clean="https://example.invalid/r.git" pair
+  for pair in "$clean|$1" "$1|$clean"; do
+    git remote set-url origin "${pair%%|*}"
+    git remote set-url --push origin "${pair#*|}"
+    run bash "$PUBLISH" --check-origin "${pair%%|*}" "${pair#*|}"
+    [ "$status" -eq 1 ] || { echo "accepted: $pair"; return 1; }
+    [[ "$output" == "$2"* ]] || { echo "message for $pair: $output"; return 1; }
+    [[ "$output" != *"$1"* ]] || { echo "printed: $1"; return 1; }
+  done
+}
+
+@test "origin check: refuses each unsupported form in both positions" {
+  # Fails if a helper, an unlisted scheme or an option-shaped URL passes (KI-70).
+  local url
+  for url in '9p::https://h/r' 'my_helper::x' '::x' 'ext::ssh git@h:r' '9p::git@github.com:o/r' \
+             '-oProxyCommand=x@h:r' 'foo://h/r' 'file:///r' 'http://u@h:80/r' 'git+https://h/r'; do
+    origin_refused "$url" "UNSUPPORTED ORIGIN URL" || false
+  done
+}
+
+@test "origin check: refuses credentials inside an accepted form, with grep absent" {
+  # Fails if the credential check needs an external command and passes when it cannot run.
+  local url
+  mkdir -p "$TEST_TMP/nogrep"
+  for tool in git bash dirname wc tr sed cat; do ln -sf "$(command -v "$tool")" "$TEST_TMP/nogrep/$tool"; done
+  for url in 'https://tok@example.invalid/r.git' 'https://u:tok@example.invalid/r.git' \
+             'https://example.invalid/r.git?tok' 'ssh://me:tok@example.invalid/r.git' 'git:tok@example.invalid:o/r'; do
+    git remote set-url origin "$url"; git remote set-url --push origin "$url"
+    PATH="$TEST_TMP/nogrep" run bash "$PUBLISH" --check-origin "$url" "$url"
+    [ "$status" -eq 1 ] || { echo "accepted: $url"; false; }
+    [[ "$output" == "CREDENTIALS IN ORIGIN URL"* ]] || false
+  done
+}
+
+@test "origin check: a failed push-URL listing refuses" {
+  # Fails if a push-URL listing that errors counts as one destination.
+  local real_git; real_git="$(command -v git)"
+  mkdir -p "$TEST_TMP/bin"
+  printf '#!/bin/bash\ncase "$*" in *"--push --all"*) exit 128 ;; esac\nexec "%s" "$@"\n' "$real_git" > "$TEST_TMP/bin/git"
+  chmod +x "$TEST_TMP/bin/git"
+  PATH="$TEST_TMP/bin:$PATH" run bash "$PUBLISH" --check-origin "$FETCH_URL" "$PUSH_URL"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"PUSH URL"* ]]
+}
+
+@test "origin check: accepts ssh, git+ssh, ssh+git, https, scp form and a local path" {
+  # Control: the forms a phase uses pass.
+  local url
+  for url in 'ssh://git@example.invalid/r.git' 'git+ssh://git@example.invalid/r.git' \
+             'ssh+git://git@example.invalid/r.git' 'https://example.invalid/r.git' \
+             'git@github.com:owner/r.git' 'github.com:owner/r.git' "$TEST_TMP/fork.git"; do
+    git remote set-url origin "$url"; git remote set-url --push origin "$url"
+    run bash "$PUBLISH" --check-origin "$url" "$url"
+    [ "$status" -eq 0 ] || { echo "refused: $url: $output"; false; }
+  done
+}
+
+@test "prune: reports every retained branch, then exits 1" {
+  # Fails if the loop stops at the first retained branch, leaving later ones unconsidered (ENH-29).
+  ki46_extract_cleanup
+  export APPROVED_SHA="$TASK_SHA"
+  for b in feature/a feature/b; do
+    git checkout -q -b "$b" main; echo "$b" > "${b#feature/}"; git add -A; git commit -qm "$b"
+    git push -q -u origin "$b"
+  done
+  git checkout -q -b feature/c main; echo c > c; git add -A; git commit -qm c
+  git push -q -u origin feature/c
+  git checkout -q main; git merge -q --ff-only feature/c; git push -q origin main
+  for b in feature/a feature/b feature/c; do git push -q origin --delete "$b"; done
+  git fetch -q --prune origin
+  run bash "$TEST_TMP/cleanup.sh"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"RETAINED — feature/a"* ]] || false
+  [[ "$output" == *"RETAINED — feature/b"* ]] || false
+  run git rev-parse --verify -q feature/c
+  [ "$status" -ne 0 ]
+}
+
+# --- the post-review check and the gate's head (KI-62) ----------------------
+
+@test "after review: a rename into an allowed path names its source" {
+  # Fails if --name-only reports only the destination of a detected rename (KI-62).
+  reviewed="$(git rev-parse HEAD)"
+  mkdir -p docs && git mv calc.py docs/ROADMAP.md && git commit -qm "move calc.py"
+  after_review "$reviewed"
+  run bash "$TEST_TMP/after.sh"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"CHANGED AFTER REVIEW"*"calc.py"* ]]
+}
+
+@test "after review: a failed listing stops the check" {
+  # Fails if a listing that errors reads as "nothing changed" and the gate continues.
+  reviewed="$(git rev-parse HEAD)"
+  local real_git; real_git="$(command -v git)"
+  mkdir -p "$TEST_TMP/bin"
+  printf '#!/bin/bash\ncase "$*" in *--name-only*) exit 128 ;; esac\nexec "%s" "$@"\n' "$real_git" > "$TEST_TMP/bin/git"
+  chmod +x "$TEST_TMP/bin/git"
+  after_review "$reviewed"
+  PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/after.sh"
+  [ "$status" -ne 0 ] || false
+  [[ "$output" == *"CANNOT LIST"* ]]
+}
+
+@test "the gate refuses a head other than the one the post-review check inspected" {
+  # Fails if HEAD moves after the post-review check and the gate still passes. (Origin and the PR are
+  # checked against this same head by the later lines of the fence.)
+  inspected="$(git rev-parse HEAD)"
+  git commit -q --allow-empty -m later
+  extract_fence gate "$TEST_TMP/gate.sh" "$BATS_TEST_DIRNAME/../SKILL.md"
+  printf 'PHASE_BRANCH=main INSPECTED=%s\n%s\n' "$inspected" "$(cat "$TEST_TMP/gate.sh")" > "$TEST_TMP/gate.sh"
+  run bash "$TEST_TMP/gate.sh"
+  [ "$status" -ne 0 ] || false
+  [[ "$output" == *"HEAD MOVED SINCE THE POST-REVIEW CHECK"* ]]
+}
+
+@test "origin check: a local path holding # is not taken for a credential" {
+  # Fails if the query/fragment rule meant for URLs refuses a local path.
+  local url="$TEST_TMP/repo#2.git"
+  git remote set-url origin "$url"; git remote set-url --push origin "$url"
+  run bash "$PUBLISH" --check-origin "$url" "$url"
+  [ "$status" -eq 0 ]
+}
+
+# --- external review pass 1 fixes ----------------------------------------------
+
+@test "first push refuses when the default branch moved its record after the fork" {
+  # Fails if the record is compared with the current default branch, not the fork point (pass 1, Codex 10).
+  first_push "$BATS_TEST_DIRNAME/../SKILL.md"
+  write_record feature/x
+  git add docs && git commit -qm "old record" && git push -q origin main
+  git switch -qc feature/x
+  git switch -q main && printf 'later\n' >> docs/PHASE_RECORD.md && git commit -qam "main edits its record" && git push -q origin main
+  git fetch -q origin && git switch -q feature/x
+  run bash "$TEST_TMP/push.sh"
+  [ "$status" -ne 0 ] || false
+  ! git ls-remote --exit-code --heads origin feature/x >/dev/null
+}
+
+@test "first push refuses when the default branch ref is missing" {
+  # Fails if a failed comparison reads as "the record changed".
+  first_push "$BATS_TEST_DIRNAME/../SKILL.md"
+  git switch -qc feature/x
+  write_record feature/x
+  git add docs && git commit -qm record
+  sed -i.bak 's/DEFAULT_BRANCH=main/DEFAULT_BRANCH=nosuch/' "$TEST_TMP/push.sh"
+  run bash "$TEST_TMP/push.sh"
+  [ "$status" -ne 0 ] || false
+  ! git ls-remote --exit-code --heads origin feature/x >/dev/null
+}
+
+@test "the gate's record check refuses an empty REPO" {
+  # Fails if an unset REPO matches a record with no REPO row (Gemini 9).
+  mkdir -p docs
+  printf '## [2.1.0] - 2026-11-22\n' > CHANGELOG.md
+  printf '| Key | Value |\n| --- | --- |\n| `PR` | 9 |\n| Release | v2.1.0 |\n' > docs/PHASE_RECORD.md
+  git add -A && git commit -qm record
+  record_check 9
+  sed -i.bak 's|^\( *\)REPO=.*|\1REPO=|' "$TEST_TMP/record.sh"
+  grep -q '^ *REPO=$' "$TEST_TMP/record.sh" || false
+  run bash "$TEST_TMP/record.sh"
+  [ "$status" -ne 0 ]
+}
+
+@test "the review record reaches the PR only while the PR head is the gate's" {
+  # Fails if a push straight to the remote after the gate lets the old record land on a new head (Codex 12).
+  publish_record "$(git rev-parse HEAD)"
+  printf '#!/bin/bash\nprintf "%%s\\n" "$*" >> "%s/gh-calls"\ncase "$*" in *headRefOid*) echo 0000000000000000000000000000000000000000 ;; esac\n' "$TEST_TMP" > "$TEST_TMP/bin/gh"
+  PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/publish.sh"
+  [ "$status" -ne 0 ] || false
+  [ "$(grep -c '^pr edit' "$TEST_TMP/gh-calls")" -eq 0 ]
+}
+
+@test "after review: a submodule pointer change is caught even when submodule diffs are hidden" {
+  # Fails if diff.ignoreSubmodules hides a gitlink change from the bookkeeping check (Codex 15).
+  reviewed="$(git rev-parse HEAD)"
+  git config diff.ignoreSubmodules all
+  git update-index --add --cacheinfo 160000,1111111111111111111111111111111111111111,vendor/lib
+  git commit -qm "pin a submodule"
+  after_review "$reviewed"
+  run bash "$TEST_TMP/after.sh"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"CHANGED AFTER REVIEW"*"vendor/lib"* ]]
+}
+
+@test "origin check: the push list must be exactly the approved URL" {
+  # Fails if a failed line count lets two push destinations pass (Codex 13).
+  git remote set-url --add --push origin "$PUSH_URL"
+  git remote set-url --add --push origin "$TEST_TMP/second.git"
+  mkdir -p "$TEST_TMP/nowc"
+  for tool in git bash dirname tr sed cat; do ln -sf "$(command -v "$tool")" "$TEST_TMP/nowc/$tool"; done
+  PATH="$TEST_TMP/nowc" run bash "$PUBLISH" --check-origin "$FETCH_URL" "$PUSH_URL"
+  [ "$status" -eq 1 ]
+}
+
+@test "origin check: refuses mixed-case schemes, percent-encoded userinfo, // paths and a vcs helper" {
+  # Fails if a spelling git hands to another transport, or a hidden credential, passes (Codex 14, Gemini 11).
+  local url
+  for url in 'SSH://git@example.invalid/r.git' 'Https://example.invalid/r.git' 'https://u%3Ap@example.invalid/r.git' \
+             '//u:p@host/share/r.git'; do
+    git remote set-url origin "$url"; git remote set-url --push origin "$url"
+    run bash "$PUBLISH" --check-origin "$url" "$url"
+    [ "$status" -eq 1 ] || { echo "accepted: $url"; false; }
+  done
+  git remote set-url origin "$FETCH_URL"; git remote set-url --push origin "$PUSH_URL"
+  git config remote.origin.vcs evil
+  run bash "$PUBLISH" --check-origin "$FETCH_URL" "$PUSH_URL"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"remote.origin.vcs"* ]]
+}
+
+@test "prune: a branch that -D cannot delete is reported, and later branches still considered" {
+  # Fails if a failed -D at the approved tip exits before the others (Codex 20).
+  ki46_extract_cleanup
+  git checkout -q -b feature/at-tip; echo t > t1; git add -A; git commit -qm tip
+  export APPROVED_SHA="$(git rev-parse HEAD)"
+  git push -q -u origin feature/at-tip
+  git checkout -q -b feature/merged main; git checkout -q main
+  git worktree add -q "$TEST_TMP/wt" feature/at-tip
+  for b in feature/at-tip; do git push -q origin --delete "$b"; done
+  git push -q -u origin feature/merged >/dev/null 2>&1; git push -q origin --delete feature/merged
+  git fetch -q --prune origin
+  run bash "$TEST_TMP/cleanup.sh"
+  git worktree remove --force "$TEST_TMP/wt"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"RETAINED — feature/at-tip"* ]] || false
+  run git rev-parse --verify -q feature/merged
+  [ "$status" -ne 0 ]
+}
+
+# --- external review pass 2 fixes ----------------------------------------------
+
+@test "the record check reads the record at INSPECTED, not at a later HEAD" {
+  # Fails if the check reads HEAD, so a record fixed after the post-review check passes (pass 2, Codex 22).
+  mkdir -p docs
+  printf '## [2.1.0] - 2026-11-22\n' > CHANGELOG.md
+  printf '| Key | Value |\n| --- | --- |\n| `REPO` | `fixture/repo` |\n| `PR` | 5 |\n| Release | v2.1.0 |\n' > docs/PHASE_RECORD.md
+  git add -A && git commit -qm "record at the inspected head"
+  inspected="$(git rev-parse HEAD)"
+  sed -i.bak 's/| `PR` | 5 |/| `PR` | 9 |/' docs/PHASE_RECORD.md && git commit -qam "a later fix"
+  record_check 9
+  sed -i.bak "s|^INSPECTED=.*|INSPECTED=$inspected|" "$TEST_TMP/record.sh"
+  run bash "$TEST_TMP/record.sh"
+  [ "$status" -ne 0 ]
+}
+
+@test "the published record names the head it was reviewed at" {
+  # Fails if a record published onto a moved head cannot be told from a current one (Codex 4).
+  publish_record "$(git rev-parse HEAD)"
+  printf '#!/bin/bash\nprintf "%%s\\n" "$*" >> "%s/gh-calls"\ncase "$*" in *headRefOid*) echo "$FAKE_PR_HEAD" ;; *"pr edit"*) if [ "${@: -1}" = - ]; then cat > "%s/published"; else cp "${@: -1}" "%s/published"; fi ;; esac\n' "$TEST_TMP" "$TEST_TMP" "$TEST_TMP" > "$TEST_TMP/bin/gh"
+  PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/publish.sh"
+  [ "$status" -eq 0 ] || false
+  grep -q "$(git rev-parse HEAD)" "$TEST_TMP/published"
+}
+
+# publish_fake: gh that answers the head (moved once edited, when MOVE is set; unreadable
+# once edited, when NOVIEW is set) and keeps a body sent on stdin as $TEST_TMP/published.
+publish_fake() {
+  cat > "$TEST_TMP/bin/gh" <<SH
+#!/bin/bash
+case "\$*" in
+  *headRefOid*) if [ -e "$TEST_TMP/edited" ] && [ -n "\$NOVIEW" ]; then exit 1; fi
+                if [ -e "$TEST_TMP/edited" ] && [ -n "\$MOVE" ]; then echo ffffffffffffffffffffffffffffffffffffffff; else echo "\$FAKE_PR_HEAD"; fi ;;
+  *"pr edit"*) if [ "\${@: -1}" = - ]; then cat > "$TEST_TMP/published"; else touch "$TEST_TMP/body-file"; fi
+               touch "$TEST_TMP/edited" ;;
+esac
+SH
+  chmod +x "$TEST_TMP/bin/gh"
+}
+
+@test "publishing the record sends its body on stdin, keeps the caller's traps, and reports a push" {
+  # Fails if the step writes the body to a file, replaces a trap of the shell it runs in, or
+  # misses a head that moves during gh pr edit (pass 3, Codex 19, Gemini 15; pass 4, Codex 9).
+  publish_record "$(git rev-parse HEAD)"
+  publish_fake
+  PATH="$TEST_TMP/bin:$PATH" MOVE= NOVIEW= run bash -c 'trap "echo CALLER-EXIT" EXIT; . "$1"' _ "$TEST_TMP/publish.sh"
+  [ "$status" -eq 0 ] || false
+  [[ "$output" == *CALLER-EXIT* ]] || false
+  [ ! -e "$TEST_TMP/body-file" ] || false
+  grep -q "Review record for $(git rev-parse HEAD)" "$TEST_TMP/published" || false
+  grep -q '^record$' "$TEST_TMP/published" || false
+  rm -f "$TEST_TMP/edited"
+  PATH="$TEST_TMP/bin:$PATH" MOVE=1 NOVIEW= run bash "$TEST_TMP/publish.sh"
+  [ "$status" -ne 0 ] || false
+  [[ "$output" == *"PR HEAD MOVED WHILE THE RECORD WAS PUBLISHED"* ]]
+}
+
+@test "zsh: publish-record sends its body on stdin" {
+  # Fails if the step's pipe into gh pr edit does not carry the body under zsh.
+  command -v zsh >/dev/null || skip "zsh is not installed"
+  publish_record "$(git rev-parse HEAD)"
+  publish_fake
+  PATH="$TEST_TMP/bin:$PATH" MOVE= NOVIEW= run zsh -f "$TEST_TMP/publish.sh"
+  [ "$status" -eq 0 ] || false
+  grep -q "Review record for $(git rev-parse HEAD)" "$TEST_TMP/published"
+}
+
+@test "a PR head that cannot be read after publishing is reported as unverified, not as moved" {
+  # Fails if a failed gh pr view after the edit is reported as a confirmed push (pass 4, Codex 9).
+  publish_record "$(git rev-parse HEAD)"
+  publish_fake
+  PATH="$TEST_TMP/bin:$PATH" MOVE= NOVIEW=1 run bash "$TEST_TMP/publish.sh"
+  [ "$status" -ne 0 ] || false
+  [[ "$output" == *"CANNOT READ THE PR HEAD AFTER PUBLISHING"* ]] || false
+  [[ "$output" != *MOVED* ]]
+}
+
+@test "a record that cannot be read never reaches the PR" {
+  # Fails if gh pr edit starts before the record is read, so a failed read publishes the
+  # heading alone over the PR description (pass 5, Codex 1, Gemini 1).
+  publish_record "$(git rev-parse HEAD)"
+  publish_fake
+  rm -f "$TEST_TMP/record.md"
+  PATH="$TEST_TMP/bin:$PATH" MOVE= NOVIEW= run bash "$TEST_TMP/publish.sh"
+  [ "$status" -ne 0 ] || false
+  [ ! -e "$TEST_TMP/edited" ] || false
+  [ ! -e "$TEST_TMP/published" ]
+}
+
+@test "an empty PR head after publishing is reported as unverified, not as moved" {
+  # Fails if gh answering status 0 with no SHA is read as a confirmed push (pass 5, Codex 12).
+  publish_record "$(git rev-parse HEAD)"
+  publish_fake
+  sed -i.bak 's|exit 1; fi$|echo; exit 0; fi|' "$TEST_TMP/bin/gh"
+  grep -q 'echo; exit 0; fi' "$TEST_TMP/bin/gh" || false
+  PATH="$TEST_TMP/bin:$PATH" MOVE= NOVIEW=1 run bash "$TEST_TMP/publish.sh"
+  [ "$status" -ne 0 ] || false
+  [[ "$output" == *"CANNOT READ THE PR HEAD AFTER PUBLISHING"* ]] || false
+  [[ "$output" != *MOVED* ]]
+}
+
+@test "origin check: an ssh authority holding a %-escape is refused" {
+  # Fails if git's decoding of an ssh authority can hide a user part from the check (Codex 5).
+  local url='ssh://git%40evil:x@example.invalid/r.git'
+  git remote set-url origin "$url"; git remote set-url --push origin "$url"
+  run bash "$PUBLISH" --check-origin "$url" "$url"
+  [ "$status" -eq 1 ] || false
+  url='ssh://example.invalid%2Fx/r.git'
+  git remote set-url origin "$url"; git remote set-url --push origin "$url"
+  run bash "$PUBLISH" --check-origin "$url" "$url"
+  [ "$status" -eq 1 ]
+}
+
+@test "origin check: an empty remote.origin.vcs is still a helper" {
+  # Fails if an explicitly empty setting reads as unset (Codex 6).
+  git config remote.origin.vcs ""
+  run bash "$PUBLISH" --check-origin "$FETCH_URL" "$PUSH_URL"
+  [ "$status" -eq 1 ]
 }

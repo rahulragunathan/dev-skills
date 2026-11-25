@@ -2,12 +2,14 @@
 """List Bats assertions as load-bearing (final) or unguarded before more commands (mid).
 
 Usage:
-    python3 bats_assertions.py <file.bats>...
+    python3 bats_assertions.py [--count-mid] <file.bats>...
+
+--count-mid prints only the number of `mid` rows, for the phase gate.
 
 Test declarations and top-level functions delimit bodies; braces do not.
 Heredoc content is skipped before looking for either boundaries or assertions.
 An explicit trailing ``|| false`` makes an assertion final wherever it sits.
-Exit 0 on success, 1 when an input cannot be read or parsed.
+Exit 0 on success, 1 when an input cannot be read or parsed (and then --count-mid prints nothing).
 """
 from __future__ import annotations
 
@@ -137,6 +139,8 @@ def parse(text: str) -> list[tuple[int, str, str]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--count-mid", action="store_true",
+                        help="print only the number of mid rows")
     parser.add_argument("files", nargs="+", metavar="file.bats")
     args = parser.parse_args()
     # Keep successful files in argument order and report every failure.
@@ -149,10 +153,14 @@ def main() -> int:
             print(f"{filename}: {exc}", file=sys.stderr)
             failed = True
             continue
-        output.extend(f"{filename}\t{line}\t{name}\t{position}"
-                      for line, name, position in rows)
-    for row in output:
-        print(row)
+        output.extend((filename, line, name, position) for line, name, position in rows)
+    if args.count_mid:
+        # No count after a failed read: a partial count would read as clean.
+        if not failed:
+            print(sum(position == "mid" for *_, position in output))
+    else:
+        for row in output:
+            print("\t".join(map(str, row)))
     return 1 if failed else 0
 
 

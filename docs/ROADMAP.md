@@ -25,7 +25,7 @@ prepared. An
 item dropped rather than built moves to "Decisions taken and not taken". IDs are never
 reused. Nothing here looks backward — completed phases are CHANGELOG releases.
 
-**Last Updated**: 2026-11-22
+**Last Updated**: 2026-11-23
 
 ## Status
 
@@ -42,35 +42,38 @@ Most severe first, and within a severity the most likely first. Both scales and 
 
 | ID | Issue | Likelihood | Severity |
 | ---- | ------- | ---------- | ---------- |
-| [KI-57](KNOWN_ISSUES.md#ki-57) | `roadmap.py close` can lose a concurrent edit and rewrites line endings | Rare | Critical |
-| [KI-70](KNOWN_ISSUES.md#ki-70) | The origin check still lets some helper URLs through, and passes when grep fails | Rare | Critical |
+| [KI-80](KNOWN_ISSUES.md#ki-80) | First push and prune act on a branch name that can move after the check | Rare | Critical |
 | [KI-47](KNOWN_ISSUES.md#ki-47) | Grading packets omit information their conditions require | Almost always | High |
-| [KI-48](KNOWN_ISSUES.md#ki-48) | S07's with-skill arm is handed the answer it is graded on | Almost always | High |
+| [KI-48](KNOWN_ISSUES.md#ki-48) | S07's with-skill arm is handed the answer to the condition it is graded on | Almost always | High |
 | [KI-60](KNOWN_ISSUES.md#ki-60) | Helper commands need `CLAUDE_PLUGIN_ROOT`, which a Codex install does not set | Almost always | High |
 | [KI-37](KNOWN_ISSUES.md#ki-37) | A replaced evidence slot keeps its old grade | Rare | High |
 | [KI-38](KNOWN_ISSUES.md#ki-38) | An assertion the test expects to fail still grades as did-not-hold | Rare | High |
-| [KI-58](KNOWN_ISSUES.md#ki-58) | `check` misses drift: empty files, fenced anchors, question order, mirrored fields | Rare | High |
-| [KI-59](KNOWN_ISSUES.md#ki-59) | The reference check has gaps in what it reads and where | Rare | High |
-| [KI-62](KNOWN_ISSUES.md#ki-62) | The post-review gate check can miss a rename's source | Rare | High |
-| [KI-63](KNOWN_ISSUES.md#ki-63) | A quoted refusal of the same model can still downshift Codex | Rare | High |
-| [KI-64](KNOWN_ISSUES.md#ki-64) | The Codex probe runs in the caller's folder when ROOT is unset | Rare | High |
-| [KI-69](KNOWN_ISSUES.md#ki-69) | The phase-record check still misreads some record layouts | Rare | High |
-| [KI-67](KNOWN_ISSUES.md#ki-67) | The first push accepts a phase record inherited from the default branch | Rare | High |
+| [KI-77](KNOWN_ISSUES.md#ki-77) | A root lockfile covers every manifest below it | Rare | High |
+| [KI-84](KNOWN_ISSUES.md#ki-84) | A dependency file whose name differs only in case can overwrite another | Rare | High |
+| [KI-87](KNOWN_ISSUES.md#ki-87) | The dependency scan still misreads some manifests | Rare | High |
 | [KI-49](KNOWN_ISSUES.md#ki-49) | The headline tally mixes two skills | Almost always | Medium |
 | [KI-50](KNOWN_ISSUES.md#ki-50) | S05's fixture contradicts itself | Almost always | Medium |
+| [KI-51](KNOWN_ISSUES.md#ki-51) | Rejected grading attempts are not retained | Likely | Medium |
 | [KI-36](KNOWN_ISSUES.md#ki-36) | A grader quote of a table cell that holds a pipe is refused | Likely | Medium |
 | [KI-39](KNOWN_ISSUES.md#ki-39) | `print` with an f-string argument still hides later guards | Likely | Medium |
-| [KI-55](KNOWN_ISSUES.md#ki-55) | The plan review cannot run while the plan is inside the repository | Likely | Medium |
-| [KI-51](KNOWN_ISSUES.md#ki-51) | Rejected grading attempts are not retained | Likely | Medium |
-| [KI-73](KNOWN_ISSUES.md#ki-73) | The release-version test is skipped when its file runs directly | Likely | Medium |
-| [KI-66](KNOWN_ISSUES.md#ki-66) | Progress lines can misreport a Gemini run's age and state | Likely | Medium |
 | [KI-41](KNOWN_ISSUES.md#ki-41) | Converting a large sequence to text has no size bound | Rare | Medium |
-| [KI-43](KNOWN_ISSUES.md#ki-43) | A ready reviewer probe reads as TIMEOUT when stderr mentions a timeout | Rare | Medium |
-| [KI-65](KNOWN_ISSUES.md#ki-65) | init can leave work behind on a signal during error cleanup, and creates files at 0644 | Rare | Medium |
-| [KI-68](KNOWN_ISSUES.md#ki-68) | The name check can stop on a folder it may not read | Rare | Medium |
-| [KI-71](KNOWN_ISSUES.md#ki-71) | Gemini discovery blames agy when the ranker fails | Rare | Medium |
+| [KI-76](KNOWN_ISSUES.md#ki-76) | The probe's error classes still match loose substrings | Rare | Medium |
+| [KI-79](KNOWN_ISSUES.md#ki-79) | A symlinked folder above the docs folder still redirects the roadmap tools | Rare | Medium |
+| [KI-81](KNOWN_ISSUES.md#ki-81) | The osv-scanner configuration is read by pattern, not as TOML | Rare | Medium |
+| [KI-88](KNOWN_ISSUES.md#ki-88) | Check's table and metadata rules still differ from Markdown in places | Rare | Medium |
+| [KI-90](KNOWN_ISSUES.md#ki-90) | The origin check strips a fetch URL's trailing newline | Rare | Medium |
+| [KI-92](KNOWN_ISSUES.md#ki-92) | Requirements reading still differs from pip in markers, extras, encodings and hash lists | Rare | Medium |
+| [KI-93](KNOWN_ISSUES.md#ki-93) | One unreadable part of a scanner answer still hides readable advisories | Rare | Medium |
+| [KI-94](KNOWN_ISSUES.md#ki-94) | Report lines that start with a committed path can pass for findings | Rare | Medium |
+| [KI-95](KNOWN_ISSUES.md#ki-95) | Publish-record still reads a short hex answer as a moved head | Rare | Medium |
+| [KI-82](KNOWN_ISSUES.md#ki-82) | The zsh lint misses traps hidden by quotes and other subscripts | Likely | Low |
 | [KI-44](KNOWN_ISSUES.md#ki-44) | A stale dispatch log gives a misleading replacement message | Rare | Low |
-| [KI-72](KNOWN_ISSUES.md#ki-72) | init's failure message overstates what it left behind | Rare | Low |
+| [KI-78](KNOWN_ISSUES.md#ki-78) | Index rows are not bound to their section | Rare | Low |
+| [KI-83](KNOWN_ISSUES.md#ki-83) | The name check misses multi-line reference definitions and counts test fixtures as scripts | Rare | Low |
+| [KI-85](KNOWN_ISSUES.md#ki-85) | The release test reads only plain X.Y.Z headings | Rare | Low |
+| [KI-89](KNOWN_ISSUES.md#ki-89) | Progress calls a finished Gemini attempt running when its answer could not be moved | Rare | Low |
+| [KI-96](KNOWN_ISSUES.md#ki-96) | The Gemini prompt measurement can still accept a count it should refuse | Rare | Low |
+| [KI-91](KNOWN_ISSUES.md#ki-91) | Init and close can lose their caller's signal handler while registering their own | Rare | Low |
 
 ## Enhancements
 
@@ -87,12 +90,9 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 | [ENH-23](ENHANCEMENTS.md#enh-23) | Calibrate graders with blind hand-graded anchors | Medium | ~1 day |
 | [ENH-26](ENHANCEMENTS.md#enh-26) | Test the conversion of a helper's evaluation gap into an opaque call | Medium | ~1 hour |
 | [ENH-28](ENHANCEMENTS.md#enh-28) | Let `publish-release.sh` verify remote presence itself | Medium | ~2 hours |
-| [ENH-29](ENHANCEMENTS.md#enh-29) | Evaluate every gone branch before reporting | Low | ~1 hour |
+| [ENH-38](ENHANCEMENTS.md#enh-38) | Name security in design-review's plan-time checks | Medium | ~2 hours |
 | [ENH-32](ENHANCEMENTS.md#enh-32) | Drop explanations of standard tool behaviour from the skills | Low | ~2 hours |
-| [ENH-33](ENHANCEMENTS.md#enh-33) | Check more command spellings in the name check | Low | ~2 hours |
-| [ENH-34](ENHANCEMENTS.md#enh-34) | Tighten the roadmap close tests and template examples | Low | ~2 hours |
-| [ENH-36](ENHANCEMENTS.md#enh-36) | Strengthen the review-loop and ladder tests | Low | ~2 hours |
-| [ENH-37](ENHANCEMENTS.md#enh-37) | Tidy the review record rules and three small doc slips | Low | ~1 hour |
+| [ENH-39](ENHANCEMENTS.md#enh-39) | Make the tests pass 3 found weak fail for their named reason | Low | ~2 hours |
 
 ## Open Questions
 

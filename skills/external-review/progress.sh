@@ -10,12 +10,36 @@
 # reviewer is still writing: the line gives how long since it started (the
 # output file is created then) and when its .log last changed. Past the
 # 25-minute print timeout it says to check the run.
+#
+# The Gemini loop also writes `.start` (the attempt's epoch) and `.state` (how it
+# ended) beside each output. A run is dated from `.start` where it exists, since
+# stderr can change at any time, and a `.part` with a later attempt of the same
+# chunk is reported as superseded, not running.
 set -u
 dir="$1"; pass="$2"
 now="$(date +%s)"
 mins() { echo $(( (now - $(stat -f %m "$1" 2>/dev/null || stat -c %Y "$1")) / 60 )); }
+# started <base> <fallback file>: minutes since the attempt began.
+started() {
+  local s; s="$(cat "$1.start" 2>/dev/null)"
+  case "$s" in ''|*[!0-9]*) mins "$2" ;; *) echo $(( (now - s) / 60 )) ;; esac
+}
+# superseded <name>: a later attempt of the same reviewer, pass and chunk exists.
+superseded() {
+  local stem att f other
+  stem="${1%%_a[0-9]*}"
+  att="$(printf '%s' "$1" | sed -E 's/.*_c[0-9]+_a([0-9]+)_.*/\1/')"
+  case "$att" in ''|*[!0-9]*) return 1 ;; esac
+  for f in "$dir/${stem}"_a*; do
+    [ -e "$f" ] || continue
+    other="$(basename "$f" | sed -E 's/.*_c[0-9]+_a([0-9]+)_.*/\1/')"
+    case "$other" in ''|*[!0-9]*) continue ;; esac
+    [ "$other" -gt "$att" ] && return 0
+  done
+  return 1
+}
 found=0
-for out in "$dir"/*_p"$pass"_c*.txt "$dir"/*_p"$pass"_c*.part "$dir"/*_p"$pass"_c*.partial; do
+for out in "$dir"/*_p"$pass"_c*.txt "$dir"/*_p"$pass"_c*.part "$dir"/*_p"$pass"_c*.partial "$dir"/*_p"$pass"_c*.state; do
   [ -e "$out" ] || continue
   name="$(basename "$out")"
   case "$name" in *_prompt_*) continue ;; esac
@@ -24,9 +48,33 @@ for out in "$dir"/*_p"$pass"_c*.txt "$dir"/*_p"$pass"_c*.part "$dir"/*_p"$pass"_
   chunk="$(printf '%s' "$name" | sed -E 's/.*_p[0-9]+_(c[0-9]+)_.*/\1/')"
   bytes="$(wc -c < "$out" | tr -d ' ')"
   case "$name" in
-    *.partial) echo "$reviewer $chunk: failed — answer cut off, $bytes bytes set aside"; continue ;;
-    *.part) err="${out%.part}.err"
-            ran="$(mins "$([ -e "$err" ] && echo "$err" || echo "$out")")"
+    *.state)
+      # Only an attempt that left nothing else, such as an unavailable rung, is reported from here.
+      base="${out%.state}"
+      [ -e "$base.txt" ] || [ -e "$base.part" ] || [ -e "$base.partial" ] && continue
+      echo "$reviewer $chunk: $(cat "$out" 2>/dev/null || echo unknown)"; continue ;;
+    *.partial)
+      if superseded "$name"; then
+        echo "$reviewer $chunk $(printf '%s' "$name" | sed -E 's/.*_c[0-9]+_(a[0-9]+)_.*/\1/'): superseded by a later attempt"
+        continue
+      fi
+      case "$(cat "${out%.partial}.state" 2>/dev/null)" in
+        failed) echo "$reviewer $chunk: failed — $bytes bytes set aside" ;;
+        cut-off) echo "$reviewer $chunk: failed — answer cut off, $bytes bytes set aside" ;;
+        *) echo "$reviewer $chunk: failed — $bytes bytes set aside, reason not recorded" ;;
+      esac
+      continue ;;
+    *.part) if superseded "$name"; then
+              echo "$reviewer $chunk $(printf '%s' "$name" | sed -E 's/.*_c[0-9]+_(a[0-9]+)_.*/\1/'): superseded by a later attempt"
+              continue
+            fi
+            # A final state is authoritative: the run stopped before moving its answer aside.
+            state="$(cat "${out%.part}.state" 2>/dev/null || true)"
+            case "$state" in failed|cut-off|unavailable)
+              echo "$reviewer $chunk: $state — $bytes bytes left in .part"; continue ;;
+            esac
+            err="${out%.part}.err"
+            ran="$(started "${out%.part}" "$([ -e "$err" ] && echo "$err" || echo "$out")")"
             line="$reviewer $chunk: running ${ran}m, last write $(mins "$out")m ago, $bytes bytes so far"
             [ "$ran" -gt 25 ] && line="$line — past its timeout; check it"
             echo "$line"; continue ;;

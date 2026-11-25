@@ -49,14 +49,16 @@ class PluginNameTest(unittest.TestCase):
         self.assertEqual([p["name"] for p in market["plugins"]], [plugin_name()])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class ReleaseVersionTest(unittest.TestCase):
     def test_manifest_version_is_the_newest_changelog_release(self):
         # Fails if a release is prepared in CHANGELOG while plugin.json keeps
         # the old version, which is the one the installer reads (ENH-35).
         heading = re.search(r"^## \[(\d+\.\d+\.\d+)\]", (ROOT / "CHANGELOG.md").read_text(), re.M)
+        self.assertIsNotNone(heading, "CHANGELOG.md has no release heading")
         manifest = json.loads((ROOT / ".claude-plugin/plugin.json").read_text())["version"]
         self.assertEqual(manifest, heading[1])
+
+
+# Below every test class, so a direct run collects them all (KI-73).
+if __name__ == "__main__":
+    unittest.main()

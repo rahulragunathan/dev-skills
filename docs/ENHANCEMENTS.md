@@ -193,7 +193,7 @@ Found in Claude's adversarial review of the overnight passes, 2026-09-14. Write 
 
 <a id="enh-28"></a>
 
-## ENH-28 — let `publish-release.sh` verify remote presence instead of being told
+## ENH-28 — let `publish-release.sh` verify remote presence itself
 
 **Priority:** Medium · **Effort:** ~2 hours
 **Where:** [publish-release.sh](../skills/phase-workflow/publish-release.sh) — `--check-origin exits before any ref changes.` · **Regression net:** `skills/phase-workflow/tests/phase-git.bats`
@@ -225,32 +225,60 @@ keep the retain rule: nothing is deleted that was not proven safe.
 
 ---
 
-<a id="enh-29"></a>
+<a id="enh-38"></a>
 
-## ENH-29 — evaluate every gone branch before reporting
+## ENH-38 — name security in design-review's plan-time checks
 
-**Priority:** Low · **Effort:** ~1 hour
-**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `$2 == "[gone]" && $1 != current` §4 step 7 · **Regression net:** `skills/phase-workflow/tests/phase-git.bats`
+**Priority:** Medium · **Effort:** ~2 hours
+**Where:** [design-review/SKILL.md](../skills/design-review/SKILL.md) — `## The six checks` · **Regression net:** `skills/design-review/tests/`
 
 ### What it is
 
-The prune loop exits on the first retained branch, so branches after it in `$GONE` are never
-considered. The previous `echo "$GONE" | xargs git branch -d` attempted all of them.
+`design-review` checks structure at plan time and phase end, and names no security question: a
+trust boundary, where untrusted input enters, or what a new dependency brings. The external
+review now asks both reviewers about security in every mode, and the phase end runs
+`/security-review` and a dependency scan, but the design pass itself, which shapes the plan, is
+silent on it.
 
 ### Why it matters
 
-Low, because it fails safe: nothing is deleted that should not be, and re-running after dealing
-with the first branch continues. The cost is that an operator with three stale branches learns
-about them one run at a time, and a phase whose cleanup reports one retention looks the same as
-one reporting three.
+A trust boundary drawn in the wrong place is cheapest to move in the plan. The other passes find
+it after the code exists.
 
 ### Notes for the work
 
-Evaluate every branch, collect the retained ones with their reasons, print them together, and
-exit non-zero at the end if any were retained. A behaviour introduced by the KI-46 fix, not
-present before it.
+Editing `design-review/SKILL.md` expires its recorded pressure-test results, so this belongs with
+the design-review rework, and its new rule needs its own pressure test.
 
-**Source:** gemini-3.8-flash-high — phase review, phase 1 gate integrity, 2026-09-21.
+**Source:** the user's question during plan review, dependable-helpers phase, 2026-11-23.
+
+---
+
+<a id="enh-39"></a>
+
+## ENH-39 — make the tests pass 3 found weak fail for their named reason
+
+**Priority:** Low · **Effort:** ~2 hours
+**Where:** [dependency-scan.bats](../skills/phase-workflow/tests/dependency-scan.bats) — `the committed file never reaches it` · **Regression net:** `skills/*/tests/`
+
+### What it is
+
+Several tests added in this phase's review pass whether or not their fix is in place: the
+include test checks a path the old exporter never passed; the commit test prints a SHA without
+comparing it to a scan; the single-message test counts messages without requiring the cause;
+the bytes test passes under `LC_ALL=C`; the bootstrap v2 assertion was already true; the
+partial-write test fails a mocked `ln` rather than a write.
+
+### Why it matters
+
+A test that cannot fail is false evidence for the behaviour CHANGELOG cites it for.
+
+### Notes for the work
+
+Give each a fixture where the reverted code answers differently, and assert the cause, not only
+the count.
+
+**Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 3, dependable-helpers phase, 2026-11-23.
 
 ---
 
@@ -281,115 +309,3 @@ Belongs with the fresh look at this plugin that follows the deep cut of the stan
 nuances people get wrong, such as which diff a review must use.
 
 **Source:** gpt-6.2-sol:max, gpt-6.2-astra:max — plan review, project-docs phase, 2026-11-20; more sites from gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, 2026-11-22.
-
----
-
-<a id="enh-33"></a>
-
-## ENH-33 — check more command spellings in the name check
-
-**Priority:** Low · **Effort:** ~2 hours
-**Where:** [name_check.py](../skills/project-docs/name_check.py) — `def check_command(` · **Regression net:** `skills/project-docs/tests/name-check.bats`
-
-### What it is
-
-The name check reads a command only when it is path-shaped. It does not check
-`python3 roadmap.py` (an interpreter and a bare script name), a bare script in its own code span
-beside a flag, a `"$CLAUDE_PLUGIN_ROOT/..."` path, or a missing program followed by a
-subcommand rather than a flag. A reference-style link whose definition was deleted is not
-reported either.
-
-### Why it matters
-
-These are the spellings the skills themselves use most, so a renamed helper can pass.
-
-### Notes for the work
-
-Resolve bare script names against tracked basenames, strip the plugin-root prefix, and resolve
-reference uses against definitions. Keep the false-positive test on real skill prose green.
-
-**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
-
----
-
-<a id="enh-34"></a>
-
-## ENH-34 — tighten the roadmap close tests and template examples
-
-**Priority:** Low · **Effort:** ~2 hours
-**Where:** [roadmap.bats](../skills/project-docs/tests/roadmap.bats) — `close: works on enhancements too` · **Regression net:** `skills/project-docs/tests/roadmap.bats`
-
-### What it is
-
-Several close tests pass when `close` does nothing: their inverted `grep` assertions are not
-the last command, and they check survivors that were there before. The rollback tests accept a
-broad exception or a printed `exit 1`, so an earlier refusal can stand in for the restore they
-claim. The templates show a link without a fragment, lowercase likelihoods and backticked
-rating placeholders, which fail `check` when filled in literally.
-
-### Why it matters
-
-A test that cannot fail is false evidence for the behaviour CHANGELOG cites it for.
-
-### Notes for the work
-
-Assert each absence by status, prove the entry and pointer left before inducing drift, record
-that the injected fault fired, compare whole trees, and fill one entry from each template in a
-test.
-
-**Source:** gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, project-docs phase, 2026-11-22.
-
----
-
-<a id="enh-36"></a>
-
-## ENH-36 — strengthen the review-loop and ladder tests
-
-**Priority:** Low · **Effort:** ~2 hours
-**Where:** [preflight.bats](../skills/external-review/tests/preflight.bats) — `the documented Gemini loop reads chunk 2's prompt for chunk 2` · **Regression net:** `skills/external-review/tests/`, `skills/project-docs/tests/roadmap.bats`, `skills/phase-workflow/tests/phase-git.bats`
-
-### What it is
-
-Several tests added in this phase's review would stay green with their fix undone: the
-chunk-2 prompt test rewrites every `_c1`; fault-injection tests never assert their fault fired;
-some ladder and record tests use fixtures where both answers agree. Later passes added more:
-the discovery block's `EFFORT_ARGS` call sites are untested; the Argon test would let Argon
-keep a fourth slot; and the origin tests accept either refusal message.
-
-### Why it matters
-
-A test that cannot fail is false evidence for the behaviour CHANGELOG cites it for.
-
-### Notes for the work
-
-Substitute only the placeholder under test, assert each injected event, and give each test
-a fixture where the wrong implementation gives a different answer.
-
-**Source:** gpt-6.2-astra:high, gemini-4-argon-high — phase review passes 4 and 5; gpt-6.2-astra:high, gemini-4-neon-high — passes 6 and 7, project-docs phase, 2026-11-22.
-
----
-
-<a id="enh-37"></a>
-
-## ENH-37 — tidy the review record rules and three small doc slips
-
-**Priority:** Low · **Effort:** ~1 hour
-**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `Only a row's Disposition may change` · **Regression net:** none (prose), `tests/test_plugin_name.py`
-
-### What it is
-
-The record rule allows only a Disposition change, but a row the user reopens and fixes also
-needs its Commit and evidence. KI-59's example now predicts the wrong result for KI and ENH
-entries. (The
-release test that is skipped when its file runs directly is now KI-73.) The red-evidence matching step and AGENTS.md still ask for a `Red:`
-line where a mutation may stand in.
-
-### Why it matters
-
-Each is small, and each makes a rule read differently in two places.
-
-### Notes for the work
-
-Allow Commit and evidence to be added with the user's disposition; fix the example; say "a `Red:` line or a mutation result" at each site.
-
-**Source:** gpt-6.2-astra:high — phase review pass 4, project-docs phase, 2026-11-22.

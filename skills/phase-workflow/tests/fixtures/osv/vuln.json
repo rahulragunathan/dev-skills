@@ -1,0 +1,82 @@
+{
+ "results": [
+  {
+   "source": {
+    "path": "<FILE>",
+    "type": "lockfile"
+   },
+   "packages": [
+    {
+     "package": {
+      "name": "requests",
+      "version": "2.19.0",
+      "ecosystem": "PyPI",
+      "purl": "pkg:pypi/requests@2.19.0"
+     },
+     "groups": [
+      {
+       "ids": [
+        "PYSEC-2018-28",
+        "GHSA-x84v-xcm2-53pg"
+       ],
+       "aliases": [
+        "CVE-2018-18074",
+        "GHSA-x84v-xcm2-53pg",
+        "PYSEC-2018-28"
+       ],
+       "max_severity": "7.5"
+      },
+      {
+       "ids": [
+        "PYSEC-2023-74",
+        "GHSA-j8r2-6x86-q33q"
+       ],
+       "aliases": [
+        "CVE-2023-32681",
+        "GHSA-j8r2-6x86-q33q",
+        "PYSEC-2023-74"
+       ],
+       "max_severity": "6.1"
+      }
+     ],
+     "vulnerabilities": [
+      {
+       "id": "PYSEC-2018-28",
+       "aliases": [
+        "CVE-2018-18074",
+        "GHSA-x84v-xcm2-53pg"
+       ]
+      },
+      {
+       "id": "PYSEC-2023-74",
+       "aliases": [
+        "CVE-2023-32681",
+        "GHSA-j8r2-6x86-q33q"
+       ]
+      },
+      {
+       "id": "GHSA-j8r2-6x86-q33q",
+       "aliases": [
+        "CVE-2023-32681",
+        "PYSEC-2023-74"
+       ]
+      },
+      {
+       "id": "GHSA-x84v-xcm2-53pg",
+       "aliases": [
+        "CVE-2018-18074",
+        "PYSEC-2018-28"
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "experimental_config": {
+  "licenses": {
+   "summary": false,
+   "allowlist": null
+  }
+ }
+}

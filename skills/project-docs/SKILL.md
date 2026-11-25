@@ -15,7 +15,7 @@ The roadmap files are optional. A repository has them only when the user asked f
 - `docs/ROADMAP.md` is future-tense and index-level only. Exactly these sections: **Status** (prose on where the project stands; the phase in flight is in `docs/PHASE_RECORD.md`, never here), **Known Issues**, **Enhancements**, and **Open Questions** — three pointer tables, no prose. Confidence-check findings land in Open Questions.
 - No `Resolved` section and no `Notes` section. Shipped work belongs in CHANGELOG.md; standing limitations belong in ARCHITECTURE.md or the project AGENTS.md.
 - **No phase ledger.** A phase ends by cutting a CHANGELOG release whose heading names it, so the release history is the phase history. ROADMAP records only what is planned; the phase in flight lives in `docs/PHASE_RECORD.md`. Version by what the phase did: minor for additive work, patch for fixes and docs, major for a break.
-- The rating in a ROADMAP row mirrors the supporting file, which is authoritative. The drift check verifies they agree, that ordering is descending, and that every ID appears in both.
+- The rating in a ROADMAP row mirrors the supporting file, which is authoritative, and so do its title (up to the case of the first letter) and an enhancement's Effort. The drift check verifies they agree, that ordering is descending, open questions included, and that every ID appears in both.
 - Completed items are deleted from both files, not annotated in place.
 - **A reference to a repo file carries a greppable fragment, never a line number**, and
   `roadmap.py check` confirms that fragment still occurs in the file it cites **exactly once** —
@@ -26,13 +26,19 @@ The roadmap files are optional. A repository has them only when the user asked f
   **Where:** [preflight.sh](../skills/external-review/preflight.sh) — `timed_out "$ERR"`
   ```
 
-  A `#Lnn` anchor is rejected anywhere in an entry, fenced examples excepted. Three further
-  rules come from what the files actually contain: a link whose target is a **directory** is an
-  existence-only reference and takes no fragment; a fragment **cannot contain a backtick**, so
-  quote something else from the same file; and the requirement covers file links in the
-  `**Where:**` field only, so a file mentioned in passing in prose needs nothing. Choosing the
-  fragment is judgement — prefer a function name or a guard's condition to a whole line, and
-  never a token that occurs everywhere. The four-character floor in the gate catches only the
+  A `#Lnn` anchor is rejected anywhere in an entry, fenced examples excepted. The rest come from
+  what the files actually contain:
+  - the `**Where:**` field starts its line, or follows another field after a `·`, and cites at
+    least one link, relative to the docs folder and never absolute;
+  - a link to a **directory**, or to a Markdown doc inside `docs/`, is an existence-only
+    reference and takes no fragment; any other file under `docs/` needs one;
+  - a fragment holding a backtick is delimited by a longer run of backticks, as Markdown does;
+  - a file shaped like a credential is never opened, so cite something else;
+  - the requirement covers file links in the `**Where:**` field only, so a file mentioned in
+    passing in prose needs nothing.
+
+  Choosing the fragment is judgement — prefer a function name or a guard's condition to a whole
+  line, and never a token that occurs everywhere. The four-character floor in the gate catches only the
   degenerate cases.
 - An entry filed from an external review carries a provenance line naming the model ids, with Codex's effort, that found it — `Source: gpt-5.6-sol:high, gemini-3.1-pro-high — phase review, phase 4` — never the CLI name, so the attribution survives without a separate review store.
 
@@ -41,6 +47,7 @@ named detail entry and pointer together, preserving the surviving entries. After
 edit, run its reconciliation check for IDs, destinations, ratings and ordering:
 
 ```bash
+# fence: roadmap-close
 python3 "$CLAUDE_PLUGIN_ROOT/skills/project-docs/roadmap.py" close "<entry-id>" || exit 1
 python3 "$CLAUDE_PLUGIN_ROOT/skills/project-docs/roadmap.py" check || exit 1
 ```
@@ -96,10 +103,15 @@ python3 "$CLAUDE_PLUGIN_ROOT/skills/project-docs/name_check.py" --root .
 - **It reads, and never runs, what it checks.** A flag is looked up in the source of the repo
   script whose command names it. Flags of external tools are not checked.
 - **What counts.** A backticked path counts when it has a `/` and starts at `.`, `..`, a folder
-  beside the doc or a top-level entry of the repository; then it must exist. A command counts in three shapes: a path-shaped script, which must exist and define
-  any `--flag` it is given; an interpreter followed by such a script; and a bare program
-  followed by a `--flag`, which must be on `PATH` or named in the repository's code. A bare
-  script name such as `roadmap.py` is not checked. A roadmap ID exists when its own detail
+  beside the doc or a top-level entry of the repository; then it must exist. A path written
+  from `"$CLAUDE_PLUGIN_ROOT/..."` is read from the repository root. A command counts in four
+  shapes: a path-shaped script, which must exist and define any `--flag` it is given; an
+  interpreter followed by such a script; a bare `.py` or `.sh` name, alone or after an
+  interpreter, matched against the tracked files' names (one match is that script, none is a
+  missing command, two are not checked); and a bare program followed by a `--flag`, which must
+  be on `PATH` or named in the repository's code. A bare script name in a span of its own is
+  never reported, but binds the line's lone flags. A full or collapsed reference link,
+  `[text][label]`, needs its `[label]:` definition in the same doc. A roadmap ID exists when its own detail
   file has the entry's anchor, or `CHANGELOG.md` names it; a mention elsewhere does not count.
 - **It skips history and test input:** `CHANGELOG.md`, dated plans and specs, the templates, and
   Markdown under a `tests/` folder other than its README.

@@ -11,10 +11,11 @@ first (the number after `gpt`; anything else ranks last); then by slug. The
 model comes first, then its effort. The cache's own `priority` is not used: it is OpenAI's
 default pick, not a capability rank. Every rung runs at `high`, the user's
 default; a model without it is skipped. Another effort is used only when the
-user asks for it, with --effort.
+user asks for it, with --effort: medium, xhigh or max.
 
 Usage:
-    codex-ladder.py [CACHE] [--effort E]    (default ~/.codex/models_cache.json, high)
+    codex-ladder.py [CACHE] [--effort medium|high|xhigh|max]
+        (defaults: ~/.codex/models_cache.json, high)
 """
 from __future__ import annotations
 
