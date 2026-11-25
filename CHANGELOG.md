@@ -10,6 +10,14 @@ here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-11-24
+
+### Changed
+
+- **Ready for a public repository.** The plugin manifest no longer lists an author email, the
+  phase record reads `No phase in flight.` now that 2.2.0 has merged, and the design-review
+  evidence notes no longer name a private archive path.
+
 ## [2.2.0] - 2026-11-23 — dependable helpers
 
 ### Added
@@ -1122,7 +1130,8 @@ corrections are recorded here.
 
 ## Reference
 
-[Unreleased]: https://github.com/rahulragunathan/dev-skills/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/rahulragunathan/dev-skills/compare/v2.2.1...HEAD
+[2.2.1]: https://github.com/rahulragunathan/dev-skills/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/rahulragunathan/dev-skills/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/rahulragunathan/dev-skills/compare/v2.0.1...v2.1.0
 [2.0.1]: https://github.com/rahulragunathan/dev-skills/compare/v2.0.0...v2.0.1
