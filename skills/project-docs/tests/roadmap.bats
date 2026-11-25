@@ -1669,3 +1669,15 @@ PY
   run close_with_replace 'p = d / "ROADMAP.md"; p.write_text(p.read_text() + "\nEDITOR-ROW\n")'
   [ "$(printf '%s\n' "$output" | grep -c 'refusing\|installation failed')" -eq 1 ]
 }
+
+@test "templates: the scale note and the close rule each have one home" {
+  # Fails if KNOWN_ISSUES states its scale note other than once, if ROADMAP stops stating how an
+  # item closes, or if a supporting template restates that rule instead of pointing to ROADMAP.
+  local dir; dir="$(dirname "$RM")"
+  [ "$(grep -c 'reads these levels' "$dir/KNOWN_ISSUES-template.md")" -eq 1 ] || false
+  grep -q 'is deleted from both' "$dir/ROADMAP-template.md" || false
+  for t in KNOWN_ISSUES ENHANCEMENTS; do
+    ! grep -q 'delete it from here' "$dir/$t-template.md" || false
+    grep -q '\[ROADMAP.md\](ROADMAP.md)' "$dir/$t-template.md" || false
+  done
+}

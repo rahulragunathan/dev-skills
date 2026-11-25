@@ -10,6 +10,15 @@ here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
 
+## [2.2.2] - 2026-11-25
+
+### Fixed
+
+- **The roadmap templates state each rule once.** The `KNOWN_ISSUES` template gave its scale note
+  twice, once per table; it now gives it once, above both. `KNOWN_ISSUES` and `ENHANCEMENTS` no
+  longer restate how an item closes, which the `ROADMAP` template states; they point to it. This
+  repository's own roadmap files take the same change.
+
 ## [2.2.1] - 2026-11-24
 
 ### Changed
@@ -1130,7 +1139,8 @@ corrections are recorded here.
 
 ## Reference
 
-[Unreleased]: https://github.com/rahulragunathan/dev-skills/compare/v2.2.1...HEAD
+[Unreleased]: https://github.com/rahulragunathan/dev-skills/compare/v2.2.2...HEAD
+[2.2.2]: https://github.com/rahulragunathan/dev-skills/compare/v2.2.1...v2.2.2
 [2.2.1]: https://github.com/rahulragunathan/dev-skills/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/rahulragunathan/dev-skills/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/rahulragunathan/dev-skills/compare/v2.0.1...v2.1.0
