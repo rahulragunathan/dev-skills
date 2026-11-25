@@ -4,16 +4,16 @@ Open defects, most severe first. [ROADMAP.md](ROADMAP.md) carries the one-line i
 file carries enough detail to pick an item up without digging.
 
 Each entry has a stable ID — use it in branch names (`bugfix/ki-02-<slug>`) and in the
-CHANGELOG entry that closes it. When fixed, delete it from here and from the ROADMAP index;
-the record lives in [CHANGELOG.md](../CHANGELOG.md). IDs are never reused.
+CHANGELOG entry that closes it. How an entry enters and closes is in [ROADMAP.md](ROADMAP.md).
 
 Every entry carries its own source line; they come from several review passes, not one.
 Entries for skills that left this repo in v2.0.0 moved with them, keeping their IDs.
 
-## Severity
+`roadmap.py check` reads these levels, Severity and Likelihood below, in row order, from the
+template bundled with `project-docs`. In a project's own copy the two tables are for reading:
+editing them changes nothing.
 
-`roadmap.py check` reads these levels, in row order, from the template bundled with
-`project-docs`. In a project's own copy this table is for reading: editing it changes nothing.
+## Severity
 
 | Level | Means |
 | ------- | ------- |
@@ -25,9 +25,6 @@ Entries for skills that left this repo in v2.0.0 moved with them, keeping their 
 **Severity is the consequence if it fires, and nothing about how often.**
 
 ## Likelihood
-
-`roadmap.py check` reads these levels, in row order, from the template bundled with
-`project-docs`. In a project's own copy this table is for reading: editing it changes nothing.
 
 | Level | Means |
 | ------- | ------- |
