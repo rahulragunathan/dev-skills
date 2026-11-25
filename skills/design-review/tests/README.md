@@ -38,9 +38,8 @@ scheduled replicate, including failures and incomplete runs; do not increase the
 when the first three disagree. These historical batches used different sampling decisions and
 must remain descriptive.
 Transcripts, dispatched prompts and hash-verified skill snapshots are archived
-outside the repo, under this project's artifact folder — the standard home for run evidence, one
-dated directory per round — at
-`Claude-Projects/Project Artifacts/Plugins/localclaude/design-review-evidence-<date>/`.
+outside the repo, in the maintainer's private evidence archive, one dated directory per round.
+Only their hashes are kept here.
 
 ## Which model to run on
 

@@ -10,24 +10,4 @@ in flight the body is the single line `No phase in flight.`
 
 ---
 
-## Dependable helpers
-
-| Key | Value |
-| --- | --- |
-| `ORIGIN_URL` | `git@github.com:rahulragunathan/dev-skills.git` |
-| `ORIGIN_PUSH_URL` | `git@github.com:rahulragunathan/dev-skills.git` |
-| `REPO` | `rahulragunathan/dev-skills` |
-| `DEFAULT_BRANCH` | `main` |
-| `PHASE_BRANCH` | `bugfix/dependable-helpers` |
-| `MERGE_METHOD` | `squash` |
-| Branched from | `origin/main` at `277e9ed` |
-| Started | 2026-11-23 |
-| `PR` | 10 |
-| Release | v2.2.0 |
-
-All three merge methods are enabled on the repository; `squash` is selected because the preflight
-takes the first allowed method in the order squash, rebase, merge.
-
-The plan lives outside the repository, in `~/.claude/plans/2026-11-23-helpers-fix-plan.md`. The
-companion repository, dev-setup, ships 1.2.0 from `feature/standards-change-report` in this
-phase.
+No phase in flight.
