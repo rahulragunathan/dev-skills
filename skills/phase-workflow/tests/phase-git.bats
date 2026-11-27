@@ -606,6 +606,19 @@ after_review() {
   [[ "$output" == *'`PR` | 9'* ]]
 }
 
+@test "after review: a CHANGELOG-only document fix passes and is shown" {
+  # Fails if a reviewer's confirmed fix to the release's CHANGELOG entry is refused after the last pass.
+  printf '## [1.0.0]\n\n- old claim\n' > CHANGELOG.md
+  git add CHANGELOG.md && git commit -qm changelog
+  reviewed="$(git rev-parse HEAD)"
+  printf '## [1.0.0]\n\n- corrected claim\n' > CHANGELOG.md
+  git commit -qam "fix the claim"
+  after_review "$reviewed"
+  run bash "$TEST_TMP/after.sh"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"corrected claim"* ]]
+}
+
 @test "origin check: accepts a bare user over each ssh spelling" {
   # Fails if git+ssh:// or ssh+git:// with a plain user name is taken for a credential.
   for url in "git+ssh://git@example.invalid/r.git" "ssh+git://git@example.invalid/r.git" "ssh://git@example.invalid:22/r.git"; do

@@ -543,5 +543,20 @@ class PassFourTest(unittest.TestCase):
             self.assertIn("or `Unfixed Blocker` when the loop has stopped or an incomplete pass awaits its retry", self.er)
 
 
+class BookkeepingFixTest(unittest.TestCase):
+    """Document fixes to the release's bookkeeping files land after the last pass without another."""
+
+    def test_confirmed_document_fixes_need_no_pass(self):
+        # Fails if a confirmed reviewer fix to CHANGELOG, the roadmap files or the phase record still
+        # needs a narrow pass, or phase-workflow's post-review rule does not allow it.
+        er = flat(ER.read_text())
+        with self.subTest("external-review"):
+            self.assertIn("document fixes a reviewer found in the release's bookkeeping files", er)
+            self.assertIn("Make them without another pass", er)
+        with self.subTest("phase-workflow"):
+            self.assertIn("and the document fixes to `CHANGELOG.md`, the roadmap files and the phase record "
+                          "that external-review's", flat(PW.read_text()))
+
+
 if __name__ == "__main__":
     unittest.main()

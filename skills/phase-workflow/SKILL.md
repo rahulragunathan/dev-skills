@@ -320,7 +320,7 @@ what remains expired.
      `origin/<branch>` and local `HEAD` are the same commit, so this is exact rather than a
      convenience. Sign-off binds to that head; an edit afterwards moves it and means re-requesting
      review on the new one.
-   - **Before marking the PR ready, check what landed after review**, and run the full suite on `HEAD`. Only bookkeeping may follow the last pass: new roadmap entries with their pointer rows, and the phase record's `PR` and `Release` rows (`external-review`'s [loop](../external-review/SKILL.md#the-loop)). Check the paths first, then read the patch of those files only:
+   - **Before marking the PR ready, check what landed after review**, and run the full suite on `HEAD`. Only bookkeeping may follow the last pass: new roadmap entries with their pointer rows, the phase record's `PR` and `Release` rows, and the document fixes to `CHANGELOG.md`, the roadmap files and the phase record that external-review's [loop](../external-review/SKILL.md#the-loop) allows. Check the paths first, then read the patch of those files only:
 
      ```bash
      # fence: after-review
@@ -335,16 +335,16 @@ what remains expired.
      OTHER=""
      while IFS= read -r f; do
        case "$f" in
-         ''|docs/PHASE_RECORD.md|docs/ROADMAP.md|docs/KNOWN_ISSUES.md|docs/ENHANCEMENTS.md|docs/OPEN_QUESTIONS.md) ;;
+         ''|CHANGELOG.md|docs/PHASE_RECORD.md|docs/ROADMAP.md|docs/KNOWN_ISSUES.md|docs/ENHANCEMENTS.md|docs/OPEN_QUESTIONS.md) ;;
          *) OTHER="$OTHER  $f"$'\n' ;;
        esac
      done <<< "$CHANGED"
      [ -z "$OTHER" ] || { printf 'CHANGED AFTER REVIEW — needs a narrow pass:\n%s\n' "$OTHER"; exit 1; }
      git --no-pager diff --no-ext-diff --no-textconv --no-renames --ignore-submodules=none "$REVIEWED" "$INSPECTED" -- \
-       docs/PHASE_RECORD.md docs/ROADMAP.md docs/KNOWN_ISSUES.md docs/ENHANCEMENTS.md docs/OPEN_QUESTIONS.md
+       CHANGELOG.md docs/PHASE_RECORD.md docs/ROADMAP.md docs/KNOWN_ISSUES.md docs/ENHANCEMENTS.md docs/OPEN_QUESTIONS.md
      ```
 
-     Read that patch: a filing and a fix can share a file, and in the record only the `PR` and `Release` rows may change. Anything else needs a narrow pass first. Name what landed in the hand-off.
+     Read that patch: a filing and a fix can share a file, and every change must be a filing, the record's `PR` and `Release` rows, or a reviewer's document fix you verified and agree with. Anything else needs a narrow pass first. Name what landed in the hand-off.
    - **Confirm `docs/PHASE_RECORD.md` is current, and do not take that on trust.** Step 4 brought
      it current, but steps 5 to 7 and every re-gate come after step 4. Check, in the committed
      file, that its first table (this repository's phase) names this PR and the release the

@@ -53,6 +53,10 @@ here — the plugin manifest's version is the only record of them.
   fixed in the phase.
 - **Each keyed note opens with *Blocking* or *Non-Blocking*, then its Disposition**, so a note
   reads without the table.
+- **A reviewer's document fix to the release's bookkeeping lands without another pass.** After
+  the last pass, a finding in this release's CHANGELOG entry, the roadmap files or the phase
+  record that the triager verifies and agrees with is fixed directly, and phase-workflow's
+  post-review check accepts `CHANGELOG.md` beside the roadmap files and the record.
 
 ### Fixed
 

@@ -781,8 +781,12 @@ and the gate takes the user's recorded decision instead.
    asks for needs another pass, and so does any pass past three: both are the user's call.
 
 **After the last pass, only bookkeeping lands:** new roadmap entries and pointer rows for the
-deferred rows, and the phase record's PR number and release version. Anything else, such as an
-edit to an existing entry, a doc fix or a regenerated diagram, needs a narrow pass of its own. At
+deferred rows, the phase record's PR number and release version, and document fixes a reviewer
+found in the release's bookkeeping files: `CHANGELOG.md`'s entry for this release, the roadmap
+files and the phase record. Verify each such finding as usual; where you agree with it, fix it.
+Make them without another pass: each row is `Fixed In Phase` with its commit, and its note says it
+landed after the last pass. Anything else, such as a change to a skill, code, a test, README or a
+regenerated diagram, needs a narrow pass of its own. At
 the gate, run `phase-workflow`'s post-review check (§3 step 7): it lists both sides of every change
 since the reviewed commit, refuses anything outside the bookkeeping files, and prints their patch,
 which is read in full because a filing and a fix can share one file. The hand-off names what
