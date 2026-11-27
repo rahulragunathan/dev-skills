@@ -434,8 +434,8 @@ settled UNK-04 reading, so discarding it removed the disagreement.
 ### Notes For A Fix
 
 Archive every return, accepted or not, with its rejection reason, and report agreement over
-attempts as well as over retained pairs. Adjacent to ENH-24 but distinct: that entry is about
-denominators, this one is about discarded evidence.
+attempts as well as over retained pairs. This is about discarded evidence, not about how the
+denominators are counted.
 
 **Source:** gpt-6-astra — review of round-9 evidence and grading, 2026-09-16.
 
@@ -474,7 +474,7 @@ decoded inside code spans.
 
 <a id="ki-39"></a>
 
-## KI-39 — `print` with an f-string argument still hides later guards
+## KI-39 — Calling `print` with an f-string argument still hides later guards
 
 **Severity:** Medium
 **Likelihood:** Likely
@@ -983,7 +983,7 @@ Say in the blocking rule's section that in plan mode it decides only the keyed n
 
 <a id="ki-115"></a>
 
-## KI-115 — Three older roadmap entries are out of date
+## KI-115 — UNK-04 asks for a decision already made
 
 **Severity:** Low
 **Likelihood:** Almost Always
@@ -993,13 +993,12 @@ Say in the blocking rule's section that in plan mode it decides only the keyed n
 
 ### What Happens
 
-UNK-04 still asks for a decision the plugin-fix design already made (a stated key bound); what remains is editing the S02 condition and re-grading. KI-51 points readers at ENH-24, which was closed. KI-39's title starts with the code span `print`, so its first visible word is lower case, and the title test does not see it.
+UNK-04 still asks for a decision the plugin-fix design already made (a stated key bound); what remains is editing the S02 condition and re-grading.
 
 ### Steps To Reproduce
 
 1. Pick up UNK-04 from ROADMAP and read *What Settles It*; compare with the design's decisions carried in.
-2. Follow KI-51's note to ENH-24; it is in neither ENHANCEMENTS nor ROADMAP.
-3. Read KI-39's title. Each entry should match the current state: UNK-04 as actionable work, KI-51 without the dead reference, KI-39's title starting with a capital.
+2. It should be actionable work: the condition edit and the re-grading after KI-37.
 
 ### Example Scenario
 
@@ -1007,7 +1006,7 @@ A reader re-opens a settled decision.
 
 ### Notes For A Fix
 
-Re-file UNK-04 as the remaining condition edit and re-grading, drop KI-51's ENH-24 reference, and retitle KI-39 ("Calling `print` with …"). Part of the fresh look.
+Re-file UNK-04 as the remaining condition edit and re-grading, and repoint the links to it in design-review's tests README and S02 file. Part of the fresh look. KI-51's and KI-39's parts were fixed at the gate as bookkeeping.
 
 **Source:** gpt-6.2-astra:high — phase review pass 4, review-triage phase, 2026-11-27.
 

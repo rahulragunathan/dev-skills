@@ -56,7 +56,7 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-50](KNOWN_ISSUES.md#ki-50) | S05's fixture contradicts itself | Almost Always | Medium |
 | [KI-51](KNOWN_ISSUES.md#ki-51) | Rejected grading attempts are not retained | Likely | Medium |
 | [KI-36](KNOWN_ISSUES.md#ki-36) | A grader quote of a table cell that holds a pipe is refused | Likely | Medium |
-| [KI-39](KNOWN_ISSUES.md#ki-39) | `print` with an f-string argument still hides later guards | Likely | Medium |
+| [KI-39](KNOWN_ISSUES.md#ki-39) | Calling `print` with an f-string argument still hides later guards | Likely | Medium |
 | [KI-41](KNOWN_ISSUES.md#ki-41) | Converting a large sequence to text has no size bound | Rare | Medium |
 | [KI-76](KNOWN_ISSUES.md#ki-76) | The probe's error classes still match loose substrings | Rare | Medium |
 | [KI-79](KNOWN_ISSUES.md#ki-79) | A symlinked folder above the docs folder still redirects the roadmap tools | Rare | Medium |
@@ -74,7 +74,7 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-118](KNOWN_ISSUES.md#ki-118) | The blocking rule's section and step 5 still say the rest are filed | Rare | Medium |
 | [KI-119](KNOWN_ISSUES.md#ki-119) | The record's user-only edit rule blocks settling a retried row | Rare | Medium |
 | [KI-114](KNOWN_ISSUES.md#ki-114) | The blocking rule excludes plan mode, but plan notes open with Blocking | Almost Always | Low |
-| [KI-115](KNOWN_ISSUES.md#ki-115) | Three older roadmap entries are out of date | Almost Always | Low |
+| [KI-115](KNOWN_ISSUES.md#ki-115) | UNK-04 asks for a decision already made | Almost Always | Low |
 | [KI-82](KNOWN_ISSUES.md#ki-82) | The zsh lint misses traps hidden by quotes and other subscripts | Likely | Low |
 | [KI-44](KNOWN_ISSUES.md#ki-44) | A stale dispatch log gives a misleading replacement message | Rare | Low |
 | [KI-78](KNOWN_ISSUES.md#ki-78) | Index rows are not bound to their section | Rare | Low |
