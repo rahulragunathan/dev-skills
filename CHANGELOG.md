@@ -10,6 +10,44 @@ here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-11-26 — review triage
+
+### Added
+
+- **Every review finding carries a Path, an Area and Steps To Reproduce.** Path says what kind
+  of use reaches the defect: `Happy Path`, `Unusual Input` or `External Interference`. Area says
+  what kind of file holds it: `Code`, `Docs` or `Tests`. external-review's shared rubric asks for
+  both, with Severity and Likelihood, in every mode; phase and repo mode add numbered steps from
+  a fresh fixture, and plan mode a concrete failure. Each reviewer opens with
+  `Happy Path: works` or `Happy Path: broken (findings N, M)`, and still reports every Path.
+- **The blocking rule.** A confirmed Critical or High finding blocks a phase when it is on the
+  Happy Path, or Likely or Almost Always. Only those are fixed in the phase; the rest are filed,
+  and the user can pull any of them back in at the gate. Each reviewer's ratings are judged on
+  their own, never mixed. The review loop now stops on a pass with no blocking finding, and the
+  gate shows each reviewer's Happy Path line and a Steps To Reproduce summary grouped by Path.
+- **Steps are evidence, not commands.** Triage runs them only in a disposable fixture with
+  synthetic inputs, reconstructs them where needed and says so, and replaces secrets, account
+  names and local paths before they are published. Findings from `/code-review`,
+  `/security-review`, `design-review` and the dependency scan get the same fields at intake.
+- **The KI template gains Path and Area scales**, a `**Path:**` and an `**Area:**` field and a
+  `### Steps To Reproduce` section; the ENH template gains an optional one. `roadmap.py check`
+  validates either field when an entry sets it, reading only the entry's metadata block, and
+  refuses an unknown, empty or repeated one. Both are optional for now and not mirrored in
+  ROADMAP.
+
+### Changed
+
+- **Title case for every label and fixed value shown to the user.** Likelihood's top level is
+  `Almost Always`; `roadmap.py check` still accepts `Almost always` until Path becomes required.
+  The dispositions are `Fixed In Phase`, `Unfixed Blocker`, `Filed KI-nn`,
+  `Confirmed: Accepted, No Work Planned`, `Recorded Only: No Roadmap Files` and `Rejected`, and in
+  plan mode `Incorporated`, `Already Covered` and `Not Incorporated`. The keyed notes, the gate
+  headings and the KI and ENH section headings follow.
+- **`Unfixed Blocker` replaces `Proposed: fixed in phase`**, and **`Recorded Only: No Roadmap
+  Files` replaces `Open — no roadmap files`**, so each name says what the row is.
+- **Regressions follow the blocking rule** like every other finding, rather than always being
+  fixed in the phase.
+
 ## [2.2.2] - 2026-11-25
 
 ### Fixed
@@ -1139,7 +1177,8 @@ corrections are recorded here.
 
 ## Reference
 
-[Unreleased]: https://github.com/rahulragunathan/dev-skills/compare/v2.2.2...HEAD
+[Unreleased]: https://github.com/rahulragunathan/dev-skills/compare/v2.3.0...HEAD
+[2.3.0]: https://github.com/rahulragunathan/dev-skills/compare/v2.2.2...v2.3.0
 [2.2.2]: https://github.com/rahulragunathan/dev-skills/compare/v2.2.1...v2.2.2
 [2.2.1]: https://github.com/rahulragunathan/dev-skills/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/rahulragunathan/dev-skills/compare/v2.1.0...v2.2.0

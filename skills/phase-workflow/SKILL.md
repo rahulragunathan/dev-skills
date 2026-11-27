@@ -301,6 +301,7 @@ what remains expired.
 
 5. **External review loop:** `external-review` in `phase` mode (Codex + Gemini). [Its loop](../external-review/SKILL.md#the-loop) runs up to three passes without checking in, with its stop rule applied before any fix, and builds one [review record](../external-review/SKILL.md#the-phase-review-record) across them. Past three passes, or a fix after the loop stopped, is the user's call.
    - **It runs after the docs pass**, including release preparation. Fold later phase fixes into that unpublished release and commit them before the next pass or gate. Each commit a pass reviews has a green full suite.
+   - Only a finding that [blocks the phase](../external-review/SKILL.md#the-blocking-rule) is fixed here; the rest are filed, and the user can pull any of them back in at the gate.
    - Build the record using `external-review`'s output contract and
      [coverage classification](../external-review/SKILL.md#coverage-classification).
    - Every finding fixed here gets a failing test first, with its `Red:` line. Run step 3's check on those tests before the next pass, and again before the gate.

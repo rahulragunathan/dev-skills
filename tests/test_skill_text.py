@@ -312,3 +312,14 @@ class TriageTest(unittest.TestCase):
         # Fails if the skill stops forbidding a blocker made by mixing two reviewers' ratings.
         rule = flat(section(self.text, "### The blocking rule"))
         self.assertIn("Never combine one reviewer's ratings with another's", rule)
+
+
+class PhaseWorkflowPointerTest(unittest.TestCase):
+    def test_phase_workflow_points_at_the_blocking_rule(self):
+        # Fails if §3 step 5 stops linking external-review's blocking rule, or restates it.
+        text = PW.read_text()
+        step = text[text.index("5. **External review loop:**"):text.index("6. **Post-fix drift re-check")]
+        with self.subTest("links"):
+            self.assertIn("(../external-review/SKILL.md#the-blocking-rule)", step)
+        with self.subTest("no restatement"):
+            self.assertNotIn("Critical or High", step)
