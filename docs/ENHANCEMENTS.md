@@ -293,7 +293,7 @@ Corrected in pass 1 (gpt-6.2-astra:high, gemini-4-neon-high).
 
 ### What It Is
 
-Six wording tests stay green when the policy they name is broken: intake passes with the source names alone, the stop-rule test misses a loop that continues past pass 3, the worked-table test leaves out the fourth row, nothing still asserts the empty list's `No findings.` since the opening-line test went, the Codex-loop state test passes with one failure branch's state write removed, and the plan-note test reads every keyed example in the skill, phase ones included.
+Six gaps in the wording tests: intake passes with the source names alone, the stop-rule test misses a loop that continues past pass 3, the worked-table test leaves out the fourth row, nothing still asserts the empty list's `No findings.` since the opening-line test went, the Codex-loop state test passes with one failure branch's state write removed, and the plan-note test reads every keyed example in the skill, so it would reject a valid phase example.
 
 ### Why It Matters
 

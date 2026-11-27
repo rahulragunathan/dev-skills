@@ -337,9 +337,9 @@ Triage names a fixture for reviewer steps: a fresh folder, a scratch `HOME`, no 
 
 ### Steps To Reproduce
 
-1. In a synthetic repository, take a finding whose steps run a repository test helper.
-2. Set up the fixture as triage step 2 says, and run the helper.
-3. Its child processes can still read any host file the user can, and reach the network. The step should run under enforced filesystem and network limits, or be verified statically instead.
+1. Put a synthetic marker file outside the fixture, such as `/tmp/marker-outside`.
+2. Set up the fixture as triage step 2 says, and run a helper from the clone that prints that file.
+3. It prints the marker. It should be denied, because the step should run under enforced filesystem and network limits, or be verified by reading instead. (The network half follows from the same setup: nothing in it cuts the network.)
 
 ### Example Scenario
 
@@ -348,6 +348,8 @@ A planted helper reads a token from the user's real config while the triager rep
 ### Notes For A Fix
 
 Name an enforced sandbox for the whole process tree (for example `sandbox-exec` on macOS), and say that without one the triager verifies by reading, or reconstructs the steps synthetically, and records that choice. KI-97 named the fixture; this is the enforcement it left open.
+
+Steps rewritten in pass 5 (gpt-6.2-astra:high) so the result is observable.
 
 **Source:** gpt-6.2-astra:high — phase review pass 4, review-triage phase, 2026-11-27.
 
@@ -801,8 +803,8 @@ Case one's citation corrected in pass 3 (gpt-6.2-astra:high): it names the file 
 
 ### Steps To Reproduce
 
-1. Give a fixture a manifest that declares a dependency and has no lockfile; the scan reports the gap.
-2. Change the declared version, as the step suggests, and scan again.
+1. Commit a manifest that declares a dependency and has no lockfile; the scan reports the gap.
+2. Commit a change to the declared version only, as the step suggests, and scan again.
 3. The same gap is reported. The step should say a gap is fixed by supplying what the scanner says is missing, then rescanning.
 
 ### Example Scenario
@@ -813,7 +815,137 @@ A phase upgrades a package to close a gap, and the gate still shows the gap.
 
 Separate the two: a vulnerability is fixed by an upgrade, a gap by the input the scanner names; both are rescanned before the row is `Fixed In Phase`.
 
+Steps corrected in pass 5 (gpt-6.2-astra:high): the scan reads committed files, so both states are commits.
+
 **Source:** gpt-6.2-astra:high — phase review pass 4, review-triage phase, 2026-11-27.
+
+---
+
+<a id="ki-116"></a>
+
+## KI-116 — Progress hides an unavailable rung that left output
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Path:** Unusual Input
+**Area:** Code
+**Where:** [progress.sh](../skills/external-review/progress.sh) — `rung_answered() {`
+
+### What Happens
+
+`rung_answered` counts any non-empty output of the same attempt as an answer, the rung's own included, and does not check the other rung's state. An unavailable rung that left output is reported as nothing at all, and a rung beside a failed one that left bytes is hidden as if that one had answered.
+
+### Steps To Reproduce
+
+1. In an empty folder, write `partial` to `codex_phase_p1_c1_a1_m_high.txt` and `unavailable` to its `.state`.
+2. Run `progress.sh <folder> 1`.
+3. Nothing is printed. It should print `codex c1: unavailable — 8 bytes, not an answer`.
+
+### Example Scenario
+
+A downshift that leaves an error message in its output disappears from the five-minute update.
+
+### Notes For A Fix
+
+Skip the rung's own file, and count another rung only when its state is `done` or absent. Add a bats case for an unavailable rung with output, and one where `a2` is unavailable beside `a1`'s answer, so the per-attempt scope is pinned. A regression from this phase's KI-111 fix.
+
+**Source:** gpt-6.2-astra:high, gemini-4-neon-high — phase review pass 5, review-triage phase, 2026-11-27.
+
+---
+
+<a id="ki-117"></a>
+
+## KI-117 — A KI filed from a plan says no run reproduced it, even when one did
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Path:** Happy Path
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `and says no run reproduced`
+
+### What Happens
+
+A KI filed from a plan review gives the concrete failure in its Steps To Reproduce and says no run reproduced it. A plan reviewer can find an existing defect and reproduce it; the sentence is then false. The KI template still asks for numbered actions ending in an observation, with no exception for a predicted failure.
+
+### Steps To Reproduce
+
+1. Review a plan against a synthetic repository whose parser already mishandles an empty list; the reviewer reports the observed result.
+2. File the defect as a KI under the plan-filing rule.
+3. The entry must say no run reproduced it. It should carry the real evidence, and mark only a predicted failure as a prediction.
+
+### Example Scenario
+
+A KI for a reproduced bug reads as unconfirmed.
+
+### Notes For A Fix
+
+Carry reproduction evidence through when it exists; say "predicted, not run" only for a failure inferred from the plan; note the exception in the KI template.
+
+**Source:** gpt-6.2-astra:high — phase review pass 5, review-triage phase, 2026-11-27.
+
+---
+
+<a id="ki-118"></a>
+
+## KI-118 — The blocking rule's section and step 5 still say the rest are filed
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Path:** Happy Path
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `A blocking row is fixed in the phase; the rest`
+
+### What Happens
+
+§3 step 2 links the blocking rule for every finding. That section, and phase-workflow §3 step 5, still say "the rest are filed", which sends an accepted or rejected row to the roadmap. The disposition order, step 4 and §3's opening now say only a `Filed` row gets an entry. §3's opening also says `Filed` where a repository without roadmap files uses `Recorded Only: No Roadmap Files`.
+
+### Steps To Reproduce
+
+1. In a fixture with roadmap files, give a confirmed Low finding `Confirmed: Accepted, No Work Planned`.
+2. Follow step 2's link to the blocking rule, then read step 5.
+3. Both say to file it. They should hand non-blocking rows to the disposition order.
+
+### Example Scenario
+
+An agent files a roadmap entry for work you accepted as it is.
+
+### Notes For A Fix
+
+Make the blocking rule's section and step 5 defer to the disposition order, link step 2 to that order too, and name `Recorded Only` in §3's opening. KI-103's remainder.
+
+**Source:** gpt-6.2-astra:high, gemini-4-neon-high — phase review pass 5, review-triage phase, 2026-11-27.
+
+---
+
+<a id="ki-119"></a>
+
+## KI-119 — The record's user-only edit rule blocks settling a retried row
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Path:** External Interference
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `Later, only the`
+
+### What Happens
+
+When an incomplete pass's retry completes, its waiting `Unfixed Blocker` rows are settled as for any complete pass, and that is not a change by the user. Loop step 1 still says "later, only the user changes a row", and the `Unfixed Blocker` definition says the row waits for the user. An agent can keep a fixed defect labelled unfixed.
+
+### Steps To Reproduce
+
+1. On pass 1, let one reviewer confirm a blocker and the other time out; record `Unfixed Blocker`.
+2. Let the retry succeed and fix the blocker.
+3. Step 1 forbids changing the row. It should allow the same pass's settlement, and keep the user-only rule for settled rows.
+
+### Example Scenario
+
+A retried pass hands off a fixed blocker as unfixed.
+
+### Notes For A Fix
+
+Limit the user-only rule to rows of completed passes, and say a waiting row becomes `Fixed In Phase` once its fix and evidence exist. KI-108's remainder.
+
+**Source:** gpt-6.2-astra:high — phase review pass 5, review-triage phase, 2026-11-27.
 
 ---
 
@@ -1107,3 +1239,35 @@ Someone filing a known issue in a hurry is pointed at the wrong field.
 Read the rated fields with `[ \t]*`, as the optional fields already are, keeping the whole-body search the existing roadmaps rely on.
 
 **Source:** `/code-review high` — phase end, review-triage phase, 2026-11-26. Path, Area and steps supplied by the triager.
+
+---
+
+<a id="ki-120"></a>
+
+## KI-120 — Two blocking sets of ratings leave a merged row's filing open
+
+**Severity:** Low
+**Likelihood:** Rare
+**Path:** Unusual Input
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `else the set that decided a blocking disposition`
+
+### What Happens
+
+A filed merged row takes the set that decided a blocking disposition. When both reviewers' sets block and you then file the row at the gate, both decided it, and the rule does not say which to take.
+
+### Steps To Reproduce
+
+1. Merge two confirmed reports rated High · Happy Path · Rare and High · Unusual Input · Almost Always; both block.
+2. At the gate, file the row instead of fixing it.
+3. Two sets qualify. The rule should choose one, for example by the same Severity, Likelihood and Path order.
+
+### Example Scenario
+
+Two agents file the same row with different ratings.
+
+### Notes For A Fix
+
+Apply the Severity, then Likelihood, then Path order to the qualifying sets too. (The Path order itself is stated in the Path column rule.)
+
+**Source:** gemini-4-neon-high — phase review pass 5, review-triage phase, 2026-11-27.

@@ -69,6 +69,10 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-95](KNOWN_ISSUES.md#ki-95) | Publish-record still reads a short hex answer as a moved head | Rare | Medium |
 | [KI-109](KNOWN_ISSUES.md#ki-109) | The optional-field reader still differs from Markdown in three ways | Rare | Medium |
 | [KI-113](KNOWN_ISSUES.md#ki-113) | A dependency coverage gap's prescribed fix is an upgrade | Rare | Medium |
+| [KI-116](KNOWN_ISSUES.md#ki-116) | Progress hides an unavailable rung that left output | Rare | Medium |
+| [KI-117](KNOWN_ISSUES.md#ki-117) | A KI filed from a plan says no run reproduced it, even when one did | Rare | Medium |
+| [KI-118](KNOWN_ISSUES.md#ki-118) | The blocking rule's section and step 5 still say the rest are filed | Rare | Medium |
+| [KI-119](KNOWN_ISSUES.md#ki-119) | The record's user-only edit rule blocks settling a retried row | Rare | Medium |
 | [KI-114](KNOWN_ISSUES.md#ki-114) | The blocking rule excludes plan mode, but plan notes open with Blocking | Almost Always | Low |
 | [KI-115](KNOWN_ISSUES.md#ki-115) | Three older roadmap entries are out of date | Almost Always | Low |
 | [KI-82](KNOWN_ISSUES.md#ki-82) | The zsh lint misses traps hidden by quotes and other subscripts | Likely | Low |
@@ -80,6 +84,7 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-96](KNOWN_ISSUES.md#ki-96) | The Gemini prompt measurement can still accept a count it should refuse | Rare | Low |
 | [KI-91](KNOWN_ISSUES.md#ki-91) | Init and close can lose their caller's signal handler while registering their own | Rare | Low |
 | [KI-102](KNOWN_ISSUES.md#ki-102) | An empty Likelihood reads the Path line below it as its value | Rare | Low |
+| [KI-120](KNOWN_ISSUES.md#ki-120) | Two blocking sets of ratings leave a merged row's filing open | Rare | Low |
 
 ## Enhancements
 
