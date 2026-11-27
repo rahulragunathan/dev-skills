@@ -10,7 +10,7 @@ here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
 
-## [2.3.0] - 2026-11-26 — review triage
+## [2.3.0] - 2026-11-27 — review triage
 
 ### Added
 
@@ -26,9 +26,11 @@ here — the plugin manifest's version is the only record of them.
   their own, never mixed. The review loop now stops on a pass with no blocking finding, and the
   gate shows a Steps To Reproduce summary grouped by Path and a trend table with each pass's
   blocking count.
-- **Steps are evidence, not commands.** Triage runs them only in a disposable fixture with
-  synthetic inputs, reconstructs them where needed and says so, and replaces secrets, account
-  names and local paths before they are published. Findings from `/code-review`,
+- **Steps are evidence, not commands.** Triage runs them only in a fresh `mktemp -d` folder
+  with a scratch `HOME`, no credential variables and no network, refuses a step that reaches
+  outside it or fetches and runs code, and reconstructs steps where needed and says so. The whole
+  record, not only the steps, is sanitised of secrets, account names and local paths before it
+  is published (KI-97, KI-107). Findings from `/code-review`,
   `/security-review`, `design-review` and the dependency scan get the same fields at intake.
 - **The KI template gains Path and Area scales**, a `**Path:**` and an `**Area:**` field and a
   `### Steps To Reproduce` section; the ENH template gains an optional one. `roadmap.py check`
@@ -49,6 +51,25 @@ here — the plugin manifest's version is the only record of them.
   Files` replaces `Open — no roadmap files`**, so each name says what the row is.
 - **Regressions follow the blocking rule** like every other finding, rather than always being
   fixed in the phase.
+- **Each keyed note opens with *Blocking* or *Non-Blocking*, then its Disposition**, so a note
+  reads without the table.
+
+### Fixed
+
+- **Every row has a disposition, and the rules agree.** A repo review's blocking row, and a
+  blocker from an incomplete pass waiting for its retry, are `Unfixed Blocker`. A change you make
+  at the gate is written `<new> — was <old>, the user's call`. A row has one Path, the one that
+  blocks first. Likelihood is attributed per reviewer like Severity, and a filed merged row takes
+  one whole set of ratings. A `Rejected` or accepted row gets no roadmap entry. Plan mode asks
+  for no steps anywhere. phase-workflow §3 step 2 sends its own checks' findings and gaps through
+  intake and the blocking rule (KI-98, KI-99, KI-100, KI-103, KI-104, KI-105, KI-106, KI-108).
+- **Reviewers no longer open with a summary line**, dropped before release: each finding's Path
+  says the same, and the trend's Blocking column answers the gate's question (KI-101).
+- **`progress.sh` reports a failed Codex attempt as failed**, not running: the Codex loop now
+  writes `.state` as the Gemini loop does (KI-111).
+- **The roadmap files have one casing and shape.** The ENH and UNK templates' `Regression Net`
+  and `What Settles It` labels and the `None Offered` fallback are in title case, and every
+  dev-skills entry uses its template's headings and labels, guarded by new tests (KI-110).
 
 ## [2.2.2] - 2026-11-25
 

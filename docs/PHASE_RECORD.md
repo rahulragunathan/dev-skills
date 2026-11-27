@@ -38,3 +38,9 @@ points at the rule. The phase-end `/code-review high` found eight findings, tria
 rule: none blocks, six are filed as KI-97 to KI-102, and two are accepted. ENH-40 records making
 Path required. `/security-review` could not run, since the session's working directory is not
 this repository.
+
+A follow-up on the same PR, after the first gate at `acce93a` and on your request, closed the
+policy gaps the review filed (KI-97 to KI-101, KI-103 to KI-108), removed the Happy Path line,
+opened each keyed note with Blocking or Non-Blocking and its Disposition, fixed KI-111, and
+brought the roadmap files to one casing and shape (KI-110). Its plan is
+`~/.claude/plans/2026-11-27-triage-followup-plan.md`.
