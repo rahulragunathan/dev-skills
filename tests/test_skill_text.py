@@ -14,6 +14,8 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tests"))
 from fence import FENCE, fence  # noqa: E402
+sys.path.insert(0, str(ROOT / "skills/project-docs"))
+import roadmap  # noqa: E402
 
 SKILLS = sorted(ROOT.glob("skills/*/SKILL.md"))
 PLACEHOLDER = re.compile(r"\$(\d|ARGUMENTS)")
@@ -132,9 +134,6 @@ class SecurityCoverageTest(unittest.TestCase):
         self.assertIn("# fence: dependency-scan", skill)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 ER = ROOT / "skills/external-review/SKILL.md"
 PW = ROOT / "skills/phase-workflow/SKILL.md"
@@ -156,14 +155,15 @@ def flat(text: str) -> str:
 
 
 def template_levels(field: str) -> list[str]:
-    sys.path.insert(0, str(KI_TEMPLATE_DIR))
-    import roadmap  # noqa: E402
     return roadmap.load_scales(KI_TEMPLATE_DIR)["KI"][field]
 
 
 def table_header(text: str, first_cells: str) -> list[str]:
-    line = next(l for l in text.splitlines() if l.startswith(first_cells))
-    return [c.strip() for c in line.strip().strip("|").split("|")]
+    return roadmap._cells(next(l for l in text.splitlines() if l.startswith(first_cells)))
+
+
+def all_skills() -> str:
+    return "".join(p.read_text() for p in SKILLS)
 
 
 class TriageTest(unittest.TestCase):
@@ -227,7 +227,7 @@ class TriageTest(unittest.TestCase):
         rule = ("A confirmed finding blocks the phase when its Severity is Critical or High, "
                 "**and** at least one of these holds: its Path is Happy Path; its Likelihood is "
                 "Likely or Almost Always.")
-        skills = "".join(p.read_text() for p in SKILLS)
+        skills = all_skills()
         with self.subTest("once"):
             self.assertEqual(skills.count(rule), 1)
         worked = section(self.text, "### The blocking rule")
@@ -284,7 +284,7 @@ class TriageTest(unittest.TestCase):
 
     def test_unfixed_blocker_replaces_proposed(self):
         # Fails if the old name survives in any skill, or the new one is not defined.
-        skills = "".join(p.read_text() for p in SKILLS)
+        skills = all_skills()
         with self.subTest("old gone"):
             self.assertNotIn("Proposed: fixed in phase", skills)
         with self.subTest("new defined"):
@@ -292,7 +292,7 @@ class TriageTest(unittest.TestCase):
 
     def test_dispositions_are_title_case(self):
         # Fails if a sentence-case disposition survives in any skill.
-        skills = "".join(p.read_text() for p in SKILLS)
+        skills = all_skills()
         for old in ("Fixed in phase", "Already covered", "Not incorporated",
                     "Confirmed: accepted, no work planned", "Open — no roadmap files"):
             with self.subTest(absent=old):
@@ -323,3 +323,7 @@ class PhaseWorkflowPointerTest(unittest.TestCase):
             self.assertIn("(../external-review/SKILL.md#the-blocking-rule)", step)
         with self.subTest("no restatement"):
             self.assertNotIn("Critical or High", step)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -65,10 +65,6 @@ OPTIONAL_FIELDS = {"KI": ["Path", "Area"]}
 # moved to the new one.
 OLD_SPELLINGS = {"Almost always": "Almost Always"}
 
-
-def spelled(value: str | None) -> str | None:
-    """The current spelling of a rating, so the old one compares and sorts as the new."""
-    return OLD_SPELLINGS.get(value, value)
 TEMPLATES = pathlib.Path(__file__).resolve().parent
 # The credential-shaped names external-review's capture.sh withholds; a test
 # keeps the two lists equal. check never opens a cited file of this shape, and
@@ -78,6 +74,11 @@ SECRET_NAMES = ("*.env", "*.env.*", "*.pem", "*.key", "*.p12", "*.pfx", "*.crt",
                 "*.sqlite", "*.sqlite3")
 # Each index section and the table header it must hold, so blank files never pass.
 SECTIONS = {"KI": "## Known Issues", "ENH": "## Enhancements", "UNK": "## Open Questions"}
+
+
+def spelled(value: str | None) -> str | None:
+    """The current spelling of a rating, so the old one compares and sorts as the new."""
+    return OLD_SPELLINGS.get(value, value)
 
 
 def credential_shaped(rel: str) -> bool:
