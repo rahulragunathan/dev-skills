@@ -134,7 +134,6 @@ class SecurityCoverageTest(unittest.TestCase):
         self.assertIn("# fence: dependency-scan", skill)
 
 
-
 ER = ROOT / "skills/external-review/SKILL.md"
 PW = ROOT / "skills/phase-workflow/SKILL.md"
 KI_TEMPLATE_DIR = ROOT / "skills/project-docs"

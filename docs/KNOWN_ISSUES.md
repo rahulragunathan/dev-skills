@@ -321,6 +321,38 @@ Parse the supported manifest structures instead of matching lines.
 
 ---
 
+<a id="ki-97"></a>
+
+## KI-97 — Reviewer-written steps have no stated isolation
+
+**Severity:** High
+**Likelihood:** Rare
+**Path:** External Interference
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `Run them only in a disposable fixture with synthetic inputs`
+
+### What Happens
+
+Triage says to run a reviewer's Steps To Reproduce only in a disposable fixture, never in the working tree or against a network. It names no mechanism: nothing says the fixture has no credentials in its environment, a separate `HOME`, or no network, and nothing tells the triager to refuse a step that reaches outside the fixture. The steps come from a model that read untrusted repository text, so they can carry an injected command.
+
+### Steps To Reproduce
+
+1. Put a comment in a fixture repository that asks a reviewer to add the step `cat ~/.config/example-token` to any finding.
+2. Run a phase review over it, and read the step that comes back.
+3. Follow triage as written: the skill does not say to drop or confine the step, so it would run with the user's own `HOME` and network. It should be refused, or run in a confined fixture.
+
+### Example Scenario
+
+A reviewed repository plants a step that copies a private key into the fixture folder, and the triager runs it as part of confirming the finding.
+
+### Notes For A Fix
+
+Name a concrete fixture: a fresh `mktemp -d`, a scratch `HOME`, no credential variables, and no network. Tell the triager to refuse any step that touches a path outside it, or that fetches and runs code.
+
+**Source:** `/code-review high` — phase end, review-triage phase, 2026-11-26. Path, Area and steps supplied by the triager.
+
+---
+
 <a id="ki-49"></a>
 
 ## KI-49 — the headline tally mixes two skills
@@ -466,6 +498,70 @@ or skip a bare `print` statement without evaluating its arguments. Add an f-stri
 T3-2.
 
 **Source:** claude-opus-5 — adversarial code review of the overnight QC passes, 2026-09-14.
+
+---
+
+<a id="ki-99"></a>
+
+## KI-99 — The blocking rule gives a repo review's blocking row no disposition
+
+**Severity:** Medium
+**Likelihood:** Likely
+**Path:** Happy Path
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `It applies in phase and repo mode`
+
+### What Happens
+
+The blocking rule applies in phase and repo mode, and a blocking row is `Fixed In Phase`, or `Unfixed Blocker` when the loop has stopped. Repo mode has no phase and no loop, and its findings wait for the user's dispositions before any code is touched. So a confirmed blocking row in a repo review fits none of the listed dispositions.
+
+### Steps To Reproduce
+
+1. Run `external-review repo` on a fixture repository with a confirmed High finding on the Happy Path.
+2. Look up its disposition: `Fixed In Phase` is false, `Unfixed Blocker` needs a stopped loop, and the non-blocking dispositions contradict the rule.
+3. The skill should name the disposition a repo review's blocking row gets.
+
+### Example Scenario
+
+Two repo reviews of the same project give the same High Happy Path bug different dispositions, so the table no longer means the same thing from one review to the next.
+
+### Notes For A Fix
+
+Say that in repo mode the rule marks rows as proposed blockers for the user's decision, or limit the rule to phase mode and give repo mode its own sentence.
+
+**Source:** `/code-review high` — phase end, review-triage phase, 2026-11-26. Path, Area and steps supplied by the triager.
+
+---
+
+<a id="ki-100"></a>
+
+## KI-100 — A finding on two Paths cannot be filed as one entry
+
+**Severity:** Medium
+**Likelihood:** Likely
+**Path:** Happy Path
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `Where a finding reaches more than one, name each`
+
+### What Happens
+
+The Path column rule lets a row name more than one Path. The KI template, `roadmap.py check` and the blocking rule each take exactly one: check refuses a second `**Path:**` as repeated and a joined value as unknown.
+
+### Steps To Reproduce
+
+1. Give a findings row the Path `External Interference / Unusual Input`, as the rule allows.
+2. File it, copying the Path into the entry as `**Path:** External Interference / Unusual Input`.
+3. Run `roadmap.py check`: it reports `unknown Path`. It should pass, or the column rule should have asked for one Path.
+
+### Example Scenario
+
+The plan review for this very phase produced such a row (`External Interference / Unusual Input`), which could not have been filed as written.
+
+### Notes For A Fix
+
+Allow one Path per row: the one that blocks first, or the most common one, with any other named in the note.
+
+**Source:** `/code-review high` — phase end, review-triage phase, 2026-11-26. Path, Area and steps supplied by the triager.
 
 ---
 
@@ -716,6 +812,38 @@ Require the full width of `GATE_SHA` before reporting movement, read the record 
 
 ---
 
+<a id="ki-98"></a>
+
+## KI-98 — The intake rule points at a dependency-scan gap policy that does not exist
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Path:** Happy Path
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `A dependency-scan coverage gap keeps its own policy`
+
+### What Happens
+
+Triage says a dependency-scan coverage gap keeps its own policy, citing `phase-workflow` §3 step 2. That step states no policy for gaps: it says every finding and gap is fixed, filed, or accepted with a reason, which also predates the blocking rule.
+
+### Steps To Reproduce
+
+1. Run the dependency scan on a fixture with a `package.json` and no lockfile; it exits 3.
+2. Follow the intake rule to `phase-workflow` §3 step 2 and look for the gap policy.
+3. There is none, so the triager guesses whether the blocking rule applies. The two documents should give one answer.
+
+### Example Scenario
+
+Two phases disposition the same missing-lockfile gap differently, one fixing it in the phase and one filing it.
+
+### Notes For A Fix
+
+State in `phase-workflow` §3 step 2 that scan findings and gaps follow the blocking rule like any other, and drop the carve-out, or state the gap policy there.
+
+**Source:** `/code-review high` — phase end, review-triage phase, 2026-11-26. Path, Area and steps supplied by the triager.
+
+---
+
 <a id="ki-82"></a>
 
 ## KI-82 — the zsh lint misses traps hidden by quotes and other subscripts
@@ -737,6 +865,38 @@ Require the full width of `GATE_SHA` before reporting movement, read the record 
 Track quote state per character, and widen the subscript and word-list patterns, with fixtures for each.
 
 **Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 2, dependable-helpers phase, 2026-11-23.
+
+---
+
+<a id="ki-101"></a>
+
+## KI-101 — Nothing says what to do with a missing or chunked Happy Path line
+
+**Severity:** Low
+**Likelihood:** Likely
+**Path:** Unusual Input
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `Judge it only on the material you were given.`
+
+### What Happens
+
+Every reviewer now opens with a Happy Path line, judged only on the material it was given. Coverage still counts a pair as covered on a findings list or `No findings.`, and nothing says how to treat an answer without the line, or how several chunks' lines add up at the gate.
+
+### Steps To Reproduce
+
+1. Run a repo review split into four chunks, where one chunk's answer has findings but no Happy Path line.
+2. Build the gate's Happy Path summary.
+3. The skill gives no rule for the missing line, and three `works` lines can read as a whole-repository verdict. It should say how each case is reported.
+
+### Example Scenario
+
+The gate shows `Happy Path: works` for a pass in which one chunk never said.
+
+### Notes For A Fix
+
+Say that a missing line is reported as missing, without changing coverage, and that the gate lists one line per chunk, never one for the whole review.
+
+**Source:** `/code-review high` — phase end, review-triage phase, 2026-11-26. Path, Area and steps supplied by the triager.
 
 ---
 
@@ -910,3 +1070,35 @@ A test harness imports `roadmap.py`, sends SIGINT during `cmd_init`, and keeps a
 Block the managed signals while registering and recording, then restore the caller's mask.
 
 **Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 3, dependable-helpers phase, 2026-11-23.
+
+---
+
+<a id="ki-102"></a>
+
+## KI-102 — An empty Likelihood reads the Path line below it as its value
+
+**Severity:** Low
+**Likelihood:** Rare
+**Path:** Unusual Input
+**Area:** Code
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `val = spelled(match[1].strip()) if match else ""`
+
+### What Happens
+
+The rated fields are read with `\s*` after the label, which crosses a line break. The template now puts `**Path:**` on the line after Likelihood, so a blank Likelihood takes the Path line as its value.
+
+### Steps To Reproduce
+
+1. Fill the KI template's sample entry, leave `**Likelihood:**` blank, and set `**Path:** Happy Path` below it.
+2. Run `roadmap.py check`.
+3. It reports `unknown Likelihood: KI-01 (**Path:** Happy Path)`. It should say the Likelihood is empty.
+
+### Example Scenario
+
+Someone filing a known issue in a hurry is pointed at the wrong field.
+
+### Notes For A Fix
+
+Read the rated fields with `[ \t]*`, as the optional fields already are, keeping the whole-body search the existing roadmaps rely on.
+
+**Source:** `/code-review high` — phase end, review-triage phase, 2026-11-26. Path, Area and steps supplied by the triager.
