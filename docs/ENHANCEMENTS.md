@@ -293,7 +293,7 @@ Corrected in pass 1 (gpt-6.2-astra:high, gemini-4-neon-high).
 
 ### What It Is
 
-Three wording tests stay green when the policy they name is broken: intake passes with the source names alone, the stop-rule test misses a loop that continues past pass 3, the worked-table test leaves out the fourth row, and the tracked-ID test searches the whole skill rather than the rubric reviewers are sent.
+Four wording tests stay green when the policy they name is broken: intake passes with the source names alone, the stop-rule test misses a loop that continues past pass 3, the worked-table test leaves out the fourth row, and the tracked-ID test searches the whole skill rather than the rubric reviewers are sent.
 
 ### Why It Matters
 

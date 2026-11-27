@@ -1085,7 +1085,7 @@ Re-rated Rare in pass 2 (gpt-6.2-astra:high): it needs a reviewer failure and a 
 
 **Severity:** Low
 **Likelihood:** Almost Always
-**Path:** Unusual Input
+**Path:** Happy Path
 **Area:** Docs
 **Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `Judge it only on the material you were given.`
 
@@ -1110,6 +1110,8 @@ Say that a missing line is reported as missing, without changing coverage, and t
 Widened in pass 1 (gemini-4-neon-high): plan and repo mode have no destination for the line.
 
 Re-rated Almost Always in pass 2 (gemini-4-neon-high): every plan review emits the line, and nothing says where it goes.
+
+Path corrected to Happy Path in pass 3 (gemini-4-neon-high): every plan review reaches it.
 
 **Source:** `/code-review high` — phase end, review-triage phase, 2026-11-26. Path, Area and steps supplied by the triager.
 
