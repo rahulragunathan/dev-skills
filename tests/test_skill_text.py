@@ -670,6 +670,15 @@ class PassNineTest(unittest.TestCase):
         self.assertIn("the rest, which takes its own disposition from the blocking rule", rule)
         self.assertIn("- `Fixed In Phase` — the whole row is fixed:", self.er)
 
+    def test_ki_125_the_last_drift_check_runs_roadmap_check(self):
+        # Fails if step 6 after the last pass checks only new filings, so an existing entry a document
+        # fix re-rated can disagree with its ROADMAP row at the gate.
+        pw = flat(PW.read_text())
+        step = pw[pw.index("6. **Post-fix drift re-check"):pw.index("7. **")]
+        self.assertIn("After the last pass, where the roadmap files exist, run `roadmap.py check`", step)
+        self.assertIn("an existing entry a document fix re-rated", step)
+        self.assertNotIn("confirm only that every filing", step)
+
 
 if __name__ == "__main__":
     unittest.main()
