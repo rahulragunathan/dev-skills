@@ -253,6 +253,34 @@ the design-review rework, and its new rule needs its own pressure test.
 
 ---
 
+<a id="enh-40"></a>
+
+## ENH-40 — make Path required in the roadmap check
+
+**Priority:** Medium · **Effort:** ~2 hours
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `OPTIONAL_FIELDS = {"KI": ["Path", "Area"]}` · **Regression net:** `skills/project-docs/tests/roadmap.bats`
+
+### What It Is
+
+Move Path from `OPTIONAL_FIELDS` into the KI's required fields, and drop the `Almost always`
+spelling from `OLD_SPELLINGS`. Decide at the same time whether Area becomes required too.
+
+### Why It Matters
+
+While Path is optional, a known issue can be filed without saying whether it breaks the Happy
+Path, which is the one fact the blocking rule turns on.
+
+### Notes For The Work
+
+Do it only after every repository's entries carry a Path and the new spelling, which the fresh
+look across the repositories does; otherwise their `check` starts failing. The tests that guard
+the optional reading (`check accepts an entry without a Path or an Area`, `check accepts the old
+spelling of Almost Always`) change with it.
+
+**Source:** the user's decision during this phase's design, review-triage phase, 2026-11-26.
+
+---
+
 <a id="enh-39"></a>
 
 ## ENH-39 — make the tests pass 3 found weak fail for their named reason
