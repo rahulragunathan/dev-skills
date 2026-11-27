@@ -44,6 +44,7 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | ---- | ------- | ---------- | ---------- |
 | [KI-80](KNOWN_ISSUES.md#ki-80) | First push and prune act on a branch name that can move after the check | Rare | Critical |
 | [KI-97](KNOWN_ISSUES.md#ki-97) | Reviewer-written steps have no stated isolation | Rare | Critical |
+| [KI-107](KNOWN_ISSUES.md#ki-107) | Publication sanitises the steps but not the rest of the reviewer's text | Rare | Critical |
 | [KI-47](KNOWN_ISSUES.md#ki-47) | Grading packets omit information their conditions require | Almost Always | High |
 | [KI-48](KNOWN_ISSUES.md#ki-48) | S07's with-skill arm is handed the answer to the condition it is graded on | Almost Always | High |
 | [KI-60](KNOWN_ISSUES.md#ki-60) | Helper commands need `CLAUDE_PLUGIN_ROOT`, which a Codex install does not set | Almost Always | High |
@@ -52,7 +53,6 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-77](KNOWN_ISSUES.md#ki-77) | A root lockfile covers every manifest below it | Rare | High |
 | [KI-84](KNOWN_ISSUES.md#ki-84) | A dependency file whose name differs only in case can overwrite another | Rare | High |
 | [KI-87](KNOWN_ISSUES.md#ki-87) | The dependency scan still misreads some manifests | Rare | High |
-| [KI-107](KNOWN_ISSUES.md#ki-107) | Publication sanitises the steps but not the rest of the reviewer's text | Rare | High |
 | [KI-49](KNOWN_ISSUES.md#ki-49) | The headline tally mixes two skills | Almost Always | Medium |
 | [KI-50](KNOWN_ISSUES.md#ki-50) | S05's fixture contradicts itself | Almost Always | Medium |
 | [KI-105](KNOWN_ISSUES.md#ki-105) | Plan findings are told to omit steps that intake then requires | Almost Always | Medium |
@@ -65,7 +65,6 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-103](KNOWN_ISSUES.md#ki-103) | An accepted finding still needs a full roadmap entry | Likely | Medium |
 | [KI-104](KNOWN_ISSUES.md#ki-104) | Dispositions cannot record the user overriding the blocking rule | Likely | Medium |
 | [KI-106](KNOWN_ISSUES.md#ki-106) | Merged ratings have no rule for attribution or filing | Likely | Medium |
-| [KI-108](KNOWN_ISSUES.md#ki-108) | A blocker from an incomplete pass has no disposition while the retry waits | Likely | Medium |
 | [KI-41](KNOWN_ISSUES.md#ki-41) | Converting a large sequence to text has no size bound | Rare | Medium |
 | [KI-76](KNOWN_ISSUES.md#ki-76) | The probe's error classes still match loose substrings | Rare | Medium |
 | [KI-79](KNOWN_ISSUES.md#ki-79) | A symlinked folder above the docs folder still redirects the roadmap tools | Rare | Medium |
@@ -77,8 +76,10 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-94](KNOWN_ISSUES.md#ki-94) | Report lines that start with a committed path can pass for findings | Rare | Medium |
 | [KI-95](KNOWN_ISSUES.md#ki-95) | Publish-record still reads a short hex answer as a moved head | Rare | Medium |
 | [KI-109](KNOWN_ISSUES.md#ki-109) | The optional-field reader still differs from Markdown in three ways | Rare | Medium |
+| [KI-108](KNOWN_ISSUES.md#ki-108) | A blocker from an incomplete pass has no disposition while the retry waits | Rare | Medium |
+| [KI-101](KNOWN_ISSUES.md#ki-101) | Plan and repo mode give the Happy Path line no destination, and nothing covers a missing or chunked one | Almost Always | Low |
+| [KI-110](KNOWN_ISSUES.md#ki-110) | The ENH and UNK templates and one fixed value are still in sentence case | Almost Always | Low |
 | [KI-82](KNOWN_ISSUES.md#ki-82) | The zsh lint misses traps hidden by quotes and other subscripts | Likely | Low |
-| [KI-101](KNOWN_ISSUES.md#ki-101) | Nothing says what to do with a missing or chunked Happy Path line | Likely | Low |
 | [KI-44](KNOWN_ISSUES.md#ki-44) | A stale dispatch log gives a misleading replacement message | Rare | Low |
 | [KI-78](KNOWN_ISSUES.md#ki-78) | Index rows are not bound to their section | Rare | Low |
 | [KI-83](KNOWN_ISSUES.md#ki-83) | The name check misses multi-line reference definitions and counts test fixtures as scripts | Rare | Low |
@@ -108,7 +109,6 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 | [ENH-41](ENHANCEMENTS.md#enh-41) | Make the triage wording tests pin the whole policy | Medium | ~2 hours |
 | [ENH-32](ENHANCEMENTS.md#enh-32) | Drop explanations of standard tool behaviour from the skills | Low | ~2 hours |
 | [ENH-39](ENHANCEMENTS.md#enh-39) | Make the tests pass 3 found weak fail for their named reason | Low | ~2 hours |
-| [ENH-42](ENHANCEMENTS.md#enh-42) | Finish title case in the ENH and UNK templates | Low | ~1 hour |
 
 ## Open Questions
 

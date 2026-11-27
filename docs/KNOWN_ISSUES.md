@@ -125,6 +125,40 @@ Re-rated Critical in pass 1 (gemini-4-neon-high): a private key copied out is th
 
 ---
 
+<a id="ki-107"></a>
+
+## KI-107 — Publication sanitises the steps but not the rest of the reviewer's text
+
+**Severity:** Critical
+**Likelihood:** Rare
+**Path:** Unusual Input
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `**Carry the reviewer's fix through, in the reviewer's words.**`
+
+### What Happens
+
+Triage replaces secrets, account names and local paths in Steps To Reproduce before they are published. The reviewer's fix is carried in its own words and the Happy Path line as it came back, and both reach the PR description, unsanitised.
+
+### Steps To Reproduce
+
+1. Give a synthetic reviewer answer whose only private-looking path, `/home/example-private/customer-a`, is in its suggested fix.
+2. Build the PR record as the skill says.
+3. The path survives in *Reviewer's Fix*. The whole record should be sanitised before publishing.
+
+### Example Scenario
+
+A reviewer quotes a token from a reviewed config file in its fix, and the public PR shows it.
+
+### Notes For A Fix
+
+Sanitise the complete record before publishing or rebundling, and allow redaction inside attributed quotations.
+
+Re-rated Critical in pass 2 (gpt-6.2-astra:high): the same field can publish a credential quoted from reviewed material.
+
+**Source:** gpt-6.2-astra:high — phase review pass 1, review-triage phase, 2026-11-26.
+
+---
+
 <a id="ki-47"></a>
 
 ## KI-47 — grading packets omit information their conditions require
@@ -352,38 +386,6 @@ A `pubspec.yaml` with `dependencies: {http: ^1.0.0}` and no `pubspec.lock` repor
 Parse the supported manifest structures instead of matching lines.
 
 **Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 3, dependable-helpers phase, 2026-11-23.
-
----
-
-<a id="ki-107"></a>
-
-## KI-107 — Publication sanitises the steps but not the rest of the reviewer's text
-
-**Severity:** High
-**Likelihood:** Rare
-**Path:** Unusual Input
-**Area:** Docs
-**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `**Carry the reviewer's fix through, in the reviewer's words.**`
-
-### What Happens
-
-Triage replaces secrets, account names and local paths in Steps To Reproduce before they are published. The reviewer's fix is carried in its own words and the Happy Path line as it came back, and both reach the PR description, unsanitised.
-
-### Steps To Reproduce
-
-1. Give a synthetic reviewer answer whose only private-looking path, `/home/example-private/customer-a`, is in its suggested fix.
-2. Build the PR record as the skill says.
-3. The path survives in *Reviewer's Fix*. The whole record should be sanitised before publishing.
-
-### Example Scenario
-
-A reviewer quotes a client folder name in its fix, and the public PR shows it.
-
-### Notes For A Fix
-
-Sanitise the complete record before publishing or rebundling, and allow redaction inside attributed quotations.
-
-**Source:** gpt-6.2-astra:high — phase review pass 1, review-triage phase, 2026-11-26.
 
 ---
 
@@ -761,38 +763,6 @@ Attribute Likelihood like Severity, and say the KI takes one attributed or verif
 
 ---
 
-<a id="ki-108"></a>
-
-## KI-108 — A blocker from an incomplete pass has no disposition while the retry waits
-
-**Severity:** Medium
-**Likelihood:** Likely
-**Path:** External Interference
-**Area:** Docs
-**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `**An incomplete pass triggers none of these**`
-
-### What Happens
-
-Each finding gets a disposition before the completeness decision, and an incomplete pass holds the reviewed commit for a retry. `Fixed In Phase` needs a fix and `Unfixed Blocker` a stopped loop, so a confirmed blocker from an incomplete pass fits neither while the retry is pending.
-
-### Steps To Reproduce
-
-1. Let one reviewer return a confirmed High Happy Path finding and the other time out.
-2. Prepare the partial record for the user while holding the reviewed commit.
-3. The finding is unfixed and the loop has neither continued nor stopped. A pending disposition should exist.
-
-### Example Scenario
-
-A Gemini timeout leaves a real blocker labelled with a disposition that is not true.
-
-### Notes For A Fix
-
-Allow a pending disposition while coverage is incomplete, or defer dispositions until the pass completes or the user decides.
-
-**Source:** gpt-6.2-astra:high — phase review pass 1, review-triage phase, 2026-11-26.
-
----
-
 <a id="ki-41"></a>
 
 ## KI-41 — converting a large sequence to text has no size bound
@@ -1056,9 +1026,10 @@ Require the full width of `GATE_SHA` before reporting movement, read the record 
 
 ### Steps To Reproduce
 
-1. Give a KI a valid Path and a Where fragment of `grep -qF '**Likelihood:** Rare · **Path:** Sometimes'`; run check: `repeated Path`.
-2. Indent `### What Happens` by two spaces and quote `**Path:** Sometimes` below it; run check: `repeated Path`.
-3. Write `**path:** Sometimes`; run check: no diagnostic. Each should pass, pass, and be reported, in that order.
+1. Start each case from its own copy of a valid KI with `**Path:** Happy Path`.
+2. Case one: make its Where fragment `grep -qF '**Likelihood:** Rare · **Path:** Sometimes'`, a line that occurs once in the cited file. Check reports `repeated Path`; it should pass.
+3. Case two: indent `### What Happens` by two spaces and put `**Path:** Sometimes` on its own line below it. Check reports `repeated Path`; it should pass.
+4. Case three: change only the label, to `**path:** Happy Path`. Check reports nothing; it should report the mis-cased label.
 
 ### Example Scenario
 
@@ -1068,40 +1039,52 @@ A known issue that cites a line of this very test file is refused.
 
 Mask code spans before finding field boundaries, accept up to three spaces and any blank after `###`, and report a mis-cased known label. KI-88 is the same family for the rated fields.
 
+Steps rewritten in pass 2 (gpt-6.2-astra:high), so each case starts from a valid entry.
+
 **Source:** gpt-6.2-astra:high — phase review pass 1, review-triage phase, 2026-11-26.
 
 ---
 
-<a id="ki-82"></a>
+<a id="ki-108"></a>
 
-## KI-82 — the zsh lint misses traps hidden by quotes and other subscripts
+## KI-108 — A blocker from an incomplete pass has no disposition while the retry waits
 
-**Severity:** Low
-**Likelihood:** Likely
-**Where:** [test_skill_text.py](../tests/test_skill_text.py) — `def unquoted(`
+**Severity:** Medium
+**Likelihood:** Rare
+**Path:** External Interference
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `**An incomplete pass triggers none of these**`
 
-### What happens
+### What Happens
 
-`unquoted` blanks text between any two apostrophes, including ones inside double quotes, so code between them is not linted; `${A[$i]}`, `A[0]=` and a variable after the first word of a `for` list are not flagged.
+Each finding gets a disposition before the completeness decision, and an incomplete pass holds the reviewed commit for a retry. `Fixed In Phase` needs a fix and `Unfixed Blocker` a stopped loop, so a confirmed blocker from an incomplete pass fits neither while the retry is pending.
 
-### Example scenario
+### Steps To Reproduce
 
-`echo "can't"; for m in $RUNGS; do echo "it's"; done` passes the lint.
+1. Let one reviewer return a confirmed High Happy Path finding and the other time out.
+2. Prepare the partial record for the user while holding the reviewed commit.
+3. The finding is unfixed and the loop has neither continued nor stopped. A pending disposition should exist.
 
-### Notes for a fix
+### Example Scenario
 
-Track quote state per character, and widen the subscript and word-list patterns, with fixtures for each.
+A Gemini timeout leaves a real blocker labelled with a disposition that is not true.
 
-**Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 2, dependable-helpers phase, 2026-11-23.
+### Notes For A Fix
+
+Allow a pending disposition while coverage is incomplete, or defer dispositions until the pass completes or the user decides.
+
+Re-rated Rare in pass 2 (gpt-6.2-astra:high): it needs a reviewer failure and a confirmed blocker from the other reviewer at once.
+
+**Source:** gpt-6.2-astra:high — phase review pass 1, review-triage phase, 2026-11-26.
 
 ---
 
 <a id="ki-101"></a>
 
-## KI-101 — Nothing says what to do with a missing or chunked Happy Path line
+## KI-101 — Plan and repo mode give the Happy Path line no destination, and nothing covers a missing or chunked one
 
 **Severity:** Low
-**Likelihood:** Likely
+**Likelihood:** Almost Always
 **Path:** Unusual Input
 **Area:** Docs
 **Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `Judge it only on the material you were given.`
@@ -1126,7 +1109,65 @@ Say that a missing line is reported as missing, without changing coverage, and t
 
 Widened in pass 1 (gemini-4-neon-high): plan and repo mode have no destination for the line.
 
+Re-rated Almost Always in pass 2 (gemini-4-neon-high): every plan review emits the line, and nothing says where it goes.
+
 **Source:** `/code-review high` — phase end, review-triage phase, 2026-11-26. Path, Area and steps supplied by the triager.
+
+---
+
+<a id="ki-110"></a>
+
+## KI-110 — The ENH and UNK templates and one fixed value are still in sentence case
+
+**Severity:** Low
+**Likelihood:** Almost Always
+**Path:** Happy Path
+**Area:** Docs
+**Where:** [ENHANCEMENTS-template.md](../skills/project-docs/ENHANCEMENTS-template.md) — `**Regression net:**`
+
+### What Happens
+
+The ENH template's `Regression net` label and the UNK template's `What settles it` label are in sentence case, so every entry made from them is too. external-review's fallback for a reviewer who gives no fix, `none offered`, is a lowercase fixed value. This release put the other labels and fixed values in title case.
+
+### Steps To Reproduce
+
+1. Fill an enhancement and an open question from the shipped templates.
+2. Build a findings note for a reviewer finding with no remediation.
+3. You see `Regression net`, `What settles it` and `none offered`. They should read `Regression Net`, `What Settles It` and `None Offered`.
+
+### Example Scenario
+
+One PR record mixes `None Offered`-style title case with a lowercase fallback, and new entries keep copying the old labels.
+
+### Notes For A Fix
+
+Rename all three, and every repository's existing entries during the fresh look. Assert the two bold labels in their template samples, not with the heading test, which never reads them. Nothing parses either label. Filed first as ENH-42; pass 2 showed it is defined wrong behaviour, not wanted work.
+
+**Source:** gpt-6.2-astra:high — phase review passes 1 and 2, review-triage phase, 2026-11-26.
+
+---
+
+<a id="ki-82"></a>
+
+## KI-82 — the zsh lint misses traps hidden by quotes and other subscripts
+
+**Severity:** Low
+**Likelihood:** Likely
+**Where:** [test_skill_text.py](../tests/test_skill_text.py) — `def unquoted(`
+
+### What happens
+
+`unquoted` blanks text between any two apostrophes, including ones inside double quotes, so code between them is not linted; `${A[$i]}`, `A[0]=` and a variable after the first word of a `for` list are not flagged.
+
+### Example scenario
+
+`echo "can't"; for m in $RUNGS; do echo "it's"; done` passes the lint.
+
+### Notes for a fix
+
+Track quote state per character, and widen the subscript and word-list patterns, with fixtures for each.
+
+**Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 2, dependable-helpers phase, 2026-11-23.
 
 ---
 

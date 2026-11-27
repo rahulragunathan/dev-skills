@@ -293,7 +293,7 @@ Corrected in pass 1 (gpt-6.2-astra:high, gemini-4-neon-high).
 
 ### What It Is
 
-Three wording tests stay green when the policy they name is broken: intake passes with the source names alone, the stop-rule test misses a loop that continues past pass 3, and the worked-table test leaves out the fourth row.
+Three wording tests stay green when the policy they name is broken: intake passes with the source names alone, the stop-rule test misses a loop that continues past pass 3, the worked-table test leaves out the fourth row, and the tracked-ID test searches the whole skill rather than the rubric reviewers are sent.
 
 ### Why It Matters
 
@@ -301,9 +301,9 @@ A wording test that passes on a broken rule is a false green on the very text ag
 
 ### Notes For The Work
 
-Assert the intake fields and who supplied them, the completeness and pass-3 conditions, and all four worked rows. Each needs a red first.
+Assert the intake fields and who supplied them, the completeness and pass-3 conditions, all four worked rows, and the tracked-ID forms inside the rubric's output contract. Each needs a red first.
 
-**Source:** gpt-6.2-astra:high — phase review pass 1, review-triage phase, 2026-11-26.
+**Source:** gpt-6.2-astra:high — phase review passes 1 and 2, review-triage phase, 2026-11-26.
 
 ---
 
@@ -362,26 +362,3 @@ Belongs with the fresh look at this plugin that follows the deep cut of the stan
 nuances people get wrong, such as which diff a review must use.
 
 **Source:** gpt-6.2-sol:max, gpt-6.2-astra:max — plan review, project-docs phase, 2026-11-20; more sites from gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, 2026-11-22.
-
----
-
-<a id="enh-42"></a>
-
-## ENH-42 — finish title case in the ENH and UNK templates
-
-**Priority:** Low · **Effort:** ~1 hour
-**Where:** [ENHANCEMENTS-template.md](../skills/project-docs/ENHANCEMENTS-template.md) — `**Regression net:**` · **Regression net:** `skills/project-docs/tests/roadmap.bats`
-
-### What It Is
-
-The ENH template's `Regression net` label and the UNK template's `What settles it` heading are still in sentence case, and so is every existing entry that copied them.
-
-### Why It Matters
-
-This release put every other label and heading the user reads in title case.
-
-### Notes For The Work
-
-Rename both in the templates and in every repository's entries during the fresh look, and add them to the template heading test. Nothing parses either label.
-
-**Source:** gpt-6.2-astra:high — phase review pass 1, review-triage phase, 2026-11-26.
