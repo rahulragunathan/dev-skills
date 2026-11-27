@@ -10,4 +10,23 @@ in flight the body is the single line `No phase in flight.`
 
 ---
 
-No phase in flight.
+## Review triage
+
+| Key | Value |
+| --- | --- |
+| `ORIGIN_URL` | `git@github.com:rahulragunathan/dev-skills.git` |
+| `ORIGIN_PUSH_URL` | `git@github.com:rahulragunathan/dev-skills.git` |
+| `REPO` | `rahulragunathan/dev-skills` |
+| `DEFAULT_BRANCH` | `main` |
+| `PHASE_BRANCH` | `feature/review-triage` |
+| `MERGE_METHOD` | `squash` |
+| Branched from | `origin/main` at `0096e33` |
+| Started | 2026-11-26 |
+| `PR` | — |
+| Release | v2.3.0 |
+
+`squash` is selected because the preflight takes the first allowed method in the order squash,
+rebase, merge.
+
+The plan lives outside the repository, in `~/.claude/plans/2026-11-26-triage-plan.md`, with its
+design beside it (`2026-11-26-triage-design.md`).
