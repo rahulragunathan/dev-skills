@@ -6,9 +6,14 @@ file carries enough detail to pick an item up without digging.
 Each entry has a stable ID — use it in branch names (`bugfix/ki-02-<slug>`) and in the
 CHANGELOG entry that closes it. How an entry enters and closes is in [ROADMAP.md](ROADMAP.md).
 
-`roadmap.py check` reads these levels, Severity and Likelihood below, in row order, from the
-template bundled with `project-docs`. In a project's own copy the two tables are for reading:
-editing them changes nothing.
+`roadmap.py check` reads these levels, Severity, Likelihood, Path and Area below, in row order,
+from the template bundled with `project-docs`. In a project's own copy the tables are for
+reading: editing them changes nothing. Severity and Likelihood are required, and ROADMAP mirrors
+them. Path and Area are optional for now; check validates them when present, and ROADMAP does not
+mirror them.
+
+**Steps To Reproduce** say how to make the defect happen, from a clean start. **Example
+Scenario** says why it matters, in the project's own terms.
 
 ## Severity
 
@@ -54,6 +59,9 @@ rating hides which you are looking at. Both still get fixed.
 | **Docs** | The defect is in prose: a skill, a README, a comment. |
 | **Tests** | The defect is in a test or its fixture. |
 
+**Path is what kind of use reaches the defect; Area is what kind of file holds it.** A README step
+that breaks the workflow is `Docs` on the `Happy Path`.
+
 ---
 
 <a id="ki-01"></a>
@@ -62,17 +70,25 @@ rating hides which you are looking at. Both still get fixed.
 
 **Severity:** <Critical | High | Medium | Low>
 **Likelihood:** <Almost Always | Likely | Rare>
+**Path:** <Happy Path | Unusual Input | External Interference>
+**Area:** <Code | Docs | Tests>
 **Where:** [file.py](../file.py) — `def the_function_that_is_wrong(`
 
-### What happens
+### What Happens
 
 <the defect, with a real code excerpt — copied from the file, not paraphrased>
 
-### Example scenario
+### Steps To Reproduce
+
+1. <from a clean checkout or a fresh fixture: the action, with its input>
+2. <the next action, if any>
+3. <what you see, against what you should see>
+
+### Example Scenario
 
 <concrete inputs → the wrong outcome, in the project's own domain terms>
 
-### Notes for a fix
+### Notes For A Fix
 
 <approach, plus the constraints that would trip someone up: invariants to preserve, tests
 that cover the area, related IDs worth bundling into the same pass>

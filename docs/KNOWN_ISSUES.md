@@ -9,9 +9,14 @@ CHANGELOG entry that closes it. How an entry enters and closes is in [ROADMAP.md
 Every entry carries its own source line; they come from several review passes, not one.
 Entries for skills that left this repo in v2.0.0 moved with them, keeping their IDs.
 
-`roadmap.py check` reads these levels, Severity and Likelihood below, in row order, from the
-template bundled with `project-docs`. In a project's own copy the two tables are for reading:
-editing them changes nothing.
+`roadmap.py check` reads these levels, Severity, Likelihood, Path and Area below, in row order,
+from the template bundled with `project-docs`. In a project's own copy the tables are for
+reading: editing them changes nothing. Severity and Likelihood are required, and ROADMAP mirrors
+them. Path and Area are optional for now; check validates them when present, and ROADMAP does not
+mirror them.
+
+**Steps To Reproduce** say how to make the defect happen, from a clean start. **Example
+Scenario** says why it matters, in the project's own terms.
 
 ## Severity
 
@@ -40,6 +45,25 @@ that is `Almost Always` for everyone who follows the step, however unusual it lo
 **Rate both, because one number cannot carry both.** `Rare · Critical` and `Almost Always · Low`
 are opposite kinds of work — the first is a landmine, the second is friction — and a single
 rating hides which you are looking at. Both still get fixed.
+
+## Path
+
+| Level | Means |
+| ------- | ------- |
+| **Happy Path** | The documented workflow, run normally, with ordinary inputs. |
+| **Unusual Input** | Odd but legal data: strange names, exotic formats, a rarely used option. |
+| **External Interference** | Another process or user writing the same files, a crash or kill mid-run, a hostile local writer, a filesystem quirk. |
+
+## Area
+
+| Level | Means |
+| ------- | ------- |
+| **Code** | The defect is in code that runs. |
+| **Docs** | The defect is in prose: a skill, a README, a comment. |
+| **Tests** | The defect is in a test or its fixture. |
+
+**Path is what kind of use reaches the defect; Area is what kind of file holds it.** A README step
+that breaks the workflow is `Docs` on the `Happy Path`.
 
 ---
 

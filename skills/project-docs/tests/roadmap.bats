@@ -1484,6 +1484,8 @@ import pathlib, re, sys
 src, docs = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
 fill = {"<title>": "A title", "<Critical | High | Medium | Low>": "High",
         "<Almost Always | Likely | Rare>": "Rare", "<High | Medium | Low>": "High",
+        "<Happy Path | Unusual Input | External Interference>": "Happy Path",
+        "<Code | Docs | Tests>": "Code",
         "<~hours / ~days>": "~1 day", "<Decision | Verification | Risk>": "Decision",
         "<the question, as a question>": "A question?", "<question>": "A question?",
         "<YYYY-MM-DD>": "2026-11-23", "<what changed>": "set up",
@@ -1506,6 +1508,9 @@ for row in rows:
     r = r[:j] + filled(row) + "\n" + r[j:]
 (docs / "ROADMAP.md").write_text(r)
 PY
+  # The fill reached the entry, so check judged a Path and an Area, not their absence.
+  grep -qx '\*\*Path:\*\* Happy Path' "$NEW/KNOWN_ISSUES.md" || false
+  grep -qx '\*\*Area:\*\* Code' "$NEW/KNOWN_ISSUES.md" || false
   run python3 "$RM" check --docs "$NEW"
   echo "$output" >&3
   [ "$status" -eq 0 ]
@@ -1865,4 +1870,32 @@ PY2
   run python3 "$RM" check --docs "$DOCS"
   [ "$status" -eq 1 ] || false
   [[ "$output" == *"unknown Likelihood: KI-03"* ]]
+}
+
+# --- The KI and ENH templates' sample entries ---------------------------------------------------
+
+# The sample entry: everything from the template's first separator on.
+sample() { sed -n '/^---$/,$p' "$(dirname "$RM")/$1-template.md"; }
+
+@test "templates: the KI sample has a Path field" {
+  # Fails if the sample entry stops offering the three Path levels in its metadata block.
+  [[ "$(sample KNOWN_ISSUES)" == *'**Path:** <Happy Path | Unusual Input | External Interference>'* ]]
+}
+
+@test "templates: the KI sample has an Area field" {
+  # Fails if the sample entry stops offering the three Area levels in its metadata block.
+  [[ "$(sample KNOWN_ISSUES)" == *'**Area:** <Code | Docs | Tests>'* ]]
+}
+
+@test "templates: the KI sample has Steps To Reproduce" {
+  # Fails if the sample entry has no Steps To Reproduce section.
+  sample KNOWN_ISSUES | grep -qx '### Steps To Reproduce'
+}
+
+@test "templates: the section headings are exactly the title-case set" {
+  # Fails if a sample heading is renamed, dropped, added, reordered or left in sentence case.
+  [ "$(sample KNOWN_ISSUES | grep '^### ' | paste -sd '|' -)" \
+    = '### What Happens|### Steps To Reproduce|### Example Scenario|### Notes For A Fix' ] || false
+  [ "$(sample ENHANCEMENTS | grep '^### ' | paste -sd '|' -)" \
+    = '### What It Is|### Why It Matters|### Steps To Reproduce|### Notes For The Work' ]
 }

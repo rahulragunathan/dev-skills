@@ -16,6 +16,7 @@ The roadmap files are optional. A repository has them only when the user asked f
 - No `Resolved` section and no `Notes` section. Shipped work belongs in CHANGELOG.md; standing limitations belong in ARCHITECTURE.md or the project AGENTS.md.
 - **No phase ledger.** A phase ends by cutting a CHANGELOG release whose heading names it, so the release history is the phase history. ROADMAP records only what is planned; the phase in flight lives in `docs/PHASE_RECORD.md`. Version by what the phase did: minor for additive work, patch for fixes and docs, major for a break.
 - The rating in a ROADMAP row mirrors the supporting file, which is authoritative, and so do its title (up to the case of the first letter) and an enhancement's Effort. The drift check verifies they agree, that ordering is descending, open questions included, and that every ID appears in both.
+- A known issue's **Path** and **Area** stay in its entry: ROADMAP does not mirror them, and they do not change the order. Both are optional for now; `roadmap.py check` refuses an unknown, empty or repeated one.
 - Completed items are deleted from both files, not annotated in place.
 - **A reference to a repo file carries a greppable fragment, never a line number**, and
   `roadmap.py check` confirms that fragment still occurs in the file it cites **exactly once** —
