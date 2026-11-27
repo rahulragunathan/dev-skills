@@ -1789,10 +1789,11 @@ PY
 import pathlib, sys
 p = pathlib.Path(sys.argv[1]); t = p.read_text()
 fence = "```markdown\n**Path:** Sometimes\n```\n"
-prose = "\n### What Happens\n\nA reviewer wrote **Path:** Sometimes in passing.\n\n"
+prose = "\n### What Happens\n\nA reviewer's answer, quoted:\n\n**Path:** Sometimes\n\n"
 p.write_text(t.replace("SURVIVOR-ONE\n", fence + prose + "SURVIVOR-ONE\n", 1))
 PY
-  [ "$(grep -c '\*\*Path:\*\* Sometimes' "$DOCS/KNOWN_ISSUES.md")" -eq 2 ] || false
+  # Both copies start their line, as a real field would; only their place keeps them out.
+  [ "$(grep -cx '\*\*Path:\*\* Sometimes' "$DOCS/KNOWN_ISSUES.md")" -eq 2 ] || false
   run python3 "$RM" check --docs "$DOCS"
   [ "$status" -eq 0 ]
 }
