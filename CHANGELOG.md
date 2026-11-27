@@ -82,9 +82,10 @@ here — the plugin manifest's version is the only record of them.
   each commit's message above its own patch, a merge's included, and its tests check each commit's
   block (KI-123, KI-124). It also checks every file each commit touched, so a change and its revert
   still stop it, refuses a reviewed commit off the branch's first-parent line, and no longer passes
-  `--diff-merges`, which Git before 2.31 lacks (KI-127). The last drift re-check runs `roadmap.py
-  check` (KI-125). The gate names a document fix made after the last pass, *Checked Against* accepts
-  a wording fix, and any other fix you ask for at the gate still needs another pass (KI-126).
+  `--diff-merges=first-parent`, a value Git before 2.31 rejects (KI-127). The last drift re-check
+  runs `roadmap.py check` (KI-125). The gate names a document fix made after the last pass, *Checked
+  Against* accepts a wording fix, and any other fix you ask for at the gate still needs another pass
+  (KI-126).
 
 ## [2.2.2] - 2026-11-25
 
