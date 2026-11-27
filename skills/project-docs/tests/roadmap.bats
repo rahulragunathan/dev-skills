@@ -1899,3 +1899,15 @@ sample() { sed -n '/^---$/,$p' "$(dirname "$RM")/$1-template.md"; }
   [ "$(sample ENHANCEMENTS | grep '^### ' | paste -sd '|' -)" \
     = '### What It Is|### Why It Matters|### Steps To Reproduce|### Notes For The Work' ]
 }
+
+@test "check reads a Path after the Where field, and still checks the reference" {
+  # Fails if a Path written after Where on one line goes unread, or breaks the Where field.
+  sed -i.bak '/^## KI-01/,/^SURVIVOR-ONE/s/^\*\*Where:\*\* \[docs\](\.)$/& · **Path:** Happy Path/' "$DOCS/KNOWN_ISSUES.md"
+  grep -qxF '**Where:** [docs](.) · **Path:** Happy Path' "$DOCS/KNOWN_ISSUES.md" || false
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  sed -i.bak 's/· \*\*Path:\*\* Happy Path$/· **Path:** Sometimes/' "$DOCS/KNOWN_ISSUES.md"
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"unknown Path: KI-01"* ]]
+}
