@@ -45,7 +45,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 
 ## 2. Phase start (plan approved)
 
-1. **Preflight before any phase-start mutation.** The blocks in this skill run under bash or zsh, so they avoid the constructs the two read differently. Replace angle-bracket placeholders before running them. Run from the repo root. Stop on any failed command.
+1. **Preflight before any phase-start mutation.** The blocks in this skill run under bash or zsh, so they avoid the constructs the two read differently. Replace angle-bracket placeholders before running them. Run from the repo root. Stop on any failed command. Resolve each ref to a commit once and act on that commit. Use compare-and-swap for each ref write or deletion.
 
    **Initial discovery.** Run this block once at phase start. Later sections load the recorded values from `docs/PHASE_RECORD.md`; they do not re-run discovery. `gh` must be installed and able to read the repository and its merge settings. Resolve the repository from `origin`, not an upstream setting.
 
@@ -84,13 +84,15 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    [ "$(git symbolic-ref --quiet --short HEAD)" = "$PHASE_BRANCH" ] || { echo "WRONG BRANCH — stop"; exit 1; }
    # The record is committed, its first table names this branch, and the branch changed it since
    # it forked: a reused branch name must not inherit an old phase's record.
-   RECORDED="$(git show HEAD:docs/PHASE_RECORD.md \
+   HEAD_SHA="$(git rev-parse --verify "refs/heads/$PHASE_BRANCH^{commit}")"
+   RECORDED="$(git show "${HEAD_SHA}:docs/PHASE_RECORD.md" \
      | python3 "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/phase-record.py" get PHASE_BRANCH)" || RECORDED=""
-   FORK="$(git merge-base "refs/remotes/origin/$DEFAULT_BRANCH" HEAD)" || { echo "NO FORK POINT — stop"; exit 1; }
-   CHANGED=0; git diff --quiet "$FORK" HEAD -- docs/PHASE_RECORD.md || CHANGED=$?   # 1 differs; more is an error
-   git diff --quiet HEAD -- docs/PHASE_RECORD.md && [ "$RECORDED" = "$PHASE_BRANCH" ] && [ "$CHANGED" -eq 1 ] \
+   FORK="$(git merge-base "refs/remotes/origin/$DEFAULT_BRANCH" "$HEAD_SHA")" || { echo "NO FORK POINT — stop"; exit 1; }
+   CHANGED=0; git diff --quiet "$FORK" "$HEAD_SHA" -- docs/PHASE_RECORD.md || CHANGED=$?   # 1 differs; more is an error
+   git diff --quiet "$HEAD_SHA" -- docs/PHASE_RECORD.md && [ "$RECORDED" = "$PHASE_BRANCH" ] && [ "$CHANGED" -eq 1 ] \
      || { echo "PHASE RECORD NOT COMMITTED ON $PHASE_BRANCH — stop"; exit 1; }
-   git push -u origin "$PHASE_BRANCH"
+   git push --force-with-lease="refs/heads/${PHASE_BRANCH}:" origin "${HEAD_SHA}:refs/heads/$PHASE_BRANCH"
+   git branch --set-upstream-to="origin/$PHASE_BRANCH" "$PHASE_BRANCH"
    ```
 
    **This is the only place a phase branch is created.**
@@ -647,30 +649,27 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
    # fence: prune
    set -euo pipefail
    git fetch --prune origin
-   BRANCHES="$(git for-each-ref --format='%(refname:lstrip=2) %(upstream:track)' refs/heads/)"   # lstrip, not short: short can prefix heads/ to an ambiguous name
-   CURRENT="$(git symbolic-ref --quiet HEAD || true)"; CURRENT="${CURRENT#refs/heads/}"   # stripped, as above
-   GONE=""   # space-separated: a branch name holds no space or pattern character
-   while read -r b track; do
-     if [ "$track" = "[gone]" ] && [ "$b" != "$CURRENT" ]; then GONE="$GONE $b"; fi
+   BRANCHES="$(git for-each-ref --format='%(refname:lstrip=2) %(objectname) %(upstream:track)' refs/heads/)"
+   CURRENT="$(git symbolic-ref --quiet HEAD || true)"
+   WORKTREES="$(git worktree list --porcelain)"
+   DEFAULT_SHA="$(git rev-parse --verify "refs/remotes/origin/$DEFAULT_BRANCH^{commit}")"
+   RETAINED=""
+   CONSIDERED=""
+   while read -r b sha track; do
+     [ "$track" = "[gone]" ] && [ "refs/heads/$b" != "$CURRENT" ] || continue
+     CONSIDERED=yes
+     if grep -Fxq "branch refs/heads/$b" <<< "$WORKTREES"; then
+       echo "RETAINED — $b is checked out in another worktree"
+     elif [ "$sha" = "${APPROVED_SHA:-}" ] || git merge-base --is-ancestor "$sha" "$DEFAULT_SHA"; then
+       git update-ref -d "refs/heads/$b" "$sha" && continue
+       echo "RETAINED — $b could not be deleted"
+     else
+       echo "RETAINED — $b holds commits absent from $DEFAULT_BRANCH"
+     fi
+     RETAINED=yes
    done <<< "$BRANCHES"
-   if [ -n "$GONE" ]; then
-     # Never -D except at the approved tip already confirmed present on the remote.
-     # That tip contains no unpushed commits; use -d for every other branch.
-     RETAINED=""
-     for b in $(printf '%s' "$GONE"); do
-       if [ "$(git rev-parse "refs/heads/$b")" = "${APPROVED_SHA:-}" ]; then
-         git branch -D "$b" || { echo "RETAINED — $b could not be deleted (see git's message above)"; RETAINED="$RETAINED $b"; }
-       elif git branch -d "$b"; then
-         :
-       else
-         echo "RETAINED — $b holds commits absent from ${DEFAULT_BRANCH:-the default branch}"
-         RETAINED="$RETAINED $b"
-       fi
-     done
-     [ -z "$RETAINED" ] || exit 1   # every gone branch was considered first
-   else
-     echo "Nothing to clean up."
-   fi
+   [ -n "$CONSIDERED" ] || echo "Nothing to clean up."
+   [ -z "$RETAINED" ] || exit 1
    ```
 
    Cleanup failures resume at step 6 and do not repeat release edits or merge.

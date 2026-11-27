@@ -307,6 +307,12 @@ class TriageTest(unittest.TestCase):
 
 
 class PhaseWorkflowPointerTest(unittest.TestCase):
+    def test_preflight_pins_reads_and_compares_ref_writes(self):
+        # Fails if the preflight omits either half of the ref rule.
+        preflight = flat(PW.read_text().split("**Preflight before any phase-start mutation.**")[1].split("**Initial discovery.**")[0])
+        self.assertIn("Resolve each ref to a commit once and act on that commit.", preflight)
+        self.assertIn("Use compare-and-swap for each ref write or deletion.", preflight)
+
     def test_phase_workflow_points_at_the_blocking_rule(self):
         # Fails if §3 step 5 stops linking external-review's blocking rule, or restates it.
         text = PW.read_text()

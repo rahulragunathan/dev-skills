@@ -390,7 +390,11 @@ SH
 # whose parents are upstream reports nothing though it carries unique work.
 # ---------------------------------------------------------------------------
 
-ki46_extract_cleanup() { extract_fence prune "$TEST_TMP/cleanup.sh" "$(dirname "$PUBLISH")/SKILL.md"; }
+ki46_extract_cleanup() {
+  export DEFAULT_BRANCH=main
+  git push -q origin main
+  extract_fence prune "$TEST_TMP/cleanup.sh" "$(dirname "$PUBLISH")/SKILL.md"
+}
 
 # Publish a branch, land it on main by $2, then orphan its upstream so the
 # prune fence considers it at all.
@@ -1332,4 +1336,72 @@ SH
   git config remote.origin.vcs ""
   run bash "$PUBLISH" --check-origin "$FETCH_URL" "$PUSH_URL"
   [ "$status" -eq 1 ]
+}
+
+move_at_git_action() {
+  export REAL_GIT="$(command -v git)"
+  export MOVED="$(git commit-tree HEAD^{tree} -p HEAD -m concurrent)"
+  mkdir -p "$TEST_TMP/bin"
+  cat > "$TEST_TMP/bin/git" <<'SH'
+#!/bin/sh
+case "$1 ${2:-}" in
+  "push "*|"branch -D"|"branch -d"|"update-ref -d")
+    "$REAL_GIT" update-ref refs/heads/feature/x "$MOVED" || exit 1 ;;
+esac
+exec "$REAL_GIT" "$@"
+SH
+  chmod +x "$TEST_TMP/bin/git"
+}
+
+@test "first push: a concurrent move cannot change the published commit" {
+  # Fails if origin receives the moved tip instead of the commit whose record passed.
+  first_push "$BATS_TEST_DIRNAME/../SKILL.md"
+  git switch -qc feature/x
+  write_record feature/x
+  git add docs && git commit -qm record
+  checked="$(git rev-parse HEAD)"
+  move_at_git_action
+  PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/push.sh"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$(git rev-parse feature/x)" = "$MOVED" ] || false
+  [ "$(git --git-dir="$FORK" rev-parse refs/heads/feature/x)" = "$checked" ] || false
+  [ "$(git rev-parse --symbolic-full-name 'feature/x@{u}')" = refs/remotes/origin/feature/x ]
+}
+
+@test "prune: a concurrent move retains the new tip" {
+  # Fails if deletion by name discards a commit made after approval or the ancestor check.
+  ki46_extract_cleanup
+  git switch -qc feature/x
+  ki46_orphan feature/x
+  move_at_git_action
+  for approved in "$TASK_SHA" "$MOVED"; do
+    git update-ref refs/heads/feature/x "$TASK_SHA"
+    APPROVED_SHA="$approved" PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/cleanup.sh"
+    [ "$(git rev-parse --verify --quiet refs/heads/feature/x)" = "$MOVED" ] || false
+    [ "$status" -ne 0 ] || false
+  done
+}
+
+@test "prune: ancestry is measured against the fetched default branch" {
+  # Fails if a local-only default-branch commit makes another branch eligible for deletion.
+  ki46_extract_cleanup
+  git switch -qc feature/x
+  git commit -q --allow-empty -m local
+  ki46_orphan feature/x
+  git merge -q --ff-only feature/x
+  run bash "$TEST_TMP/cleanup.sh"
+  [ "$status" -ne 0 ] || false
+  git rev-parse --verify refs/heads/feature/x
+}
+
+@test "first push: an existing remote branch keeps its tip" {
+  # Fails if a first push overwrites a branch created at origin after phase start.
+  first_push "$BATS_TEST_DIRNAME/../SKILL.md"
+  git push -q origin HEAD:refs/heads/feature/x
+  git switch -qc feature/x
+  write_record feature/x
+  git add docs && git commit -qm record
+  run bash "$TEST_TMP/push.sh"
+  [ "$status" -ne 0 ] || false
+  [ "$(git --git-dir="$FORK" rev-parse refs/heads/feature/x)" = "$TASK_SHA" ]
 }
