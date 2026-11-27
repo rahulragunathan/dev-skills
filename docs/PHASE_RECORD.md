@@ -48,4 +48,5 @@ the rule that lets a reviewer's confirmed fix to the release's bookkeeping docs 
 pass. You chose to fix the findings of passes 6 to 8; pass 9 found no blocking finding, and its
 findings were filed as KI-121 to KI-126. You then chose to fix KI-122 to KI-126. Pass 10 reviewed
 those fixes and found no blocking finding; its findings are filed as KI-127 to KI-132. You then
-chose to fix KI-127, the regressions in the post-review check.
+chose to fix KI-127, the regressions in the post-review check. Pass 11 reviewed that fix and found
+no blocking finding; its findings are filed as KI-133 to KI-136.

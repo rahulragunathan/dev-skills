@@ -355,6 +355,70 @@ Steps rewritten in pass 5 (gpt-6.2-astra:high) so the result is observable.
 
 ---
 
+<a id="ki-133"></a>
+
+## KI-133 — A merge after review can still defeat the post-review check
+
+**Severity:** High
+**Likelihood:** Rare
+**Path:** Unusual Input
+**Area:** Docs
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `PER_COMMIT="$(git --no-pager log -m --no-renames`
+
+### What Happens
+
+Merges into the phase branch after review are still handled unevenly. With `log.diffMerges=combined` set, the merge patch can omit a `MERGE_METHOD` change taken from the second parent. A side branch that changes a protected key and restores it shows no patch. A shallow clone can hide a side branch's change and revert. And `log -m` compares a merge with each parent, so merging an older bookkeeping branch falsely flags reviewed code.
+
+### Steps To Reproduce
+
+1. Mark a commit with `MERGE_METHOD=merge` reviewed; on a side branch change it to `squash`; merge with `--no-ff`.
+2. Set `log.diffMerges=combined` and run step 7.
+3. Both name checks pass and the patch omits the change. The check should show it, or refuse the merge.
+
+### Example Scenario
+
+A changed merge method, or an unreviewed change, passes the gate through a merge.
+
+### Notes For A Fix
+
+Refuse any merge commit in the range, which a bookkeeping follow-up never needs, and refuse a shallow repository. That replaces the per-parent listing and the merge patch.
+
+**Source:** gpt-6.2-astra:high (config: High, Rare; protected-key revert: Medium, Rare; shallow: Medium, Rare; false refusal: Medium, Rare) and gemini-4-neon-high (false refusal: Medium, Rare) — phase review pass 11, review-triage phase, 2026-11-27.
+
+---
+
+<a id="ki-134"></a>
+
+## KI-134 — The post-review check re-reads REVIEWED after checking it
+
+**Severity:** High
+**Likelihood:** Rare
+**Path:** External Interference
+**Area:** Docs
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `git merge-base --is-ancestor "$REVIEWED" "$INSPECTED"`
+
+### What Happens
+
+The fence resolves `REVIEWED` to a SHA only for the first-parent check. Every other command resolves the name again, so a branch or tag moved in between makes the range empty and the check pass.
+
+### Steps To Reproduce
+
+1. Set `REVIEWED` to a branch name at the reviewed commit, with an outside change committed after it.
+2. Move that branch to `HEAD` after the first-parent check.
+3. The check passes on an empty range. It should use the SHA it checked.
+
+### Example Scenario
+
+An unreviewed change passes because a ref moved.
+
+### Notes For A Fix
+
+Resolve `REVIEWED_SHA` first and use it in every command.
+
+**Source:** gpt-6.2-astra:high (High, Rare) and gemini-4-neon-high (Medium, Rare) — phase review pass 11, review-triage phase, 2026-11-27.
+
+---
+
 <a id="ki-49"></a>
 
 ## KI-49 — The headline tally mixes two skills
@@ -1077,6 +1141,38 @@ Qualify the sentence by successful coverage, and name the uncovered fix commits 
 
 ---
 
+<a id="ki-135"></a>
+
+## KI-135 — Signature output in the post-review log reads as a changed file
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Path:** Unusual Input
+**Area:** Docs
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `PER_COMMIT="$(git --no-pager log -m --no-renames`
+
+### What Happens
+
+With `log.showSignature=true`, `git log` prints signature lines even with `--format=`, and the allow-list loop reports them as changed files.
+
+### Steps To Reproduce
+
+1. Set `log.showSignature=true` and make one signed commit changing the phase record's `PR` row.
+2. Run step 7.
+3. It reports `CHANGED AFTER REVIEW`. It should pass.
+
+### Example Scenario
+
+A signed bookkeeping commit is refused.
+
+### Notes For A Fix
+
+Pass `--no-show-signature` to every log the fence parses.
+
+**Source:** gpt-6.2-astra:high — phase review pass 11, review-triage phase, 2026-11-27.
+
+---
+
 <a id="ki-114"></a>
 
 ## KI-114 — The blocking rule excludes plan mode, but plan notes open with Blocking
@@ -1462,3 +1558,35 @@ A later edit weakens a rule and the suite stays green.
 Assert the positive *Checked Against* source clause; assert the new form in loop step 1 and the CHANGELOG; use `([^0-9A-Za-z-]|$)` as the right boundary; put one fixture's ID in the message body.
 
 **Source:** gpt-6.2-astra:high and gemini-4-neon-high, both Low, Rare — phase review pass 10, review-triage phase, 2026-11-27.
+
+---
+
+<a id="ki-136"></a>
+
+## KI-136 — The merge-handling test pins strings across the whole skill
+
+**Severity:** Low
+**Likelihood:** Rare
+**Path:** Unusual Input
+**Area:** Tests
+**Where:** [test_skill_text.py](../tests/test_skill_text.py) — `self.assertNotIn("--diff-merges", pw)`
+
+### What Happens
+
+`test_the_post_review_log_states_its_merge_handling` refuses `--diff-merges` anywhere in phase-workflow, so an accurate mention in prose fails it, though the fence is unchanged. Its comment also says Git 2.30 lacks the option, where 2.30 rejects only the value `first-parent`.
+
+### Steps To Reproduce
+
+1. Mention `--diff-merges=off` in prose outside the fence.
+2. Run the test.
+3. It fails. It should read only the fence.
+
+### Example Scenario
+
+A correct doc edit turns the suite red.
+
+### Notes For A Fix
+
+Check the extracted fence, not the whole skill, and name the rejected value in the comment.
+
+**Source:** gpt-6.2-astra:high — phase review pass 11, review-triage phase, 2026-11-27.
