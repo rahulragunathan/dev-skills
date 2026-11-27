@@ -601,8 +601,8 @@ class BookkeepingFixTest(unittest.TestCase):
         rule = self.rule()
         for clause in ("whatever its blocking status",
                        "a pass whose only blocking rows are document fixes stops as if it had none",
-                       "in place of a failing test its note gives the claim that was wrong and the source you "
-                       "checked it against, and says when it landed after the last pass",
+                       "in place of a failing test its note gives the claim or wording it corrects and the source "
+                       "you checked it against, and says whether it landed after the last pass",
                        "On a pass the loop continues past, it is made with that pass's fixes, so the next pass "
                        "reviews it"):
             with self.subTest(clause=clause):
@@ -624,7 +624,8 @@ class BookkeepingFixTest(unittest.TestCase):
                        "fixes in the same commit",
                        "file the other deferred rows",
                        "its Commit and its evidence (a test, or *Checked Against* for a document fix)",
-                       "the source you checked it against, and whether it landed after the last pass",
+                       "the source you checked it against (for a wording fix, the reviewer's request), and whether it "
+                       "landed after the last pass",
                        "since every fix but a document fix needs another review pass",
                        "Stop when a pass has no blocking finding other than a document fix",
                        "Other deferred rows are filed before the gate; other blocking rows go to the gate",
@@ -637,6 +638,27 @@ class BookkeepingFixTest(unittest.TestCase):
                        "a document fix gives the source it was checked against instead"):
             with self.subTest(clause=clause):
                 self.assertIn(clause, pw)
+
+
+class PassNineTest(unittest.TestCase):
+    def setUp(self):
+        self.er = flat(ER.read_text())
+
+    def test_ki_126_the_rule_s_neighbours_fit_it(self):
+        # Fails if the gate still denies the unreviewed document fix, the loop asks when rather than
+        # whether a fix landed after the last pass, Checked Against demands a wrong claim from a
+        # wording fix, or loop step 4 sends a document fix the user asks for to another pass.
+        for clause in ("Nothing is fixed-and-unreviewed but a document fix made after the last pass, "
+                       "which the hand-off names with its *Checked Against*",
+                       "*Checked Against:* for a document fix, in place of *Scenarios*: the claim or wording "
+                       "it corrects",
+                       "Any other fix the user then asks for needs another pass"):
+            with self.subTest(clause=clause):
+                self.assertIn(clause, self.er)
+        for gone in ("says when it landed", "the claim that was wrong", "Nothing is fixed-and-unreviewed. ",
+                     "A fix the user then asks for"):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, self.er)
 
 
 if __name__ == "__main__":

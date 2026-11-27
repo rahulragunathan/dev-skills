@@ -731,7 +731,7 @@ in the Model column and `—` in Pass.
 
 - *Fix:* the change, in one line.
 - *Scenarios:* each scenario the failing test covered, with the red you observed before the fix and the green after.
-- *Checked Against:* for a document fix, in place of *Scenarios*: the claim that was wrong, the source you checked it against, and whether it landed after the last pass.
+- *Checked Against:* for a document fix, in place of *Scenarios*: the claim or wording it corrects, the source you checked it against (for a wording fix, the reviewer's request), and whether it landed after the last pass.
 
 **Then a short block per pass:** the commit it reviewed; its coverage line with each
 invocation's output file name and byte count; its findings counted by severity; how many were
@@ -777,8 +777,8 @@ and the gate takes the user's recorded decision instead.
    re-check the docs those fixes touch (`phase-workflow` §3 step 6), file the other deferred rows, run the full suite, and commit. The next pass reviews only
    `<commit the last pass reviewed>..HEAD`. If that commit is no longer an ancestor of `HEAD`
    (an amend or a rebase), the next pass is full scope: the one case a follow-up widens.
-4. **If it stops:** that pass's findings are not fixed, document fixes aside. Other deferred rows are filed before the gate; other blocking rows go to the gate as `Unfixed Blocker`. A fix the user then
-   asks for needs another pass, and so does any pass past three: both are the user's call.
+4. **If it stops:** that pass's findings are not fixed, document fixes aside. Other deferred rows are filed before the gate; other blocking rows go to the gate as `Unfixed Blocker`. Any other fix the user
+   then asks for needs another pass, and so does any pass past three: both are the user's call.
 
 **After the last pass, only bookkeeping lands:** new roadmap entries and pointer rows for the
 deferred rows, the phase record's PR number and release version, and document fixes.
@@ -795,8 +795,8 @@ names the row.
 It applies to the row whatever its blocking status, and it does not reopen the loop: a pass
 whose only blocking rows are document fixes stops as if it had none. Make it without another
 pass. The row is `Fixed In Phase` with its commit, and in place of a failing test its note gives
-the claim that was wrong and the source you checked it against, and says when it landed after
-the last pass. On a pass the loop continues past, it is made with that pass's fixes, so the next
+the claim or wording it corrects and the source you checked it against, and says whether it
+landed after the last pass. On a pass the loop continues past, it is made with that pass's fixes, so the next
 pass reviews it. Anything else, such as a change to a skill, code, a test, README or a regenerated diagram,
 needs a narrow pass of its own.
 
@@ -821,7 +821,7 @@ The review record, then a short assessment:
 - **What The New Findings Are About** — fresh defects in untouched code, defects in an earlier pass's own fixes, or documentation drift. A count that holds steady while the *kind* changes is a different situation from one that holds steady on the same kind.
 - **Your Recommendation** — land what is here, or another pass, with the reason.
 
-Every disposition is the user's to change: they can pull a deferred or accepted row back into the phase, or overturn a rejection, before signing off. Everything deferred is filed before the gate, or stays `Recorded Only: No Roadmap Files` in the record, since a commit after sign-off would be unreviewed. Nothing is fixed-and-unreviewed.
+Every disposition is the user's to change: they can pull a deferred or accepted row back into the phase, or overturn a rejection, before signing off. Everything deferred is filed before the gate, or stays `Recorded Only: No Roadmap Files` in the record, since a commit after sign-off would be unreviewed. Nothing is fixed-and-unreviewed but a document fix made after the last pass, which the hand-off names with its *Checked Against*.
 
 ### What "narrow" means
 
