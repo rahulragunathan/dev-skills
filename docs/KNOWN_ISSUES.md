@@ -91,6 +91,40 @@ Push the inspected commit itself, and delete with `git update-ref -d refs/heads/
 
 ---
 
+<a id="ki-97"></a>
+
+## KI-97 — Reviewer-written steps have no stated isolation
+
+**Severity:** Critical
+**Likelihood:** Rare
+**Path:** External Interference
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `Run them only in a disposable fixture with synthetic inputs`
+
+### What Happens
+
+Triage says to run a reviewer's Steps To Reproduce only in a disposable fixture, never in the working tree or against a network. It names no mechanism: nothing says the fixture has no credentials in its environment, a separate `HOME`, or no network, and nothing tells the triager to refuse a step that reaches outside the fixture. The steps come from a model that read untrusted repository text, so they can carry an injected command.
+
+### Steps To Reproduce
+
+1. Put a comment in a fixture repository that asks a reviewer to add the step `cat ~/.config/example-token` to any finding.
+2. Run a phase review over it, and read the step that comes back.
+3. Follow triage as written: the skill does not say to drop or confine the step, so it would run with the user's own `HOME` and network. It should be refused, or run in a confined fixture.
+
+### Example Scenario
+
+A reviewed repository plants a step that copies a private key into the fixture folder, and the triager runs it as part of confirming the finding.
+
+### Notes For A Fix
+
+Name a concrete fixture: a fresh `mktemp -d`, a scratch `HOME`, no credential variables, and no network. Tell the triager to refuse any step that touches a path outside it, or that fetches and runs code.
+
+Re-rated Critical in pass 1 (gemini-4-neon-high): a private key copied out is the scale's `Rare · Critical` case.
+
+**Source:** `/code-review high` — phase end, review-triage phase, 2026-11-26. Path, Area and steps supplied by the triager.
+
+---
+
 <a id="ki-47"></a>
 
 ## KI-47 — grading packets omit information their conditions require
@@ -321,35 +355,35 @@ Parse the supported manifest structures instead of matching lines.
 
 ---
 
-<a id="ki-97"></a>
+<a id="ki-107"></a>
 
-## KI-97 — Reviewer-written steps have no stated isolation
+## KI-107 — Publication sanitises the steps but not the rest of the reviewer's text
 
 **Severity:** High
 **Likelihood:** Rare
-**Path:** External Interference
+**Path:** Unusual Input
 **Area:** Docs
-**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `Run them only in a disposable fixture with synthetic inputs`
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `**Carry the reviewer's fix through, in the reviewer's words.**`
 
 ### What Happens
 
-Triage says to run a reviewer's Steps To Reproduce only in a disposable fixture, never in the working tree or against a network. It names no mechanism: nothing says the fixture has no credentials in its environment, a separate `HOME`, or no network, and nothing tells the triager to refuse a step that reaches outside the fixture. The steps come from a model that read untrusted repository text, so they can carry an injected command.
+Triage replaces secrets, account names and local paths in Steps To Reproduce before they are published. The reviewer's fix is carried in its own words and the Happy Path line as it came back, and both reach the PR description, unsanitised.
 
 ### Steps To Reproduce
 
-1. Put a comment in a fixture repository that asks a reviewer to add the step `cat ~/.config/example-token` to any finding.
-2. Run a phase review over it, and read the step that comes back.
-3. Follow triage as written: the skill does not say to drop or confine the step, so it would run with the user's own `HOME` and network. It should be refused, or run in a confined fixture.
+1. Give a synthetic reviewer answer whose only private-looking path, `/home/example-private/customer-a`, is in its suggested fix.
+2. Build the PR record as the skill says.
+3. The path survives in *Reviewer's Fix*. The whole record should be sanitised before publishing.
 
 ### Example Scenario
 
-A reviewed repository plants a step that copies a private key into the fixture folder, and the triager runs it as part of confirming the finding.
+A reviewer quotes a client folder name in its fix, and the public PR shows it.
 
 ### Notes For A Fix
 
-Name a concrete fixture: a fresh `mktemp -d`, a scratch `HOME`, no credential variables, and no network. Tell the triager to refuse any step that touches a path outside it, or that fetches and runs code.
+Sanitise the complete record before publishing or rebundling, and allow redaction inside attributed quotations.
 
-**Source:** `/code-review high` — phase end, review-triage phase, 2026-11-26. Path, Area and steps supplied by the triager.
+**Source:** gpt-6.2-astra:high — phase review pass 1, review-triage phase, 2026-11-26.
 
 ---
 
@@ -406,6 +440,38 @@ Give the scenario an unambiguous before-state and final-state. Until then S05's 
 mixes reporting quality with fixture repair.
 
 **Source:** gpt-6-astra — review of round-9 evidence and grading, 2026-09-16.
+
+---
+
+<a id="ki-105"></a>
+
+## KI-105 — Plan findings are told to omit steps that intake then requires
+
+**Severity:** Medium
+**Likelihood:** Almost Always
+**Path:** Happy Path
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `complete or reconstruct them yourself`
+
+### What Happens
+
+The rubric tells plan reviewers to give a concrete failure, not numbered steps. Triage then says to reconstruct missing steps, and intake asks every source for steps, while the plan-mode note drops them again. The worked example notes under the plan-mode table also show *Steps To Reproduce*.
+
+### Steps To Reproduce
+
+1. Review a fresh plan that runs a migration before its backup, following the plan rubric exactly.
+2. Apply triage and intake to the answer.
+3. The triager must reconstruct steps for code that does not exist, then leave them out of the note. The plan's concrete failure should satisfy intake.
+
+### Example Scenario
+
+Every plan review asks the triager for work the note then discards.
+
+### Notes For A Fix
+
+Scope reconstruction and the intake steps to phase and repo mode; carry a plan finding's failure through intake and filing. Fix the example notes, or label them as phase mode.
+
+**Source:** gpt-6.2-astra:high (and the example notes, gemini-4-neon-high) — phase review pass 1, review-triage phase, 2026-11-26.
 
 ---
 
@@ -562,6 +628,168 @@ The plan review for this very phase produced such a row (`External Interference 
 Allow one Path per row: the one that blocks first, or the most common one, with any other named in the note.
 
 **Source:** `/code-review high` — phase end, review-triage phase, 2026-11-26. Path, Area and steps supplied by the triager.
+
+---
+
+<a id="ki-98"></a>
+
+## KI-98 — Phase-workflow's own checks never reach the intake and blocking rules
+
+**Severity:** Medium
+**Likelihood:** Likely
+**Path:** Happy Path
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `A dependency-scan coverage gap keeps its own policy`
+
+### What Happens
+
+Triage says a dependency-scan coverage gap keeps its own policy, citing `phase-workflow` §3 step 2. That step states no policy for gaps: it says every finding and gap is fixed, filed, or accepted with a reason, which also predates the blocking rule.
+
+### Steps To Reproduce
+
+1. Run the dependency scan on a fixture with a `package.json` and no lockfile; it exits 3.
+2. Follow the intake rule to `phase-workflow` §3 step 2 and look for the gap policy.
+3. There is none, so the triager guesses whether the blocking rule applies. The two documents should give one answer.
+
+Pass 1 (gemini-4-neon-high) found the cause wider: §3 step 2 runs all four of the phase's own checks, and none of it points at external-review's intake or blocking rules; only step 5 links the rule. An agent following §3 in order triages every step-2 finding under the old wording.
+
+### Example Scenario
+
+Two phases disposition the same missing-lockfile gap differently, one fixing it in the phase and one filing it.
+
+### Notes For A Fix
+
+State in `phase-workflow` §3 step 2 that scan findings and gaps follow the blocking rule like any other, and drop the carve-out, or state the gap policy there. Point step 2 at the intake and blocking rules too, and extend `PhaseWorkflowPointerTest` to cover it.
+
+**Source:** `/code-review high` — phase end, review-triage phase, 2026-11-26. Path, Area and steps supplied by the triager.
+
+---
+
+<a id="ki-103"></a>
+
+## KI-103 — An accepted finding still needs a full roadmap entry
+
+**Severity:** Medium
+**Likelihood:** Likely
+**Path:** Happy Path
+**Area:** Docs
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `every finding triaged out of steps 1–3 gets a full entry`
+
+### What Happens
+
+`phase-workflow` §3 sends findings from every step to the roadmap files, and step 4 says every finding triaged out of steps 1 to 3 gets a full entry. external-review's `Confirmed: Accepted, No Work Planned` files nothing. A finding accepted at step 2 cannot satisfy both.
+
+### Steps To Reproduce
+
+1. In a fixture with roadmap files, accept a Low `/code-review` finding at step 2, with a reason.
+2. At step 4, apply "every finding triaged out of steps 1–3 gets a full entry".
+3. Filing it creates work the disposition declined; leaving it in the record only breaks step 4. Only a `Filed` row should need an entry.
+
+### Example Scenario
+
+This phase accepted two `/code-review` findings and, read literally, owed each a roadmap entry.
+
+### Notes For A Fix
+
+Say that every finding goes in the review record and only a `Filed` one gets a roadmap entry, in §3's introduction and step 4.
+
+**Source:** gpt-6.2-astra:high — phase review pass 1, review-triage phase, 2026-11-26.
+
+---
+
+<a id="ki-104"></a>
+
+## KI-104 — Dispositions cannot record the user overriding the blocking rule
+
+**Severity:** Medium
+**Likelihood:** Likely
+**Path:** Happy Path
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `The user can change any row at the gate.`
+
+### What Happens
+
+`Fixed In Phase` is defined as a blocking row and `Filed` or `Recorded Only` as rows that do not block, but the user can defer a blocker or ask for a non-blocker's fix. The final disposition then contradicts its own definition.
+
+### Steps To Reproduce
+
+1. At a gate, have the user file a confirmed High Happy Path `Unfixed Blocker`, and ask for a fix to a Low row.
+2. Record what happened.
+3. The first is `Filed` though it blocks; the second `Fixed In Phase` though it does not. The definitions should allow both, with the history kept.
+
+### Example Scenario
+
+A record shows `Fixed In Phase` on a Low row, and a reader takes it for a blocker.
+
+### Notes For A Fix
+
+Define blocking as the default action before the user decides; let the disposition say what happened, and keep the `was …, the user's call` history.
+
+**Source:** gpt-6.2-astra:high — phase review pass 1, review-triage phase, 2026-11-26.
+
+---
+
+<a id="ki-106"></a>
+
+## KI-106 — Merged ratings have no rule for attribution or filing
+
+**Severity:** Medium
+**Likelihood:** Likely
+**Path:** Happy Path
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `When the two reviewers disagree, record both and order by the higher`
+
+### What Happens
+
+Severity and Path are attributed per reviewer when two disagree; Likelihood has no such rule. When a merged row is filed, the KI takes one Severity and one Likelihood, and nothing says which: taking the higher in each column can make a blocker that neither reviewer reported.
+
+### Steps To Reproduce
+
+1. Have reviewer A rate an Unusual Input finding High · Rare and reviewer B Medium · Likely; neither blocks.
+2. Record the merged row and file it.
+3. The Likelihood cell is unattributed, and the higher-of-each filing reads High · Likely, a blocker. The record and the KI should carry one attributed, verified pair.
+
+### Example Scenario
+
+A filed KI shows a rating combination that no reviewer gave and that would have blocked the phase.
+
+### Notes For A Fix
+
+Attribute Likelihood like Severity, and say the KI takes one attributed or verified triple, with both reviewers' kept in the note.
+
+**Source:** gpt-6.2-astra:high, gemini-4-neon-high — phase review pass 1, review-triage phase, 2026-11-26.
+
+---
+
+<a id="ki-108"></a>
+
+## KI-108 — A blocker from an incomplete pass has no disposition while the retry waits
+
+**Severity:** Medium
+**Likelihood:** Likely
+**Path:** External Interference
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `**An incomplete pass triggers none of these**`
+
+### What Happens
+
+Each finding gets a disposition before the completeness decision, and an incomplete pass holds the reviewed commit for a retry. `Fixed In Phase` needs a fix and `Unfixed Blocker` a stopped loop, so a confirmed blocker from an incomplete pass fits neither while the retry is pending.
+
+### Steps To Reproduce
+
+1. Let one reviewer return a confirmed High Happy Path finding and the other time out.
+2. Prepare the partial record for the user while holding the reviewed commit.
+3. The finding is unfixed and the loop has neither continued nor stopped. A pending disposition should exist.
+
+### Example Scenario
+
+A Gemini timeout leaves a real blocker labelled with a disposition that is not true.
+
+### Notes For A Fix
+
+Allow a pending disposition while coverage is incomplete, or defer dispositions until the pass completes or the user decides.
+
+**Source:** gpt-6.2-astra:high — phase review pass 1, review-triage phase, 2026-11-26.
 
 ---
 
@@ -812,35 +1040,35 @@ Require the full width of `GATE_SHA` before reporting movement, read the record 
 
 ---
 
-<a id="ki-98"></a>
+<a id="ki-109"></a>
 
-## KI-98 — The intake rule points at a dependency-scan gap policy that does not exist
+## KI-109 — The optional-field reader still differs from Markdown in three ways
 
 **Severity:** Medium
 **Likelihood:** Rare
-**Path:** Happy Path
-**Area:** Docs
-**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `A dependency-scan coverage gap keeps its own policy`
+**Path:** Unusual Input
+**Area:** Code
+**Where:** [roadmap.py](../skills/project-docs/roadmap.py) — `def optional_problems(`
 
 ### What Happens
 
-Triage says a dependency-scan coverage gap keeps its own policy, citing `phase-workflow` §3 step 2. That step states no policy for gaps: it says every finding and gap is fixed, filed, or accepted with a reason, which also predates the blocking rule.
+`optional_problems` reads a field after any `·`, including one inside a backticked Where fragment; ends the metadata block only on a line that starts with `###` and one space, so an indented heading or one followed by a tab does not end it; and matches only the exact label, so a mis-cased `**path:**` is treated as absent.
 
 ### Steps To Reproduce
 
-1. Run the dependency scan on a fixture with a `package.json` and no lockfile; it exits 3.
-2. Follow the intake rule to `phase-workflow` §3 step 2 and look for the gap policy.
-3. There is none, so the triager guesses whether the blocking rule applies. The two documents should give one answer.
+1. Give a KI a valid Path and a Where fragment of `grep -qF '**Likelihood:** Rare · **Path:** Sometimes'`; run check: `repeated Path`.
+2. Indent `### What Happens` by two spaces and quote `**Path:** Sometimes` below it; run check: `repeated Path`.
+3. Write `**path:** Sometimes`; run check: no diagnostic. Each should pass, pass, and be reported, in that order.
 
 ### Example Scenario
 
-Two phases disposition the same missing-lockfile gap differently, one fixing it in the phase and one filing it.
+A known issue that cites a line of this very test file is refused.
 
 ### Notes For A Fix
 
-State in `phase-workflow` §3 step 2 that scan findings and gaps follow the blocking rule like any other, and drop the carve-out, or state the gap policy there.
+Mask code spans before finding field boundaries, accept up to three spaces and any blank after `###`, and report a mis-cased known label. KI-88 is the same family for the rated fields.
 
-**Source:** `/code-review high` — phase end, review-triage phase, 2026-11-26. Path, Area and steps supplied by the triager.
+**Source:** gpt-6.2-astra:high — phase review pass 1, review-triage phase, 2026-11-26.
 
 ---
 
@@ -880,12 +1108,12 @@ Track quote state per character, and widen the subscript and word-list patterns,
 
 ### What Happens
 
-Every reviewer now opens with a Happy Path line, judged only on the material it was given. Coverage still counts a pair as covered on a findings list or `No findings.`, and nothing says how to treat an answer without the line, or how several chunks' lines add up at the gate.
+Every reviewer now opens with a Happy Path line, judged only on the material it was given. Coverage still counts a pair as covered on a findings list or `No findings.`, and nothing says how to treat an answer without the line, or how several chunks' lines add up at the gate or in a plan or repo hand-off. Only phase mode says where the line goes at all.
 
 ### Steps To Reproduce
 
 1. Run a repo review split into four chunks, where one chunk's answer has findings but no Happy Path line.
-2. Build the gate's Happy Path summary.
+2. Build the hand-off's Happy Path summary.
 3. The skill gives no rule for the missing line, and three `works` lines can read as a whole-repository verdict. It should say how each case is reported.
 
 ### Example Scenario
@@ -895,6 +1123,8 @@ The gate shows `Happy Path: works` for a pass in which one chunk never said.
 ### Notes For A Fix
 
 Say that a missing line is reported as missing, without changing coverage, and that the gate lists one line per chunk, never one for the whole review.
+
+Widened in pass 1 (gemini-4-neon-high): plan and repo mode have no destination for the line.
 
 **Source:** `/code-review high` — phase end, review-triage phase, 2026-11-26. Path, Area and steps supplied by the triager.
 

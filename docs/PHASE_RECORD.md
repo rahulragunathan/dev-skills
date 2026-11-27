@@ -32,8 +32,8 @@ The plan lives outside the repository, in `~/.claude/plans/2026-11-26-triage-pla
 design beside it (`2026-11-26-triage-design.md`).
 
 What the phase did: `roadmap.py` checks optional Path and Area fields and accepts the old
-`Almost always` spelling; the KI and ENH templates gain Path, Area and Steps To Reproduce in title
-case; external-review's rubric, triage, tables, blocking rule, loop and gate follow; phase-workflow
+`Almost always` spelling; the KI template gains Path and Area fields and a Steps To Reproduce section, the ENH template an
+optional Steps To Reproduce, and both title-case headings; external-review's rubric, triage, tables, blocking rule, loop and gate follow; phase-workflow
 points at the rule. The phase-end `/code-review high` found eight findings, triaged under the new
 rule: none blocks, six are filed as KI-97 to KI-102, and two are accepted. ENH-40 records making
 Path required. `/security-review` could not run, since the session's working directory is not

@@ -262,8 +262,10 @@ the design-review rework, and its new rule needs its own pressure test.
 
 ### What It Is
 
-Move Path from `OPTIONAL_FIELDS` into the KI's required fields, and drop the `Almost always`
-spelling from `OLD_SPELLINGS`. Decide at the same time whether Area becomes required too.
+Make `check` report a missing Path, and drop the `Almost always` spelling from `OLD_SPELLINGS`.
+Do not move Path into `FIELDS`: that list also drives the ROADMAP mirror and the sort key, so
+every index would then fail with `rating mismatch: KI-nn Path`. Add the presence check beside
+`optional_problems` instead. Decide at the same time whether Area becomes required too.
 
 ### Why It Matters
 
@@ -275,9 +277,33 @@ Path, which is the one fact the blocking rule turns on.
 Do it only after every repository's entries carry a Path and the new spelling, which the fresh
 look across the repositories does; otherwise their `check` starts failing. The tests that guard
 the optional reading (`check accepts an entry without a Path or an Area`, `check accepts the old
-spelling of Almost Always`) change with it.
+spelling of Almost Always`) change with it; keep the one that proves Path stays out of the index.
+Corrected in pass 1 (gpt-6.2-astra:high, gemini-4-neon-high).
 
 **Source:** the user's decision during this phase's design, review-triage phase, 2026-11-26.
+
+---
+
+<a id="enh-41"></a>
+
+## ENH-41 — make the triage wording tests pin the whole policy
+
+**Priority:** Medium · **Effort:** ~2 hours
+**Where:** [test_skill_text.py](../tests/test_skill_text.py) — `def test_every_source_gets_the_fields_at_intake` · **Regression net:** `tests/test_skill_text.py`
+
+### What It Is
+
+Three wording tests stay green when the policy they name is broken: intake passes with the source names alone, the stop-rule test misses a loop that continues past pass 3, and the worked-table test leaves out the fourth row.
+
+### Why It Matters
+
+A wording test that passes on a broken rule is a false green on the very text agents follow.
+
+### Notes For The Work
+
+Assert the intake fields and who supplied them, the completeness and pass-3 conditions, and all four worked rows. Each needs a red first.
+
+**Source:** gpt-6.2-astra:high — phase review pass 1, review-triage phase, 2026-11-26.
 
 ---
 
@@ -336,3 +362,26 @@ Belongs with the fresh look at this plugin that follows the deep cut of the stan
 nuances people get wrong, such as which diff a review must use.
 
 **Source:** gpt-6.2-sol:max, gpt-6.2-astra:max — plan review, project-docs phase, 2026-11-20; more sites from gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, 2026-11-22.
+
+---
+
+<a id="enh-42"></a>
+
+## ENH-42 — finish title case in the ENH and UNK templates
+
+**Priority:** Low · **Effort:** ~1 hour
+**Where:** [ENHANCEMENTS-template.md](../skills/project-docs/ENHANCEMENTS-template.md) — `**Regression net:**` · **Regression net:** `skills/project-docs/tests/roadmap.bats`
+
+### What It Is
+
+The ENH template's `Regression net` label and the UNK template's `What settles it` heading are still in sentence case, and so is every existing entry that copied them.
+
+### Why It Matters
+
+This release put every other label and heading the user reads in title case.
+
+### Notes For The Work
+
+Rename both in the templates and in every repository's entries during the fresh look, and add them to the template heading test. Nothing parses either label.
+
+**Source:** gpt-6.2-astra:high — phase review pass 1, review-triage phase, 2026-11-26.

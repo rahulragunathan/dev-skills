@@ -37,7 +37,8 @@ here — the plugin manifest's version is the only record of them.
 
 ### Changed
 
-- **Title case for every label and fixed value shown to the user.** Likelihood's top level is
+- **Title case for the labels and fixed values external-review shows, and for the KI and ENH
+  section headings.** Likelihood's top level is
   `Almost Always`; `roadmap.py check` still accepts `Almost always` until Path becomes required.
   The dispositions are `Fixed In Phase`, `Unfixed Blocker`, `Filed KI-nn`,
   `Confirmed: Accepted, No Work Planned`, `Recorded Only: No Roadmap Files` and `Rejected`, and in
