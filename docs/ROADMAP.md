@@ -52,6 +52,7 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-84](KNOWN_ISSUES.md#ki-84) | A dependency file whose name differs only in case can overwrite another | Rare | High |
 | [KI-87](KNOWN_ISSUES.md#ki-87) | The dependency scan still misreads some manifests | Rare | High |
 | [KI-112](KNOWN_ISSUES.md#ki-112) | The reproduction fixture is named but not enforced | Rare | High |
+| [KI-127](KNOWN_ISSUES.md#ki-127) | The per-commit post-review log can hide a change the old patch showed | Rare | High |
 | [KI-49](KNOWN_ISSUES.md#ki-49) | The headline tally mixes two skills | Almost Always | Medium |
 | [KI-50](KNOWN_ISSUES.md#ki-50) | S05's fixture contradicts itself | Almost Always | Medium |
 | [KI-51](KNOWN_ISSUES.md#ki-51) | Rejected grading attempts are not retained | Likely | Medium |
@@ -74,6 +75,9 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-118](KNOWN_ISSUES.md#ki-118) | The blocking rule's section and step 5 still say the rest are filed | Rare | Medium |
 | [KI-119](KNOWN_ISSUES.md#ki-119) | The record's user-only edit rule blocks settling a retried row | Rare | Medium |
 | [KI-121](KNOWN_ISSUES.md#ki-121) | A document fix on an incomplete pass has no disposition while it waits | Rare | Medium |
+| [KI-128](KNOWN_ISSUES.md#ki-128) | A merge naming two findings can hide swapped fix commits | Rare | Medium |
+| [KI-129](KNOWN_ISSUES.md#ki-129) | A split finding has no rule for its ratings or its counts | Rare | Medium |
+| [KI-130](KNOWN_ISSUES.md#ki-130) | The gate's unreviewed-fix sentence ignores an accepted coverage gap | Rare | Medium |
 | [KI-114](KNOWN_ISSUES.md#ki-114) | The blocking rule excludes plan mode, but plan notes open with Blocking | Almost Always | Low |
 | [KI-115](KNOWN_ISSUES.md#ki-115) | UNK-04 asks for a decision already made | Almost Always | Low |
 | [KI-82](KNOWN_ISSUES.md#ki-82) | The zsh lint misses traps hidden by quotes and other subscripts | Likely | Low |
@@ -86,6 +90,8 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-91](KNOWN_ISSUES.md#ki-91) | Init and close can lose their caller's signal handler while registering their own | Rare | Low |
 | [KI-102](KNOWN_ISSUES.md#ki-102) | An empty Likelihood reads the Path line below it as its value | Rare | Low |
 | [KI-120](KNOWN_ISSUES.md#ki-120) | Two blocking sets of ratings leave a merged row's filing open | Rare | Low |
+| [KI-131](KNOWN_ISSUES.md#ki-131) | A document fix's after-the-last-pass answer goes stale after another pass | Rare | Low |
+| [KI-132](KNOWN_ISSUES.md#ki-132) | Four tests from the pass-9 fixes pass with their rule weakened | Rare | Low |
 
 ## Enhancements
 

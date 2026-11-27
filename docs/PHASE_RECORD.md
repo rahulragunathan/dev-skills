@@ -46,4 +46,5 @@ files to one casing and shape (KI-110). Passes 4 and 5 reviewed it; pass 4's one
 (the fixture's clone kept `origin`) was fixed, and the rest were filed. Passes 6 to 9 reviewed only
 the rule that lets a reviewer's confirmed fix to the release's bookkeeping docs land without another
 pass. You chose to fix the findings of passes 6 to 8; pass 9 found no blocking finding, and its
-findings were filed as KI-121 to KI-126. You then chose to fix KI-122 to KI-126.
+findings were filed as KI-121 to KI-126. You then chose to fix KI-122 to KI-126. Pass 10 reviewed
+those fixes and found no blocking finding; its findings are filed as KI-127 to KI-132.

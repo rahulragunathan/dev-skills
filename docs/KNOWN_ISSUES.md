@@ -355,6 +355,38 @@ Steps rewritten in pass 5 (gpt-6.2-astra:high) so the result is observable.
 
 ---
 
+<a id="ki-127"></a>
+
+## KI-127 — The per-commit post-review log can hide a change the old patch showed
+
+**Severity:** High
+**Likelihood:** Rare
+**Path:** Unusual Input
+**Area:** Docs
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `log -p --first-parent --diff-merges=first-parent`
+
+### What Happens
+
+KI-123's fix replaced the cumulative patch with a per-commit, path-limited, first-parent log. Three cases now slip by. When the reviewed commit is reachable only through a merge's second parent, the merge's first-parent patch can hide a changed `MERGE_METHOD`, though the endpoint path check allows the file. A commit to an outside file and its revert leave no trace, where the old name-only log listed them. And Git 2.30 rejects `--diff-merges`, so the gate stops.
+
+### Steps To Reproduce
+
+1. Commit a phase record with `MERGE_METHOD=merge`; on the branch change it to `squash` and mark that commit reviewed.
+2. From the earlier commit, merge with the reviewed commit as the second parent, keeping the first parent's record.
+3. Run step 7. The path check passes and the log shows no record change. The check should show that `squash` became `merge`.
+
+### Example Scenario
+
+A changed merge method reaches §4 unseen.
+
+### Notes For A Fix
+
+Print the endpoint patch as before, then the per-commit log. List every first-parent commit's file names, unrestricted, before any patch. Use `-m --first-parent -p`, which Git 2.30 accepts, and add the second-parent and revert fixtures to Bats.
+
+**Source:** gpt-6.2-astra:high (second parent: High, Rare; revert: Medium, Rare; Git 2.30: Medium, Rare) — phase review pass 10, review-triage phase, 2026-11-27.
+
+---
+
 <a id="ki-49"></a>
 
 ## KI-49 — The headline tally mixes two skills
@@ -981,6 +1013,102 @@ Let a document fix from an incomplete pass wait with no disposition until the pa
 
 ---
 
+<a id="ki-128"></a>
+
+## KI-128 — A merge naming two findings can hide swapped fix commits
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Path:** Unusual Input
+**Area:** Docs
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `a merge's message names every finding it brings in`
+
+### What Happens
+
+Two document fixes made on a side branch and merged show one combined patch under a merge message naming both findings. The record cites side-commit SHAs the log never prints, so a swapped attribution is still invisible.
+
+### Steps To Reproduce
+
+1. Make two side-branch commits to `CHANGELOG.md` naming F-07 and F-08, the reverse of what each asked.
+2. Merge them with a message naming both, and run step 7.
+3. One combined patch appears under both IDs. The check should tie each ID to its change.
+
+### Example Scenario
+
+KI-123's ambiguity returns for merged work.
+
+### Notes For A Fix
+
+Say which commit the record cites for a merged fix: the merge, with its message tying each ID to its change, or the side commit, shown with its own patch.
+
+**Source:** gpt-6.2-astra:high — phase review pass 10, review-triage phase, 2026-11-27.
+
+---
+
+<a id="ki-129"></a>
+
+## KI-129 — A split finding has no rule for its ratings or its counts
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Path:** Happy Path
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `The two rows are one finding in the pass's counts`
+
+### What Happens
+
+A split finding's rows take their own dispositions, but nothing says which ratings the non-document half takes, so it may block on a consequence the document fix removed. The trend's `Rows` column and the pass block's tallies cannot both count one finding with two rows.
+
+### Steps To Reproduce
+
+1. Split a High, Happy Path finding into a CHANGELOG fix and a test improvement.
+2. Give the second row its own disposition, then fill in the trend.
+3. Its ratings, and whether the trend says 1 or 2, are undefined. The rule should say.
+
+### Example Scenario
+
+Two triagers stop or continue the loop on the same finding.
+
+### Notes For A Fix
+
+Keep the reviewer's ratings for attribution, and let the verified ratings of each half decide its disposition. Count the trend by distinct base ID, and let disposition tallies count rows, noting the split.
+
+**Source:** gpt-6.2-astra:high (ratings: Unusual Input, Medium, Rare; Rows: Low, Rare) and gemini-4-neon-high (tallies: Unusual Input, Low, Rare) — phase review pass 10, review-triage phase, 2026-11-27.
+
+---
+
+<a id="ki-130"></a>
+
+## KI-130 — The gate's unreviewed-fix sentence ignores an accepted coverage gap
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Path:** External Interference
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `Nothing is fixed-and-unreviewed but a document fix`
+
+### What Happens
+
+When every reviewer of a follow-up pass fails and the user decides to land anyway, a code fix is unreviewed. The coverage section says so, while the gate sentence says only a document fix can be.
+
+### Steps To Reproduce
+
+1. Fix a pass-1 blocker, let every pass-2 reviewer fail on quota, and record the user's decision to land.
+2. Prepare the hand-off.
+3. The two statements contradict each other. The gate should name the uncovered fix commits.
+
+### Example Scenario
+
+The hand-off says two opposite things about the same commit.
+
+### Notes For A Fix
+
+Qualify the sentence by successful coverage, and name the uncovered fix commits beside the user's decision.
+
+**Source:** gpt-6.2-astra:high — phase review pass 10, review-triage phase, 2026-11-27.
+
+---
+
 <a id="ki-114"></a>
 
 ## KI-114 — The blocking rule excludes plan mode, but plan notes open with Blocking
@@ -1302,3 +1430,67 @@ Two agents file the same row with different ratings.
 Apply the Severity, then Likelihood, then Path order to the qualifying sets too. (The Path order itself is stated in the Path column rule.)
 
 **Source:** gemini-4-neon-high — phase review pass 5, review-triage phase, 2026-11-27.
+
+---
+
+<a id="ki-131"></a>
+
+## KI-131 — A document fix's after-the-last-pass answer goes stale after another pass
+
+**Severity:** Low
+**Likelihood:** Rare
+**Path:** Happy Path
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `and whether it landed after the last pass`
+
+### What Happens
+
+A document fix records that it landed after the last pass. If the user then reopens another row and a narrow pass reviews both, the note is wrong, and loop step 1 lets only the user change a row's evidence.
+
+### Steps To Reproduce
+
+1. Stop after a pass, apply document fix F-01, and record that it landed after the last pass.
+2. Reopen another row at the gate, fix it, and run a narrow pass covering both.
+3. F-01's note still says it is unreviewed. It should say which pass reviewed it.
+
+### Example Scenario
+
+The hand-off calls a reviewed fix unreviewed.
+
+### Notes For A Fix
+
+Record the fix commit and the first pass that reviewed it, and derive the answer at each gate.
+
+**Source:** gpt-6.2-astra:high — phase review pass 10, review-triage phase, 2026-11-27.
+
+---
+
+<a id="ki-132"></a>
+
+## KI-132 — Four tests from the pass-9 fixes pass with their rule weakened
+
+**Severity:** Low
+**Likelihood:** Rare
+**Path:** Happy Path
+**Area:** Tests
+**Where:** [test_skill_text.py](../tests/test_skill_text.py) — `def test_a_wording_fix_is_checked_against_a_source`
+
+### What Happens
+
+`test_a_wording_fix_is_checked_against_a_source` asserts the absence of a phrase that only an intermediate commit had. `test_the_users_change_reads_in_order_everywhere` checks only for old strings, so loop step 1 or the CHANGELOG can drop the new form. The Bats `commit_block` helper matches `F-07a` for `F-07`, and every fixture puts its ID in the subject, so a `%s` log format passes.
+
+### Steps To Reproduce
+
+1. Revert the external-review skill to `a641201` and run the wording-source test: it passes.
+2. Replace the form in loop step 1 with `<new> (was <old>)`: the order test passes.
+3. Name a fixture commit `F-07a` and call `commit_block F-07`: it matches. Each should fail.
+
+### Example Scenario
+
+A later edit weakens a rule and the suite stays green.
+
+### Notes For A Fix
+
+Assert the positive *Checked Against* source clause; assert the new form in loop step 1 and the CHANGELOG; use `([^0-9A-Za-z-]|$)` as the right boundary; put one fixture's ID in the message body.
+
+**Source:** gpt-6.2-astra:high and gemini-4-neon-high, both Low, Rare — phase review pass 10, review-triage phase, 2026-11-27.
