@@ -25,7 +25,7 @@ prepared. An
 item dropped rather than built moves to "Decisions taken and not taken". IDs are never
 reused. Nothing here looks backward — completed phases are CHANGELOG releases.
 
-**Last Updated**: 2026-11-26
+**Last Updated**: 2026-11-27
 
 ## Status
 
@@ -51,6 +51,7 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-77](KNOWN_ISSUES.md#ki-77) | A root lockfile covers every manifest below it | Rare | High |
 | [KI-84](KNOWN_ISSUES.md#ki-84) | A dependency file whose name differs only in case can overwrite another | Rare | High |
 | [KI-87](KNOWN_ISSUES.md#ki-87) | The dependency scan still misreads some manifests | Rare | High |
+| [KI-112](KNOWN_ISSUES.md#ki-112) | The reproduction fixture is named but not enforced | Rare | High |
 | [KI-49](KNOWN_ISSUES.md#ki-49) | The headline tally mixes two skills | Almost Always | Medium |
 | [KI-50](KNOWN_ISSUES.md#ki-50) | S05's fixture contradicts itself | Almost Always | Medium |
 | [KI-51](KNOWN_ISSUES.md#ki-51) | Rejected grading attempts are not retained | Likely | Medium |
@@ -67,6 +68,9 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-94](KNOWN_ISSUES.md#ki-94) | Report lines that start with a committed path can pass for findings | Rare | Medium |
 | [KI-95](KNOWN_ISSUES.md#ki-95) | Publish-record still reads a short hex answer as a moved head | Rare | Medium |
 | [KI-109](KNOWN_ISSUES.md#ki-109) | The optional-field reader still differs from Markdown in three ways | Rare | Medium |
+| [KI-113](KNOWN_ISSUES.md#ki-113) | A dependency coverage gap's prescribed fix is an upgrade | Rare | Medium |
+| [KI-114](KNOWN_ISSUES.md#ki-114) | The blocking rule excludes plan mode, but plan notes open with Blocking | Almost Always | Low |
+| [KI-115](KNOWN_ISSUES.md#ki-115) | Three older roadmap entries are out of date | Almost Always | Low |
 | [KI-82](KNOWN_ISSUES.md#ki-82) | The zsh lint misses traps hidden by quotes and other subscripts | Likely | Low |
 | [KI-44](KNOWN_ISSUES.md#ki-44) | A stale dispatch log gives a misleading replacement message | Rare | Low |
 | [KI-78](KNOWN_ISSUES.md#ki-78) | Index rows are not bound to their section | Rare | Low |
@@ -97,6 +101,7 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 | [ENH-41](ENHANCEMENTS.md#enh-41) | Make the triage wording tests pin the whole policy | Medium | ~2 hours |
 | [ENH-32](ENHANCEMENTS.md#enh-32) | Drop explanations of standard tool behaviour from the skills | Low | ~2 hours |
 | [ENH-39](ENHANCEMENTS.md#enh-39) | Make the tests pass 3 found weak fail for their named reason | Low | ~2 hours |
+| [ENH-43](ENHANCEMENTS.md#enh-43) | Make the roadmap-shape guards exact | Low | ~1 hour |
 
 ## Open Questions
 

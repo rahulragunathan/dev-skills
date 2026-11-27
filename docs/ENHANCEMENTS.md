@@ -293,7 +293,7 @@ Corrected in pass 1 (gpt-6.2-astra:high, gemini-4-neon-high).
 
 ### What It Is
 
-Three wording tests stay green when the policy they name is broken: intake passes with the source names alone, the stop-rule test misses a loop that continues past pass 3, and the worked-table test leaves out the fourth row.
+Six wording tests stay green when the policy they name is broken: intake passes with the source names alone, the stop-rule test misses a loop that continues past pass 3, the worked-table test leaves out the fourth row, nothing still asserts the empty list's `No findings.` since the opening-line test went, the Codex-loop state test passes with one failure branch's state write removed, and the plan-note test reads every keyed example in the skill, phase ones included.
 
 ### Why It Matters
 
@@ -301,9 +301,9 @@ A wording test that passes on a broken rule is a false green on the very text ag
 
 ### Notes For The Work
 
-Assert the intake fields and who supplied them, the completeness and pass-3 conditions, and all four worked rows. (The tracked-ID test went with the Happy Path line.) Each needs a red first.
+Assert the intake fields and who supplied them, the completeness and pass-3 conditions, and all four worked rows. Assert `No findings.` in the text sent to reviewers, run the Codex loop's failure branch against a fixture and read its state with `progress.sh`, and scope the plan-note test to the plan examples. (The tracked-ID test went with the Happy Path line.) Each needs a red first.
 
-**Source:** gpt-6.2-astra:high — phase review passes 1 and 2, review-triage phase, 2026-11-26.
+**Source:** gpt-6.2-astra:high — phase review passes 1, 2 and 4, review-triage phase, 2026-11-26 and 2026-11-27.
 
 ---
 
@@ -362,3 +362,26 @@ Belongs with the fresh look at this plugin that follows the deep cut of the stan
 nuances people get wrong, such as which diff a review must use.
 
 **Source:** gpt-6.2-sol:max, gpt-6.2-astra:max — plan review, project-docs phase, 2026-11-20; more sites from gpt-6.2-astra:max, gemini-4-argon-high — phase review pass 1, 2026-11-22.
+
+---
+
+<a id="enh-43"></a>
+
+## ENH-43 — Make the roadmap-shape guards exact
+
+**Priority:** Low · **Effort:** ~1 hour
+**Where:** [roadmap.bats](../skills/project-docs/tests/roadmap.bats) — `own_docs() {` · **Regression Net:** `skills/project-docs/tests/roadmap.bats`
+
+### What It Is
+
+The guards added for the casing sweep accept some malformed entries and reject some valid ones. The heading test accepts any subsequence, so a missing required heading passes, and reads a `###` line inside a code fence as a heading. The label test pools all three templates, so an ENH label in a KI passes, and its pattern skips labels with hyphens or apostrophes. The title test sees only an initial ASCII lower-case letter, so a title that starts with a code span passes.
+
+### Why It Matters
+
+A guard that passes a malformed entry is false evidence that the roadmap files are in shape.
+
+### Notes For The Work
+
+Compare each file against its own template, require the required sections, skip fenced blocks, widen the label pattern, and check the first visible word of a title. Each needs a red first.
+
+**Source:** gpt-6.2-astra:high, gemini-4-neon-high — phase review pass 4, review-triage phase, 2026-11-27.

@@ -321,6 +321,38 @@ Parse the supported manifest structures instead of matching lines.
 
 ---
 
+<a id="ki-112"></a>
+
+## KI-112 — The reproduction fixture is named but not enforced
+
+**Severity:** High
+**Likelihood:** Rare
+**Path:** Unusual Input
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `that one read of the repository is allowed`
+
+### What Happens
+
+Triage names a fixture for reviewer steps: a fresh folder, a scratch `HOME`, no credential variables, no network. None of these stops a child process a step starts from reading host files outside the folder, and nothing says how to cut the network or what to do when that is not possible.
+
+### Steps To Reproduce
+
+1. In a synthetic repository, take a finding whose steps run a repository test helper.
+2. Set up the fixture as triage step 2 says, and run the helper.
+3. Its child processes can still read any host file the user can, and reach the network. The step should run under enforced filesystem and network limits, or be verified statically instead.
+
+### Example Scenario
+
+A planted helper reads a token from the user's real config while the triager reproduces a finding.
+
+### Notes For A Fix
+
+Name an enforced sandbox for the whole process tree (for example `sandbox-exec` on macOS), and say that without one the triager verifies by reading, or reconstructs the steps synthetically, and records that choice. KI-97 named the fixture; this is the enforcement it left open.
+
+**Source:** gpt-6.2-astra:high — phase review pass 4, review-triage phase, 2026-11-27.
+
+---
+
 <a id="ki-49"></a>
 
 ## KI-49 — The headline tally mixes two skills
@@ -750,6 +782,102 @@ Steps rewritten in pass 2 (gpt-6.2-astra:high), so each case starts from a valid
 Case one's citation corrected in pass 3 (gpt-6.2-astra:high): it names the file that holds the fragment.
 
 **Source:** gpt-6.2-astra:high — phase review pass 1, review-triage phase, 2026-11-26.
+
+---
+
+<a id="ki-113"></a>
+
+## KI-113 — A dependency coverage gap's prescribed fix is an upgrade
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Path:** Happy Path
+**Area:** Docs
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `its fix is an upgrade`
+
+### What Happens
+
+§3 step 2 says a scan finding's fix is an upgrade. A coverage gap, such as a manifest with no lockfile, is not fixed by changing a version: the scan reports the same gap until its input exists.
+
+### Steps To Reproduce
+
+1. Give a fixture a manifest that declares a dependency and has no lockfile; the scan reports the gap.
+2. Change the declared version, as the step suggests, and scan again.
+3. The same gap is reported. The step should say a gap is fixed by supplying what the scanner says is missing, then rescanning.
+
+### Example Scenario
+
+A phase upgrades a package to close a gap, and the gate still shows the gap.
+
+### Notes For A Fix
+
+Separate the two: a vulnerability is fixed by an upgrade, a gap by the input the scanner names; both are rescanned before the row is `Fixed In Phase`.
+
+**Source:** gpt-6.2-astra:high — phase review pass 4, review-triage phase, 2026-11-27.
+
+---
+
+<a id="ki-114"></a>
+
+## KI-114 — The blocking rule excludes plan mode, but plan notes open with Blocking
+
+**Severity:** Low
+**Likelihood:** Almost Always
+**Path:** Happy Path
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `It applies in phase and repo mode`
+
+### What Happens
+
+Every keyed note opens with *Blocking* or *Non-Blocking* by the blocking rule, and in plan mode the word says whether the finding would block once built. The blocking rule's own section says it applies in phase and repo mode only.
+
+### Steps To Reproduce
+
+1. Write the keyed notes for a plan review with a confirmed High Happy Path finding.
+2. Look up the blocking rule to choose the opening word.
+3. The rule says it does not apply in plan mode. Its section should say it also sets the plan-mode note's opening word.
+
+### Example Scenario
+
+Two agents open the same plan note differently.
+
+### Notes For A Fix
+
+Say in the blocking rule's section that in plan mode it decides only the keyed note's opening word, not a disposition.
+
+**Source:** gemini-4-neon-high — phase review pass 4, review-triage phase, 2026-11-27.
+
+---
+
+<a id="ki-115"></a>
+
+## KI-115 — Three older roadmap entries are out of date
+
+**Severity:** Low
+**Likelihood:** Almost Always
+**Path:** Happy Path
+**Area:** Docs
+**Where:** [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) — `**What Settles It:** choose one reading`
+
+### What Happens
+
+UNK-04 still asks for a decision the plugin-fix design already made (a stated key bound); what remains is editing the S02 condition and re-grading. KI-51 points readers at ENH-24, which was closed. KI-39's title starts with the code span `print`, so its first visible word is lower case, and the title test does not see it.
+
+### Steps To Reproduce
+
+1. Pick up UNK-04 from ROADMAP and read *What Settles It*; compare with the design's decisions carried in.
+2. Follow KI-51's note to ENH-24; it is in neither ENHANCEMENTS nor ROADMAP.
+3. Read KI-39's title. Each entry should match the current state: UNK-04 as actionable work, KI-51 without the dead reference, KI-39's title starting with a capital.
+
+### Example Scenario
+
+A reader re-opens a settled decision.
+
+### Notes For A Fix
+
+Re-file UNK-04 as the remaining condition edit and re-grading, drop KI-51's ENH-24 reference, and retitle KI-39 ("Calling `print` with …"). Part of the fresh look.
+
+**Source:** gpt-6.2-astra:high — phase review pass 4, review-triage phase, 2026-11-27.
 
 ---
 
