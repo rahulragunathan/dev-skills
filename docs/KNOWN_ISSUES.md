@@ -949,6 +949,134 @@ Limit the user-only rule to rows of completed passes, and say a waiting row beco
 
 ---
 
+<a id="ki-121"></a>
+
+## KI-121 — A document fix on an incomplete pass has no disposition while it waits
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Path:** Unusual Input
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `While it waits, a confirmed blocking row`
+
+### What Happens
+
+The document-fix exception applies only on a complete pass. While an incomplete pass waits for its retry, a non-blocking document fix falls to the ordinary order and is filed. Retry settlement covers only the waiting `Unfixed Blocker` rows, so the filed row never becomes `Fixed In Phase`.
+
+### Steps To Reproduce
+
+1. On pass 1, let one reviewer time out and the other report a Low CHANGELOG correction that you verify and agree with.
+2. Apply the disposition order while the retry waits: the row is filed.
+3. Complete the retry and settle the pass. The row should wait and then be fixed, not filed.
+
+### Example Scenario
+
+A pass with a failed reviewer files a one-word release-note fix as a roadmap entry.
+
+### Notes For A Fix
+
+Let a document fix from an incomplete pass wait with no disposition until the pass completes, and widen retry settlement to every confirmed row of that pass. Distinct from KI-119, which is about the user-only edit rule.
+
+**Source:** gpt-6.2-astra:high (External Interference, Medium, Rare) and gemini-4-neon-high (Unusual Input, Medium, Rare) — phase review pass 9, review-triage phase, 2026-11-27.
+
+---
+
+<a id="ki-122"></a>
+
+## KI-122 — A document fix can mark a partly unfixed finding Fixed In Phase
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Path:** Unusual Input
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `with its commit, and in place of a failing test`
+
+### What Happens
+
+A finding can ask for the same correction in this release's CHANGELOG and in a skill. The CHANGELOG half is a document fix, and the rule then makes the row `Fixed In Phase`, while the skill half still needs a narrow pass.
+
+### Steps To Reproduce
+
+1. Confirm one finding that names a wrong command in both the CHANGELOG entry and the skill.
+2. Fix the CHANGELOG as a document fix and record the row `Fixed In Phase`.
+3. The skill still gives the wrong command. The row should show the open part.
+
+### Example Scenario
+
+A row reads as fixed at the gate while users still run the wrong command.
+
+### Notes For A Fix
+
+Make `Fixed In Phase` mean the whole finding is resolved. For a mixed finding, record the document edit and send the rest through the blocking rule and the loop.
+
+**Source:** gpt-6.2-astra:high — phase review pass 9, review-triage phase, 2026-11-27.
+
+---
+
+<a id="ki-123"></a>
+
+## KI-123 — The post-review check's log cannot show which commit made which correction
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Path:** Happy Path
+**Area:** Docs
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `name-only --format=`
+
+### What Happens
+
+The post-review check prints one cumulative patch and a log of messages with file names. Two document fixes in one file can name swapped findings and look correct. The log also lists no files for a merge commit and only the new path of a rename, unlike the `--no-renames` diff above it.
+
+### Steps To Reproduce
+
+1. After the last pass, commit a date fix under a message naming F-07 and a wording fix under one naming F-08, the reverse of what each finding asked.
+2. Run the post-review check.
+3. Both IDs show `CHANGELOG.md`, and the patch shows both edits. The check should show each commit's own patch.
+
+### Example Scenario
+
+A mis-attributed correction passes the gate unnoticed.
+
+### Notes For A Fix
+
+Print each commit's bookkeeping patch beside its message (`git log -p --first-parent -m --no-renames`), after the path check.
+
+**Source:** gpt-6.2-astra:high (Medium, Rare: attribution) and gemini-4-neon-high (Unusual Input, Low, Rare: merges and renames) — phase review pass 9, review-triage phase, 2026-11-27.
+
+---
+
+<a id="ki-125"></a>
+
+## KI-125 — The last drift re-check skips an existing entry a document fix re-rated
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Path:** Happy Path
+**Area:** Docs
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `confirm only that every filing`
+
+### What Happens
+
+After the last pass, step 6 confirms only that each new filing has matching ratings in its entry and its ROADMAP row. A document fix may re-rate an existing entry, and nothing then checks its pointer row or its place in the rating order.
+
+### Steps To Reproduce
+
+1. After the last pass, verify a finding that lowers KI-01 from Medium to Low, and edit only the entry.
+2. Run step 6 and the post-review check.
+3. The ROADMAP row still says Medium. Step 6 should run `roadmap.py check`.
+
+### Example Scenario
+
+The index and the entry disagree on a rating at sign-off.
+
+### Notes For A Fix
+
+Run `roadmap.py check` after the final batch whenever a document fix touched an existing entry or row.
+
+**Source:** gpt-6.2-astra:high — phase review pass 9, review-triage phase, 2026-11-27.
+
+---
+
 <a id="ki-114"></a>
 
 ## KI-114 — The blocking rule excludes plan mode, but plan notes open with Blocking
@@ -1033,6 +1161,38 @@ Re-file UNK-04 as the remaining condition edit and re-grading, and repoint the l
 Track quote state per character, and widen the subscript and word-list patterns, with fixtures for each.
 
 **Source:** gpt-6.2-astra:high, gemini-4-carbon-high — phase review pass 2, dependable-helpers phase, 2026-11-23.
+
+---
+
+<a id="ki-126"></a>
+
+## KI-126 — The document-fix rule's wording has four loose ends
+
+**Severity:** Low
+**Likelihood:** Likely
+**Path:** Happy Path
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `Nothing is fixed-and-unreviewed`
+
+### What Happens
+
+Four sentences around the rule still read as if it did not exist, or ask for the wrong thing. The gate says "Nothing is fixed-and-unreviewed", but a document fix lands after the last reviewed commit. The loop's note asks *when* a fix landed after the last pass, where the record asks *whether*. *Checked Against* asks for "the claim that was wrong", which a wording-only fix lacks. Loop step 4 still says any fix the user asks for at the gate needs another pass.
+
+### Steps To Reproduce
+
+1. Complete a pass whose only finding is a verified CHANGELOG wording fix, and apply it.
+2. Write its note and read the gate text.
+3. The note asks for a claim and a landing time that do not exist, and the gate denies the unreviewed commit. Each should fit the rule.
+
+### Example Scenario
+
+The hand-off states something false about the last commit.
+
+### Notes For A Fix
+
+Name corrections after the reviewed commit at the gate with their *Checked Against*; use "whether" in the loop and its test; ask for "the claim or wording"; qualify step 4's last sentence with "any other fix".
+
+**Source:** gpt-6.2-astra:high (gate: Low, Likely; when/whether and claim: Low, Rare) and gemini-4-neon-high (step 4: Unusual Input, Low, Rare) — phase review pass 9, review-triage phase, 2026-11-27.
 
 ---
 
@@ -1270,3 +1430,35 @@ Two agents file the same row with different ratings.
 Apply the Severity, then Likelihood, then Path order to the qualifying sets too. (The Path order itself is stated in the Path column rule.)
 
 **Source:** gemini-4-neon-high — phase review pass 5, review-triage phase, 2026-11-27.
+
+---
+
+<a id="ki-124"></a>
+
+## KI-124 — The post-review Bats test misses a log with no per-commit files or no lower bound
+
+**Severity:** Low
+**Likelihood:** Rare
+**Path:** Happy Path
+**Area:** Tests
+**Where:** [phase-git.bats](../skills/phase-workflow/tests/phase-git.bats) — `a CHANGELOG-only document fix passes and is shown`
+
+### What Happens
+
+The test asserts that `Document fix for F-07` appears and that `CHANGELOG.md` appears somewhere after it. The cumulative patch supplies that name, so a message-only log still passes. It also never asserts that the pre-review commit is absent, so dropping `$REVIEWED..` passes.
+
+### Steps To Reproduce
+
+1. Change the fence's log to print messages only, or to start at `$INSPECTED` alone.
+2. Run the test.
+3. It passes. It should fail.
+
+### Example Scenario
+
+A regression in the evidence the gate prints goes unseen.
+
+### Notes For A Fix
+
+Use two post-review commits and check each commit's block, and assert a unique pre-review marker is absent. Pairs with KI-123.
+
+**Source:** gpt-6.2-astra:high (no per-commit files) and gemini-4-neon-high (no lower bound), both Low, Rare — phase review pass 9, review-triage phase, 2026-11-27.

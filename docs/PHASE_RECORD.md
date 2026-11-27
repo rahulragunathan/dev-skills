@@ -39,10 +39,11 @@ rule: none blocks, six are filed as KI-97 to KI-102, and two are accepted. ENH-4
 Path required. `/security-review` could not run, since the session's working directory is not
 this repository.
 
-A follow-up on the same PR, after the first gate at `acce93a` and on your request, closed the
-policy gaps the review filed (KI-97 to KI-101, KI-103 to KI-108), removed the Happy Path line,
-opened each keyed note with Blocking or Non-Blocking and its Disposition, fixed KI-111, and
-brought the roadmap files to one casing and shape (KI-110). Passes 4 and 5 reviewed it; pass 4's
-one blocking finding (the fixture's clone kept `origin`) was fixed, and the rest were filed. Pass 6
-reviewed only the rule that lets a reviewer's confirmed fix to the release's bookkeeping docs land
-without another pass.
+A follow-up on the same PR, after the first gate at `acce93a` and on your request, closed the policy
+gaps the review filed (KI-97 to KI-101, KI-103 to KI-108), removed the Happy Path line, opened each
+keyed note with Blocking or Non-Blocking and its Disposition, fixed KI-111, and brought the roadmap
+files to one casing and shape (KI-110). Passes 4 and 5 reviewed it; pass 4's one blocking finding
+(the fixture's clone kept `origin`) was fixed, and the rest were filed. Passes 6 to 9 reviewed only
+the rule that lets a reviewer's confirmed fix to the release's bookkeeping docs land without another
+pass. You chose to fix the findings of passes 6 to 8; pass 9 found no blocking finding, and its
+findings were filed as KI-121 to KI-126.
