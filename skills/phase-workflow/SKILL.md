@@ -302,10 +302,10 @@ what remains expired.
 
 5. **External review loop:** `external-review` in `phase` mode (Codex + Gemini). [Its loop](../external-review/SKILL.md#the-loop) runs up to three passes without checking in, with its stop rule applied before any fix, and builds one [review record](../external-review/SKILL.md#the-phase-review-record) across them. Past three passes, or a fix after the loop stopped, is the user's call; a document fix is the exception.
    - **It runs after the docs pass**, including release preparation. Fold later phase fixes into that unpublished release and commit them before the next pass or gate. Each commit a pass reviews has a green full suite.
-   - Only a finding that [blocks the phase](../external-review/SKILL.md#the-blocking-rule) is fixed here; the rest are filed, and the user can pull any of them back in at the gate.
+   - Only a finding that [blocks the phase](../external-review/SKILL.md#the-blocking-rule), or a document fix, is fixed here; the rest are filed, and the user can pull any of them back in at the gate.
    - Build the record using `external-review`'s output contract and
      [coverage classification](../external-review/SKILL.md#coverage-classification).
-   - Every finding fixed here gets a failing test first, with its `Red:` line. Run step 3's check on those tests before the next pass, and again before the gate.
+   - Every finding fixed here gets a failing test first, with its `Red:` line; a document fix gives the source it was checked against instead. Run step 3's check on those tests before the next pass, and again before the gate.
 6. **Post-fix drift re-check — narrow, and inside the loop.** Step 5's fixes change code after step 4 declared the docs true, so each round of fixes re-checks what it touched before it is committed for the next pass: the docs and code comments the changed files invalidate, the CHANGELOG entries whose claims moved, and the diagrams if a module moved. That way the next pass reviews them. After the last pass, confirm only that every filing has both its full entry and its ROADMAP pointer row, with ratings that agree, where the roadmap files exist; anything else this finds needs a narrow pass (`external-review`'s [loop](../external-review/SKILL.md#the-loop)). Report what you found, not only what you fixed.
 7. **Present to the user and stop** — the phase gate.
    - **Include the review record** from step 5 in the hand-off, and put it in the PR description once the gate's checks below have passed — never in a per-phase review file in the repository. It exists so the user can see every finding and pull any deferred or accepted one back into this phase before signing off.
@@ -342,9 +342,11 @@ what remains expired.
      [ -z "$OTHER" ] || { printf 'CHANGED AFTER REVIEW — needs a narrow pass:\n%s\n' "$OTHER"; exit 1; }
      git --no-pager diff --no-ext-diff --no-textconv --no-renames --ignore-submodules=none "$REVIEWED" "$INSPECTED" -- \
        CHANGELOG.md docs/PHASE_RECORD.md docs/ROADMAP.md docs/KNOWN_ISSUES.md docs/ENHANCEMENTS.md docs/OPEN_QUESTIONS.md
+     # Each commit's message, so a document fix can be matched to the finding it names.
+     git --no-pager log --format='--- %h%n%B' "$REVIEWED..$INSPECTED"
      ```
 
-     Read that patch: a filing and a fix can share a file, and every change must be a filing, the record's `PR` and `Release` rows, or a document fix to this release's `CHANGELOG.md` entry, the roadmap files or the phase record that names its finding. Anything else, a changed phase-record value such as `MERGE_METHOD` included, needs a narrow pass first. Name what landed in the hand-off.
+     Read that patch: a filing and a fix can share a file, and every change must be a filing, the record's `PR` and `Release` rows, or a document fix to this release's `CHANGELOG.md` entry, the roadmap files or the phase record whose commit, in the log the check prints, names its finding. Anything else, a changed phase-record value such as `MERGE_METHOD` included, needs a narrow pass first. Name what landed in the hand-off.
    - **Confirm `docs/PHASE_RECORD.md` is current, and do not take that on trust.** Step 4 brought
      it current, but steps 5 to 7 and every re-gate come after step 4. Check, in the committed
      file, that its first table (this repository's phase) names this PR and the release the

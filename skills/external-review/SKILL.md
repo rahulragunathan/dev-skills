@@ -698,10 +698,10 @@ A valid finding that is out of scope for this phase is **kept, not dropped**. Wh
 
 **Every row lands in exactly one** — that is what guarantees nothing is quietly lost.
 
-**Disposition order.** First verify, which sets the Verdict; a row that fails verification is `Rejected`. For a confirmed row, apply [the blocking rule](#the-blocking-rule): a blocking row is `Fixed In Phase`, or `Unfixed Blocker` when the loop has stopped or an incomplete pass awaits its retry; a row that does not block is filed, or `Recorded Only: No Roadmap Files`, or `Confirmed: Accepted, No Work Planned`. In repo mode there is no loop, so a blocking row is `Unfixed Blocker` and the user decides. The user can change any row at the gate; write it as `<new> — was <old>, the user's call`. The definitions below describe the default a row gets from the rule, not a row the user changed.
+**Disposition order.** First verify, which sets the Verdict; a row that fails verification is `Rejected`. For a confirmed row, apply [the blocking rule](#the-blocking-rule): a blocking row is `Fixed In Phase`, or `Unfixed Blocker` when the loop has stopped or an incomplete pass awaits its retry; a row that does not block is filed, or `Recorded Only: No Roadmap Files`, or `Confirmed: Accepted, No Work Planned`. A document fix is the exception: it is `Fixed In Phase` whether or not it blocks, and whether or not the loop has stopped ([the loop](#the-loop)). In repo mode there is no loop, so a blocking row is `Unfixed Blocker` and the user decides. The user can change any row at the gate; write it as `<new> — was <old>, the user's call`. The definitions below describe the default a row gets from the rule, not a row the user changed.
 
 - `Fixed In Phase` — a blocking row, fixed on the branch, with a failing test written first, or a document fix, which has its own evidence ([below](#the-loop)).
-- `Unfixed Blocker` — *not fixed.* A blocking row that waits for the user: from the pass the loop stopped on, from an incomplete pass whose retry is pending, or from a repo review, which has no loop. The loop stops before fixing its last pass's findings, since each fix needs another review pass, so the row reaches the gate unfixed and the user decides: fix it, which costs another pass, or file it.
+- `Unfixed Blocker` — *not fixed.* A blocking row that waits for the user: from the pass the loop stopped on, from an incomplete pass whose retry is pending, or from a repo review, which has no loop. The loop stops before fixing its last pass's findings, since every fix but a document fix needs another review pass, so the row reaches the gate unfixed and the user decides: fix it, which costs another pass, or file it.
 - `Filed …` — valid and not blocking, filed through `project-docs` as a rated entry with its ROADMAP pointer row. Only where the repository has all four roadmap files; run `roadmap.py check` after filing, and fix any drift it reports. A `docs/ROADMAP.md` of another shape is the project's own document, not consent to file.
 - `Confirmed: Accepted, No Work Planned` — valid, and accepted as it is: nothing will be built and nothing is filed. Its note says why.
 - `Recorded Only: No Roadmap Files` — valid and not blocking, in a repository without the four roadmap files, which the skills never create unasked. The review record is where it stays.
@@ -731,6 +731,7 @@ in the Model column and `—` in Pass.
 
 - *Fix:* the change, in one line.
 - *Scenarios:* each scenario the failing test covered, with the red you observed before the fix and the green after.
+- *Checked Against:* for a document fix, in place of *Scenarios*: the claim that was wrong and the source you checked it against.
 
 **Then a short block per pass:** the commit it reviewed; its coverage line with each
 invocation's output file name and byte count; its findings counted by severity; how many were
@@ -765,19 +766,18 @@ and the gate takes the user's recorded decision instead.
    a fix, its Commit and test evidence.
 2. **Apply the stop rule before fixing anything, and only to a complete pass.** Count verified
    findings only; `Rejected` rows do not count. Stop after pass 3. Stop when a pass has no blocking
-   finding ([the blocking rule](#the-blocking-rule)): its other rows are filed, no row would be
-   `Fixed In Phase` except by a document fix, and the next pass would review an empty diff. **An incomplete pass triggers none of these**: re-run its failed pairs
+   finding other than a document fix ([the blocking rule](#the-blocking-rule)): its document fixes
+   are made, its other rows are filed, and nothing is left for a next pass to review. **An incomplete pass triggers none of these**: re-run its failed pairs
    once their reviewer can answer, or take it to the user, and keep the reviewed commit where it
    was. While it waits, a confirmed blocking row from it is `Unfixed Blocker`. When the retry
    completes, those rows are settled as for any complete pass, and that is not a change by the
    user: the loop continues or stops as usual. It never ends the loop on its own — see
    [Coverage classification](#coverage-classification).
-3. **If the loop continues:** fix the blocking rows, each with a failing test first,
+3. **If the loop continues:** fix the blocking rows, each with a failing test first, make its document fixes in the same commit,
    re-check the docs those fixes touch (`phase-workflow` §3 step 6), file the deferred rows, run the full suite, and commit. The next pass reviews only
    `<commit the last pass reviewed>..HEAD`. If that commit is no longer an ancestor of `HEAD`
    (an amend or a rebase), the next pass is full scope: the one case a follow-up widens.
-4. **If it stops:** that pass's findings are not fixed, document fixes aside. Deferred rows are filed before the gate;
-   blocking rows go to the gate as `Unfixed Blocker`. A fix the user then
+4. **If it stops:** that pass's findings are not fixed, document fixes aside. Other deferred rows are filed before the gate; other blocking rows go to the gate as `Unfixed Blocker`. A fix the user then
    asks for needs another pass, and so does any pass past three: both are the user's call.
 
 **After the last pass, only bookkeeping lands:** new roadmap entries and pointer rows for the
@@ -786,16 +786,18 @@ deferred rows, the phase record's PR number and release version, and document fi
 **A document fix** is a change to this release's `CHANGELOG.md` entry, the roadmap files or the
 phase record that one reviewer finding asks for, and that you verify and agree with: its
 wording, facts, links, counts, dates, steps, or an entry's ratings. It never closes or deletes an
-entry, changes what an entry covers, or changes a value the workflow reads, which is every
-phase-record key except `PR` and `Release`, such as `MERGE_METHOD`; those need a narrow pass.
+entry, changes what an entry covers, or changes a value the workflow reads: the phase-record keys
+set at phase start, `ORIGIN_URL`, `ORIGIN_PUSH_URL`, `REPO`, `DEFAULT_BRANCH`, `PHASE_BRANCH` and
+`MERGE_METHOD`; those need a narrow pass. (`PR` and `Release` change as ordinary bookkeeping.)
 Nothing lands as a document fix without the finding that asked for it, and its commit message
 names the row.
 
 It applies to the row whatever its blocking status, and it does not reopen the loop: a pass
 whose only blocking rows are document fixes stops as if it had none. Make it without another
 pass. The row is `Fixed In Phase` with its commit, and in place of a failing test its note gives
-the claim that was wrong, the source you checked it against, and that it landed after the last
-pass. Anything else, such as a change to a skill, code, a test, README or a regenerated diagram,
+the claim that was wrong and the source you checked it against, and says when it landed after
+the last pass. On a pass the loop continues past, it is made with that pass's fixes, so the next
+pass reviews it. Anything else, such as a change to a skill, code, a test, README or a regenerated diagram,
 needs a narrow pass of its own.
 
 At the gate, run `phase-workflow`'s post-review check (§3 step 7): it lists both sides of every

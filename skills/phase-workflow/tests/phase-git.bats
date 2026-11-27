@@ -612,11 +612,13 @@ after_review() {
   git add CHANGELOG.md && git commit -qm changelog
   reviewed="$(git rev-parse HEAD)"
   printf '## [1.0.0]\n\n- corrected claim\n' > CHANGELOG.md
-  git commit -qam "fix the claim"
+  git commit -qam "Document fix for F-07: the claim"
   after_review "$reviewed"
   run bash "$TEST_TMP/after.sh"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"corrected claim"* ]]
+  [[ "$output" == *"corrected claim"* ]] || false
+  # The commit message must be shown, so the reader can check it names its finding.
+  [[ "$output" == *"Document fix for F-07"* ]]
 }
 
 @test "origin check: accepts a bare user over each ssh spelling" {

@@ -575,25 +575,48 @@ class BookkeepingFixTest(unittest.TestCase):
         # entry or change a value the workflow reads.
         rule = self.rule()
         for clause in ("this release's `CHANGELOG.md` entry", "or an entry's ratings",
-                       "It never closes or deletes an entry", "such as `MERGE_METHOD`"):
+                       "It never closes or deletes an entry, changes what an entry covers, or changes a value "
+                       "the workflow reads: the phase-record keys set at phase start",
+                       "`DEFAULT_BRANCH`, `PHASE_BRANCH` and `MERGE_METHOD`; those need a narrow pass"):
             with self.subTest(clause=clause):
                 self.assertIn(clause, rule)
         with self.subTest("patch check"):
             self.assertIn("a document fix to this release's `CHANGELOG.md` entry, the roadmap files or the "
-                          "phase record that names its finding", flat(PW.read_text()))
+                          "phase record whose commit, in the log the check prints, names its finding", flat(PW.read_text()))
 
     def test_a_document_fix_fits_the_loop(self):
         # Fails if a document fix's blocking status, its effect on the stop rule, or its evidence in
         # place of a failing test is left unstated, or the stop rule and Fixed In Phase contradict it.
         er = flat(ER.read_text())
         rule = self.rule()
-        for clause in ("whatever its blocking status", "does not reopen the loop", "in place of a failing test"):
+        for clause in ("whatever its blocking status",
+                       "a pass whose only blocking rows are document fixes stops as if it had none",
+                       "in place of a failing test its note gives the claim that was wrong and the source you "
+                       "checked it against"):
             with self.subTest(clause=clause):
                 self.assertIn(clause, rule)
         with self.subTest("definition"):
             self.assertIn("with a failing test written first, or a document fix, which has its own evidence", er)
         with self.subTest("stop rule"):
             self.assertIn("that pass's findings are not fixed, document fixes aside", er)
+
+    def test_the_adjacent_rules_carry_the_exception(self):
+        # Fails if the disposition order, Unfixed Blocker, the stop rule, the record's fixed-row
+        # evidence or phase-workflow's step 5 still contradict the document-fix exception.
+        er = flat(ER.read_text())
+        pw = flat(PW.read_text())
+        for clause in ("A document fix is the exception: it is `Fixed In Phase` whether or not it blocks",
+                       "since every fix but a document fix needs another review pass",
+                       "Stop when a pass has no blocking finding other than a document fix",
+                       "Other deferred rows are filed before the gate; other blocking rows go to the gate",
+                       "make its document fixes in the same commit",
+                       "*Checked Against:* for a document fix, in place of *Scenarios*"):
+            with self.subTest(clause=clause):
+                self.assertIn(clause, er)
+        for clause in ("Only a finding that [blocks the phase](../external-review/SKILL.md#the-blocking-rule), or a document fix, is fixed here",
+                       "a document fix gives the source it was checked against instead"):
+            with self.subTest(clause=clause):
+                self.assertIn(clause, pw)
 
 
 if __name__ == "__main__":
