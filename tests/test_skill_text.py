@@ -351,5 +351,18 @@ class TriagePassOneTest(unittest.TestCase):
         self.assertIn("For a `Partly` row, your verified ratings of the confirmed part decide", rule)
 
 
+class TriagePassTwoTest(unittest.TestCase):
+    """Blocking findings from the phase's second external review pass."""
+
+    def test_merged_partly_rows_use_verified_ratings(self):
+        # Fails if the disagreement rule still lets a reviewer's disproved ratings block a
+        # merged Partly row.
+        rule = flat(section(ER.read_text(), "### The blocking rule"))
+        with self.subTest("confirmed only"):
+            self.assertIn("A `Confirmed` merged row blocks only if one reviewer's three ratings block", rule)
+        with self.subTest("partly"):
+            self.assertIn("a `Partly` merged row is decided by your verified ratings alone", rule)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -664,7 +664,7 @@ A confirmed finding blocks the phase when its Severity is Critical or High, **an
 
 It applies in phase and repo mode, to every row whose Verdict is `Confirmed` or `Partly`, whatever its source, regressions this phase introduced included. For a `Partly` row, your verified ratings of the confirmed part decide; the reviewer's own stay in the row for attribution. A blocking row is fixed in the phase; the rest are filed, and the user can pull any of them back in at the gate.
 
-**When reviewers disagree, judge each reviewer's own Severity, Path and Likelihood.** A merged row blocks only if one reviewer's three ratings block, or your own verified ratings do, and then the commentary says why. Never combine one reviewer's ratings with another's: a High from one and a Happy Path from the other do not make a blocker.
+**When reviewers disagree, judge each reviewer's own Severity, Path and Likelihood.** A `Confirmed` merged row blocks only if one reviewer's three ratings block, or your own verified ratings do, and then the commentary says why; a `Partly` merged row is decided by your verified ratings alone, as above. Never combine one reviewer's ratings with another's: a High from one and a Happy Path from the other do not make a blocker.
 
 | Severity | Path | Likelihood | Blocks |
 | --- | --- | --- | --- |

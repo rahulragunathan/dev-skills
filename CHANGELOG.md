@@ -19,7 +19,8 @@ here — the plugin manifest's version is the only record of them.
   what kind of file holds it: `Code`, `Docs` or `Tests`. external-review's shared rubric asks for
   both, with Severity and Likelihood, in every mode; phase and repo mode add numbered steps from
   a fresh fixture, and plan mode a concrete failure. Each reviewer opens with
-  `Happy Path: works` or `Happy Path: broken (findings N, M)`, and still reports every Path.
+  `Happy Path: works` or `Happy Path: broken (findings N, M)`, naming an already-tracked break as
+  `tracked KI-nn`, and still reports every Path.
 - **The blocking rule.** A confirmed Critical or High finding blocks a phase when it is on the
   Happy Path, or Likely or Almost Always. Only those are fixed in the phase; the rest are filed,
   and the user can pull any of them back in at the gate. Each reviewer's ratings are judged on
