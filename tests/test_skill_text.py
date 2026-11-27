@@ -680,7 +680,9 @@ class PassNineTest(unittest.TestCase):
         # Fails if the log relies on a newer git's default merge diff, or a merge can bring in a
         # document fix whose finding no message names.
         pw = flat(PW.read_text())
-        self.assertIn("log -p --first-parent --diff-merges=first-parent", pw)
+        # KI-127: --diff-merges needs Git 2.31; `-m --first-parent` gives the same patch on 2.30.
+        self.assertIn("log -p -m --first-parent", pw)
+        self.assertNotIn("--diff-merges", pw)
         self.assertIn("a merge's message names every finding it brings in", pw)
 
     def test_a_wording_fix_is_checked_against_a_source(self):

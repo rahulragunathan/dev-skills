@@ -52,7 +52,6 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-84](KNOWN_ISSUES.md#ki-84) | A dependency file whose name differs only in case can overwrite another | Rare | High |
 | [KI-87](KNOWN_ISSUES.md#ki-87) | The dependency scan still misreads some manifests | Rare | High |
 | [KI-112](KNOWN_ISSUES.md#ki-112) | The reproduction fixture is named but not enforced | Rare | High |
-| [KI-127](KNOWN_ISSUES.md#ki-127) | The per-commit post-review log can hide a change the old patch showed | Rare | High |
 | [KI-49](KNOWN_ISSUES.md#ki-49) | The headline tally mixes two skills | Almost Always | Medium |
 | [KI-50](KNOWN_ISSUES.md#ki-50) | S05's fixture contradicts itself | Almost Always | Medium |
 | [KI-51](KNOWN_ISSUES.md#ki-51) | Rejected grading attempts are not retained | Likely | Medium |

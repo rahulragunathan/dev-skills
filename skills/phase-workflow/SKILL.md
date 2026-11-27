@@ -329,20 +329,29 @@ what remains expired.
      INSPECTED="$(git rev-parse --verify HEAD)"   # the gate below must find this same head
      echo "Inspected: $INSPECTED — set INSPECTED to this in the gate block"
      git merge-base --is-ancestor "$REVIEWED" "$INSPECTED" || { echo "REVIEWED COMMIT REWRITTEN — run a full pass"; exit 1; }
-     # --no-renames lists both sides of a move, so a file cannot arrive under an allowed name.
+     # The per-commit patches below add up to the change only along the branch's own line.
+     REVIEWED_SHA="$(git rev-parse --verify "$REVIEWED^{commit}")"
+     # Read whole, not piped into grep -q: an early exit there fails the pipeline under pipefail.
+     LINE="$(git rev-list --first-parent "$INSPECTED")" || { echo "CANNOT LIST THE BRANCH'S LINE — stop"; exit 1; }
+     grep -qx "$REVIEWED_SHA" <<< "$LINE" \
+       || { echo "REVIEWED COMMIT IS NOT ON THE BRANCH'S FIRST-PARENT LINE — needs a narrow pass"; exit 1; }
+     # --no-renames lists both sides of a move, so a file cannot arrive under an allowed name. The
+     # endpoint diff and each commit's own files are both checked, so a change and its revert count.
      CHANGED="$(git --no-pager diff --no-ext-diff --no-renames --ignore-submodules=none --name-only "$REVIEWED" "$INSPECTED")" \
        || { echo "CANNOT LIST THE CHANGES SINCE REVIEW — stop"; exit 1; }
+     PER_COMMIT="$(git --no-pager log -m --first-parent --no-renames --ignore-submodules=none --name-only --format= "$REVIEWED..$INSPECTED")" \
+       || { echo "CANNOT LIST EACH COMMIT'S FILES — stop"; exit 1; }
      OTHER=""
      while IFS= read -r f; do
        case "$f" in
          ''|CHANGELOG.md|docs/PHASE_RECORD.md|docs/ROADMAP.md|docs/KNOWN_ISSUES.md|docs/ENHANCEMENTS.md|docs/OPEN_QUESTIONS.md) ;;
          *) OTHER="$OTHER  $f"$'\n' ;;
        esac
-     done <<< "$CHANGED"
+     done <<< "$CHANGED"$'\n'"$PER_COMMIT"
      [ -z "$OTHER" ] || { printf 'CHANGED AFTER REVIEW — needs a narrow pass:\n%s\n' "$OTHER"; exit 1; }
      # Each commit's message above its own patch, so each change can be matched to the finding its commit
      # names. A merge shows its change against the branch, and the merged side's commits are skipped.
-     git --no-pager log -p --first-parent --diff-merges=first-parent --no-ext-diff --no-textconv --no-renames --ignore-submodules=none \
+     git --no-pager log -p -m --first-parent --no-ext-diff --no-textconv --no-renames --ignore-submodules=none \
        --format='=== %h%n%B' "$REVIEWED..$INSPECTED" -- \
        CHANGELOG.md docs/PHASE_RECORD.md docs/ROADMAP.md docs/KNOWN_ISSUES.md docs/ENHANCEMENTS.md docs/OPEN_QUESTIONS.md
      ```

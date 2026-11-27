@@ -803,7 +803,8 @@ pass reviews it. Anything else, such as a change to a skill, code, a test, READM
 needs a narrow pass of its own.
 
 At the gate, run `phase-workflow`'s post-review check (§3 step 7): it lists both sides of every
-change since the reviewed commit, refuses anything outside the bookkeeping files, and prints
+change since the reviewed commit and every file each commit touched, refuses anything outside
+the bookkeeping files or a reviewed commit off the branch's first-parent line, and prints
 each commit's patch under its message, read in full because a filing and a fix can share one
 file. The hand-off names what landed.
 

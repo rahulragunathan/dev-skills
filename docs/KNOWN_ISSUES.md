@@ -355,38 +355,6 @@ Steps rewritten in pass 5 (gpt-6.2-astra:high) so the result is observable.
 
 ---
 
-<a id="ki-127"></a>
-
-## KI-127 — The per-commit post-review log can hide a change the old patch showed
-
-**Severity:** High
-**Likelihood:** Rare
-**Path:** Unusual Input
-**Area:** Docs
-**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `log -p --first-parent --diff-merges=first-parent`
-
-### What Happens
-
-KI-123's fix replaced the cumulative patch with a per-commit, path-limited, first-parent log. Three cases now slip by. When the reviewed commit is reachable only through a merge's second parent, the merge's first-parent patch can hide a changed `MERGE_METHOD`, though the endpoint path check allows the file. A commit to an outside file and its revert leave no trace, where the old name-only log listed them. And Git 2.30 rejects `--diff-merges`, so the gate stops.
-
-### Steps To Reproduce
-
-1. Commit a phase record with `MERGE_METHOD=merge`; on the branch change it to `squash` and mark that commit reviewed.
-2. From the earlier commit, merge with the reviewed commit as the second parent, keeping the first parent's record.
-3. Run step 7. The path check passes and the log shows no record change. The check should show that `squash` became `merge`.
-
-### Example Scenario
-
-A changed merge method reaches §4 unseen.
-
-### Notes For A Fix
-
-Print the endpoint patch as before, then the per-commit log. List every first-parent commit's file names, unrestricted, before any patch. Use `-m --first-parent -p`, which Git 2.30 accepts, and add the second-parent and revert fixtures to Bats.
-
-**Source:** gpt-6.2-astra:high (second parent: High, Rare; revert: Medium, Rare; Git 2.30: Medium, Rare) — phase review pass 10, review-triage phase, 2026-11-27.
-
----
-
 <a id="ki-49"></a>
 
 ## KI-49 — The headline tally mixes two skills

@@ -665,6 +665,37 @@ commit_block() {
   [[ "$output" != *"side-branch commit"* ]]
 }
 
+@test "after review: a reviewed commit off the first-parent line stops the check" {
+  # Fails if a reviewed commit reachable only through a merge's second parent lets a changed
+  # MERGE_METHOD through, since the merge's first-parent patch hides the change (KI-127).
+  mkdir -p docs && printf '| `MERGE_METHOD` | `merge` |\n' > docs/PHASE_RECORD.md
+  git add docs && git commit -qm record
+  git switch -qc reviewed-line
+  printf '| `MERGE_METHOD` | `squash` |\n' > docs/PHASE_RECORD.md
+  git commit -qam "squash"
+  reviewed="$(git rev-parse HEAD)"
+  git switch -q -
+  git merge -q --no-ff -s ours reviewed-line -m "Merge for F-01"
+  after_review "$reviewed"
+  run bash "$TEST_TMP/after.sh"
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$output" == *"FIRST-PARENT"* ]]
+}
+
+@test "after review: a change and its revert outside the bookkeeping set still stop the check" {
+  # Fails if a post-review commit to an outside file, reverted later, leaves no trace (KI-127).
+  reviewed="$(git rev-parse HEAD)"
+  [ ! -e helper.py ] || false   # the file must be new, so the revert leaves no net change
+  printf 'x = 1\n' > helper.py && git add helper.py && git commit -qm "add helper"
+  git rm -q helper.py && git commit -qm "revert helper"
+  printf '## [1.0.0]\n\n- fixed claim\n' > CHANGELOG.md
+  git add CHANGELOG.md && git commit -qm "Document fix for F-07: the claim"
+  after_review "$reviewed"
+  run bash "$TEST_TMP/after.sh"
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$output" == *"CHANGED AFTER REVIEW"*"helper.py"* ]]
+}
+
 @test "origin check: accepts a bare user over each ssh spelling" {
   # Fails if git+ssh:// or ssh+git:// with a plain user name is taken for a credential.
   for url in "git+ssh://git@example.invalid/r.git" "ssh+git://git@example.invalid/r.git" "ssh://git@example.invalid:22/r.git"; do
