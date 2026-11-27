@@ -20,12 +20,13 @@ here — the plugin manifest's version is the only record of them.
   both, with Severity and Likelihood, in every mode; phase and repo mode add numbered steps from
   a fresh fixture, and plan mode a concrete failure. Reviewers report every
   finding, on any Path.
-- **The blocking rule.** A confirmed Critical or High finding blocks a phase when it is on the
-  Happy Path, or Likely or Almost Always. Only those are fixed in the phase; the rest are filed,
-  and the user can pull any of them back in at the gate. Each reviewer's ratings are judged on
-  their own, never mixed. The review loop now stops on a pass with no blocking finding, and the
-  gate shows a Steps To Reproduce summary grouped by Path and a trend table with each pass's
-  blocking count.
+- **The blocking rule.** A confirmed Critical or High finding blocks a phase when it is on the Happy
+  Path, or Likely or Almost Always. Only those are fixed in the phase, with one exception, a
+  reviewer's document fix to the release's bookkeeping (below); the rest are filed, and the user can
+  pull any of them back in at the gate. Each reviewer's ratings are judged on their own, never
+  mixed. The review loop now stops on a pass with no blocking finding, or whose only blocking
+  findings are document fixes, and the gate shows a Steps To Reproduce summary grouped by Path and a
+  trend table with each pass's blocking count.
 - **Steps are evidence, not commands.** Triage runs them only in a fresh `mktemp -d` folder
   with a scratch `HOME`, no credential variables and no network, refuses a step that reaches
   outside it or fetches and runs code, and reconstructs steps where needed and says so. The whole
