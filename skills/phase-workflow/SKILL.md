@@ -300,7 +300,7 @@ This matters most where re-gathering is expensive — fresh subagents, paid API 
 because that cost is exactly what tempts a skip. Say in the hand-off what was re-gathered and
 what remains expired.
 
-5. **External review loop:** `external-review` in `phase` mode (Codex + Gemini). [Its loop](../external-review/SKILL.md#the-loop) runs up to three passes without checking in, with its stop rule applied before any fix, and builds one [review record](../external-review/SKILL.md#the-phase-review-record) across them. Past three passes, or a fix after the loop stopped, is the user's call.
+5. **External review loop:** `external-review` in `phase` mode (Codex + Gemini). [Its loop](../external-review/SKILL.md#the-loop) runs up to three passes without checking in, with its stop rule applied before any fix, and builds one [review record](../external-review/SKILL.md#the-phase-review-record) across them. Past three passes, or a fix after the loop stopped, is the user's call; a document fix is the exception.
    - **It runs after the docs pass**, including release preparation. Fold later phase fixes into that unpublished release and commit them before the next pass or gate. Each commit a pass reviews has a green full suite.
    - Only a finding that [blocks the phase](../external-review/SKILL.md#the-blocking-rule) is fixed here; the rest are filed, and the user can pull any of them back in at the gate.
    - Build the record using `external-review`'s output contract and
@@ -320,7 +320,7 @@ what remains expired.
      `origin/<branch>` and local `HEAD` are the same commit, so this is exact rather than a
      convenience. Sign-off binds to that head; an edit afterwards moves it and means re-requesting
      review on the new one.
-   - **Before marking the PR ready, check what landed after review**, and run the full suite on `HEAD`. Only bookkeeping may follow the last pass: new roadmap entries with their pointer rows, the phase record's `PR` and `Release` rows, and the document fixes to `CHANGELOG.md`, the roadmap files and the phase record that external-review's [loop](../external-review/SKILL.md#the-loop) allows. Check the paths first, then read the patch of those files only:
+   - **Before marking the PR ready, check what landed after review**, and run the full suite on `HEAD`. Only bookkeeping may follow the last pass: new roadmap entries with their pointer rows, the phase record's `PR` and `Release` rows, and the document fixes to this release's `CHANGELOG.md` entry, the roadmap files and the phase record that external-review's [loop](../external-review/SKILL.md#the-loop) allows. Check the paths first, then read the patch of those files only:
 
      ```bash
      # fence: after-review
@@ -344,7 +344,7 @@ what remains expired.
        CHANGELOG.md docs/PHASE_RECORD.md docs/ROADMAP.md docs/KNOWN_ISSUES.md docs/ENHANCEMENTS.md docs/OPEN_QUESTIONS.md
      ```
 
-     Read that patch: a filing and a fix can share a file, and every change must be a filing, the record's `PR` and `Release` rows, or a reviewer's document fix you verified and agree with. Anything else needs a narrow pass first. Name what landed in the hand-off.
+     Read that patch: a filing and a fix can share a file, and every change must be a filing, the record's `PR` and `Release` rows, or a document fix to this release's `CHANGELOG.md` entry, the roadmap files or the phase record that names its finding. Anything else, a changed phase-record value such as `MERGE_METHOD` included, needs a narrow pass first. Name what landed in the hand-off.
    - **Confirm `docs/PHASE_RECORD.md` is current, and do not take that on trust.** Step 4 brought
      it current, but steps 5 to 7 and every re-gate come after step 4. Check, in the committed
      file, that its first table (this repository's phase) names this PR and the release the

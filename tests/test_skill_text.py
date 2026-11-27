@@ -546,16 +546,54 @@ class PassFourTest(unittest.TestCase):
 class BookkeepingFixTest(unittest.TestCase):
     """Document fixes to the release's bookkeeping files land after the last pass without another."""
 
+    def rule(self):
+        text = flat(ER.read_text())
+        start = text.index("**After the last pass, only bookkeeping lands:**")
+        return text[start:text.index("### What the user sees at the gate", start)]
+
     def test_confirmed_document_fixes_need_no_pass(self):
-        # Fails if a confirmed reviewer fix to CHANGELOG, the roadmap files or the phase record still
-        # needs a narrow pass, or phase-workflow's post-review rule does not allow it.
+        # Fails if a confirmed reviewer fix to the bookkeeping files still needs a narrow pass, or
+        # phase-workflow's post-review rule does not allow it.
+        rule = self.rule()
+        self.assertIn("Make it without another pass", rule)
+        pw = flat(PW.read_text())
+        self.assertIn("and the document fixes to this release's `CHANGELOG.md` entry, the roadmap files and "
+                      "the phase record that external-review's", pw)
+
+    def test_a_document_fix_is_tied_to_a_verified_finding(self):
+        # Fails if a document fix may land without the reviewer finding that asked for it, without
+        # the triager verifying and agreeing, or without its commit naming the row.
+        rule = self.rule()
+        for clause in ("that one reviewer finding asks for, and that you verify and agree with",
+                       "Nothing lands as a document fix without the finding that asked for it",
+                       "its commit message names the row"):
+            with self.subTest(clause=clause):
+                self.assertIn(clause, rule)
+
+    def test_a_document_fix_has_bounds(self):
+        # Fails if the rule stops limiting CHANGELOG to this release, or lets a document fix close an
+        # entry or change a value the workflow reads.
+        rule = self.rule()
+        for clause in ("this release's `CHANGELOG.md` entry", "or an entry's ratings",
+                       "It never closes or deletes an entry", "such as `MERGE_METHOD`"):
+            with self.subTest(clause=clause):
+                self.assertIn(clause, rule)
+        with self.subTest("patch check"):
+            self.assertIn("a document fix to this release's `CHANGELOG.md` entry, the roadmap files or the "
+                          "phase record that names its finding", flat(PW.read_text()))
+
+    def test_a_document_fix_fits_the_loop(self):
+        # Fails if a document fix's blocking status, its effect on the stop rule, or its evidence in
+        # place of a failing test is left unstated, or the stop rule and Fixed In Phase contradict it.
         er = flat(ER.read_text())
-        with self.subTest("external-review"):
-            self.assertIn("document fixes a reviewer found in the release's bookkeeping files", er)
-            self.assertIn("Make them without another pass", er)
-        with self.subTest("phase-workflow"):
-            self.assertIn("and the document fixes to `CHANGELOG.md`, the roadmap files and the phase record "
-                          "that external-review's", flat(PW.read_text()))
+        rule = self.rule()
+        for clause in ("whatever its blocking status", "does not reopen the loop", "in place of a failing test"):
+            with self.subTest(clause=clause):
+                self.assertIn(clause, rule)
+        with self.subTest("definition"):
+            self.assertIn("with a failing test written first, or a document fix, which has its own evidence", er)
+        with self.subTest("stop rule"):
+            self.assertIn("that pass's findings are not fixed, document fixes aside", er)
 
 
 if __name__ == "__main__":
