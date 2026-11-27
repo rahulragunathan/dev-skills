@@ -58,6 +58,9 @@ for out in "$dir"/*_p"$pass"_c*.txt "$dir"/*_p"$pass"_c*.part "$dir"/*_p"$pass"_
       # Only an attempt that left nothing else, such as an unavailable rung, is reported from here.
       base="${out%.state}"
       [ -e "$base.txt" ] || [ -e "$base.part" ] || [ -e "$base.partial" ] && continue
+      if superseded "$name"; then say_superseded; continue; fi
+      # A rung that left only its state is old news once another rung of the chunk answered.
+      for f in "$dir/${reviewer}"_*_p"$pass"_"$chunk"_*.txt; do [ -s "$f" ] && continue 2; done
       echo "$reviewer $chunk: ${state:-unknown}"; continue ;;
     *.partial)
       if superseded "$name"; then

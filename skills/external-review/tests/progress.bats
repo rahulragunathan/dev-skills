@@ -166,3 +166,21 @@ age() { touch -t "$(date -v-"$2"M +%Y%m%d%H%M.%S)" "$1"; }
   [[ "$output" == *"codex c1 a1: superseded by a later attempt"* ]] || { echo "$output"; false; }
   [[ "$output" != *"running"* ]]
 }
+
+@test "an unavailable rung's state is not reported beside the rung that answered" {
+  # Fails if a rung that left only a `.state` is reported once another rung of the chunk answered.
+  echo unavailable > "$TEST_TMP/codex_phase_p1_c1_a1_sol_high.state"
+  printf 'ok\n' > "$TEST_TMP/codex_phase_p1_c1_a1_m_high.txt"
+  run bash "$PROGRESS" "$TEST_TMP" 1
+  [[ "$output" == *"codex c1: done, 3 bytes"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"unavailable"* ]] || { echo "$output"; false; }
+}
+
+@test "an earlier failed attempt's state is superseded by a later attempt" {
+  # Fails if a failed attempt that left only a `.state` is reported as failed once a later attempt exists.
+  echo failed > "$TEST_TMP/codex_phase_p1_c1_a1_m_high.state"
+  printf 'ok\n' > "$TEST_TMP/codex_phase_p1_c1_a2_m_high.txt"
+  run bash "$PROGRESS" "$TEST_TMP" 1
+  [[ "$output" == *"codex c1 a1: superseded by a later attempt"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"codex c1: failed"* ]] || { echo "$output"; false; }
+}

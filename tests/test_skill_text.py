@@ -259,10 +259,12 @@ class TriageTest(unittest.TestCase):
 
     def test_note_labels_are_title_case(self):
         # Fails if a keyed-note label or a gate heading is in sentence case, or an old label remains.
-        for label in ("*When It Fires:*", "*What Happens:*", "*Steps To Reproduce*",
-                      "*Reviewer's Fix:*", "*Commentary:*"):
+        for label in ("*When It Fires:*", "*What Happens:*", "*Reviewer's Fix:*", "*Commentary:*"):
             with self.subTest(present=label):
                 self.assertIn(label, self.text)
+        with self.subTest(present="*Steps To Reproduce*"):
+            self.assertIn("then *When It Fires*, *What Happens*, *Steps To Reproduce*, "
+                          "*Reviewer's Fix* and *Commentary*", flat(self.text))
         for old in ("*When it fires", "*What happens", "*Reviewer's fix", "*Explanation"):
             with self.subTest(absent=old):
                 self.assertNotIn(old, self.text)
@@ -368,7 +370,6 @@ class FollowUpTest(unittest.TestCase):
         gate = section(ER.read_text(), "### What the user sees at the gate")
         self.assertIn("| Pass | Rows | Blocking | Outcome |", gate)
 
-
     def test_keyed_notes_open_with_blocking_and_disposition(self):
         # Fails if an example note does not open with the bare word Blocking or Non-Blocking and
         # then its Disposition, if a `*Blocking:*` label appears, or if the record's note rule
@@ -399,6 +400,7 @@ class FollowUpTest(unittest.TestCase):
         triage = flat(section(text, "## Triage — verify before presenting"))
         with self.subTest("intake"):
             self.assertIn("**In phase and repo mode, every source gets a Path, an Area and Steps To Reproduce at intake.**", triage)
+
 
 class PolicyGapTest(unittest.TestCase):
     """The policy gaps the phase's review filed, fixed in its follow-up."""
@@ -437,8 +439,8 @@ class PolicyGapTest(unittest.TestCase):
         self.assertIn("In repo mode there is no loop, so a blocking row is `Unfixed Blocker`", self.er)
 
     def test_ki_100_one_path_per_row(self):
-        # Fails if the Path column still lets a row name several Paths.
-        self.assertIn("A row has one Path", self.er)
+        # Fails if the Path column still lets a reviewer name several Paths for one row.
+        self.assertIn("A row has one Path per reviewer", self.er)
         self.assertNotIn("name each, the one that blocks first", self.er)
 
     def test_ki_103_accepted_rows_get_no_entry(self):
@@ -458,7 +460,7 @@ class PolicyGapTest(unittest.TestCase):
         with self.subTest("likelihood"):
             self.assertIn("When the two reviewers disagree on Likelihood, record both, attributed like Severity", self.er)
         with self.subTest("filing"):
-            self.assertIn("A filed merged row takes the three ratings that decided its disposition", self.er)
+            self.assertIn("A filed merged row takes one whole set of three ratings, never a mix", self.er)
 
     def test_ki_108_incomplete_pass_blockers_have_a_disposition(self):
         # Fails if a confirmed blocker from an incomplete pass has no disposition while the
@@ -477,6 +479,29 @@ class PolicyGapTest(unittest.TestCase):
         # Fails if the fallback for a reviewer who gave no fix is still lowercase.
         self.assertIn("`None Offered`", self.er)
         self.assertNotIn("`none offered`", self.er)
+
+    def test_unfixed_blocker_covers_every_case(self):
+        # Fails if the Unfixed Blocker definition still names only a stopped loop, though repo
+        # mode and an incomplete pass use it too.
+        bullet = flat(next(l for l in ER.read_text().splitlines() if l.startswith("- `Unfixed Blocker` —")))
+        for case in ("the pass the loop stopped on", "an incomplete pass whose retry is pending", "a repo review"):
+            with self.subTest(case=case):
+                self.assertIn(case, bullet)
+
+    def test_filed_merged_rows_take_one_defined_set(self):
+        # Fails if a non-blocking merged row has no defined set of ratings to file, or the Path
+        # rule leaves two reviewers' Paths unresolved.
+        er = flat(ER.read_text())
+        with self.subTest("filing"):
+            self.assertIn("else the set that decided a blocking disposition, else the set of the "
+                          "reviewer with the higher Severity", er)
+        with self.subTest("path"):
+            self.assertIn("A row has one Path per reviewer", er)
+
+    def test_the_fixture_gets_the_code_one_way(self):
+        # Fails if the fixture rule gives no way to bring the code under review into the folder.
+        self.assertIn("`git clone --no-hardlinks`", flat(ER.read_text()))
+
 
 if __name__ == "__main__":
     unittest.main()
