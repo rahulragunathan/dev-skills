@@ -1027,7 +1027,7 @@ Require the full width of `GATE_SHA` before reporting movement, read the record 
 ### Steps To Reproduce
 
 1. Start each case from its own copy of a valid KI with `**Path:** Happy Path`.
-2. Case one: make its Where fragment `grep -qF '**Likelihood:** Rare · **Path:** Sometimes'`, a line that occurs once in the cited file. Check reports `repeated Path`; it should pass.
+2. Case one: make its Where cite [roadmap.bats](../skills/project-docs/tests/roadmap.bats) with the fragment `grep -qF '**Likelihood:** Rare · **Path:** Sometimes'`, which occurs once in that file. Check reports `repeated Path`; it should pass.
 3. Case two: indent `### What Happens` by two spaces and put `**Path:** Sometimes` on its own line below it. Check reports `repeated Path`; it should pass.
 4. Case three: change only the label, to `**path:** Happy Path`. Check reports nothing; it should report the mis-cased label.
 
@@ -1040,6 +1040,8 @@ A known issue that cites a line of this very test file is refused.
 Mask code spans before finding field boundaries, accept up to three spaces and any blank after `###`, and report a mis-cased known label. KI-88 is the same family for the rated fields.
 
 Steps rewritten in pass 2 (gpt-6.2-astra:high), so each case starts from a valid entry.
+
+Case one's citation corrected in pass 3 (gpt-6.2-astra:high): it names the file that holds the fragment.
 
 **Source:** gpt-6.2-astra:high — phase review pass 1, review-triage phase, 2026-11-26.
 
@@ -1111,7 +1113,7 @@ Widened in pass 1 (gemini-4-neon-high): plan and repo mode have no destination f
 
 Re-rated Almost Always in pass 2 (gemini-4-neon-high): every plan review emits the line, and nothing says where it goes.
 
-Path corrected to Happy Path in pass 3 (gemini-4-neon-high): every plan review reaches it.
+Path corrected to Happy Path in pass 3 (gemini-4-neon-high, gpt-6.2-astra:high): every plan review reaches it. The simplest case is a single-bundle plan review where both reviewers answer `Happy Path: works` and `No findings.`: the plan hand-off has nowhere to keep either line. The fix should name where the plan and repo hand-offs keep each reviewer's line.
 
 **Source:** `/code-review high` — phase end, review-triage phase, 2026-11-26. Path, Area and steps supplied by the triager.
 
@@ -1375,3 +1377,35 @@ Someone filing a known issue in a hurry is pointed at the wrong field.
 Read the rated fields with `[ \t]*`, as the optional fields already are, keeping the whole-body search the existing roadmaps rely on.
 
 **Source:** `/code-review high` — phase end, review-triage phase, 2026-11-26. Path, Area and steps supplied by the triager.
+
+---
+
+<a id="ki-111"></a>
+
+## KI-111 — Progress reports a failed Codex attempt as running
+
+**Severity:** Low
+**Likelihood:** Rare
+**Path:** External Interference
+**Area:** Code
+**Where:** [progress.sh](../skills/external-review/progress.sh) — `line="$reviewer $chunk: running ${ran}m"`
+
+### What Happens
+
+The Codex loop writes no end state. When `codex exec` fails before it answers, such as on a usage limit, it leaves an empty output file, and progress reports that file as running until the next attempt supersedes it. After 25 minutes the line adds `past its timeout; check it`, but never says the run ended.
+
+### Steps To Reproduce
+
+1. In a scratch folder, create an empty `codex_phase_p1_c1_a1_m_high.txt` and a `.log` beside it that ends with an `ERROR:` line.
+2. Run `progress.sh <folder> 1`.
+3. You see `codex c1: running 0m, log written 0m ago`. It should report the attempt as failed, or at least as ended without an answer.
+
+### Example Scenario
+
+A usage limit stops Codex in its first minute, and the five-minute updates keep calling it running for the next hour.
+
+### Notes For A Fix
+
+Have the Codex loop write a `.state` file as the Gemini loop does (`done` or `failed`), and let progress read it for both reviewers. KI-89 is the Gemini side of the same reporting.
+
+**Source:** the triager — phase review pass 3, review-triage phase, 2026-11-27.

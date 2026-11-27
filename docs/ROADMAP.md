@@ -88,6 +88,7 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-96](KNOWN_ISSUES.md#ki-96) | The Gemini prompt measurement can still accept a count it should refuse | Rare | Low |
 | [KI-91](KNOWN_ISSUES.md#ki-91) | Init and close can lose their caller's signal handler while registering their own | Rare | Low |
 | [KI-102](KNOWN_ISSUES.md#ki-102) | An empty Likelihood reads the Path line below it as its value | Rare | Low |
+| [KI-111](KNOWN_ISSUES.md#ki-111) | Progress reports a failed Codex attempt as running | Rare | Low |
 
 ## Enhancements
 
