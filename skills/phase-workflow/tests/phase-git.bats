@@ -696,6 +696,42 @@ commit_block() {
   [[ "$output" == *"CHANGED AFTER REVIEW"*"helper.py"* ]]
 }
 
+@test "after review: a change and its revert on a merged side branch still stop the check" {
+  # Fails if only the branch's own line is listed, so a side branch's change and revert, merged in,
+  # leave no trace.
+  reviewed="$(git rev-parse HEAD)"
+  [ ! -e helper.py ] || false
+  git switch -qc side
+  printf 'x = 1\n' > helper.py && git add helper.py && git commit -qm "add helper"
+  git rm -q helper.py && git commit -qm "revert helper"
+  git switch -q -
+  git merge -q --no-ff side -m "Merge side"
+  after_review "$reviewed"
+  run bash "$TEST_TMP/after.sh"
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$output" == *"CHANGED AFTER REVIEW"*"helper.py"* ]]
+}
+
+@test "after review under zsh: a document fix passes, and a reverted outside change stops it" {
+  # Fails if the fence reads differently under zsh: the here-string, the $'\n' join or the
+  # first-parent check.
+  command -v zsh >/dev/null || skip "zsh not installed"
+  printf '## [1.0.0]\n\n- old claim\n' > CHANGELOG.md
+  git add CHANGELOG.md && git commit -qm changelog
+  reviewed="$(git rev-parse HEAD)"
+  printf '## [1.0.0]\n\n- corrected claim\n' > CHANGELOG.md
+  git commit -qam "Document fix for F-07: the claim"
+  after_review "$reviewed"
+  run zsh -f "$TEST_TMP/after.sh"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$(commit_block F-07)" == *"+- corrected claim"* ]] || { echo "$output"; false; }
+  printf 'x = 1\n' > helper.py && git add helper.py && git commit -qm "add helper"
+  git rm -q helper.py && git commit -qm "revert helper"
+  run zsh -f "$TEST_TMP/after.sh"
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$output" == *"helper.py"* ]]
+}
+
 @test "origin check: accepts a bare user over each ssh spelling" {
   # Fails if git+ssh:// or ssh+git:// with a plain user name is taken for a credential.
   for url in "git+ssh://git@example.invalid/r.git" "ssh+git://git@example.invalid/r.git" "ssh://git@example.invalid:22/r.git"; do

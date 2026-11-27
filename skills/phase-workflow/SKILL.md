@@ -334,12 +334,13 @@ what remains expired.
      # Read whole, not piped into grep -q: an early exit there fails the pipeline under pipefail.
      LINE="$(git rev-list --first-parent "$INSPECTED")" || { echo "CANNOT LIST THE BRANCH'S LINE — stop"; exit 1; }
      grep -qx "$REVIEWED_SHA" <<< "$LINE" \
-       || { echo "REVIEWED COMMIT IS NOT ON THE BRANCH'S FIRST-PARENT LINE — needs a narrow pass"; exit 1; }
+       || { echo "REVIEWED COMMIT IS NOT ON THE BRANCH'S FIRST-PARENT LINE (a pull merged it in?) — review the merge in a narrow pass"; exit 1; }
      # --no-renames lists both sides of a move, so a file cannot arrive under an allowed name. The
-     # endpoint diff and each commit's own files are both checked, so a change and its revert count.
+     # endpoint diff and the files of every commit in the range, merged-in ones too, are both
+     # checked, so a change and its revert count.
      CHANGED="$(git --no-pager diff --no-ext-diff --no-renames --ignore-submodules=none --name-only "$REVIEWED" "$INSPECTED")" \
        || { echo "CANNOT LIST THE CHANGES SINCE REVIEW — stop"; exit 1; }
-     PER_COMMIT="$(git --no-pager log -m --first-parent --no-renames --ignore-submodules=none --name-only --format= "$REVIEWED..$INSPECTED")" \
+     PER_COMMIT="$(git --no-pager log -m --no-renames --ignore-submodules=none --name-only --format= "$REVIEWED..$INSPECTED")" \
        || { echo "CANNOT LIST EACH COMMIT'S FILES — stop"; exit 1; }
      OTHER=""
      while IFS= read -r f; do
