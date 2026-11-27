@@ -700,7 +700,7 @@ A valid finding that is out of scope for this phase is **kept, not dropped**. Wh
 
 **Disposition order.** First verify, which sets the Verdict; a row that fails verification is `Rejected`. For a confirmed row, apply [the blocking rule](#the-blocking-rule): a blocking row is `Fixed In Phase`, or `Unfixed Blocker` when the loop has stopped or an incomplete pass awaits its retry; a row that does not block is filed, or `Recorded Only: No Roadmap Files`, or `Confirmed: Accepted, No Work Planned`. In phase mode, on a complete pass, a document fix is the exception: it is `Fixed In Phase` whether or not it blocks, and whether or not the loop has stopped ([the loop](#the-loop)). In repo mode there is no loop and no fix on the branch, so a blocking row is `Unfixed Blocker` and the user decides. The user can change any row at the gate; write it in the order it happened, as `Originally <old>; <new> On User's Call` (`Originally Filed KI-12; Fixed In Phase On User's Call`). The definitions below describe the default a row gets from the rule, not a row the user changed.
 
-- `Fixed In Phase` — a blocking row, fixed on the branch, with a failing test written first, or a document fix, which has its own evidence ([below](#the-loop)).
+- `Fixed In Phase` — the whole row is fixed: a blocking row, fixed on the branch, with a failing test written first, or a document fix, which has its own evidence ([below](#the-loop)).
 - `Unfixed Blocker` — *not fixed.* A blocking row that waits for the user: from the pass the loop stopped on, from an incomplete pass whose retry is pending, or from a repo review, which has no loop. The loop stops before fixing its last pass's findings, since every fix but a document fix needs another review pass, so the row reaches the gate unfixed and the user decides: fix it, which costs another pass, or file it.
 - `Filed …` — valid and not blocking, filed through `project-docs` as a rated entry with its ROADMAP pointer row. Only where the repository has all four roadmap files; run `roadmap.py check` after filing, and fix any drift it reports. A `docs/ROADMAP.md` of another shape is the project's own document, not consent to file.
 - `Confirmed: Accepted, No Work Planned` — valid, and accepted as it is: nothing will be built and nothing is filed. Its note says why.
@@ -790,7 +790,9 @@ entry, changes what an entry covers, or changes a value the workflow reads: the 
 set at phase start, `ORIGIN_URL`, `ORIGIN_PUSH_URL`, `REPO`, `DEFAULT_BRANCH`, `PHASE_BRANCH` and
 `MERGE_METHOD`; those need a narrow pass. (`PR` and `Release` change as ordinary bookkeeping.)
 Nothing lands as a document fix without the finding that asked for it, and its commit message
-names the row.
+names the row. A finding that asks for a document fix and for any other change is split at triage into two
+rows that share its ID: `F-12a`, the document fix, and `F-12b`, the rest, which takes its own
+disposition from the blocking rule.
 
 It applies to the row whatever its blocking status, and it does not reopen the loop: a pass
 whose only blocking rows are document fixes stops as if it had none. Make it without another

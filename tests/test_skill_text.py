@@ -660,6 +660,16 @@ class PassNineTest(unittest.TestCase):
             with self.subTest(gone=gone):
                 self.assertNotIn(gone, self.er)
 
+    def test_ki_122_a_mixed_finding_is_split(self):
+        # Fails if a finding asking for a document fix and another change can be marked Fixed In Phase
+        # once only its document half is done.
+        start = self.er.index("**After the last pass, only bookkeeping lands:**")
+        rule = self.er[start:self.er.index("### What the user sees at the gate", start)]
+        self.assertIn("A finding that asks for a document fix and for any other change is split at triage "
+                      "into two rows that share its ID", rule)
+        self.assertIn("the rest, which takes its own disposition from the blocking rule", rule)
+        self.assertIn("- `Fixed In Phase` — the whole row is fixed:", self.er)
+
 
 if __name__ == "__main__":
     unittest.main()
