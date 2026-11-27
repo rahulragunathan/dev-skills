@@ -77,6 +77,12 @@ here — the plugin manifest's version is the only record of them.
 - **The roadmap files have one casing and shape.** The ENH and UNK templates' `Regression Net`
   and `What Settles It` labels and the `None Offered` fallback are in title case, and every
   dev-skills entry uses its template's headings and labels, guarded by new tests (KI-110).
+- **The document-fix rule's edges.** A finding with a document half and another half is split into
+  two rows, so `Fixed In Phase` always means the whole row (KI-122). The post-review check prints
+  each commit's message above its own patch, a merge's included, and its tests check each commit's
+  block (KI-123, KI-124). The last drift re-check runs `roadmap.py check` (KI-125). The gate names a
+  document fix made after the last pass, *Checked Against* accepts a wording fix, and any other fix
+  you ask for at the gate still needs another pass (KI-126).
 
 ## [2.2.2] - 2026-11-25
 

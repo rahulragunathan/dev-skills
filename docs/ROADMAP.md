@@ -74,13 +74,9 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-118](KNOWN_ISSUES.md#ki-118) | The blocking rule's section and step 5 still say the rest are filed | Rare | Medium |
 | [KI-119](KNOWN_ISSUES.md#ki-119) | The record's user-only edit rule blocks settling a retried row | Rare | Medium |
 | [KI-121](KNOWN_ISSUES.md#ki-121) | A document fix on an incomplete pass has no disposition while it waits | Rare | Medium |
-| [KI-122](KNOWN_ISSUES.md#ki-122) | A document fix can mark a partly unfixed finding Fixed In Phase | Rare | Medium |
-| [KI-123](KNOWN_ISSUES.md#ki-123) | The post-review check's log cannot show which commit made which correction | Rare | Medium |
-| [KI-125](KNOWN_ISSUES.md#ki-125) | The last drift re-check skips an existing entry a document fix re-rated | Rare | Medium |
 | [KI-114](KNOWN_ISSUES.md#ki-114) | The blocking rule excludes plan mode, but plan notes open with Blocking | Almost Always | Low |
 | [KI-115](KNOWN_ISSUES.md#ki-115) | UNK-04 asks for a decision already made | Almost Always | Low |
 | [KI-82](KNOWN_ISSUES.md#ki-82) | The zsh lint misses traps hidden by quotes and other subscripts | Likely | Low |
-| [KI-126](KNOWN_ISSUES.md#ki-126) | The document-fix rule's wording has four loose ends | Likely | Low |
 | [KI-44](KNOWN_ISSUES.md#ki-44) | A stale dispatch log gives a misleading replacement message | Rare | Low |
 | [KI-78](KNOWN_ISSUES.md#ki-78) | Index rows are not bound to their section | Rare | Low |
 | [KI-83](KNOWN_ISSUES.md#ki-83) | The name check misses multi-line reference definitions and counts test fixtures as scripts | Rare | Low |
@@ -90,7 +86,6 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-91](KNOWN_ISSUES.md#ki-91) | Init and close can lose their caller's signal handler while registering their own | Rare | Low |
 | [KI-102](KNOWN_ISSUES.md#ki-102) | An empty Likelihood reads the Path line below it as its value | Rare | Low |
 | [KI-120](KNOWN_ISSUES.md#ki-120) | Two blocking sets of ratings leave a merged row's filing open | Rare | Low |
-| [KI-124](KNOWN_ISSUES.md#ki-124) | The post-review Bats test misses a log with no per-commit files or no lower bound | Rare | Low |
 
 ## Enhancements
 
