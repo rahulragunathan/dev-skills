@@ -606,9 +606,12 @@ after_review() {
   [[ "$output" == *'`PR` | 9'* ]]
 }
 
-# commit_block <id>: the lines the post-review log prints under the commit whose message names <id>.
+# commit_block <id>: the lines the post-review log prints under the commit whose subject names <id>
+# as a whole ID (F-07, never F-070). It fails when no commit does, so a negative check never passes
+# on an empty block.
 commit_block() {
-  awk -v id="$1" '/^=== [0-9a-f]+$/ { getline msg; keep = index(msg, id) > 0 } keep' <<< "$output"
+  awk -v id="$1" '/^=== [0-9a-f]+$/ { getline msg; keep = msg ~ ("(^|[^0-9A-Za-z-])" id "([^0-9]|$)"); found = found || keep }
+    keep; END { exit !found }' <<< "$output"
 }
 
 @test "after review: a CHANGELOG-only document fix passes and is shown" {
@@ -637,7 +640,7 @@ commit_block() {
   after_review "$reviewed"
   run bash "$TEST_TMP/after.sh"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  f07="$(commit_block F-07)"; f08="$(commit_block F-08)"
+  f07="$(commit_block F-07)" && f08="$(commit_block F-08)" || { echo "$output"; false; }
   [[ "$f07" == *"+## [1.0.0] - 2026-01-02"* && "$f07" != *"+- new wording"* ]] || { echo "$output"; false; }
   [[ "$f08" == *"+- new wording"* && "$f08" != *"+## [1.0.0]"* ]] || { echo "$output"; false; }
   [[ "$output" != *"pre-review marker"* ]]

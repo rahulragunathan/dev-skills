@@ -624,8 +624,7 @@ class BookkeepingFixTest(unittest.TestCase):
                        "fixes in the same commit",
                        "file the other deferred rows",
                        "its Commit and its evidence (a test, or *Checked Against* for a document fix)",
-                       "the source you checked it against (for a wording fix, the reviewer's request), and whether it "
-                       "landed after the last pass",
+                       "the source you checked it against, and whether it landed after the last pass",
                        "since every fix but a document fix needs another review pass",
                        "Stop when a pass has no blocking finding other than a document fix",
                        "Other deferred rows are filed before the gate; other blocking rows go to the gate",
@@ -669,6 +668,24 @@ class PassNineTest(unittest.TestCase):
                       "into two rows that share its ID", rule)
         self.assertIn("the rest, which takes its own disposition from the blocking rule", rule)
         self.assertIn("- `Fixed In Phase` — the whole row is fixed:", self.er)
+        # Fails if the split's two rows can be counted as two findings in the pass's counts.
+        self.assertIn("The two rows are one finding in the pass's counts", rule)
+
+    def test_the_users_change_names_the_rule_s_disposition(self):
+        # Fails if a row the user changed twice has no rule for what `<old>` is.
+        order = self.er[self.er.index("**Disposition order.**"):self.er.index("- `Fixed In Phase` —")]
+        self.assertIn("`<old>` is the disposition the rule gave the row", order)
+
+    def test_the_post_review_log_states_its_merge_handling(self):
+        # Fails if the log relies on a newer git's default merge diff, or a merge can bring in a
+        # document fix whose finding no message names.
+        pw = flat(PW.read_text())
+        self.assertIn("log -p --first-parent --diff-merges=first-parent", pw)
+        self.assertIn("a merge's message names every finding it brings in", pw)
+
+    def test_a_wording_fix_is_checked_against_a_source(self):
+        # Fails if a wording fix can cite only the reviewer's request as its evidence.
+        self.assertNotIn("for a wording fix, the reviewer's request", self.er)
 
     def test_ki_125_the_last_drift_check_runs_roadmap_check(self):
         # Fails if step 6 after the last pass checks only new filings, so an existing entry a document

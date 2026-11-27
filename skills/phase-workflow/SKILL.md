@@ -341,13 +341,13 @@ what remains expired.
      done <<< "$CHANGED"
      [ -z "$OTHER" ] || { printf 'CHANGED AFTER REVIEW — needs a narrow pass:\n%s\n' "$OTHER"; exit 1; }
      # Each commit's message above its own patch, so each change can be matched to the finding its commit
-     # names. --first-parent shows a merge's change against the branch and skips the merged side's commits.
-     git --no-pager log -p --first-parent --no-ext-diff --no-textconv --no-renames --ignore-submodules=none \
+     # names. A merge shows its change against the branch, and the merged side's commits are skipped.
+     git --no-pager log -p --first-parent --diff-merges=first-parent --no-ext-diff --no-textconv --no-renames --ignore-submodules=none \
        --format='=== %h%n%B' "$REVIEWED..$INSPECTED" -- \
        CHANGELOG.md docs/PHASE_RECORD.md docs/ROADMAP.md docs/KNOWN_ISSUES.md docs/ENHANCEMENTS.md docs/OPEN_QUESTIONS.md
      ```
 
-     Read each commit's patch: a filing and a fix can share a file, and every change must be a filing, the record's `PR` and `Release` rows, or a document fix to this release's `CHANGELOG.md` entry, the roadmap files or the phase record whose commit, in the log the check prints, names its finding. Anything else, a changed phase-record key the workflow reads, one of those set at phase start such as `MERGE_METHOD`, included, needs a narrow pass first. Name what landed in the hand-off.
+     Read each commit's patch: a filing and a fix can share a file, and every change must be a filing, the record's `PR` and `Release` rows, or a document fix to this release's `CHANGELOG.md` entry, the roadmap files or the phase record whose commit, in the log the check prints, names its finding; a merge's message names every finding it brings in. Anything else, a changed phase-record key the workflow reads, one of those set at phase start such as `MERGE_METHOD`, included, needs a narrow pass first. Name what landed in the hand-off.
    - **Confirm `docs/PHASE_RECORD.md` is current, and do not take that on trust.** Step 4 brought
      it current, but steps 5 to 7 and every re-gate come after step 4. Check, in the committed
      file, that its first table (this repository's phase) names this PR and the release the

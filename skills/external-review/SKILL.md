@@ -698,7 +698,7 @@ A valid finding that is out of scope for this phase is **kept, not dropped**. Wh
 
 **Every row lands in exactly one** — that is what guarantees nothing is quietly lost.
 
-**Disposition order.** First verify, which sets the Verdict; a row that fails verification is `Rejected`. For a confirmed row, apply [the blocking rule](#the-blocking-rule): a blocking row is `Fixed In Phase`, or `Unfixed Blocker` when the loop has stopped or an incomplete pass awaits its retry; a row that does not block is filed, or `Recorded Only: No Roadmap Files`, or `Confirmed: Accepted, No Work Planned`. In phase mode, on a complete pass, a document fix is the exception: it is `Fixed In Phase` whether or not it blocks, and whether or not the loop has stopped ([the loop](#the-loop)). In repo mode there is no loop and no fix on the branch, so a blocking row is `Unfixed Blocker` and the user decides. The user can change any row at the gate; write it in the order it happened, as `Originally <old>; <new> On User's Call` (`Originally Filed KI-12; Fixed In Phase On User's Call`). The definitions below describe the default a row gets from the rule, not a row the user changed.
+**Disposition order.** First verify, which sets the Verdict; a row that fails verification is `Rejected`. For a confirmed row, apply [the blocking rule](#the-blocking-rule): a blocking row is `Fixed In Phase`, or `Unfixed Blocker` when the loop has stopped or an incomplete pass awaits its retry; a row that does not block is filed, or `Recorded Only: No Roadmap Files`, or `Confirmed: Accepted, No Work Planned`. In phase mode, on a complete pass, a document fix is the exception: it is `Fixed In Phase` whether or not it blocks, and whether or not the loop has stopped ([the loop](#the-loop)). In repo mode there is no loop and no fix on the branch, so a blocking row is `Unfixed Blocker` and the user decides. The user can change any row at the gate; write it in the order it happened, as `Originally <old>; <new> On User's Call` (`Originally Filed KI-12; Fixed In Phase On User's Call`), where `<old>` is the disposition the rule gave the row, however often it changed since. The definitions below describe the default a row gets from the rule, not a row the user changed.
 
 - `Fixed In Phase` — the whole row is fixed: a blocking row, fixed on the branch, with a failing test written first, or a document fix, which has its own evidence ([below](#the-loop)).
 - `Unfixed Blocker` — *not fixed.* A blocking row that waits for the user: from the pass the loop stopped on, from an incomplete pass whose retry is pending, or from a repo review, which has no loop. The loop stops before fixing its last pass's findings, since every fix but a document fix needs another review pass, so the row reaches the gate unfixed and the user decides: fix it, which costs another pass, or file it.
@@ -731,7 +731,7 @@ in the Model column and `—` in Pass.
 
 - *Fix:* the change, in one line.
 - *Scenarios:* each scenario the failing test covered, with the red you observed before the fix and the green after.
-- *Checked Against:* for a document fix, in place of *Scenarios*: the claim or wording it corrects, the source you checked it against (for a wording fix, the reviewer's request), and whether it landed after the last pass.
+- *Checked Against:* for a document fix, in place of *Scenarios*: the claim or wording it corrects, the source you checked it against, and whether it landed after the last pass.
 
 **Then a short block per pass:** the commit it reviewed; its coverage line with each
 invocation's output file name and byte count; its findings counted by severity; how many were
@@ -792,7 +792,7 @@ set at phase start, `ORIGIN_URL`, `ORIGIN_PUSH_URL`, `REPO`, `DEFAULT_BRANCH`, `
 Nothing lands as a document fix without the finding that asked for it, and its commit message
 names the row. A finding that asks for a document fix and for any other change is split at triage into two
 rows that share its ID: `F-12a`, the document fix, and `F-12b`, the rest, which takes its own
-disposition from the blocking rule.
+disposition from the blocking rule. The two rows are one finding in the pass's counts.
 
 It applies to the row whatever its blocking status, and it does not reopen the loop: a pass
 whose only blocking rows are document fixes stops as if it had none. Make it without another
