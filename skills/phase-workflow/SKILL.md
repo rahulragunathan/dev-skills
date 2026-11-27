@@ -326,21 +326,18 @@ what remains expired.
      # fence: after-review
      set -euo pipefail
      REVIEWED="<commit the last pass reviewed>"
+     REVIEWED_SHA="$(git rev-parse --verify "$REVIEWED^{commit}")"
      INSPECTED="$(git rev-parse --verify HEAD)"   # the gate below must find this same head
      echo "Inspected: $INSPECTED — set INSPECTED to this in the gate block"
-     git merge-base --is-ancestor "$REVIEWED" "$INSPECTED" || { echo "REVIEWED COMMIT REWRITTEN — run a full pass"; exit 1; }
-     # The per-commit patches below add up to the change only along the branch's own line.
-     REVIEWED_SHA="$(git rev-parse --verify "$REVIEWED^{commit}")"
-     # Read whole, not piped into grep -q: an early exit there fails the pipeline under pipefail.
-     LINE="$(git rev-list --first-parent "$INSPECTED")" || { echo "CANNOT LIST THE BRANCH'S LINE — stop"; exit 1; }
-     grep -qx "$REVIEWED_SHA" <<< "$LINE" \
-       || { echo "REVIEWED COMMIT IS NOT ON THE BRANCH'S FIRST-PARENT LINE (a pull merged it in?) — review the merge in a narrow pass"; exit 1; }
-     # --no-renames lists both sides of a move, so a file cannot arrive under an allowed name. The
-     # endpoint diff and the files of every commit in the range, merged-in ones too, are both
-     # checked, so a change and its revert count.
-     CHANGED="$(git --no-pager diff --no-ext-diff --no-renames --ignore-submodules=none --name-only "$REVIEWED" "$INSPECTED")" \
+     SHALLOW="$(git rev-parse --is-shallow-repository)"
+     [ "$SHALLOW" = false ] || { echo "SHALLOW HISTORY — check the full repository"; exit 1; }
+     git merge-base --is-ancestor "$REVIEWED_SHA" "$INSPECTED" || { echo "REVIEWED COMMIT REWRITTEN — run a full pass"; exit 1; }
+     MERGES="$(git rev-list --merges "$REVIEWED_SHA..$INSPECTED")"
+     [ -z "$MERGES" ] || { echo "MERGE AFTER REVIEW — rebase the commits after $REVIEWED_SHA instead, or run a narrow pass that covers the merge"; exit 1; }
+     # Check each commit as well as the endpoints so a change and its revert count.
+     CHANGED="$(git --no-pager diff --no-ext-diff --no-renames --ignore-submodules=none --name-only "$REVIEWED_SHA" "$INSPECTED")" \
        || { echo "CANNOT LIST THE CHANGES SINCE REVIEW — stop"; exit 1; }
-     PER_COMMIT="$(git --no-pager log -m --no-renames --ignore-submodules=none --name-only --format= "$REVIEWED..$INSPECTED")" \
+     PER_COMMIT="$(git --no-pager log --no-show-signature --no-renames --ignore-submodules=none --name-only --format= "$REVIEWED_SHA..$INSPECTED")" \
        || { echo "CANNOT LIST EACH COMMIT'S FILES — stop"; exit 1; }
      OTHER=""
      while IFS= read -r f; do
@@ -350,14 +347,15 @@ what remains expired.
        esac
      done <<< "$CHANGED"$'\n'"$PER_COMMIT"
      [ -z "$OTHER" ] || { printf 'CHANGED AFTER REVIEW — needs a narrow pass:\n%s\n' "$OTHER"; exit 1; }
-     # Each commit's message above its own patch, so each change can be matched to the finding its commit
-     # names. A merge shows its change against the branch, and the merged side's commits are skipped.
-     git --no-pager log -p -m --first-parent --no-ext-diff --no-textconv --no-renames --ignore-submodules=none \
-       --format='=== %h%n%B' "$REVIEWED..$INSPECTED" -- \
+     # Keep the message with its patch so the reviewer can match each change to its finding.
+     git --no-pager log --no-show-signature -p --no-ext-diff --no-textconv --no-renames --ignore-submodules=none \
+       --format='=== %h%n%B' "$REVIEWED_SHA..$INSPECTED" -- \
        CHANGELOG.md docs/PHASE_RECORD.md docs/ROADMAP.md docs/KNOWN_ISSUES.md docs/ENHANCEMENTS.md docs/OPEN_QUESTIONS.md
      ```
 
-     Read each commit's patch: a filing and a fix can share a file, and every change must be a filing, the record's `PR` and `Release` rows, or a document fix to this release's `CHANGELOG.md` entry, the roadmap files or the phase record whose commit, in the log the check prints, names its finding; a merge's message names every finding it brings in. Anything else, a changed phase-record key the workflow reads, one of those set at phase start such as `MERGE_METHOD`, included, needs a narrow pass first. Name what landed in the hand-off.
+     Rebase only this branch's post-review bookkeeping commits. If you need changes from another branch, run a narrow pass covering the merge.
+
+     Read each commit's patch: a filing and a fix can share a file, and every change must be a filing, the record's `PR` and `Release` rows, or a document fix to this release's `CHANGELOG.md` entry, the roadmap files or the phase record whose commit, in the log the check prints, names its finding. Anything else, a changed phase-record key the workflow reads, one of those set at phase start such as `MERGE_METHOD`, included, needs a narrow pass first. Name what landed in the hand-off.
    - **Confirm `docs/PHASE_RECORD.md` is current, and do not take that on trust.** Step 4 brought
      it current, but steps 5 to 7 and every re-gate come after step 4. Check, in the committed
      file, that its first table (this repository's phase) names this PR and the release the

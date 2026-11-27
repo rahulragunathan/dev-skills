@@ -646,40 +646,46 @@ commit_block() {
   [[ "$output" != *"pre-review marker"* ]]
 }
 
-@test "after review: a merge commit shows the change it brought in" {
-  # Fails if the log lists a merge with no files, or walks the merged side's own commits (KI-123).
-  printf '## [1.0.0]\n\n- old claim\n' > CHANGELOG.md
-  git add CHANGELOG.md && git commit -qm changelog
+@test "after review: even a CHANGELOG-only merge needs review" {
+  # Fails if an allowed path hides a merge inside the review window.
   reviewed="$(git rev-parse HEAD)"
   git switch -qc side
-  printf '## [1.0.0]\n\n- merged claim\n' > CHANGELOG.md
-  git commit -qam "side-branch commit"
-  git switch -q -
-  mkdir -p docs && printf '| `PR` | 9 |\n' > docs/PHASE_RECORD.md
-  git add docs && git commit -qm record
-  git merge -q --no-ff side -m "Merge for F-09"
-  after_review "$reviewed"
-  run bash "$TEST_TMP/after.sh"
-  [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$(commit_block F-09)" == *"+- merged claim"* ]] || { echo "$output"; false; }
-  [[ "$output" != *"side-branch commit"* ]]
-}
-
-@test "after review: a reviewed commit off the first-parent line stops the check" {
-  # Fails if a reviewed commit reachable only through a merge's second parent lets a changed
-  # MERGE_METHOD through, since the merge's first-parent patch hides the change (KI-127).
-  mkdir -p docs && printf '| `MERGE_METHOD` | `merge` |\n' > docs/PHASE_RECORD.md
-  git add docs && git commit -qm record
-  git switch -qc reviewed-line
-  printf '| `MERGE_METHOD` | `squash` |\n' > docs/PHASE_RECORD.md
-  git commit -qam "squash"
-  reviewed="$(git rev-parse HEAD)"
-  git switch -q -
-  git merge -q --no-ff -s ours reviewed-line -m "Merge for F-01"
+  echo correction > CHANGELOG.md && git add CHANGELOG.md && git commit -qm correction
+  git switch -q main
+  git merge -q --no-ff side -m "Merge correction"
   after_review "$reviewed"
   run bash "$TEST_TMP/after.sh"
   [ "$status" -eq 1 ] || { echo "$output"; false; }
-  [[ "$output" == *"FIRST-PARENT"* ]]
+  [[ "$output" == *"MERGE AFTER REVIEW — rebase the commits after $reviewed instead, or run a narrow pass that covers the merge"* ]]
+}
+
+@test "after review: shallow history is refused" {
+  # Fails if the gate trusts a history with missing parents.
+  git commit -q --allow-empty -m tip
+  git clone -q --depth 1 "file://$REPO" "$TEST_TMP/shallow"
+  cd "$TEST_TMP/shallow"
+  [ "$(git rev-parse --is-shallow-repository)" = true ] || false
+  after_review HEAD
+  run bash "$TEST_TMP/after.sh"
+  [ "$status" -ne 0 ] || false
+  [[ "$output" == *"SHALLOW"* ]]
+}
+
+@test "after review: signed bookkeeping passes with signature display enabled" {
+  # Fails if Git includes signature text among the filenames.
+  reviewed="$(git rev-parse HEAD)"
+  ssh-keygen -q -t ed25519 -N '' -f "$TEST_TMP/signing"
+  git config gpg.format ssh
+  git config user.signingkey "$TEST_TMP/signing"
+  echo "tester $(cat "$TEST_TMP/signing.pub")" > "$TEST_TMP/signers"
+  git config gpg.ssh.allowedSignersFile "$TEST_TMP/signers"
+  git config log.showSignature true
+  echo correction > CHANGELOG.md && git add CHANGELOG.md && git commit -qS -m correction
+  git verify-commit HEAD || false
+  after_review "$reviewed"
+  run bash "$TEST_TMP/after.sh"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"+correction"* ]]
 }
 
 @test "after review: a change and its revert outside the bookkeeping set still stop the check" {
@@ -696,25 +702,8 @@ commit_block() {
   [[ "$output" == *"CHANGED AFTER REVIEW"*"helper.py"* ]]
 }
 
-@test "after review: a change and its revert on a merged side branch still stop the check" {
-  # Fails if only the branch's own line is listed, so a side branch's change and revert, merged in,
-  # leave no trace.
-  reviewed="$(git rev-parse HEAD)"
-  [ ! -e helper.py ] || false
-  git switch -qc side
-  printf 'x = 1\n' > helper.py && git add helper.py && git commit -qm "add helper"
-  git rm -q helper.py && git commit -qm "revert helper"
-  git switch -q -
-  git merge -q --no-ff side -m "Merge side"
-  after_review "$reviewed"
-  run bash "$TEST_TMP/after.sh"
-  [ "$status" -eq 1 ] || { echo "$output"; false; }
-  [[ "$output" == *"CHANGED AFTER REVIEW"*"helper.py"* ]]
-}
-
 @test "after review under zsh: a document fix passes, and a reverted outside change stops it" {
-  # Fails if the fence reads differently under zsh: the here-string, the $'\n' join or the
-  # first-parent check.
+  # Fails if zsh loses a filename when the fence combines the two listings.
   command -v zsh >/dev/null || skip "zsh not installed"
   printf '## [1.0.0]\n\n- old claim\n' > CHANGELOG.md
   git add CHANGELOG.md && git commit -qm changelog

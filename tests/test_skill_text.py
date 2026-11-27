@@ -8,6 +8,7 @@ Two hazards come from how the skills are read rather than what they say:
 """
 import pathlib
 import re
+import shlex
 import sys
 import unittest
 
@@ -676,14 +677,17 @@ class PassNineTest(unittest.TestCase):
         order = self.er[self.er.index("**Disposition order.**"):self.er.index("- `Fixed In Phase` —")]
         self.assertIn("`<old>` is the disposition the rule gave the row", order)
 
-    def test_the_post_review_log_states_its_merge_handling(self):
-        # Fails if the log relies on a newer git's default merge diff, or a merge can bring in a
-        # document fix whose finding no message names.
-        pw = flat(PW.read_text())
-        # KI-127: --diff-merges needs Git 2.31; `-m --first-parent` gives the same patch on 2.30.
-        self.assertIn("log -p -m --first-parent", pw)
-        self.assertNotIn("--diff-merges", pw)
-        self.assertIn("a merge's message names every finding it brings in", pw)
+    def test_after_review_uses_pinned_commits_and_unsigned_log_output(self):
+        # Fails if the fence reads REVIEWED again or either log can print a signature.
+        code = fence(PW, "after-review")
+        pin = 'REVIEWED_SHA="$(git rev-parse --verify "$REVIEWED^{commit}")"'
+        self.assertIn(pin, code)
+        self.assertNotRegex(code.split(pin, 1)[1], r"\$\{?REVIEWED\b")
+        commands = re.findall(r"\bgit (?:--[\w-]+ )*log\b([^\n]*)", code.replace("\\\n", " "))
+        self.assertTrue(commands)
+        for args in commands:
+            with self.subTest(args=args):
+                self.assertIn("--no-show-signature", shlex.split(args.split(')"', 1)[0]))
 
     def test_a_wording_fix_is_checked_against_a_source(self):
         # Fails if a wording fix can cite only the reviewer's request as its evidence.

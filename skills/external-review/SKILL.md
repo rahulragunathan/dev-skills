@@ -802,11 +802,8 @@ landed after the last pass. On a pass the loop continues past, it is made with t
 pass reviews it. Anything else, such as a change to a skill, code, a test, README or a regenerated diagram,
 needs a narrow pass of its own.
 
-At the gate, run `phase-workflow`'s post-review check (§3 step 7): it lists both sides of every
-change since the reviewed commit and every file each commit touched, refuses anything outside
-the bookkeeping files or a reviewed commit off the branch's first-parent line, and prints
-each commit's patch under its message, read in full because a filing and a fix can share one
-file. The hand-off names what landed.
+At the gate, run the [post-review check](../phase-workflow/SKILL.md#3-phase-end--retrospective-before-hand-off).
+It refuses merges in the review window. Read each commit's patch and name what landed in the hand-off.
 
 ### What the user sees at the gate
 

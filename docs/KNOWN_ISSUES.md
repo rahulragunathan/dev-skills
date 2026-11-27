@@ -363,7 +363,7 @@ Steps rewritten in pass 5 (gpt-6.2-astra:high) so the result is observable.
 **Likelihood:** Rare
 **Path:** Unusual Input
 **Area:** Docs
-**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `PER_COMMIT="$(git --no-pager log -m --no-renames`
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `# fence: after-review`
 
 ### What Happens
 
@@ -395,7 +395,7 @@ Refuse any merge commit in the range, which a bookkeeping follow-up never needs,
 **Likelihood:** Rare
 **Path:** External Interference
 **Area:** Docs
-**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `git merge-base --is-ancestor "$REVIEWED" "$INSPECTED"`
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `# fence: after-review`
 
 ### What Happens
 
@@ -1053,7 +1053,7 @@ Let a document fix from an incomplete pass wait with no disposition until the pa
 **Likelihood:** Rare
 **Path:** Unusual Input
 **Area:** Docs
-**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `a merge's message names every finding it brings in`
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `# fence: after-review`
 
 ### What Happens
 
@@ -1149,7 +1149,7 @@ Qualify the sentence by successful coverage, and name the uncovered fix commits 
 **Likelihood:** Rare
 **Path:** Unusual Input
 **Area:** Docs
-**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `PER_COMMIT="$(git --no-pager log -m --no-renames`
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `# fence: after-review`
 
 ### What Happens
 
@@ -1569,7 +1569,7 @@ Assert the positive *Checked Against* source clause; assert the new form in loop
 **Likelihood:** Rare
 **Path:** Unusual Input
 **Area:** Tests
-**Where:** [test_skill_text.py](../tests/test_skill_text.py) — `self.assertNotIn("--diff-merges", pw)`
+**Where:** [test_skill_text.py](../tests/test_skill_text.py) — `def test_after_review_uses_pinned_commits_and_unsigned_log_output`
 
 ### What Happens
 
