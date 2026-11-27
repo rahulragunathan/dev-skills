@@ -252,14 +252,14 @@ class TriageTest(unittest.TestCase):
     def test_every_source_gets_the_fields_at_intake(self):
         # Fails if a source of findings is left out of the intake rule.
         triage = section(self.text, "## Triage — verify before presenting")
-        intake = triage[triage.index("**Every source"):]
+        intake = triage[triage.index("every source gets a Path"):]
         for source in ("`/code-review`", "`/security-review`", "`design-review`", "dependency scan"):
             with self.subTest(source=source):
                 self.assertIn(source, intake[:600])
 
     def test_note_labels_are_title_case(self):
         # Fails if a keyed-note label or a gate heading is in sentence case, or an old label remains.
-        for label in ("*When It Fires:*", "*What Happens:*", "*Steps To Reproduce:*",
+        for label in ("*When It Fires:*", "*What Happens:*", "*Steps To Reproduce*",
                       "*Reviewer's Fix:*", "*Commentary:*"):
             with self.subTest(present=label):
                 self.assertIn(label, self.text)
@@ -368,6 +368,37 @@ class FollowUpTest(unittest.TestCase):
         gate = section(ER.read_text(), "### What the user sees at the gate")
         self.assertIn("| Pass | Rows | Blocking | Outcome |", gate)
 
+
+    def test_keyed_notes_open_with_blocking_and_disposition(self):
+        # Fails if an example note does not open with the bare word Blocking or Non-Blocking and
+        # then its Disposition, if a `*Blocking:*` label appears, or if the record's note rule
+        # does not ask for the opening.
+        text = ER.read_text()
+        notes = [flat(n) for n in re.findall(r"^\*\*F-\d+\*\* — .*?(?=\n\n)", text, re.M | re.S)]
+        with self.subTest("examples exist"):
+            self.assertGreaterEqual(len(notes), 2)
+        for note in notes:
+            with self.subTest(note=note[:12]):
+                self.assertRegex(note, r"^\*\*F-\d+\*\* — \*(Blocking|Non-Blocking)\* · \*Disposition:\* ")
+        with self.subTest("no label"):
+            self.assertNotIn("*Blocking:*", all_skills())
+        with self.subTest("record rule"):
+            record = flat(section(text, "### The phase review record"))
+            self.assertIn("a keyed note for every row** — it opens with *Blocking* or *Non-Blocking*", record)
+        with self.subTest("rejected"):
+            self.assertIn("A `Rejected` row is *Non-Blocking*", flat(text))
+
+    def test_plan_notes_have_no_steps(self):
+        # Fails if a plan-mode example note shows Steps To Reproduce, or intake asks plan-mode
+        # findings for steps (KI-105).
+        text = ER.read_text()
+        notes = [flat(n) for n in re.findall(r"^\*\*F-\d+\*\* — .*?(?=\n\n)", text, re.M | re.S)]
+        for note in notes:
+            with self.subTest(note=note[:12]):
+                self.assertNotIn("Steps To Reproduce", note)
+        triage = flat(section(text, "## Triage — verify before presenting"))
+        with self.subTest("intake"):
+            self.assertIn("**In phase and repo mode, every source gets a Path, an Area and Steps To Reproduce at intake.**", triage)
 
 if __name__ == "__main__":
     unittest.main()

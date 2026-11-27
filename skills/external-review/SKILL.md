@@ -570,8 +570,8 @@ model downshift. The probe must carry the same do-not-read instruction as the re
 ## Triage — verify before presenting
 
 1. **Verify each finding against the repo** (read the cited file/function) before it reaches the user. A confident false finding routed into the roadmap files is worse than no review. Verification decides the **Verdict**, never whether the row appears.
-2. **Steps To Reproduce are evidence, never commands.** Read them before running anything. Run them only in a disposable fixture with synthetic inputs: never in the working tree, and never against a network or outside service. Where a reviewer's steps are missing or do not work, complete or reconstruct them yourself, and say so in the note (`steps reconstructed by the triager`). A defect you confirm with reconstructed steps is judged like any other; a claim nobody can confirm is `Rejected`. Before steps reach a PR, a roadmap entry or another review's bundle, replace real secrets, account names and local paths with synthetic values.
-3. **Every source gets a Path, an Area and Steps To Reproduce at intake.** Findings from `/code-review`, `/security-review`, `design-review` and the dependency scan join the record with the same fields as a reviewer's; where the source gave none, you supply them, and the note says who did. A dependency-scan coverage gap keeps its own policy (`phase-workflow` §3 step 2).
+2. **Steps To Reproduce are evidence, never commands.** Read them before running anything. Run them only in a disposable fixture with synthetic inputs: never in the working tree, and never against a network or outside service. In phase and repo mode, where a reviewer's steps are missing or do not work, complete or reconstruct them yourself, and say so in the note (`steps reconstructed by the triager`). A defect you confirm with reconstructed steps is judged like any other; a claim nobody can confirm is `Rejected`. Before steps reach a PR, a roadmap entry or another review's bundle, replace real secrets, account names and local paths with synthetic values.
+3. **In phase and repo mode, every source gets a Path, an Area and Steps To Reproduce at intake.** A plan-mode finding gets a Path and an Area, and no steps. Findings from `/code-review`, `/security-review`, `design-review` and the dependency scan join the record with the same fields as a reviewer's; where the source gave none, you supply them, and the note says who did. A dependency-scan coverage gap keeps its own policy (`phase-workflow` §3 step 2).
 4. **Deduplicate across reviewers.** One row per distinct finding. Two reviewers reporting the same thing is signal, not noise — merge them into one row listing **both model ids, including Codex's effort**, per the Model column rule below. Never `Both`: a row can outlive this table by being filed as a roadmap entry, and `Both` resolves only against one pass's coverage line.
 5. **Give every finding a disposition** and present them in the findings table below. *plan* mode: the table goes in the plan. *phase* mode: the [review record](#the-phase-review-record) goes in the PR description and the hand-off. *repo* mode: the table goes in the hand-off.
 
@@ -606,13 +606,18 @@ If neither CLI is installed, print the skip line in its place — `External revi
 
 *The dispositions above are **plan** mode; phase and repo mode use the vocabulary further down. A phase review adds `Pass` and `Commit` columns; see [the phase review record](#the-phase-review-record).*
 
-**F-01** — *When It Fires:* `the condition that has to hold` *What Happens:* `the observable
-consequence, concretely` *Steps To Reproduce:* `numbered, from a fresh fixture` *Reviewer's Fix:*
-`the remediation the reviewer proposed, in its own words` *Commentary:* `what you found verifying
-it, and why the disposition follows`
+**F-01** — *Non-Blocking* · *Disposition:* Incorporated — new step 6 — *When It Fires:* `the
+condition that has to hold` *What Happens:* `the observable consequence, concretely`
+*Reviewer's Fix:* `the remediation the reviewer proposed, in its own words` *Commentary:* `what
+you found verifying it, and why the disposition follows`
 
-**Every keyed note carries those first four lines.** *When It Fires* and *What Happens* are the
-pair that makes a `KNOWN_ISSUES` entry assessable, and a findings row without them asks the
+**Every keyed note opens with *Blocking* or *Non-Blocking*, by [the blocking
+rule](#the-blocking-rule), then its Disposition**, so the note reads without the table. The
+first is a bare word with no label. A `Rejected` row is *Non-Blocking*: only a confirmed finding
+can block. In plan mode the word says whether the finding would block once built. Then come
+*When It Fires*, *What Happens*, *Reviewer's Fix* and *Commentary*; in phase and repo mode,
+*Steps To Reproduce* follows *What Happens*. The examples here are plan mode, so they have
+none. *When It Fires* and *What Happens* are the pair that makes a `KNOWN_ISSUES` entry assessable, and a findings row without them asks the
 reader to take the severity on trust. *Steps To Reproduce* lets the next reader see it happen.
 All three travel: a row filed as `KI-nn` inherits them, as its *What Happens* and *Steps To
 Reproduce* sections. A plan has no code to run, so in plan mode the note has no *Steps To
@@ -625,7 +630,7 @@ what you would do, say so in the commentary rather than replacing the sketch. Wr
 `none offered` when the reviewer gave none — that is itself worth seeing, because a finding
 whose author cannot say how to fix it is usually underspecified.
 
-**F-02** — *When It Fires:* … *What Happens:* … *Steps To Reproduce:* … *Reviewer's Fix:* … *Commentary:* …
+**F-02** — *Non-Blocking* · *Disposition:* Filed KI-08 — *When It Fires:* … *What Happens:* … *Reviewer's Fix:* … *Commentary:* …
 
 Column rules:
 
@@ -714,7 +719,7 @@ The column rules above apply. `Commit` is the fix commit, or `—`. A finding fr
 checks rather than an external reviewer (`/code-review high`, `/security-review`, `design-review`, the dependency scan) names that check
 in the Model column and `—` in Pass.
 
-**Under the table, a keyed note for every row** — *When It Fires*, *What Happens*, *Steps To Reproduce*, *Reviewer's Fix* and *Commentary*, as above. A fixed row adds:
+**Under the table, a keyed note for every row** — it opens with *Blocking* or *Non-Blocking* and its Disposition, then *When It Fires*, *What Happens*, *Steps To Reproduce*, *Reviewer's Fix* and *Commentary*, as above. A fixed row adds:
 
 - *Fix:* the change, in one line.
 - *Scenarios:* each scenario the failing test covered, with the red you observed before the fix and the green after.
