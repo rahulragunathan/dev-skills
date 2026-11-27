@@ -65,7 +65,7 @@ here — the plugin manifest's version is the only record of them.
 
 - **Every row has a disposition.** A repo review's blocking row, and a
   blocker from an incomplete pass waiting for its retry, are `Unfixed Blocker`. A change you make
-  at the gate is written `<new> — was <old>, the user's call`. A row has one Path, the one that
+  at the gate is written `Originally <old>; <new> On User's Call`. A row has one Path, the one that
   blocks first. Likelihood is attributed per reviewer like Severity, and a filed merged row takes
   one whole set of ratings. A `Rejected` or accepted row gets no roadmap entry. Plan mode asks
   for no steps anywhere. phase-workflow §3 step 2 sends its own checks' findings and gaps through

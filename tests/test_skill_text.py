@@ -449,10 +449,19 @@ class PolicyGapTest(unittest.TestCase):
         self.assertIn("a `Rejected` or `Confirmed: Accepted, No Work Planned` row gets none", bullet)
 
     def test_ki_104_the_users_change_has_a_form(self):
-        # Fails if the disposition order does not say how a row the user changed is written.
+        # Fails if the disposition order does not say how a row the user changed is written, or
+        # the form is not chronological: what the row was first, then what the user made it.
         order = self.er[self.er.index("**Disposition order.**"):self.er.index("- `Fixed In Phase` —")]
-        self.assertIn("`<new> — was <old>, the user's call`", order)
+        self.assertIn("`Originally <old>; <new> On User's Call`", order)
         self.assertIn("describe the default", order)
+
+    def test_the_users_change_reads_in_order_everywhere(self):
+        # Fails if the old `<new> — was <old>` form survives in a skill, the loop or the release notes.
+        for name, text in (("external-review", self.er), ("phase-workflow", self.pw),
+                           ("CHANGELOG", (ROOT / "CHANGELOG.md").read_text())):
+            with self.subTest(name):
+                self.assertNotIn("was <old>, the user's call", text)
+                self.assertNotIn("— was Filed, the user's call", text)
 
     def test_ki_106_merged_ratings_are_attributed_and_filed_whole(self):
         # Fails if Likelihood has no attribution rule for disagreeing reviewers, or a filed
