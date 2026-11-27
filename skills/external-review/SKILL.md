@@ -698,7 +698,7 @@ A valid finding that is out of scope for this phase is **kept, not dropped**. Wh
 
 **Every row lands in exactly one** — that is what guarantees nothing is quietly lost.
 
-**Disposition order.** First verify, which sets the Verdict; a row that fails verification is `Rejected`. For a confirmed row, apply [the blocking rule](#the-blocking-rule): a blocking row is `Fixed In Phase`, or `Unfixed Blocker` when the loop has stopped or an incomplete pass awaits its retry; a row that does not block is filed, or `Recorded Only: No Roadmap Files`, or `Confirmed: Accepted, No Work Planned`. A document fix is the exception: it is `Fixed In Phase` whether or not it blocks, and whether or not the loop has stopped ([the loop](#the-loop)). In repo mode there is no loop, so a blocking row is `Unfixed Blocker` and the user decides. The user can change any row at the gate; write it as `<new> — was <old>, the user's call`. The definitions below describe the default a row gets from the rule, not a row the user changed.
+**Disposition order.** First verify, which sets the Verdict; a row that fails verification is `Rejected`. For a confirmed row, apply [the blocking rule](#the-blocking-rule): a blocking row is `Fixed In Phase`, or `Unfixed Blocker` when the loop has stopped or an incomplete pass awaits its retry; a row that does not block is filed, or `Recorded Only: No Roadmap Files`, or `Confirmed: Accepted, No Work Planned`. In phase mode, on a complete pass, a document fix is the exception: it is `Fixed In Phase` whether or not it blocks, and whether or not the loop has stopped ([the loop](#the-loop)). In repo mode there is no loop and no fix on the branch, so a blocking row is `Unfixed Blocker` and the user decides. The user can change any row at the gate; write it as `<new> — was <old>, the user's call`. The definitions below describe the default a row gets from the rule, not a row the user changed.
 
 - `Fixed In Phase` — a blocking row, fixed on the branch, with a failing test written first, or a document fix, which has its own evidence ([below](#the-loop)).
 - `Unfixed Blocker` — *not fixed.* A blocking row that waits for the user: from the pass the loop stopped on, from an incomplete pass whose retry is pending, or from a repo review, which has no loop. The loop stops before fixing its last pass's findings, since every fix but a document fix needs another review pass, so the row reaches the gate unfixed and the user decides: fix it, which costs another pass, or file it.
@@ -731,7 +731,7 @@ in the Model column and `—` in Pass.
 
 - *Fix:* the change, in one line.
 - *Scenarios:* each scenario the failing test covered, with the red you observed before the fix and the green after.
-- *Checked Against:* for a document fix, in place of *Scenarios*: the claim that was wrong and the source you checked it against.
+- *Checked Against:* for a document fix, in place of *Scenarios*: the claim that was wrong, the source you checked it against, and whether it landed after the last pass.
 
 **Then a short block per pass:** the commit it reviewed; its coverage line with each
 invocation's output file name and byte count; its findings counted by severity; how many were
@@ -763,7 +763,7 @@ and the gate takes the user's recorded decision instead.
    (`F-12 — the F-03 fix is partial`), and counts as new at its own severity. Earlier rows keep
    their pass and finding, and per-pass counts never change. Later, only the user changes a row:
    its Disposition, written as `<new> — was <old>, the user's call`, and, for a row reopened for
-   a fix, its Commit and test evidence.
+   a fix, its Commit and its evidence (a test, or *Checked Against* for a document fix).
 2. **Apply the stop rule before fixing anything, and only to a complete pass.** Count verified
    findings only; `Rejected` rows do not count. Stop after pass 3. Stop when a pass has no blocking
    finding other than a document fix ([the blocking rule](#the-blocking-rule)): its document fixes
@@ -773,8 +773,8 @@ and the gate takes the user's recorded decision instead.
    completes, those rows are settled as for any complete pass, and that is not a change by the
    user: the loop continues or stops as usual. It never ends the loop on its own — see
    [Coverage classification](#coverage-classification).
-3. **If the loop continues:** fix the blocking rows, each with a failing test first, make its document fixes in the same commit,
-   re-check the docs those fixes touch (`phase-workflow` §3 step 6), file the deferred rows, run the full suite, and commit. The next pass reviews only
+3. **If the loop continues:** fix the other blocking rows, each with a failing test first, make the pass's document fixes in the same commit (its message names their rows),
+   re-check the docs those fixes touch (`phase-workflow` §3 step 6), file the other deferred rows, run the full suite, and commit. The next pass reviews only
    `<commit the last pass reviewed>..HEAD`. If that commit is no longer an ancestor of `HEAD`
    (an amend or a rebase), the next pass is full scope: the one case a follow-up widens.
 4. **If it stops:** that pass's findings are not fixed, document fixes aside. Other deferred rows are filed before the gate; other blocking rows go to the gate as `Unfixed Blocker`. A fix the user then

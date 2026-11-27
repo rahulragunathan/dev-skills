@@ -436,7 +436,7 @@ class PolicyGapTest(unittest.TestCase):
 
     def test_ki_99_repo_mode_blocking_rows_have_a_disposition(self):
         # Fails if a blocking row in a repo review has no disposition.
-        self.assertIn("In repo mode there is no loop, so a blocking row is `Unfixed Blocker`", self.er)
+        self.assertIn("In repo mode there is no loop and no fix on the branch, so a blocking row is `Unfixed Blocker`", self.er)
 
     def test_ki_100_one_path_per_row(self):
         # Fails if the Path column still lets a reviewer name several Paths for one row.
@@ -576,8 +576,9 @@ class BookkeepingFixTest(unittest.TestCase):
         rule = self.rule()
         for clause in ("this release's `CHANGELOG.md` entry", "or an entry's ratings",
                        "It never closes or deletes an entry, changes what an entry covers, or changes a value "
-                       "the workflow reads: the phase-record keys set at phase start",
-                       "`DEFAULT_BRANCH`, `PHASE_BRANCH` and `MERGE_METHOD`; those need a narrow pass"):
+                       "the workflow reads: the phase-record keys set at phase start, `ORIGIN_URL`, "
+                       "`ORIGIN_PUSH_URL`, `REPO`, `DEFAULT_BRANCH`, `PHASE_BRANCH` and `MERGE_METHOD`; those "
+                       "need a narrow pass"):
             with self.subTest(clause=clause):
                 self.assertIn(clause, rule)
         with self.subTest("patch check"):
@@ -592,7 +593,9 @@ class BookkeepingFixTest(unittest.TestCase):
         for clause in ("whatever its blocking status",
                        "a pass whose only blocking rows are document fixes stops as if it had none",
                        "in place of a failing test its note gives the claim that was wrong and the source you "
-                       "checked it against"):
+                       "checked it against, and says when it landed after the last pass",
+                       "On a pass the loop continues past, it is made with that pass's fixes, so the next pass "
+                       "reviews it"):
             with self.subTest(clause=clause):
                 self.assertIn(clause, rule)
         with self.subTest("definition"):
@@ -605,15 +608,23 @@ class BookkeepingFixTest(unittest.TestCase):
         # evidence or phase-workflow's step 5 still contradict the document-fix exception.
         er = flat(ER.read_text())
         pw = flat(PW.read_text())
-        for clause in ("A document fix is the exception: it is `Fixed In Phase` whether or not it blocks",
+        for clause in ("In phase mode, on a complete pass, a document fix is the exception: it is `Fixed In "
+                       "Phase` whether or not it blocks, and whether or not the loop has stopped",
+                       "In repo mode there is no loop and no fix on the branch",
+                       "fix the other blocking rows, each with a failing test first, make the pass's document "
+                       "fixes in the same commit",
+                       "file the other deferred rows",
+                       "its Commit and its evidence (a test, or *Checked Against* for a document fix)",
+                       "the source you checked it against, and whether it landed after the last pass",
                        "since every fix but a document fix needs another review pass",
                        "Stop when a pass has no blocking finding other than a document fix",
                        "Other deferred rows are filed before the gate; other blocking rows go to the gate",
-                       "make its document fixes in the same commit",
                        "*Checked Against:* for a document fix, in place of *Scenarios*"):
             with self.subTest(clause=clause):
                 self.assertIn(clause, er)
-        for clause in ("Only a finding that [blocks the phase](../external-review/SKILL.md#the-blocking-rule), or a document fix, is fixed here",
+        for clause in ("a changed phase-record key the workflow reads, one of those set at phase start such as "
+                       "`MERGE_METHOD`, included",
+                       "Only a finding that [blocks the phase](../external-review/SKILL.md#the-blocking-rule), or a document fix, is fixed here",
                        "a document fix gives the source it was checked against instead"):
             with self.subTest(clause=clause):
                 self.assertIn(clause, pw)

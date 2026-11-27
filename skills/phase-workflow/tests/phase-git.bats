@@ -617,8 +617,9 @@ after_review() {
   run bash "$TEST_TMP/after.sh"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"corrected claim"* ]] || false
-  # The commit message must be shown, so the reader can check it names its finding.
-  [[ "$output" == *"Document fix for F-07"* ]]
+  # The commit message must be shown, with the files that commit changed, so the reader can
+  # check the fix names its finding.
+  [[ "$output" == *"Document fix for F-07"*CHANGELOG.md* ]]
 }
 
 @test "origin check: accepts a bare user over each ssh spelling" {
