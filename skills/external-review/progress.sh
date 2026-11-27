@@ -6,13 +6,13 @@
 #
 # An invocation is a `<reviewer>_<mode>_p<pass>_c<chunk>_…txt` output file
 # (prompt files are not), or a Gemini answer still streaming into `.part`, or one
-# set aside as `.partial`. Non-empty output means done. Empty output means the
-# reviewer is still writing: the line gives how long since it started (the
-# output file is created then) and when its .log last changed. Past the
-# 25-minute print timeout it says to check the run.
+# set aside as `.partial`. Non-empty output means done, unless its state says
+# it failed. Empty output means the reviewer is still writing: the line gives
+# how long since it started (the output file is created then) and when its .log
+# last changed. Past the 25-minute print timeout it says to check the run.
 #
-# Both loops write `.state` (how the attempt ended) beside each output; an empty
-# output with a final state is reported from it, not as running. The Gemini loop
+# Both loops write `.state` (how the attempt ended) beside each output; an output
+# whose state is failed or unavailable is reported from it, empty or not. The Gemini loop
 # also writes `.start` (the attempt's epoch), which dates a run where it exists,
 # since stderr can change at any time. An unfinished attempt with a later attempt
 # of the same chunk is reported as superseded, not running.
@@ -40,8 +40,13 @@ superseded() {
   return 1
 }
 # say_superseded: the line for an attempt a later one replaced.
-say_superseded() {
-  echo "$reviewer $chunk $(printf '%s' "$name" | sed -E 's/.*_c[0-9]+_(a[0-9]+)_.*/\1/'): superseded by a later attempt"
+say_superseded() { echo "$reviewer $chunk $att: superseded by a later attempt"; }
+# rung_answered: another rung of the same attempt left a non-empty answer, so this
+# rung's `unavailable` is old news.
+rung_answered() {
+  local f
+  for f in "$dir/${reviewer}"_*_p"$pass"_"$chunk"_"$att"_*.txt; do [ -s "$f" ] && return 0; done
+  return 1
 }
 found=0
 for out in "$dir"/*_p"$pass"_c*.txt "$dir"/*_p"$pass"_c*.part "$dir"/*_p"$pass"_c*.partial "$dir"/*_p"$pass"_c*.state; do
@@ -51,6 +56,7 @@ for out in "$dir"/*_p"$pass"_c*.txt "$dir"/*_p"$pass"_c*.part "$dir"/*_p"$pass"_
   found=1
   reviewer="${name%%_*}"
   chunk="$(printf '%s' "$name" | sed -E 's/.*_p[0-9]+_(c[0-9]+)_.*/\1/')"
+  att="$(printf '%s' "$name" | sed -E 's/.*_c[0-9]+_(a[0-9]+)_.*/\1/')"
   bytes="$(wc -c < "$out" | tr -d ' ')"
   state=""; [ -r "${out%.*}.state" ] && IFS= read -r state < "${out%.*}.state"
   case "$name" in
@@ -59,8 +65,7 @@ for out in "$dir"/*_p"$pass"_c*.txt "$dir"/*_p"$pass"_c*.part "$dir"/*_p"$pass"_
       base="${out%.state}"
       [ -e "$base.txt" ] || [ -e "$base.part" ] || [ -e "$base.partial" ] && continue
       if superseded "$name"; then say_superseded; continue; fi
-      # A rung that left only its state is old news once another rung of the chunk answered.
-      for f in "$dir/${reviewer}"_*_p"$pass"_"$chunk"_*.txt; do [ -s "$f" ] && continue 2; done
+      [ "$state" = unavailable ] && rung_answered && continue
       echo "$reviewer $chunk: ${state:-unknown}"; continue ;;
     *.partial)
       if superseded "$name"; then
@@ -87,6 +92,14 @@ for out in "$dir"/*_p"$pass"_c*.txt "$dir"/*_p"$pass"_c*.part "$dir"/*_p"$pass"_
             [ "$ran" -gt 25 ] && line="$line — past its timeout; check it"
             echo "$line"; continue ;;
   esac
+  # A failed or unavailable state outranks any output the run left behind.
+  case "$state" in failed|unavailable)
+    if superseded "$name"; then say_superseded; continue; fi
+    [ "$state" = unavailable ] && rung_answered && continue
+    if [ -s "$out" ]; then echo "$reviewer $chunk: $state — $bytes bytes, not an answer"
+    else echo "$reviewer $chunk: $state — no answer"; fi
+    continue ;;
+  esac
   if [ -s "$out" ]; then
     echo "$reviewer $chunk: done, $bytes bytes"
     continue
@@ -95,10 +108,6 @@ for out in "$dir"/*_p"$pass"_c*.txt "$dir"/*_p"$pass"_c*.part "$dir"/*_p"$pass"_
     say_superseded
     continue
   fi
-  # An empty answer with a final state ended without answering: a failed Codex run.
-  case "$state" in failed|unavailable)
-    echo "$reviewer $chunk: $state — no answer"; continue ;;
-  esac
   ran="$(mins "$out")"
   line="$reviewer $chunk: running ${ran}m"
   log="${out%.txt}.log"

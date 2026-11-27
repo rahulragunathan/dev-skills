@@ -503,5 +503,45 @@ class PolicyGapTest(unittest.TestCase):
         self.assertIn("`git clone --no-hardlinks`", flat(ER.read_text()))
 
 
+class PassFourTest(unittest.TestCase):
+    """The blocking finding and the partly fixed entries from the follow-up's review."""
+
+    def setUp(self):
+        self.er = flat(ER.read_text())
+        self.pw = flat(PW.read_text())
+
+    def test_the_fixture_clone_has_no_origin(self):
+        # Fails if the fixture's clone keeps `origin` pointing at the real repository (F-35).
+        self.assertIn("then remove its `origin` (`git -C <folder>/repo remote remove origin`)", self.er)
+
+    def test_only_filed_rows_reach_the_roadmap(self):
+        # Fails if §3's opening or step 2 still sends every non-blocking row to the roadmap files.
+        step2 = self.pw[self.pw.index("2. **Consolidation"):self.pw.index("3. **Red record check")]
+        with self.subTest("step 2"):
+            self.assertIn("a blocking one is fixed in the phase, and the rest take their disposition from "
+                          "the same rule; only a `Filed` row gets a roadmap entry", step2)
+        with self.subTest("opening"):
+            self.assertIn("Findings from every step enter the review record, and those dispositioned "
+                          "`Filed` land in the roadmap files", self.pw)
+
+    def test_a_plan_finding_files_its_concrete_failure(self):
+        # Fails if a plan finding filed as a KI has nothing to put in Steps To Reproduce.
+        self.assertIn("A KI filed from a plan review has no steps to inherit: its *Steps To Reproduce* "
+                      "section gives the concrete failure", self.er)
+
+    def test_equal_severity_has_a_tie_break(self):
+        # Fails if a merged row whose reviewers tie on Severity has no rule for which set is filed.
+        self.assertIn("On a tie, take the set with the higher Likelihood, then the Path that blocks first", self.er)
+
+    def test_a_completed_retry_settles_the_waiting_rows(self):
+        # Fails if nothing says what happens to a waiting Unfixed Blocker once the retry completes,
+        # or the disposition order omits the waiting case.
+        with self.subTest("transition"):
+            self.assertIn("When the retry completes, those rows are settled as for any complete pass, "
+                          "and that is not a change by the user", self.er)
+        with self.subTest("order"):
+            self.assertIn("or `Unfixed Blocker` when the loop has stopped or an incomplete pass awaits its retry", self.er)
+
+
 if __name__ == "__main__":
     unittest.main()

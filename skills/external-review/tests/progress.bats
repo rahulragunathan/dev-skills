@@ -184,3 +184,30 @@ age() { touch -t "$(date -v-"$2"M +%Y%m%d%H%M.%S)" "$1"; }
   [[ "$output" == *"codex c1 a1: superseded by a later attempt"* ]] || { echo "$output"; false; }
   [[ "$output" != *"codex c1: failed"* ]] || { echo "$output"; false; }
 }
+
+@test "a failed Codex run that wrote some output is reported as failed" {
+  # Fails if a non-empty output whose loop recorded `failed` is reported as done.
+  printf 'partial\n' > "$TEST_TMP/codex_phase_p1_c1_a1_m_high.txt"
+  echo failed > "$TEST_TMP/codex_phase_p1_c1_a1_m_high.state"
+  run bash "$PROGRESS" "$TEST_TMP" 1
+  [[ "$output" == *"codex c1: failed — 8 bytes"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"done"* ]] || { echo "$output"; false; }
+}
+
+@test "a later attempt's failure is not hidden by an earlier attempt's answer" {
+  # Fails if a retry's failed state is suppressed because an earlier attempt left output.
+  printf 'prose\n' > "$TEST_TMP/codex_phase_p1_c1_a1_m_high.txt"
+  echo failed > "$TEST_TMP/codex_phase_p1_c1_a2_m_high.state"
+  run bash "$PROGRESS" "$TEST_TMP" 1
+  [[ "$output" == *"codex c1: failed"* ]] || { echo "$output"; false; }
+}
+
+@test "an unavailable rung with an empty output is not reported beside the rung that answered" {
+  # Fails if an unavailable rung that left an empty `.txt` is still reported once another rung of the attempt answered.
+  : > "$TEST_TMP/codex_phase_p1_c1_a1_sol_high.txt"
+  echo unavailable > "$TEST_TMP/codex_phase_p1_c1_a1_sol_high.state"
+  printf 'ok\n' > "$TEST_TMP/codex_phase_p1_c1_a1_m_high.txt"
+  run bash "$PROGRESS" "$TEST_TMP" 1
+  [[ "$output" == *"codex c1: done, 3 bytes"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"unavailable"* ]] || { echo "$output"; false; }
+}
