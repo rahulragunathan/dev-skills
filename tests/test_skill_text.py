@@ -465,5 +465,13 @@ class PolicyGapTest(unittest.TestCase):
         # retry waits.
         self.assertIn("While it waits, a confirmed blocking row from it is `Unfixed Blocker`", self.er)
 
+    def test_ki_111_codex_loop_writes_its_state(self):
+        # Fails if the Codex loop leaves no end state for progress to read.
+        text = ER.read_text()
+        fence = text[text.index("# fence: codex-loop"):text.index("# fence: gemini-loop")]
+        for state in ("done", "failed", "unavailable"):
+            with self.subTest(state=state):
+                self.assertIn(f'echo {state} > "$STATE"', fence)
+
 if __name__ == "__main__":
     unittest.main()

@@ -147,3 +147,22 @@ age() { touch -t "$(date -v-"$2"M +%Y%m%d%H%M.%S)" "$1"; }
   run bash "$PROGRESS" "$TEST_TMP" 2
   [[ "$output" == *"gemini c1 a1: superseded by a later attempt"* ]]
 }
+
+@test "progress reports a failed Codex attempt as failed" {
+  # Fails if an empty Codex output whose loop recorded a final state is reported as running (KI-111).
+  : > "$TEST_TMP/codex_phase_p1_c1_a1_m_high.txt"
+  printf 'ERROR: usage limit\n' > "$TEST_TMP/codex_phase_p1_c1_a1_m_high.log"
+  echo failed > "$TEST_TMP/codex_phase_p1_c1_a1_m_high.state"
+  run bash "$PROGRESS" "$TEST_TMP" 1
+  [[ "$output" == *"codex c1: failed"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"running"* ]]
+}
+
+@test "a superseded empty Codex attempt is not running" {
+  # Fails if an empty earlier attempt is reported as running once a later attempt exists.
+  : > "$TEST_TMP/codex_phase_p1_c1_a1_m_high.txt"
+  printf 'No findings.\n' > "$TEST_TMP/codex_phase_p1_c1_a2_m_high.txt"
+  run bash "$PROGRESS" "$TEST_TMP" 1
+  [[ "$output" == *"codex c1 a1: superseded by a later attempt"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"running"* ]]
+}

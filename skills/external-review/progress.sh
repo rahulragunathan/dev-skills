@@ -11,10 +11,11 @@
 # output file is created then) and when its .log last changed. Past the
 # 25-minute print timeout it says to check the run.
 #
-# The Gemini loop also writes `.start` (the attempt's epoch) and `.state` (how it
-# ended) beside each output. A run is dated from `.start` where it exists, since
-# stderr can change at any time, and a `.part` with a later attempt of the same
-# chunk is reported as superseded, not running.
+# Both loops write `.state` (how the attempt ended) beside each output; an empty
+# output with a final state is reported from it, not as running. The Gemini loop
+# also writes `.start` (the attempt's epoch), which dates a run where it exists,
+# since stderr can change at any time. An unfinished attempt with a later attempt
+# of the same chunk is reported as superseded, not running.
 set -u
 dir="$1"; pass="$2"
 now="$(date +%s)"
@@ -38,6 +39,10 @@ superseded() {
   done
   return 1
 }
+# say_superseded: the line for an attempt a later one replaced.
+say_superseded() {
+  echo "$reviewer $chunk $(printf '%s' "$name" | sed -E 's/.*_c[0-9]+_(a[0-9]+)_.*/\1/'): superseded by a later attempt"
+}
 found=0
 for out in "$dir"/*_p"$pass"_c*.txt "$dir"/*_p"$pass"_c*.part "$dir"/*_p"$pass"_c*.partial "$dir"/*_p"$pass"_c*.state; do
   [ -e "$out" ] || continue
@@ -47,29 +52,29 @@ for out in "$dir"/*_p"$pass"_c*.txt "$dir"/*_p"$pass"_c*.part "$dir"/*_p"$pass"_
   reviewer="${name%%_*}"
   chunk="$(printf '%s' "$name" | sed -E 's/.*_p[0-9]+_(c[0-9]+)_.*/\1/')"
   bytes="$(wc -c < "$out" | tr -d ' ')"
+  state=""; [ -r "${out%.*}.state" ] && IFS= read -r state < "${out%.*}.state"
   case "$name" in
     *.state)
       # Only an attempt that left nothing else, such as an unavailable rung, is reported from here.
       base="${out%.state}"
       [ -e "$base.txt" ] || [ -e "$base.part" ] || [ -e "$base.partial" ] && continue
-      echo "$reviewer $chunk: $(cat "$out" 2>/dev/null || echo unknown)"; continue ;;
+      echo "$reviewer $chunk: ${state:-unknown}"; continue ;;
     *.partial)
       if superseded "$name"; then
-        echo "$reviewer $chunk $(printf '%s' "$name" | sed -E 's/.*_c[0-9]+_(a[0-9]+)_.*/\1/'): superseded by a later attempt"
+        say_superseded
         continue
       fi
-      case "$(cat "${out%.partial}.state" 2>/dev/null)" in
+      case "$state" in
         failed) echo "$reviewer $chunk: failed — $bytes bytes set aside" ;;
         cut-off) echo "$reviewer $chunk: failed — answer cut off, $bytes bytes set aside" ;;
         *) echo "$reviewer $chunk: failed — $bytes bytes set aside, reason not recorded" ;;
       esac
       continue ;;
     *.part) if superseded "$name"; then
-              echo "$reviewer $chunk $(printf '%s' "$name" | sed -E 's/.*_c[0-9]+_(a[0-9]+)_.*/\1/'): superseded by a later attempt"
+              say_superseded
               continue
             fi
             # A final state is authoritative: the run stopped before moving its answer aside.
-            state="$(cat "${out%.part}.state" 2>/dev/null || true)"
             case "$state" in failed|cut-off|unavailable)
               echo "$reviewer $chunk: $state — $bytes bytes left in .part"; continue ;;
             esac
@@ -83,6 +88,14 @@ for out in "$dir"/*_p"$pass"_c*.txt "$dir"/*_p"$pass"_c*.part "$dir"/*_p"$pass"_
     echo "$reviewer $chunk: done, $bytes bytes"
     continue
   fi
+  if superseded "$name"; then
+    say_superseded
+    continue
+  fi
+  # An empty answer with a final state ended without answering: a failed Codex run.
+  case "$state" in failed|unavailable)
+    echo "$reviewer $chunk: $state — no answer"; continue ;;
+  esac
   ran="$(mins "$out")"
   line="$reviewer $chunk: running ${ran}m"
   log="${out%.txt}.log"

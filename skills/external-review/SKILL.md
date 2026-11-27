@@ -163,13 +163,13 @@ for m in $(printf '%s' "$CODEX_RUNGS"); do
   slug="${m%%:*}"
   case "$m" in *:*) effort="${m#*:}";; *) effort=high;; esac
   OUT="<scratchpad>/codex_<mode>_p<n>_c<chunk>_a<attempt>_${slug}_${effort}.txt"
-  LOG="${OUT%.txt}.log"
-  rm -f "$OUT" "$LOG"          # never inherit a previous attempt's answer
+  LOG="${OUT%.txt}.log"; STATE="${OUT%.txt}.state"
+  rm -f "$OUT" "$LOG" "$STATE"   # never inherit a previous attempt's answer
   rc=0
   codex exec -C "$ROOT" --sandbox read-only --skip-git-repo-check \
     -m "$slug" -c model_reasoning_effort="$effort" \
     -o "$OUT" "<prompt>" > "$LOG" 2>&1 < /dev/null || rc=$?
-  [ "$rc" = 0 ] && [ -s "$OUT" ] && break                      # it answered; keep this rung
+  if [ "$rc" = 0 ] && [ -s "$OUT" ]; then echo done > "$STATE"; break; fi   # it answered; keep this rung
   if grep -E '^ERROR:' "$LOG" | grep -F "$slug" | grep -qiE 'not supported|unknown model|is not available|entitle'; then
     # The log can quote a refusal from the material under review, so a probe of this rung confirms it.
     CONFIRMED=""
@@ -178,14 +178,17 @@ for m in $(printf '%s' "$CODEX_RUNGS"); do
     done <<< "$(bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/preflight.sh" \
       --codex-model "$slug:$effort" --root "$ROOT" --timeout 120 2>&1 || true)"
     case "$CONFIRMED" in
-      UNAVAILABLE*) echo "unavailable: $slug:$effort — trying the next rung"; continue ;;
+      UNAVAILABLE*) echo unavailable > "$STATE"; echo "unavailable: $slug:$effort — trying the next rung"; continue ;;
     esac
+    echo failed > "$STATE"
     echo "$slug:$effort failed, and a probe did not confirm it unavailable (${CONFIRMED:-the probe gave no codex row}) — classify per Failure handling"; break
   fi
+  echo failed > "$STATE"
   echo "$slug:$effort failed for a reason that is not availability — classify per Failure handling"; break
 done
 ```
 
+- **Each attempt leaves its end.** The loop writes `.state` (`done`, `failed` or `unavailable`) beside the output, so `progress.sh` reports a run that failed before answering as failed, not running.
 - **`-o` captures the final message and nothing else.** A quota, auth or availability failure never reaches it, so the file is absent or empty and says nothing about why. The `.log` beside it holds stderr; the hand-off quotes its error lines verbatim, and the PR copy of the record does not.
 - **Downshift only on an `ERROR:` line that names this rung's own model, confirmed by a probe.**
   Codex writes the prompt and its whole transcript to stderr, so a run that fails mid-review
