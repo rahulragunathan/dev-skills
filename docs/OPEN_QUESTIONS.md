@@ -28,29 +28,24 @@ copy this table is for reading: editing it changes nothing.
 
 <a id="unk-04"></a>
 
-## UNK-04 — does an undefined input-format check bound a shared cache's keys?
+## UNK-04 — Does an undefined input-format check bound a shared cache's keys?
 
 **Kind:** Decision
-
-### The question
+**Where:** [s02-lifetime-surface.md](../skills/design-review/tests/s02-lifetime-surface.md) — `Fail an unbounded`
 
 S02 Lifetime fails "an unbounded shared cache". The fixture's `taxonomy.category_for` cache is
 keyed by SKU prefixes from merchant files. Some designs keep that cache unbounded and say the
 prefix is format-checked first, without defining the format. A defined format, such as three
 uppercase letters, bounds the keys; an undefined one does not show a bound.
 
-### Why it matters
-
 Graders split on this argument. The round-7 correction failed with-skill replicate 3 for it. In
 round 9 the graders failed with-skill replicate 3 for it, but passed baseline replicate 2, whose
 design differs mainly by naming a `normalise_prefix` function. S02 Lifetime tallies depend on
 the answer.
 
-### What would settle it
-
-Choose one reading and write it into the S02 Lifetime condition: either a key bound must be
-stated (a maxsize, a finite key set or a defined format), or a named normalisation step is
-enough. The reworded condition changes the condition hash, so the affected rows would need
+**What Settles It:** choose one reading and write it into the S02 Lifetime condition: either a
+key bound must be stated (a maxsize, a finite key set or a defined format), or a named
+normalisation step is enough. The reworded condition changes the condition hash, so the affected rows would need
 re-grading against it.
 
 **Source:** claude-opus-5 — round-9 grading, 2026-09-14.
@@ -59,7 +54,7 @@ re-grading against it.
 
 <a id="unk-05"></a>
 
-## UNK-05 — what drives repeat review findings?
+## UNK-05 — What drives repeat review findings?
 
 **Kind:** Verification
 **Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `in code an earlier fix of this review wrote`
@@ -68,7 +63,7 @@ External review often needs several passes, and later passes keep finding proble
 known how many of the findings in a narrow pass are in code the previous pass's fixes wrote, and
 how many are documentation drift those fixes caused.
 
-**What settles it:** the per-pass counts the review record now keeps, read across a few phases.
+**What Settles It:** the per-pass counts the review record now keeps, read across a few phases.
 If most later findings sit in fix code, the fix step needs more care. A narrow pass never reviews
 untouched code, so these counts cannot say what a first pass missed; that would need a separate
 full-scope sample.

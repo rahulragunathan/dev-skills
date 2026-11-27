@@ -473,5 +473,10 @@ class PolicyGapTest(unittest.TestCase):
             with self.subTest(state=state):
                 self.assertIn(f'echo {state} > "$STATE"', fence)
 
+    def test_ki_110_no_fix_fallback_is_title_case(self):
+        # Fails if the fallback for a reviewer who gave no fix is still lowercase.
+        self.assertIn("`None Offered`", self.er)
+        self.assertNotIn("`none offered`", self.er)
+
 if __name__ == "__main__":
     unittest.main()

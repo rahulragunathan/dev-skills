@@ -630,7 +630,7 @@ Reproduce*, and *When It Fires* carries the concrete failure.
 for a remediation sketch, so one comes back with each; summarizing it into your own commentary
 loses the thing the user is deciding about. Two sentences at most, and where they disagree with
 what you would do, say so in the commentary rather than replacing the sketch. Write
-`none offered` when the reviewer gave none — that is itself worth seeing, because a finding
+`None Offered` when the reviewer gave none — that is itself worth seeing, because a finding
 whose author cannot say how to fix it is usually underspecified.
 
 **F-02** — *Non-Blocking* · *Disposition:* Filed KI-08 — *When It Fires:* … *What Happens:* … *Reviewer's Fix:* … *Commentary:* …

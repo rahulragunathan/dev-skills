@@ -67,7 +67,6 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-94](KNOWN_ISSUES.md#ki-94) | Report lines that start with a committed path can pass for findings | Rare | Medium |
 | [KI-95](KNOWN_ISSUES.md#ki-95) | Publish-record still reads a short hex answer as a moved head | Rare | Medium |
 | [KI-109](KNOWN_ISSUES.md#ki-109) | The optional-field reader still differs from Markdown in three ways | Rare | Medium |
-| [KI-110](KNOWN_ISSUES.md#ki-110) | The ENH and UNK templates and one fixed value are still in sentence case | Almost Always | Low |
 | [KI-82](KNOWN_ISSUES.md#ki-82) | The zsh lint misses traps hidden by quotes and other subscripts | Likely | Low |
 | [KI-44](KNOWN_ISSUES.md#ki-44) | A stale dispatch log gives a misleading replacement message | Rare | Low |
 | [KI-78](KNOWN_ISSUES.md#ki-78) | Index rows are not bound to their section | Rare | Low |
@@ -77,7 +76,6 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-96](KNOWN_ISSUES.md#ki-96) | The Gemini prompt measurement can still accept a count it should refuse | Rare | Low |
 | [KI-91](KNOWN_ISSUES.md#ki-91) | Init and close can lose their caller's signal handler while registering their own | Rare | Low |
 | [KI-102](KNOWN_ISSUES.md#ki-102) | An empty Likelihood reads the Path line below it as its value | Rare | Low |
-| [KI-111](KNOWN_ISSUES.md#ki-111) | Progress reports a failed Codex attempt as running | Rare | Low |
 
 ## Enhancements
 

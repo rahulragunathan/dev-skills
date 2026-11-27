@@ -1922,3 +1922,46 @@ sample() { sed -n '/^---$/,$p' "$(dirname "$RM")/$1-template.md"; }
   [ "$status" -eq 1 ] || false
   [[ "$output" == *"KI-01"*"gone.md"* ]]
 }
+
+# own_docs: this repository's roadmap folder.
+own_docs() { echo "$(dirname "$RM")/../../docs"; }
+
+@test "the repository's own entries use only their template's headings, in order" {
+  # Fails if an entry has a heading its template lacks, in another case, or out of the template's order.
+  local file want id got h rest bad=""
+  for file in KNOWN_ISSUES ENHANCEMENTS OPEN_QUESTIONS; do
+    want="$(sample "$file" | grep '^### ' | paste -sd '|' -)"
+    while IFS='	' read -r id got; do
+      rest="|$want|"
+      while IFS= read -r h; do
+        [ -n "$h" ] || continue
+        case "$rest" in *"|$h|"*) rest="|${rest#*"|$h|"}" ;; *) bad="$bad $id:$h;" ;; esac
+      done <<< "$(printf '%s' "$got" | tr '|' '\n')"
+    done <<< "$(awk '/^## (KI|ENH|UNK)-[0-9]+ /{if (id) print id "\t" hs; id=$2; hs=""; next}
+                     /^### /{hs = hs (hs ? "|" : "") $0} END{if (id) print id "\t" hs}' "$(own_docs)/$file.md")"
+  done
+  [ -z "$bad" ] || { echo "$bad"; false; }
+}
+
+@test "the repository's own entries use only their templates' bold labels" {
+  # Fails if an entry carries a bold label, such as a sentence-case one, that no template has.
+  local want got bad
+  # A label starts its line or follows a field separator; one quoted in prose does not count.
+  labels() { grep -oE '(^|· )\*\*[A-Za-z ]+:\*\*' | sed 's/^· //' | sort -u; }
+  want="$(for f in KNOWN_ISSUES ENHANCEMENTS OPEN_QUESTIONS; do sample "$f"; done | labels)"
+  got="$(cat "$(own_docs)"/{KNOWN_ISSUES,ENHANCEMENTS,OPEN_QUESTIONS}.md | labels)"
+  bad="$(comm -13 <(printf '%s\n' "$want" '**Source:**' | sort -u) <(printf '%s\n' "$got"))"
+  [ -z "$bad" ] || { echo "$bad"; false; }
+}
+
+@test "the repository's own entry titles start with a capital letter" {
+  # Fails if an entry title starts in lower case.
+  run grep -nE '^## (KI|ENH|UNK)-[0-9]+ — [a-z]' "$(own_docs)"/{KNOWN_ISSUES,ENHANCEMENTS,OPEN_QUESTIONS}.md
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+}
+
+@test "templates: the ENH and UNK labels are in title case" {
+  # Fails if the ENH sample's Regression Net or the UNK sample's What Settles It label is in sentence case (KI-110).
+  [[ "$(sample ENHANCEMENTS)" == *'**Regression Net:**'* ]] || false
+  [[ "$(sample OPEN_QUESTIONS)" == *'**What Settles It:**'* ]]
+}
