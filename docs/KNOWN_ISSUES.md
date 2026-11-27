@@ -28,16 +28,16 @@ editing them changes nothing.
 
 | Level | Means |
 | ------- | ------- |
-| **Almost always** | Anyone following the documented workflow hits it. |
+| **Almost Always** | Anyone following the documented workflow hits it. |
 | **Likely** | Hit whenever a common condition holds — a second machine, an overlapping run, a particular option. |
 | **Rare** | Needs an unusual trigger, or only bites in combination with another failure. |
 
 **Judge the harm, not the code path.** A wrong value computed on every run is `Rare` when it only
 misleads after something else has already failed, and **a defect that is always present but
 harmful only in combination is `Rare`**. Conversely, if a documented step is what triggers it,
-that is `Almost always` for everyone who follows the step, however unusual it looks from outside.
+that is `Almost Always` for everyone who follows the step, however unusual it looks from outside.
 
-**Rate both, because one number cannot carry both.** `Rare · Critical` and `Almost always · Low`
+**Rate both, because one number cannot carry both.** `Rare · Critical` and `Almost Always · Low`
 are opposite kinds of work — the first is a landmine, the second is friction — and a single
 rating hides which you are looking at. Both still get fixed.
 
@@ -72,7 +72,7 @@ Push the inspected commit itself, and delete with `git update-ref -d refs/heads/
 ## KI-47 — grading packets omit information their conditions require
 
 **Severity:** High
-**Likelihood:** Almost always
+**Likelihood:** Almost Always
 **Where:** [grade_batch.py](../skills/design-review/tests/grade_batch.py) — `def packet_text(` (packet assembly),
 [s05-report-form.md](../skills/design-review/tests/s05-report-form.md) — `omits the reason: neither a fitting existing home`
 
@@ -104,7 +104,7 @@ verified by claude-opus-5.
 ## KI-48 — S07's with-skill arm is handed the answer to the condition it is graded on
 
 **Severity:** High
-**Likelihood:** Almost always
+**Likelihood:** Almost Always
 **Where:** [s07-process-rules.md](../skills/design-review/tests/s07-process-rules.md) — `This condition is about the audit's bookkeeping` condition 2b,
 `loaded-phase-workflow.md` in each round's evidence directory
 
@@ -135,7 +135,7 @@ verified by claude-opus-5.
 ## KI-60 — helper commands need `CLAUDE_PLUGIN_ROOT`, which a Codex install does not set
 
 **Severity:** High
-**Likelihood:** Almost always
+**Likelihood:** Almost Always
 **Where:** [README.md](../README.md) — `reads skills as plain folders`
 
 ### What happens
@@ -302,7 +302,7 @@ Parse the supported manifest structures instead of matching lines.
 ## KI-49 — the headline tally mixes two skills
 
 **Severity:** Medium
-**Likelihood:** Almost always
+**Likelihood:** Almost Always
 **Where:** [tests/README.md](../skills/design-review/tests/README.md) — `an unexecuted audit plan. S07 does not prove that` rollup,
 [s07-process-rules.md](../skills/design-review/tests/s07-process-rules.md) — `## Rules under test`
 
@@ -329,7 +329,7 @@ Report per-skill subtotals, and never a combined figure without naming which ski
 ## KI-50 — S05's fixture contradicts itself
 
 **Severity:** Medium
-**Likelihood:** Almost always
+**Likelihood:** Almost Always
 **Where:** [s05-report-form.md](../skills/design-review/tests/s05-report-form.md) — `Reporting an extraction contradicts the final decision and fails.`, Final decisions
 
 ### What happens

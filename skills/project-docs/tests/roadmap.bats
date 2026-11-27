@@ -1483,11 +1483,11 @@ PY
 import pathlib, re, sys
 src, docs = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
 fill = {"<title>": "A title", "<Critical | High | Medium | Low>": "High",
-        "<Almost always | Likely | Rare>": "Rare", "<High | Medium | Low>": "High",
+        "<Almost Always | Likely | Rare>": "Rare", "<High | Medium | Low>": "High",
         "<~hours / ~days>": "~1 day", "<Decision | Verification | Risk>": "Decision",
         "<the question, as a question>": "A question?", "<question>": "A question?",
         "<YYYY-MM-DD>": "2026-11-23", "<what changed>": "set up",
-        "Almost always / Likely / Rare": "Rare", "Critical / High / Medium / Low": "High",
+        "Almost Always / Likely / Rare": "Rare", "Critical / High / Medium / Low": "High",
         "High / Medium / Low": "High", "~hours / ~days": "~1 day",
         "Decision / Verification / Risk": "Decision"}
 def filled(text):
@@ -1680,4 +1680,189 @@ PY
     ! grep -q 'delete it from here' "$dir/$t-template.md" || false
     grep -q '\[ROADMAP.md\](ROADMAP.md)' "$dir/$t-template.md" || false
   done
+}
+
+# --- Optional fields: Path and Area -----------------------------------------------------------
+
+# Put LINE into KI-01's metadata block, straight after its Likelihood line.
+ki01_meta() {
+  python3 -I - "$DOCS/KNOWN_ISSUES.md" "$1" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+anchor = "**Likelihood:** Rare\n"
+assert t.count(anchor) == 1, "fixture lost KI-01's Likelihood line"
+p.write_text(t.replace(anchor, anchor + sys.argv[2] + "\n", 1))
+PY
+}
+
+@test "check refuses an unknown Path" {
+  # Fails if a Path that is not a template level passes check.
+  ki01_meta '**Path:** Sometimes'
+  grep -qx '\*\*Path:\*\* Sometimes' "$DOCS/KNOWN_ISSUES.md" || false
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"unknown Path: KI-01"* ]]
+}
+
+@test "check refuses a Path in the wrong case" {
+  # Fails if `happy path` is accepted as `Happy Path`.
+  ki01_meta '**Path:** happy path'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"unknown Path: KI-01"* ]]
+}
+
+@test "check refuses an empty or repeated Path" {
+  # Fails if an empty `**Path:**`, or a second one, passes check.
+  cp "$DOCS/KNOWN_ISSUES.md" "$TEST_TMP/ki.orig"
+  ki01_meta '**Path:**'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"empty Path: KI-01"* ]] || false
+  cp "$TEST_TMP/ki.orig" "$DOCS/KNOWN_ISSUES.md"
+  ki01_meta $'**Path:** Happy Path\n**Path:** Unusual Input'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"repeated Path: KI-01"* ]]
+}
+
+@test "check reads a Path beside another field" {
+  # Fails if a Path sharing a line with another field, before or after it, goes unread.
+  cp "$DOCS/KNOWN_ISSUES.md" "$TEST_TMP/ki.orig"
+  sed -i.bak 's/^\*\*Likelihood:\*\* Rare$/**Likelihood:** Rare · **Path:** Sometimes/' "$DOCS/KNOWN_ISSUES.md"
+  grep -qF '**Likelihood:** Rare · **Path:** Sometimes' "$DOCS/KNOWN_ISSUES.md" || false
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"unknown Path: KI-01"* ]] || false
+  cp "$TEST_TMP/ki.orig" "$DOCS/KNOWN_ISSUES.md"
+  ki01_meta '**Path:** Sometimes · **Area:** Code'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"unknown Path: KI-01"* ]]
+}
+
+@test "check accepts each Path level" {
+  # Fails if any of the three template levels is refused.
+  for level in 'Happy Path' 'Unusual Input' 'External Interference'; do
+    cp "$DOCS/KNOWN_ISSUES.md" "$TEST_TMP/ki.orig"
+    ki01_meta "**Path:** $level"
+    run python3 "$RM" check --docs "$DOCS"
+    [ "$status" -eq 0 ] || { echo "$level: $output"; false; }
+    cp "$TEST_TMP/ki.orig" "$DOCS/KNOWN_ISSUES.md"
+  done
+}
+
+@test "check refuses an unknown Area" {
+  # Fails if an Area that is not a template level passes check.
+  ki01_meta '**Area:** Prose'
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"unknown Area: KI-01"* ]]
+}
+
+@test "check accepts each Area level" {
+  # Fails if any of the three template levels is refused.
+  for level in Code Docs Tests; do
+    cp "$DOCS/KNOWN_ISSUES.md" "$TEST_TMP/ki.orig"
+    ki01_meta "**Area:** $level"
+    run python3 "$RM" check --docs "$DOCS"
+    [ "$status" -eq 0 ] || { echo "$level: $output"; false; }
+    cp "$TEST_TMP/ki.orig" "$DOCS/KNOWN_ISSUES.md"
+  done
+}
+
+@test "check accepts an entry without a Path or an Area" {
+  # Guard: fails if either optional field becomes required.
+  ! grep -q '\*\*Path:\*\*\|\*\*Area:\*\*' "$DOCS/KNOWN_ISSUES.md" || false
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
+
+@test "a legacy roadmap with a Path in prose and in a fenced example passes" {
+  # Guard: fails if a **Path:** below the metadata block, or inside a fence, is read as a rating.
+  python3 -I - "$DOCS/KNOWN_ISSUES.md" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+fence = "```markdown\n**Path:** Sometimes\n```\n"
+prose = "\n### What Happens\n\nA reviewer wrote **Path:** Sometimes in passing.\n\n"
+p.write_text(t.replace("SURVIVOR-ONE\n", fence + prose + "SURVIVOR-ONE\n", 1))
+PY
+  [ "$(grep -c '\*\*Path:\*\* Sometimes' "$DOCS/KNOWN_ISSUES.md")" -eq 2 ] || false
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
+
+@test "the loaded Severity and Likelihood scales are exactly the template's" {
+  # Guard: fails if the Path or Area table changes what is read for the rated fields, or if Path
+  # joins the sort key. KI-01 and KI-02 share a Severity and differ in Likelihood; their Paths
+  # run against that order, so a sort key that took in Path would refuse a valid order.
+  run python3 -I -c 'import sys; sys.path.insert(0, sys.argv[1]); import roadmap, pathlib
+s = roadmap.load_scales(pathlib.Path(sys.argv[1]))["KI"]
+print(s["Severity"]); print(s["Likelihood"])' "$(dirname "$RM")"
+  [ "$status" -eq 0 ] || false
+  [ "${lines[0]}" = "['Critical', 'High', 'Medium', 'Low']" ] || false
+  [ "${lines[1]}" = "['Almost Always', 'Likely', 'Rare']" ] || false
+  # likelihoods: KI-01's then KI-02's. Both are High; KI-01 runs External Interference, KI-02
+  # Happy Path.
+  ordered() {
+    python3 -I - "$DOCS" "$1" "$2" <<'PY2'
+import pathlib, re, sys
+d, one, two = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+ki = d / "KNOWN_ISSUES.md"; t = ki.read_text()
+def meta(eid, sev, lik, path):
+    return (f"## {eid} — " + {"KI-01": "first issue", "KI-02": "doomed issue"}[eid] + "\n\n"
+            f"**Severity:** {sev}\n**Likelihood:** {lik}\n**Path:** {path}\n**Where:** [docs](.)\n")
+for eid, lik, path in (("KI-01", one, "External Interference"), ("KI-02", two, "Happy Path")):
+    t = re.sub(rf"## {eid} — .*?\*\*Where:\*\* \[docs\]\(\.\)\n", meta(eid, "High", lik, path),
+               t, count=1, flags=re.S)
+ki.write_text(t)
+r = d / "ROADMAP.md"; s = r.read_text()
+s = re.sub(r"first issue \| \w+ \| \w+", f"first issue | {one} | High", s)
+s = re.sub(r"doomed issue \| \w+ \| \w+", f"doomed issue | {two} | High", s)
+r.write_text(s)
+PY2
+  }
+  ordered Likely Rare
+  grep -qx '\*\*Path:\*\* External Interference' "$DOCS/KNOWN_ISSUES.md" || false
+  [ "$(grep -c '^\*\*Severity:\*\* High$' "$DOCS/KNOWN_ISSUES.md")" -eq 2 ] || false
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  ordered Rare Likely
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"rating order invalid"* ]]
+}
+
+@test "a Path in the entry and none in the index row is not a mismatch" {
+  # Guard: fails if Path is mirrored into the ROADMAP row.
+  ki01_meta '**Path:** Happy Path'
+  ! grep -q 'Path' "$DOCS/ROADMAP.md" || false
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ]
+}
+
+@test "the repository's own roadmap passes check" {
+  # Guard: fails if this change makes the repository's own roadmap fail.
+  run python3 "$RM" check --docs "$(dirname "$RM")/../../docs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+}
+
+@test "check accepts the old spelling of Almost Always" {
+  # Fails if `Almost always`, the spelling before title case, is refused, in the entry, the row,
+  # or one of each.
+  grep -qx '\*\*Likelihood:\*\* Almost always' "$DOCS/KNOWN_ISSUES.md" || false
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  sed -i.bak 's/^\*\*Likelihood:\*\* Almost always$/**Likelihood:** Almost Always/' "$DOCS/KNOWN_ISSUES.md"
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+}
+
+@test "check refuses almost always" {
+  # Guard: fails if the old spelling is matched without regard to case.
+  sed -i.bak 's/^\*\*Likelihood:\*\* Almost always$/**Likelihood:** almost always/' "$DOCS/KNOWN_ISSUES.md"
+  sed -i.bak 's/third issue | Almost always | Low/third issue | almost always | Low/' "$DOCS/ROADMAP.md"
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"unknown Likelihood: KI-03"* ]]
 }

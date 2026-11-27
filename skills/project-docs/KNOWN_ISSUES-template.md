@@ -25,18 +25,34 @@ editing them changes nothing.
 
 | Level | Means |
 | ------- | ------- |
-| **Almost always** | Anyone following the documented workflow hits it. |
+| **Almost Always** | Anyone following the documented workflow hits it. |
 | **Likely** | Hit whenever a common condition holds — a second machine, an overlapping run, a particular option. |
 | **Rare** | Needs an unusual trigger, or only bites in combination with another failure. |
 
 **Judge the harm, not the code path.** A wrong value computed on every run is `Rare` when it only
 misleads after something else has already failed, and **a defect that is always present but
 harmful only in combination is `Rare`**. Conversely, if a documented step is what triggers it,
-that is `Almost always` for everyone who follows the step, however unusual it looks from outside.
+that is `Almost Always` for everyone who follows the step, however unusual it looks from outside.
 
-**Rate both, because one number cannot carry both.** `Rare · Critical` and `Almost always · Low`
+**Rate both, because one number cannot carry both.** `Rare · Critical` and `Almost Always · Low`
 are opposite kinds of work — the first is a landmine, the second is friction — and a single
 rating hides which you are looking at. Both still get fixed.
+
+## Path
+
+| Level | Means |
+| ------- | ------- |
+| **Happy Path** | The documented workflow, run normally, with ordinary inputs. |
+| **Unusual Input** | Odd but legal data: strange names, exotic formats, a rarely used option. |
+| **External Interference** | Another process or user writing the same files, a crash or kill mid-run, a hostile local writer, a filesystem quirk. |
+
+## Area
+
+| Level | Means |
+| ------- | ------- |
+| **Code** | The defect is in code that runs. |
+| **Docs** | The defect is in prose: a skill, a README, a comment. |
+| **Tests** | The defect is in a test or its fixture. |
 
 ---
 
@@ -45,7 +61,7 @@ rating hides which you are looking at. Both still get fixed.
 ## KI-01 — `<title>`
 
 **Severity:** <Critical | High | Medium | Low>
-**Likelihood:** <Almost always | Likely | Rare>
+**Likelihood:** <Almost Always | Likely | Rare>
 **Where:** [file.py](../file.py) — `def the_function_that_is_wrong(`
 
 ### What happens
