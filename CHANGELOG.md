@@ -18,14 +18,14 @@ here — the plugin manifest's version is the only record of them.
   of use reaches the defect: `Happy Path`, `Unusual Input` or `External Interference`. Area says
   what kind of file holds it: `Code`, `Docs` or `Tests`. external-review's shared rubric asks for
   both, with Severity and Likelihood, in every mode; phase and repo mode add numbered steps from
-  a fresh fixture, and plan mode a concrete failure. Each reviewer opens with
-  `Happy Path: works` or `Happy Path: broken (findings N, M)`, naming an already-tracked break as
-  `tracked KI-nn`, and still reports every Path.
+  a fresh fixture, and plan mode a concrete failure. Reviewers report every
+  finding, on any Path.
 - **The blocking rule.** A confirmed Critical or High finding blocks a phase when it is on the
   Happy Path, or Likely or Almost Always. Only those are fixed in the phase; the rest are filed,
   and the user can pull any of them back in at the gate. Each reviewer's ratings are judged on
   their own, never mixed. The review loop now stops on a pass with no blocking finding, and the
-  gate shows each reviewer's Happy Path line and a Steps To Reproduce summary grouped by Path.
+  gate shows a Steps To Reproduce summary grouped by Path and a trend table with each pass's
+  blocking count.
 - **Steps are evidence, not commands.** Triage runs them only in a disposable fixture with
   synthetic inputs, reconstructs them where needed and says so, and replaces secrets, account
   names and local paths before they are published. Findings from `/code-review`,

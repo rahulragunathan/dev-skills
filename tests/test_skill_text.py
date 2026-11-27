@@ -190,16 +190,6 @@ class TriageTest(unittest.TestCase):
         with self.subTest("never dropped"):
             self.assertIn("Never drop a finding because of its Path.", r)
 
-    def test_rubric_opens_with_the_happy_path_line(self):
-        # Fails if the output contract stops putting the Happy Path line before the heading, or
-        # drops the empty list's `No findings.`.
-        contract = self.rubric[self.rubric.index("**Output contract"):]
-        with self.subTest("line first"):
-            self.assertRegex(contract, r"Open with one line before the findings heading: "
-                                       r"`Happy Path: works`, or `Happy Path: broken \(findings N, M\)`")
-        with self.subTest("no findings kept"):
-            self.assertIn("`No findings.`", contract)
-
     def test_rubric_levels_match_the_template(self):
         # Fails if the rubric's Path or Area levels differ from the KI template's, or their order.
         r = self.rubric
@@ -336,15 +326,6 @@ class TriagePassOneTest(unittest.TestCase):
                 self.assertIn("Likely or Almost Always", text)
                 self.assertRegex(text, r"confirmed Critical or High")
 
-    def test_happy_path_line_can_cite_tracked_ids(self):
-        # Fails if a reviewer has no way to name an already-tracked entry that breaks the
-        # Happy Path, since tracked entries are not re-reported as findings.
-        text = flat(ER.read_text())
-        with self.subTest("rubric"):
-            self.assertIn("`Happy Path: broken (tracked KI-nn)`", text)
-        with self.subTest("gate keeps tracked IDs"):
-            self.assertIn("tracked IDs stay as they are", text)
-
     def test_partly_rows_use_verified_ratings(self):
         # Fails if the blocking rule stops saying which ratings decide a Partly row.
         rule = flat(section(ER.read_text(), "### The blocking rule"))
@@ -362,6 +343,30 @@ class TriagePassTwoTest(unittest.TestCase):
             self.assertIn("A `Confirmed` merged row blocks only if one reviewer's three ratings block", rule)
         with self.subTest("partly"):
             self.assertIn("a `Partly` merged row is decided by your verified ratings alone", rule)
+
+
+class FollowUpTest(unittest.TestCase):
+    """The follow-up to the phase's review: policy gaps and presentation."""
+
+    def changelog_entry(self):
+        text = (ROOT / "CHANGELOG.md").read_text()
+        start = text.index("## [2.3.0]")
+        return text[start:text.index("\n## [", start + 1)]
+
+    def test_no_happy_path_line_anywhere(self):
+        # Fails if any skill, README, AGENTS.md or the 2.3.0 entry still asks for or shows the
+        # reviewer's Happy Path line or its tracked-ID form.
+        docs = {"skills": all_skills(), "README.md": (ROOT / "README.md").read_text(),
+                "AGENTS.md": (ROOT / "AGENTS.md").read_text(), "CHANGELOG 2.3.0": self.changelog_entry()}
+        for name, text in docs.items():
+            for phrase in ("Happy Path: works", "Happy Path: broken", "tracked KI-nn", "Happy Path line"):
+                with self.subTest(doc=name, phrase=phrase):
+                    self.assertNotIn(phrase, flat(text))
+
+    def test_trend_has_a_blocking_column(self):
+        # Fails if the gate's trend is a bare count series rather than a table with Blocking.
+        gate = section(ER.read_text(), "### What the user sees at the gate")
+        self.assertIn("| Pass | Rows | Blocking | Outcome |", gate)
 
 
 if __name__ == "__main__":

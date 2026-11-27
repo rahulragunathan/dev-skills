@@ -383,11 +383,11 @@ Prompt drift between the two reviewers corrupts the agree/disagree triage. Compo
    > For every finding, give its **Path**: `Happy Path`, `Unusual Input` or `External Interference`. Happy Path is the documented workflow, run normally, with ordinary inputs; Unusual Input is odd but legal data or a rarely used option; External Interference is another process or user writing the same files, a crash or kill mid-run, a hostile local writer, or a filesystem quirk. Give its **Area**: `Code`, `Docs` or `Tests`, the kind of file that holds the defect. Rate its **Severity** (Critical, High, Medium or Low: the harm if it fires) and its **Likelihood** (Almost Always, Likely or Rare: how often someone following the documented workflow hits it).
    > *phase / repo*: add numbered **Steps To Reproduce** from a clean checkout or a fresh fixture, with synthetic inputs, ending with what you see against what you should see. For a documentation finding, name the workflow step, its input and the wording that fails.
    > *plan*: no numbered steps; instead say concretely what goes wrong, and when.
-   > Check the Happy Path first, then report everything else you find, on any Path. Never drop a finding because of its Path.
+   > Report everything you find, on any Path. Never drop a finding because of its Path.
 
 10. **Output contract — always a list, even an empty one:**
 
-    > Open with one line before the findings heading: `Happy Path: works`, or `Happy Path: broken (findings N, M)` naming the findings that break it. A break already on the tracked list is not re-reported as a finding; name it instead, as `Happy Path: broken (tracked KI-nn)`, or beside new findings as `Happy Path: broken (findings 2; tracked KI-nn)`. Judge it only on the material you were given. Then return a numbered list of findings, each with file/function references, its Path, Area, Severity and Likelihood, and in phase and repo mode its Steps To Reproduce. Return the list **even when you found nothing**: emit the heading and the single line `No findings.` Never answer with prose instead of the list.
+    > Return a numbered list of findings, each with file/function references, its Path, Area, Severity and Likelihood, and in phase and repo mode its Steps To Reproduce. Return the list **even when you found nothing**: emit the heading and the single line `No findings.` Never answer with prose instead of the list.
 
     The empty list is what separates a reviewer that ran and found nothing from one that never ran. **Absent output means the review did not happen — nothing else does.** An independent reviewer that returns `No findings.` has covered the material; a reviewer that returns nothing at all has not, and the coverage line must say which. An author's output remains disqualified regardless of its findings.
 
@@ -719,7 +719,7 @@ in the Model column and `—` in Pass.
 - *Fix:* the change, in one line.
 - *Scenarios:* each scenario the failing test covered, with the red you observed before the fix and the green after.
 
-**Then a short block per pass:** the commit it reviewed; each reviewer's Happy Path line, as it came back; its coverage line with each
+**Then a short block per pass:** the commit it reviewed; its coverage line with each
 invocation's output file name and byte count; its findings counted by severity; how many were
 in code an earlier fix of this review wrote; how many were documentation drift; and how many
 were accepted without work. The PR copy names output files by name only: full scratchpad
@@ -777,12 +777,15 @@ landed.
 
 The review record, then a short assessment:
 
-- **Each Reviewer's Happy Path Line**, per pass, with its local finding numbers mapped to `F-`
-  IDs; tracked IDs stay as they are: `Happy Path: broken (F-03, F-07; tracked KI-12) —
-  gpt-5.6-sol:high`.
 - **A Steps To Reproduce Summary** — one line per confirmed row, grouped by Path, Happy Path
   first.
-- **The Trend** — the finding count for each pass, as a series.
+- **The Trend** — one row per pass, so the blocking count is read beside the total:
+
+  | Pass | Rows | Blocking | Outcome |
+  | --- | --- | --- | --- |
+  | 1 | 12 | 2 | Fixed in `a1b2c3d`; the rest filed |
+  | 2 | 4 | 0 | All filed; the loop stopped |
+
 - **What The New Findings Are About** — fresh defects in untouched code, defects in an earlier pass's own fixes, or documentation drift. A count that holds steady while the *kind* changes is a different situation from one that holds steady on the same kind.
 - **Your Recommendation** — land what is here, or another pass, with the reason.
 

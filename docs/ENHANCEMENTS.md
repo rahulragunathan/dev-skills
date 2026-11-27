@@ -293,7 +293,7 @@ Corrected in pass 1 (gpt-6.2-astra:high, gemini-4-neon-high).
 
 ### What It Is
 
-Four wording tests stay green when the policy they name is broken: intake passes with the source names alone, the stop-rule test misses a loop that continues past pass 3, the worked-table test leaves out the fourth row, and the tracked-ID test searches the whole skill rather than the rubric reviewers are sent.
+Three wording tests stay green when the policy they name is broken: intake passes with the source names alone, the stop-rule test misses a loop that continues past pass 3, and the worked-table test leaves out the fourth row.
 
 ### Why It Matters
 
@@ -301,7 +301,7 @@ A wording test that passes on a broken rule is a false green on the very text ag
 
 ### Notes For The Work
 
-Assert the intake fields and who supplied them, the completeness and pass-3 conditions, all four worked rows, and the tracked-ID forms inside the rubric's output contract. Each needs a red first.
+Assert the intake fields and who supplied them, the completeness and pass-3 conditions, and all four worked rows. (The tracked-ID test went with the Happy Path line.) Each needs a red first.
 
 **Source:** gpt-6.2-astra:high — phase review passes 1 and 2, review-triage phase, 2026-11-26.
 
