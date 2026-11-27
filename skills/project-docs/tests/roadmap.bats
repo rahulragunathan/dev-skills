@@ -1800,8 +1800,8 @@ PY
 
 @test "the loaded Severity and Likelihood scales are exactly the template's" {
   # Guard: fails if the Path or Area table changes what is read for the rated fields, or if Path
-  # joins the sort key. KI-01 and KI-02 share a Severity and differ in Likelihood; their Paths
-  # run against that order, so a sort key that took in Path would refuse a valid order.
+  # joins the sort key. KI-01 and KI-02 share a Severity and a Likelihood, and their Paths run
+  # against the Path scale's order, so a sort key that took in Path would refuse them.
   run python3 -I -c 'import sys; sys.path.insert(0, sys.argv[1]); import roadmap, pathlib
 s = roadmap.load_scales(pathlib.Path(sys.argv[1]))["KI"]
 print(s["Severity"]); print(s["Likelihood"])' "$(dirname "$RM")"
@@ -1828,11 +1828,13 @@ s = re.sub(r"doomed issue \| \w+ \| \w+", f"doomed issue | {two} | High", s)
 r.write_text(s)
 PY2
   }
-  ordered Likely Rare
+  ordered Likely Likely
   grep -qx '\*\*Path:\*\* External Interference' "$DOCS/KNOWN_ISSUES.md" || false
   [ "$(grep -c '^\*\*Severity:\*\* High$' "$DOCS/KNOWN_ISSUES.md")" -eq 2 ] || false
+  [ "$(grep -c '^\*\*Likelihood:\*\* Likely$' "$DOCS/KNOWN_ISSUES.md")" -eq 2 ] || false
   run python3 "$RM" check --docs "$DOCS"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # Likelihood still orders them.
   ordered Rare Likely
   run python3 "$RM" check --docs "$DOCS"
   [ "$status" -eq 1 ] || false
@@ -1907,8 +1909,16 @@ sample() { sed -n '/^---$/,$p' "$(dirname "$RM")/$1-template.md"; }
   grep -qxF '**Where:** [docs](.) · **Path:** Happy Path' "$DOCS/KNOWN_ISSUES.md" || false
   run python3 "$RM" check --docs "$DOCS"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
+  cp "$DOCS/KNOWN_ISSUES.md" "$TEST_TMP/ki.valid"
   sed -i.bak 's/· \*\*Path:\*\* Happy Path$/· **Path:** Sometimes/' "$DOCS/KNOWN_ISSUES.md"
   run python3 "$RM" check --docs "$DOCS"
   [ "$status" -eq 1 ] || false
-  [[ "$output" == *"unknown Path: KI-01"* ]]
+  [[ "$output" == *"unknown Path: KI-01"* ]] || false
+  # A broken reference beside a valid Path is still caught.
+  cp "$TEST_TMP/ki.valid" "$DOCS/KNOWN_ISSUES.md"
+  sed -i.bak 's/^\*\*Where:\*\* \[docs\](\.) · \*\*Path:\*\* Happy Path$/**Where:** [gone](gone.md) · **Path:** Happy Path/' "$DOCS/KNOWN_ISSUES.md"
+  grep -qxF '**Where:** [gone](gone.md) · **Path:** Happy Path' "$DOCS/KNOWN_ISSUES.md" || false
+  run python3 "$RM" check --docs "$DOCS"
+  [ "$status" -eq 1 ] || false
+  [[ "$output" == *"KI-01"*"gone.md"* ]]
 }

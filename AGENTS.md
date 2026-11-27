@@ -82,7 +82,7 @@ Secrets that require isolation must be outside the reviewer's accessible filesys
 
 **Triage judges a finding by its Path, not only its ratings.** A rare crash-mid-run case rated
 Critical used to hold a phase the same way a broken happy path did, so review loops kept growing.
-Since 2.3.0 a finding blocks only when it is Critical or High and either on the Happy Path or
-Likely; the rest are filed. Not taken: folding Path into Likelihood (one is how often, the other
+Since 2.3.0 only a confirmed Critical or High finding that is on the Happy Path, or Likely or
+Almost Always, blocks a phase; the rest are filed. Not taken: folding Path into Likelihood (one is how often, the other
 what kind of use), a separate triage skill (a second owner for rules external-review and
 project-docs hold), and a `Documentation` Path level (Area carries that, separately). Making Path required is ENH-40.

@@ -387,7 +387,7 @@ Prompt drift between the two reviewers corrupts the agree/disagree triage. Compo
 
 10. **Output contract — always a list, even an empty one:**
 
-    > Open with one line before the findings heading: `Happy Path: works`, or `Happy Path: broken (findings N, M)` naming the findings that break it. Judge it only on the material you were given. Then return a numbered list of findings, each with file/function references, its Path, Area, Severity and Likelihood, and in phase and repo mode its Steps To Reproduce. Return the list **even when you found nothing**: emit the heading and the single line `No findings.` Never answer with prose instead of the list.
+    > Open with one line before the findings heading: `Happy Path: works`, or `Happy Path: broken (findings N, M)` naming the findings that break it. A break already on the tracked list is not re-reported as a finding; name it instead, as `Happy Path: broken (tracked KI-nn)`, or beside new findings as `Happy Path: broken (findings 2; tracked KI-nn)`. Judge it only on the material you were given. Then return a numbered list of findings, each with file/function references, its Path, Area, Severity and Likelihood, and in phase and repo mode its Steps To Reproduce. Return the list **even when you found nothing**: emit the heading and the single line `No findings.` Never answer with prose instead of the list.
 
     The empty list is what separates a reviewer that ran and found nothing from one that never ran. **Absent output means the review did not happen — nothing else does.** An independent reviewer that returns `No findings.` has covered the material; a reviewer that returns nothing at all has not, and the coverage line must say which. An author's output remains disqualified regardless of its findings.
 
@@ -662,7 +662,7 @@ Column rules:
 
 A confirmed finding blocks the phase when its Severity is Critical or High, **and** at least one of these holds: its Path is Happy Path; its Likelihood is Likely or Almost Always.
 
-It applies in phase and repo mode, to every row whose Verdict is `Confirmed` or `Partly` (judged on the part that was confirmed), whatever its source, regressions this phase introduced included. A blocking row is fixed in the phase; the rest are filed, and the user can pull any of them back in at the gate.
+It applies in phase and repo mode, to every row whose Verdict is `Confirmed` or `Partly`, whatever its source, regressions this phase introduced included. For a `Partly` row, your verified ratings of the confirmed part decide; the reviewer's own stay in the row for attribution. A blocking row is fixed in the phase; the rest are filed, and the user can pull any of them back in at the gate.
 
 **When reviewers disagree, judge each reviewer's own Severity, Path and Likelihood.** A merged row blocks only if one reviewer's three ratings block, or your own verified ratings do, and then the commentary says why. Never combine one reviewer's ratings with another's: a High from one and a Happy Path from the other do not make a blocker.
 
@@ -777,9 +777,10 @@ landed.
 
 The review record, then a short assessment:
 
-- **Each reviewer's Happy Path line**, per pass, with its local finding numbers mapped to `F-`
-  IDs: `Happy Path: broken (F-03, F-07) — gpt-5.6-sol:high`.
-- **A Steps To Reproduce summary** — one line per confirmed row, grouped by Path, Happy Path
+- **Each Reviewer's Happy Path Line**, per pass, with its local finding numbers mapped to `F-`
+  IDs; tracked IDs stay as they are: `Happy Path: broken (F-03, F-07; tracked KI-12) —
+  gpt-5.6-sol:high`.
+- **A Steps To Reproduce Summary** — one line per confirmed row, grouped by Path, Happy Path
   first.
 - **The Trend** — the finding count for each pass, as a series.
 - **What The New Findings Are About** — fresh defects in untouched code, defects in an earlier pass's own fixes, or documentation drift. A count that holds steady while the *kind* changes is a different situation from one that holds steady on the same kind.

@@ -324,5 +324,32 @@ class PhaseWorkflowPointerTest(unittest.TestCase):
             self.assertNotIn("Critical or High", step)
 
 
+class TriagePassOneTest(unittest.TestCase):
+    """Blocking findings from the phase's first external review pass."""
+
+    def test_summaries_name_every_blocking_likelihood(self):
+        # Fails if README or AGENTS.md summarises the blocking rule without Almost Always, or
+        # without saying the finding must be confirmed.
+        for name in ("README.md", "AGENTS.md"):
+            text = flat((ROOT / name).read_text())
+            with self.subTest(doc=name):
+                self.assertIn("Likely or Almost Always", text)
+                self.assertRegex(text, r"confirmed Critical or High")
+
+    def test_happy_path_line_can_cite_tracked_ids(self):
+        # Fails if a reviewer has no way to name an already-tracked entry that breaks the
+        # Happy Path, since tracked entries are not re-reported as findings.
+        text = flat(ER.read_text())
+        with self.subTest("rubric"):
+            self.assertIn("`Happy Path: broken (tracked KI-nn)`", text)
+        with self.subTest("gate keeps tracked IDs"):
+            self.assertIn("tracked IDs stay as they are", text)
+
+    def test_partly_rows_use_verified_ratings(self):
+        # Fails if the blocking rule stops saying which ratings decide a Partly row.
+        rule = flat(section(ER.read_text(), "### The blocking rule"))
+        self.assertIn("For a `Partly` row, your verified ratings of the confirmed part decide", rule)
+
+
 if __name__ == "__main__":
     unittest.main()
