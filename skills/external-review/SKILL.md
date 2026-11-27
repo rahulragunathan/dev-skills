@@ -804,8 +804,8 @@ needs a narrow pass of its own.
 
 At the gate, run `phase-workflow`'s post-review check (§3 step 7): it lists both sides of every
 change since the reviewed commit, refuses anything outside the bookkeeping files, and prints
-their patch, which is read in full because a filing and a fix can share one file. The hand-off
-names what landed.
+each commit's patch under its message, read in full because a filing and a fix can share one
+file. The hand-off names what landed.
 
 ### What the user sees at the gate
 

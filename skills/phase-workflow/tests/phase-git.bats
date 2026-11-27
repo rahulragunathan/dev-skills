@@ -606,6 +606,11 @@ after_review() {
   [[ "$output" == *'`PR` | 9'* ]]
 }
 
+# commit_block <id>: the lines the post-review log prints under the commit whose message names <id>.
+commit_block() {
+  awk -v id="$1" '/^=== [0-9a-f]+$/ { getline msg; keep = index(msg, id) > 0 } keep' <<< "$output"
+}
+
 @test "after review: a CHANGELOG-only document fix passes and is shown" {
   # Fails if a reviewer's confirmed fix to the release's CHANGELOG entry is refused after the last pass.
   printf '## [1.0.0]\n\n- old claim\n' > CHANGELOG.md
@@ -616,10 +621,45 @@ after_review() {
   after_review "$reviewed"
   run bash "$TEST_TMP/after.sh"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"corrected claim"* ]] || false
-  # The commit message must be shown, with the files that commit changed, so the reader can
-  # check the fix names its finding.
-  [[ "$output" == *"Document fix for F-07"*CHANGELOG.md* ]]
+  [[ "$(commit_block F-07)" == *"+- corrected claim"* ]]
+}
+
+@test "after review: each commit's own change is shown under its message, and nothing before review" {
+  # Fails if the log shows messages without each commit's own patch, so two fixes to one file can
+  # name swapped findings unseen (KI-123), or if it starts before the reviewed commit (KI-124).
+  printf '## [1.0.0] - 2026-01-01\n\n- old wording\n' > CHANGELOG.md
+  git add CHANGELOG.md && git commit -qm "pre-review marker"
+  reviewed="$(git rev-parse HEAD)"
+  printf '## [1.0.0] - 2026-01-02\n\n- old wording\n' > CHANGELOG.md
+  git commit -qam "Document fix for F-07: the date"
+  printf '## [1.0.0] - 2026-01-02\n\n- new wording\n' > CHANGELOG.md
+  git commit -qam "Document fix for F-08: the wording"
+  after_review "$reviewed"
+  run bash "$TEST_TMP/after.sh"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  f07="$(commit_block F-07)"; f08="$(commit_block F-08)"
+  [[ "$f07" == *"+## [1.0.0] - 2026-01-02"* && "$f07" != *"+- new wording"* ]] || { echo "$output"; false; }
+  [[ "$f08" == *"+- new wording"* && "$f08" != *"+## [1.0.0]"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"pre-review marker"* ]]
+}
+
+@test "after review: a merge commit shows the change it brought in" {
+  # Fails if the log lists a merge with no files, or walks the merged side's own commits (KI-123).
+  printf '## [1.0.0]\n\n- old claim\n' > CHANGELOG.md
+  git add CHANGELOG.md && git commit -qm changelog
+  reviewed="$(git rev-parse HEAD)"
+  git switch -qc side
+  printf '## [1.0.0]\n\n- merged claim\n' > CHANGELOG.md
+  git commit -qam "side-branch commit"
+  git switch -q -
+  mkdir -p docs && printf '| `PR` | 9 |\n' > docs/PHASE_RECORD.md
+  git add docs && git commit -qm record
+  git merge -q --no-ff side -m "Merge for F-09"
+  after_review "$reviewed"
+  run bash "$TEST_TMP/after.sh"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$(commit_block F-09)" == *"+- merged claim"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"side-branch commit"* ]]
 }
 
 @test "origin check: accepts a bare user over each ssh spelling" {
