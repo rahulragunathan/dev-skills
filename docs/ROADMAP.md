@@ -43,8 +43,6 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | ID | Issue | Likelihood | Severity |
 | ---- | ------- | ---------- | ---------- |
 | [KI-80](KNOWN_ISSUES.md#ki-80) | First push and prune act on a branch name that can move after the check | Rare | Critical |
-| [KI-97](KNOWN_ISSUES.md#ki-97) | Reviewer-written steps have no stated isolation | Rare | Critical |
-| [KI-107](KNOWN_ISSUES.md#ki-107) | Publication sanitises the steps but not the rest of the reviewer's text | Rare | Critical |
 | [KI-47](KNOWN_ISSUES.md#ki-47) | Grading packets omit information their conditions require | Almost Always | High |
 | [KI-48](KNOWN_ISSUES.md#ki-48) | S07's with-skill arm is handed the answer to the condition it is graded on | Almost Always | High |
 | [KI-60](KNOWN_ISSUES.md#ki-60) | Helper commands need `CLAUDE_PLUGIN_ROOT`, which a Codex install does not set | Almost Always | High |
@@ -55,16 +53,9 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-87](KNOWN_ISSUES.md#ki-87) | The dependency scan still misreads some manifests | Rare | High |
 | [KI-49](KNOWN_ISSUES.md#ki-49) | The headline tally mixes two skills | Almost Always | Medium |
 | [KI-50](KNOWN_ISSUES.md#ki-50) | S05's fixture contradicts itself | Almost Always | Medium |
-| [KI-105](KNOWN_ISSUES.md#ki-105) | Plan findings are told to omit steps that intake then requires | Almost Always | Medium |
 | [KI-51](KNOWN_ISSUES.md#ki-51) | Rejected grading attempts are not retained | Likely | Medium |
 | [KI-36](KNOWN_ISSUES.md#ki-36) | A grader quote of a table cell that holds a pipe is refused | Likely | Medium |
 | [KI-39](KNOWN_ISSUES.md#ki-39) | `print` with an f-string argument still hides later guards | Likely | Medium |
-| [KI-99](KNOWN_ISSUES.md#ki-99) | The blocking rule gives a repo review's blocking row no disposition | Likely | Medium |
-| [KI-100](KNOWN_ISSUES.md#ki-100) | A finding on two Paths cannot be filed as one entry | Likely | Medium |
-| [KI-98](KNOWN_ISSUES.md#ki-98) | Phase-workflow's own checks never reach the intake and blocking rules | Likely | Medium |
-| [KI-103](KNOWN_ISSUES.md#ki-103) | An accepted finding still needs a full roadmap entry | Likely | Medium |
-| [KI-104](KNOWN_ISSUES.md#ki-104) | Dispositions cannot record the user overriding the blocking rule | Likely | Medium |
-| [KI-106](KNOWN_ISSUES.md#ki-106) | Merged ratings have no rule for attribution or filing | Likely | Medium |
 | [KI-41](KNOWN_ISSUES.md#ki-41) | Converting a large sequence to text has no size bound | Rare | Medium |
 | [KI-76](KNOWN_ISSUES.md#ki-76) | The probe's error classes still match loose substrings | Rare | Medium |
 | [KI-79](KNOWN_ISSUES.md#ki-79) | A symlinked folder above the docs folder still redirects the roadmap tools | Rare | Medium |
@@ -76,8 +67,6 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-94](KNOWN_ISSUES.md#ki-94) | Report lines that start with a committed path can pass for findings | Rare | Medium |
 | [KI-95](KNOWN_ISSUES.md#ki-95) | Publish-record still reads a short hex answer as a moved head | Rare | Medium |
 | [KI-109](KNOWN_ISSUES.md#ki-109) | The optional-field reader still differs from Markdown in three ways | Rare | Medium |
-| [KI-108](KNOWN_ISSUES.md#ki-108) | A blocker from an incomplete pass has no disposition while the retry waits | Rare | Medium |
-| [KI-101](KNOWN_ISSUES.md#ki-101) | Plan and repo mode give the Happy Path line no destination, and nothing covers a missing or chunked one | Almost Always | Low |
 | [KI-110](KNOWN_ISSUES.md#ki-110) | The ENH and UNK templates and one fixed value are still in sentence case | Almost Always | Low |
 | [KI-82](KNOWN_ISSUES.md#ki-82) | The zsh lint misses traps hidden by quotes and other subscripts | Likely | Low |
 | [KI-44](KNOWN_ISSUES.md#ki-44) | A stale dispatch log gives a misleading replacement message | Rare | Low |

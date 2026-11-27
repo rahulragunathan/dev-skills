@@ -245,7 +245,7 @@ class TriageTest(unittest.TestCase):
         with self.subTest("fixture"):
             self.assertIn("Run them only in a disposable fixture with synthetic inputs", triage)
         with self.subTest("no working tree or network"):
-            self.assertIn("never in the working tree, and never against a network or outside service", triage)
+            self.assertIn("Never run them in the working tree or against an outside service", triage)
         with self.subTest("sanitised"):
             self.assertIn("replace real secrets, account names and local paths with synthetic values", triage)
 
@@ -399,6 +399,71 @@ class FollowUpTest(unittest.TestCase):
         triage = flat(section(text, "## Triage — verify before presenting"))
         with self.subTest("intake"):
             self.assertIn("**In phase and repo mode, every source gets a Path, an Area and Steps To Reproduce at intake.**", triage)
+
+class PolicyGapTest(unittest.TestCase):
+    """The policy gaps the phase's review filed, fixed in its follow-up."""
+
+    def setUp(self):
+        self.er = flat(ER.read_text())
+        self.pw = PW.read_text()
+
+    def test_ki_97_the_fixture_is_named(self):
+        # Fails if triage runs reviewer steps without naming a confined fixture, or without
+        # refusing a step that reaches outside it.
+        step = self.er[self.er.index("2. **Steps To Reproduce are evidence"):self.er.index("3. **In phase and repo mode")]
+        for part in ("`mktemp -d`", "a scratch `HOME`", "no credential variables", "no network",
+                     "Refuse a step that reads or writes outside that folder, or that fetches and runs code"):
+            with self.subTest(part=part):
+                self.assertIn(part, step)
+
+    def test_ki_107_the_whole_record_is_sanitised(self):
+        # Fails if sanitising before publication still covers only the steps.
+        self.assertIn("sanitise all of it, not only the steps", self.er)
+        self.assertIn("the reviewer's quoted fix included", self.er)
+
+    def test_ki_98_step_2_reaches_intake_and_the_rule(self):
+        # Fails if phase-workflow §3 step 2 does not send its findings through intake and the
+        # blocking rule, or if the dependency-scan carve-out survives.
+        step = self.pw[self.pw.index("2. **Consolidation"):self.pw.index("3. **Red record check")]
+        for link in ("../external-review/SKILL.md#triage--verify-before-presenting",
+                     "../external-review/SKILL.md#the-blocking-rule"):
+            with self.subTest(link=link):
+                self.assertIn(link, step)
+        with self.subTest("no carve-out"):
+            self.assertNotIn("keeps its own policy", self.er)
+
+    def test_ki_99_repo_mode_blocking_rows_have_a_disposition(self):
+        # Fails if a blocking row in a repo review has no disposition.
+        self.assertIn("In repo mode there is no loop, so a blocking row is `Unfixed Blocker`", self.er)
+
+    def test_ki_100_one_path_per_row(self):
+        # Fails if the Path column still lets a row name several Paths.
+        self.assertIn("A row has one Path", self.er)
+        self.assertNotIn("name each, the one that blocks first", self.er)
+
+    def test_ki_103_accepted_rows_get_no_entry(self):
+        # Fails if step 4 still files every triaged finding, accepted and rejected ones included.
+        bullet = flat(next(l for l in self.pw.splitlines() if "every finding triaged out of steps 1–3" in l))
+        self.assertIn("a `Rejected` or `Confirmed: Accepted, No Work Planned` row gets none", bullet)
+
+    def test_ki_104_the_users_change_has_a_form(self):
+        # Fails if the disposition order does not say how a row the user changed is written.
+        order = self.er[self.er.index("**Disposition order.**"):self.er.index("- `Fixed In Phase` —")]
+        self.assertIn("`<new> — was <old>, the user's call`", order)
+        self.assertIn("describe the default", order)
+
+    def test_ki_106_merged_ratings_are_attributed_and_filed_whole(self):
+        # Fails if Likelihood has no attribution rule for disagreeing reviewers, or a filed
+        # merged row has no rule for which ratings it takes.
+        with self.subTest("likelihood"):
+            self.assertIn("When the two reviewers disagree on Likelihood, record both, attributed like Severity", self.er)
+        with self.subTest("filing"):
+            self.assertIn("A filed merged row takes the three ratings that decided its disposition", self.er)
+
+    def test_ki_108_incomplete_pass_blockers_have_a_disposition(self):
+        # Fails if a confirmed blocker from an incomplete pass has no disposition while the
+        # retry waits.
+        self.assertIn("While it waits, a confirmed blocking row from it is `Unfixed Blocker`", self.er)
 
 if __name__ == "__main__":
     unittest.main()
