@@ -134,3 +134,181 @@ class SecurityCoverageTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+ER = ROOT / "skills/external-review/SKILL.md"
+PW = ROOT / "skills/phase-workflow/SKILL.md"
+KI_TEMPLATE_DIR = ROOT / "skills/project-docs"
+
+
+def section(text: str, heading: str) -> str:
+    """The text under `heading` up to the next heading of the same or a higher level."""
+    level = heading.split(" ")[0]
+    start = text.index(heading + "\n")
+    rest = text[start + len(heading) + 1:]
+    stop = re.search(r"^#{1,%d} " % len(level), rest, re.M)
+    return rest[: stop.start()] if stop else rest
+
+
+def flat(text: str) -> str:
+    """The text with every run of whitespace as one space, so a wrapped line still matches."""
+    return " ".join(text.split())
+
+
+def template_levels(field: str) -> list[str]:
+    sys.path.insert(0, str(KI_TEMPLATE_DIR))
+    import roadmap  # noqa: E402
+    return roadmap.load_scales(KI_TEMPLATE_DIR)["KI"][field]
+
+
+def table_header(text: str, first_cells: str) -> list[str]:
+    line = next(l for l in text.splitlines() if l.startswith(first_cells))
+    return [c.strip() for c in line.strip().strip("|").split("|")]
+
+
+class TriageTest(unittest.TestCase):
+    """Review findings carry a Path, an Area and Steps To Reproduce, and only a blocking one
+    holds up a phase."""
+
+    def setUp(self):
+        self.text = ER.read_text()
+        self.rubric = section(self.text, "## Shared rubric — both reviewers get this text VERBATIM")
+
+    def test_rubric_asks_for_path_ratings_and_steps(self):
+        # Fails if a mode stops asking for Path, Area, Severity or Likelihood, phase and repo
+        # mode stop asking for numbered steps, plan mode for a concrete failure, or the rubric
+        # stops saying a finding is never dropped for its Path.
+        r = self.rubric
+        for word in ("**Path**", "**Area**", "**Severity**", "**Likelihood**"):
+            with self.subTest(asks_for=word):
+                self.assertIn(word, r)
+        with self.subTest("every mode"):
+            self.assertIn("Path, ratings and steps (every mode)", r)
+        with self.subTest("phase and repo steps"):
+            self.assertRegex(r, r"\*phase / repo\*: add numbered \*\*Steps To Reproduce\*\*")
+        with self.subTest("plan failure"):
+            self.assertRegex(r, r"\*plan\*: no numbered steps; instead say concretely what goes wrong, and when")
+        with self.subTest("never dropped"):
+            self.assertIn("Never drop a finding because of its Path.", r)
+
+    def test_rubric_opens_with_the_happy_path_line(self):
+        # Fails if the output contract stops putting the Happy Path line before the heading, or
+        # drops the empty list's `No findings.`.
+        contract = self.rubric[self.rubric.index("**Output contract"):]
+        with self.subTest("line first"):
+            self.assertRegex(contract, r"Open with one line before the findings heading: "
+                                       r"`Happy Path: works`, or `Happy Path: broken \(findings N, M\)`")
+        with self.subTest("no findings kept"):
+            self.assertIn("`No findings.`", contract)
+
+    def test_rubric_levels_match_the_template(self):
+        # Fails if the rubric's Path or Area levels differ from the KI template's, or their order.
+        r = self.rubric
+        for field in ("Path", "Area"):
+            with self.subTest(field=field):
+                sentence = re.search(r"\*\*" + field + r"\*\*: (.*?)\.", r, re.S)[1]
+                self.assertEqual(re.findall(r"`([^`]+)`", sentence), template_levels(field))
+
+    def test_tables_have_a_path_column(self):
+        # Fails if the findings table or the phase review record loses its Path column.
+        for first in ("| # | Finding |", "| # | Pass |"):
+            with self.subTest(table=first):
+                self.assertIn("Path", table_header(self.text, first))
+
+    def test_tables_have_an_area_column(self):
+        # Fails if the findings table or the phase review record loses its Area column.
+        for first in ("| # | Finding |", "| # | Pass |"):
+            with self.subTest(table=first):
+                self.assertIn("Area", table_header(self.text, first))
+
+    def test_blocking_rule_is_stated_once_and_grouped(self):
+        # Fails if the rule is restated, loses its grouping, or the worked table stops giving
+        # Medium/Likely as filed, High/Happy Path/Rare as blocking, High/External/Rare as filed.
+        rule = ("A confirmed finding blocks the phase when its Severity is Critical or High, "
+                "**and** at least one of these holds: its Path is Happy Path; its Likelihood is "
+                "Likely or Almost Always.")
+        skills = "".join(p.read_text() for p in SKILLS)
+        with self.subTest("once"):
+            self.assertEqual(skills.count(rule), 1)
+        worked = section(self.text, "### The blocking rule")
+        rows = {tuple(c.strip() for c in l.strip("|").split("|")[:3]): l.split("|")[4].strip()
+                for l in worked.splitlines() if l.startswith("| ") and "Blocks" not in l
+                and "---" not in l}
+        for key, want in ((("Medium", "Happy Path", "Likely"), "No: filed"),
+                          (("High", "Happy Path", "Rare"), "Yes"),
+                          (("High", "External Interference", "Rare"), "No: filed")):
+            with self.subTest(row=key):
+                self.assertEqual(rows.get(key), want)
+
+    def test_stop_rule_uses_the_blocking_rule(self):
+        # Fails if the loop stops on anything but a complete pass with no blocking finding, or
+        # the old count-based stop rule survives.
+        loop = flat(section(self.text, "### The loop"))
+        with self.subTest("new rule"):
+            self.assertIn("Stop when a pass has no blocking finding", loop)
+        with self.subTest("old rule gone"):
+            self.assertNotIn("no new Critical or High and fewer findings", self.text)
+
+    def test_steps_are_evidence(self):
+        # Fails if triage stops confining steps to a disposable fixture with synthetic inputs, or
+        # stops sanitising them before they are published.
+        triage = flat(section(self.text, "## Triage — verify before presenting"))
+        with self.subTest("fixture"):
+            self.assertIn("Run them only in a disposable fixture with synthetic inputs", triage)
+        with self.subTest("no working tree or network"):
+            self.assertIn("never in the working tree, and never against a network or outside service", triage)
+        with self.subTest("sanitised"):
+            self.assertIn("replace real secrets, account names and local paths with synthetic values", triage)
+
+    def test_every_source_gets_the_fields_at_intake(self):
+        # Fails if a source of findings is left out of the intake rule.
+        triage = section(self.text, "## Triage — verify before presenting")
+        intake = triage[triage.index("**Every source"):]
+        for source in ("`/code-review`", "`/security-review`", "`design-review`", "dependency scan"):
+            with self.subTest(source=source):
+                self.assertIn(source, intake[:600])
+
+    def test_note_labels_are_title_case(self):
+        # Fails if a keyed-note label or a gate heading is in sentence case, or an old label remains.
+        for label in ("*When It Fires:*", "*What Happens:*", "*Steps To Reproduce:*",
+                      "*Reviewer's Fix:*", "*Commentary:*"):
+            with self.subTest(present=label):
+                self.assertIn(label, self.text)
+        for old in ("*When it fires", "*What happens", "*Reviewer's fix", "*Explanation"):
+            with self.subTest(absent=old):
+                self.assertNotIn(old, self.text)
+        gate = section(self.text, "### What the user sees at the gate")
+        for heading in ("**The Trend**", "**What The New Findings Are About**", "**Your Recommendation**"):
+            with self.subTest(gate=heading):
+                self.assertIn(heading, gate)
+
+    def test_unfixed_blocker_replaces_proposed(self):
+        # Fails if the old name survives in any skill, or the new one is not defined.
+        skills = "".join(p.read_text() for p in SKILLS)
+        with self.subTest("old gone"):
+            self.assertNotIn("Proposed: fixed in phase", skills)
+        with self.subTest("new defined"):
+            self.assertIn("- `Unfixed Blocker` —", self.text)
+
+    def test_dispositions_are_title_case(self):
+        # Fails if a sentence-case disposition survives in any skill.
+        skills = "".join(p.read_text() for p in SKILLS)
+        for old in ("Fixed in phase", "Already covered", "Not incorporated",
+                    "Confirmed: accepted, no work planned", "Open — no roadmap files"):
+            with self.subTest(absent=old):
+                self.assertNotIn(old, skills)
+        for new in ("`Fixed In Phase`", "`Already Covered — <where>`", "`Not Incorporated`",
+                    "`Confirmed: Accepted, No Work Planned`", "`Recorded Only: No Roadmap Files`"):
+            with self.subTest(present=new):
+                self.assertIn(new, self.text)
+
+    def test_disposition_order_is_stated(self):
+        # Fails if the skill stops saying how a row's disposition follows from its verdict and
+        # the blocking rule.
+        self.assertIn("a blocking row is `Fixed In Phase`, or `Unfixed Blocker` when the loop "
+                      "has stopped", flat(self.text))
+
+    def test_reviewer_disagreement_is_judged_per_reviewer(self):
+        # Fails if the skill stops forbidding a blocker made by mixing two reviewers' ratings.
+        rule = flat(section(self.text, "### The blocking rule"))
+        self.assertIn("Never combine one reviewer's ratings with another's", rule)
