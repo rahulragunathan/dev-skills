@@ -23,6 +23,10 @@ def plugin_name():
     return json.loads((ROOT / ".claude-plugin/plugin.json").read_text())["name"]
 
 
+def marketplace():
+    return json.loads((ROOT / ".claude-plugin/marketplace.json").read_text())
+
+
 def files_naming(name):
     tracked = subprocess.run(
         ["git", "-C", str(ROOT), "ls-files", "-z"],
@@ -46,7 +50,7 @@ class PluginNameTest(unittest.TestCase):
         self.assertEqual(stray, [], f"plugin name '{plugin_name()}' found outside {sorted(ALLOWED)}")
 
     def test_marketplace_lists_the_plugin_by_its_manifest_name(self):
-        market = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text())
+        market = marketplace()
         self.assertEqual([p["name"] for p in market["plugins"]], [plugin_name()])
 
 
@@ -77,7 +81,7 @@ class DrawioSkillNameTest(unittest.TestCase):
 class ManifestValidTest(unittest.TestCase):
     def test_marketplace_entry_carries_no_version(self):
         # Fails if marketplace.json gains a version, a second source that can hide a bump.
-        market = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text())
+        market = marketplace()
         self.assertNotIn("version", market["plugins"][0])
 
     def test_claude_validates_both_manifests(self):
