@@ -328,12 +328,19 @@ class TriagePassOneTest(unittest.TestCase):
 
     def test_summaries_name_every_blocking_likelihood(self):
         # Fails if README or AGENTS.md summarises the blocking rule without Almost Always, or
-        # without saying the finding must be confirmed.
+        # without the disposition link, or if either summary files every non-blocking row.
         for name in ("README.md", "AGENTS.md"):
             text = flat((ROOT / name).read_text())
             with self.subTest(doc=name):
                 self.assertIn("Likely or Almost Always", text)
                 self.assertRegex(text, r"confirmed Critical or High")
+                self.assertIn("[disposition order](skills/external-review/SKILL.md#disposition-vocabulary--phase--repo-mode)", text)
+                self.assertNotIn("the rest are filed", text)
+
+    def test_readme_names_the_reproduction_fallback(self):
+        # Fails if setup tells a triager to stop when the optional sandbox is unavailable.
+        tools = flat(section((ROOT / "README.md").read_text(), "## External tools"))
+        self.assertIn("If the platform's sandbox cannot start, triage verifies by reading", tools)
 
     def test_partly_rows_use_verified_ratings(self):
         # Fails if the blocking rule stops saying which ratings decide a Partly row.
@@ -361,6 +368,17 @@ class FollowUpTest(unittest.TestCase):
         text = (ROOT / "CHANGELOG.md").read_text()
         start = text.index("## [2.3.0]")
         return text[start:text.index("\n## [", start + 1)]
+
+    def test_release_notes_cite_the_follow_up_fixes(self):
+        # Fails if a closed ID lacks a Fixed bullet or the Changed section omits the loop rule.
+        entry = self.changelog_entry()
+        fixed = entry.split("### Fixed")[1]
+        closed = {f"KI-{n}" for n in (80, 112, 113, 114, 115, 117, 118, 128, 129, 131, 132, 133, 134, 135, 136)}
+        with self.subTest(section="Fixed"):
+            self.assertFalse((closed | {"UNK-04"}) - set(re.findall(r"\b(?:KI|UNK)-\d+\b", fixed)))
+        changed = entry.split("### Changed")[1].split("### Fixed")[0]
+        with self.subTest(section="Changed"):
+            self.assertIn("recommend landing after a complete pass with no blocker", flat(changed))
 
     def test_no_happy_path_line_anywhere(self):
         # Fails if any skill, README, AGENTS.md or the 2.3.0 entry still asks for or shows the

@@ -22,8 +22,8 @@ here — the plugin manifest's version is the only record of them.
   finding, on any Path.
 - **The blocking rule.** A confirmed Critical or High finding blocks a phase when it is on the Happy
   Path, or Likely or Almost Always. Only those are fixed in the phase, with one exception, a
-  reviewer's document fix to the release's bookkeeping (below); the rest are filed, and the user can
-  pull any of them back in at the gate. Each reviewer's ratings are judged on their own, never
+  reviewer's document fix to the release's bookkeeping (below); the other rows follow their dispositions. The user can
+  reopen a row at the gate. Each reviewer's ratings are judged on their own, never
   mixed. The review loop now stops on a pass with no blocking finding, or whose only blocking
   findings are document fixes, and the gate shows a Steps To Reproduce summary grouped by Path and a
   trend table with each pass's blocking count.
@@ -40,6 +40,10 @@ here — the plugin manifest's version is the only record of them.
   ROADMAP.
 
 ### Changed
+
+- Reviewers name the failure class and suggest the simplest fix that removes it. Narrow passes
+  check what a replacement stopped catching. Triagers test the edges of the class and
+  recommend landing after a complete pass with no blocker.
 
 - **Title case for the labels and fixed values external-review shows, and for the KI and ENH
   section headings.** Likelihood's top level is
@@ -63,6 +67,24 @@ here — the plugin manifest's version is the only record of them.
 
 ### Fixed
 
+- The post-review check pins the reviewed commit, refuses shallow history and stops at any
+  merge in the review window. Signed commits no longer add signature text to the file list.
+  Tests check the executable fence (KI-128, KI-133, KI-134, KI-135, KI-136).
+- First push publishes the checked commit. Prune checks worktrees and deletes a gone branch
+  only at its inspected tip (KI-80).
+- Reviewer reproduction steps run in a confined fixture. When the sandbox cannot start,
+  triage records verification by reading (KI-112).
+- Dependency findings and coverage gaps have distinct remedies. Each fix requires a rescan
+  (KI-113). The plan-mode blocking rule sets the note’s opening word. Filed plan findings
+  preserve observed evidence and label predictions (KI-114, KI-117).
+- Findings follow the disposition order. Split rows use verified ratings for each half. The
+  trend counts base IDs, while disposition tallies count rows (KI-118, KI-129).
+- Document-fix notes track the first pass that reviewed the commit (KI-131). Tests check the
+  evidence source, the chronological disposition and whole finding IDs in commit messages
+  (KI-132).
+- The S02 key-bound decision is settled (KI-115, UNK-04). ENH-44 tracks the condition edit
+  and re-grading.
+
 - **Every row has a disposition.** A repo review's blocking row, and a
   blocker from an incomplete pass waiting for its retry, are `Unfixed Blocker`. A change you make
   at the gate is written `Originally <old>; <new> On User's Call`. A row has one Path, the one that
@@ -79,10 +101,9 @@ here — the plugin manifest's version is the only record of them.
   dev-skills entry uses its template's headings and labels, guarded by new tests (KI-110).
 - **The document-fix rule's edges.** A finding with a document half and another half is split into
   two rows, so `Fixed In Phase` always means the whole row (KI-122). The post-review check prints
-  each commit's message above its own patch, a merge's included, and its tests check each commit's
-  block (KI-123, KI-124). It also checks every file each commit touched, so a change and its revert
-  still stop it, refuses a reviewed commit off the branch's first-parent line, and no longer passes
-  `--diff-merges=first-parent`, a value Git before 2.31 rejects (KI-127). The last drift re-check
+  each commit's message above its own patch, and its tests check each commit's block (KI-123,
+  KI-124). It also checks every file each commit touched, so a change and its revert still stop it
+  (KI-127). The last drift re-check
   runs `roadmap.py check` (KI-125). The gate names a document fix made after the last pass, *Checked
   Against* accepts a wording fix, and any other fix you ask for at the gate still needs another pass
   (KI-126).
