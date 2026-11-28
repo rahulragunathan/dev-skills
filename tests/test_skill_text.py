@@ -425,6 +425,12 @@ class PolicyGapTest(unittest.TestCase):
             with self.subTest(part=part):
                 self.assertIn(part, step)
 
+    def test_reviewer_steps_require_the_sandbox_helper(self):
+        # Fails if triage allows a direct command or silently skips verification.
+        step = self.er.split("2. **Steps To Reproduce are evidence")[1].split("3. **In phase and repo mode")[0]
+        self.assertIn('only through `"$CLAUDE_PLUGIN_ROOT/skills/external-review/repro-sandbox.sh" FIXTURE -- CMD [ARG...]`', step)
+        self.assertIn("verify by reading and record that method in the note", step)
+
     def test_ki_107_the_whole_record_is_sanitised(self):
         # Fails if sanitising before publication still covers only the steps.
         self.assertIn("sanitise all of it, not only the steps", self.er)
