@@ -509,6 +509,38 @@ Let the caller name a local image with the repository's tools, keeping `--pull=n
 
 ---
 
+<a id="ki-146"></a>
+
+## KI-146 — README's install steps leave out a shadowing local install and the drawio fallbacks
+
+**Severity:** Medium
+**Likelihood:** Likely
+**Path:** Happy Path
+**Area:** Docs
+**Where:** [README.md](../README.md) — `**Claude Code**, through your claude.ai account`
+
+### What Happens
+
+README installs the plugin through the claude.ai account but does not say that a local install of the same name takes precedence over the synced copy, so a machine that installed it earlier keeps running the old version. Its tools table gives only the account route for `drawio:create-diagram`, with no command-line route for an API key setup, and does not say the skill is Claude Code only, so design-review records "no diagram" under Codex.
+
+### Steps To Reproduce
+
+1. On a machine with the plugin installed locally, add the marketplace on claude.ai as README says.
+2. Start a session after a release.
+3. The local copy still loads. README should say to remove it, or point to the setup script that retires local installs.
+
+### Example Scenario
+
+A user upgrades through the account and keeps the old skills without knowing.
+
+### Notes For A Fix
+
+Add one sentence on precedence with the uninstall command, the drawio command-line route, and that `drawio:create-diagram` is Claude Code only.
+
+**Source:** gemini-4-neon-high — plugins-from-account phase review pass 1, 2026-11-28.
+
+---
+
 <a id="ki-41"></a>
 
 ## KI-41 — Converting a large sequence to text has no size bound
@@ -1403,3 +1435,35 @@ The recommendation default does not apply where the stop rule says the pass is c
 Write `no blocking finding other than a document fix`, as the stop rule does.
 
 **Source:** gemini-4-neon-high (Low, Rare) — phase review pass 12, review-triage phase, 2026-11-27.
+
+---
+
+<a id="ki-147"></a>
+
+## KI-147 — The drawio-name and manifest tests miss some regressions
+
+**Severity:** Low
+**Likelihood:** Rare
+**Path:** Unusual Input
+**Area:** Tests
+**Where:** [test_plugin_name.py](../tests/test_plugin_name.py) — `def test_drawio_is_named_as_the_plugin_skill(self):`
+
+### What Happens
+
+The name test reads a hand-picked file list and matches the banned phrases with literal spaces, so a new doc, a phrase wrapped across lines, or a bare `` `drawio` `` elsewhere passes. The manifest tests check only the first marketplace entry, and the validation test skips without `claude`, so a machine without it checks nothing.
+
+### Steps To Reproduce
+
+1. Wrap `` `drawio` `` and `skill` onto two lines in design-review's SKILL.md.
+2. Run the test.
+3. It passes. It should fail.
+
+### Example Scenario
+
+A stale name slips back into a skill with the suite green.
+
+### Notes For A Fix
+
+Scan tracked Markdown like `files_naming()` does, with `\s+` between words; check every marketplace entry; add a structural check of both manifests that runs without `claude`.
+
+**Source:** gemini-4-neon-high — plugins-from-account phase review pass 1, 2026-11-28.

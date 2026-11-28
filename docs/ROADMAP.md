@@ -57,6 +57,7 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-36](KNOWN_ISSUES.md#ki-36) | A grader quote of a table cell that holds a pipe is refused | Likely | Medium |
 | [KI-39](KNOWN_ISSUES.md#ki-39) | Calling `print` with an f-string argument still hides later guards | Likely | Medium |
 | [KI-137](KNOWN_ISSUES.md#ki-137) | The Docker reproduction image lacks git and bash | Likely | Medium |
+| [KI-146](KNOWN_ISSUES.md#ki-146) | README's install steps leave out a shadowing local install and the drawio fallbacks | Likely | Medium |
 | [KI-41](KNOWN_ISSUES.md#ki-41) | Converting a large sequence to text has no size bound | Rare | Medium |
 | [KI-76](KNOWN_ISSUES.md#ki-76) | The probe's error classes still match loose substrings | Rare | Medium |
 | [KI-79](KNOWN_ISSUES.md#ki-79) | A symlinked folder above the docs folder still redirects the roadmap tools | Rare | Medium |
@@ -89,6 +90,7 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-141](KNOWN_ISSUES.md#ki-141) | The signed-bookkeeping test misses signature text in the printed patch | Rare | Low |
 | [KI-142](KNOWN_ISSUES.md#ki-142) | The per-pass severity and kind counts have no rule for a split finding | Rare | Low |
 | [KI-143](KNOWN_ISSUES.md#ki-143) | The gate's land-by-default rule misses a pass whose only blocker was a document fix | Rare | Low |
+| [KI-147](KNOWN_ISSUES.md#ki-147) | The drawio-name and manifest tests miss some regressions | Rare | Low |
 
 ## Enhancements
 
@@ -109,6 +111,7 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 | [ENH-40](ENHANCEMENTS.md#enh-40) | Make Path required in the roadmap check | Medium | ~2 hours |
 | [ENH-41](ENHANCEMENTS.md#enh-41) | Make the triage wording tests pin the whole policy | Medium | ~2 hours |
 | [ENH-44](ENHANCEMENTS.md#enh-44) | Write the stated-key-bound reading into S02 Lifetime and re-grade the affected rows | Medium | ~1 day |
+| [ENH-45](ENHANCEMENTS.md#enh-45) | Check the release version against the default branch | Medium | ~2 hours |
 | [ENH-32](ENHANCEMENTS.md#enh-32) | Drop explanations of standard tool behaviour from the skills | Low | ~2 hours |
 | [ENH-39](ENHANCEMENTS.md#enh-39) | Make the tests pass 3 found weak fail for their named reason | Low | ~2 hours |
 | [ENH-43](ENHANCEMENTS.md#enh-43) | Make the roadmap-shape guards exact | Low | ~1 hour |

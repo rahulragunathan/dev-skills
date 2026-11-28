@@ -332,6 +332,29 @@ Keep the historical grades with their original hashes. Refresh the scenario rows
 
 ---
 
+<a id="enh-45"></a>
+
+## ENH-45 — Check the release version against the default branch
+
+**Priority:** Medium · **Effort:** ~2 hours
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `Decide the version now` · **Regression Net:** `skills/phase-workflow/tests/phase-git.bats`
+
+### What It Is
+
+The release check compares `plugin.json`'s version with the newest CHANGELOG heading. A change to the skills that forgets both edits keeps them equal and passes. Compare the candidate version with the default branch's as well, and fail when the plugin's files changed but the version did not.
+
+### Why It Matters
+
+Plugins now update from the claude.ai account only when `plugin.json`'s version changes, so a release that forgets the bump reaches no machine, and nothing says so.
+
+### Notes For The Work
+
+Read the default branch's `plugin.json` with `git show origin/<default>:.claude-plugin/plugin.json` in phase-workflow's release step rather than in a unit test, which should not depend on remote state. Being in the workflow, it covers drawio and any other plugin released through a phase.
+
+**Source:** gpt-6.2-astra:high — plan review (C-24), plugins-from-account phase, 2026-11-28.
+
+---
+
 <a id="enh-39"></a>
 
 ## ENH-39 — Make the tests pass 3 found weak fail for their named reason

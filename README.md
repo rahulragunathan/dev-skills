@@ -13,16 +13,21 @@ same folders work in Claude Code and in Codex.
 
 ## Install
 
-**Claude Code**, from GitHub:
+**Claude Code**, through your claude.ai account: Customize → Plugins → Add marketplace,
+`rahulragunathan/dev-skills`, with **Sync automatically** on, then install `dev-skills`. It
+reaches Claude Code, Cowork and cloud sessions and updates itself after each release. Skills
+load as `/dev-skills:<skill>`.
 
-```text
-/plugin marketplace add rahulragunathan/dev-skills
-/plugin install dev-skills@dev-skills
+Without a claude.ai account (an API key setup), use the command line, then turn auto-update on
+for the marketplace in `/plugin`:
+
+```bash
+claude plugin marketplace add rahulragunathan/dev-skills
+claude plugin install dev-skills@dev-skills
 ```
 
-From a local checkout, pass its absolute path to `/plugin marketplace add` instead. The slash
-command cannot parse a path with spaces, so link the checkout to a space-free path first. Then
-Cmd+Q and reopen. Skills load as `/dev-skills:<skill>`.
+To try unreleased skill text for one session, load a checkout directly:
+`claude --plugin-dir <checkout>`.
 
 **Codex** reads skills as plain folders. Link each folder under `skills/` into Codex's skills
 directory.
@@ -39,12 +44,12 @@ The plugin itself needs nothing installed. Each skill checks the tools its curre
 | `gh` | phase-workflow (draft PR, checks, merge, tag) | `brew install gh`, then `gh auth login` |
 | `osv-scanner` | phase-workflow (the dependency scan at phase end) | `brew install osv-scanner` |
 | `git`, `python3` | every skill's helpers; the name check lists files with `git` | ship with the Xcode command-line tools |
-| `drawio` skill | design-review (module and flow diagrams) | drop the skill into `~/.claude/skills/drawio/` |
+| `drawio:create-diagram` | design-review (module and flow diagrams) | the `drawio` plugin: add the `rahulragunathan/drawio` marketplace on your claude.ai account and install it |
 | `bats` | running the test suite | `brew install bats-core`, then `bats skills/*/tests/` and `python3 -m unittest discover tests` |
 
 external-review runs two independent reviewers, so one missing CLI is not fatal: it names the reviewer it skipped and reviews with the other. If both are missing it skips the external review altogether and says so; phase-workflow records that in the hand-off. A reviewer that is installed but fails is different: the pass is incomplete, and is re-run or taken to the user.
 
-`gh` is the one closest to required: phase-workflow cannot open or merge a phase PR without it, so it is checked before the first phase-start mutation rather than at merge time. `drawio` is best-effort — design-review records "no diagram" and carries on.
+`gh` is the one closest to required: phase-workflow cannot open or merge a phase PR without it, so it is checked before the first phase-start mutation rather than at merge time. `drawio:create-diagram` is best-effort — design-review records "no diagram" and carries on.
 
 ## Documentation
 

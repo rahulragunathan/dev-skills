@@ -10,6 +10,22 @@ here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-11-28 — plugins from the claude.ai account
+
+### Fixed
+
+- **The drawio skill is named as the plugin skill it became.** drawio 2.0.0 turns the loose
+  `drawio` skill into the `drawio` plugin's `create-diagram` skill, so `~/.claude/skills/drawio`
+  stops existing. design-review and phase-workflow name `drawio:create-diagram`, a generator only
+  writes its `.drawio` file, and validating and rendering go through that skill, which knows
+  where its scripts are installed. A test keeps the old path and the bare name out.
+
+### Changed
+
+- **README installs through the claude.ai account.** Add the marketplace there with Sync
+  automatically on, and the plugin updates itself after each release; the command line remains
+  for an API key setup.
+
 ## [2.3.0] - 2026-11-27 — review triage
 
 ### Added
@@ -1237,7 +1253,8 @@ corrections are recorded here.
 
 ## Reference
 
-[Unreleased]: https://github.com/rahulragunathan/dev-skills/compare/v2.3.0...HEAD
+[Unreleased]: https://github.com/rahulragunathan/dev-skills/compare/v2.3.1...HEAD
+[2.3.1]: https://github.com/rahulragunathan/dev-skills/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/rahulragunathan/dev-skills/compare/v2.2.2...v2.3.0
 [2.2.2]: https://github.com/rahulragunathan/dev-skills/compare/v2.2.1...v2.2.2
 [2.2.1]: https://github.com/rahulragunathan/dev-skills/compare/v2.2.0...v2.2.1
