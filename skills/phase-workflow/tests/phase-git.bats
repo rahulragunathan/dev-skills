@@ -1424,3 +1424,17 @@ SH
   [ "$status" -ne 0 ] || false
   [ "$(git --git-dir="$FORK" rev-parse refs/heads/feature/x)" = "$TASK_SHA" ]
 }
+
+@test "prune: a deleted branch leaves no tracking config behind" {
+  # Fails if update-ref -d keeps branch.<name>.merge, so a later branch of the same name
+  # starts with a [gone] upstream and the next prune can delete it.
+  ki46_extract_cleanup
+  git checkout -q -b feature/x; echo x > x1; git add -A; git commit -qm x
+  git checkout -q main; git merge -q --ff-only feature/x
+  ki46_orphan feature/x
+  [ -n "$(git config --get branch.feature/x.merge)" ] || false
+  run bash "$TEST_TMP/cleanup.sh"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  ! git rev-parse --verify -q refs/heads/feature/x >/dev/null || false
+  [ -z "$(git config --get-regexp '^branch\.feature/x\.' || true)" ]
+}

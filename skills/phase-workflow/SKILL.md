@@ -661,7 +661,11 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
      if grep -Fxq "branch refs/heads/$b" <<< "$WORKTREES"; then
        echo "RETAINED — $b is checked out in another worktree"
      elif [ "$sha" = "${APPROVED_SHA:-}" ] || git merge-base --is-ancestor "$sha" "$DEFAULT_SHA"; then
-       git update-ref -d "refs/heads/$b" "$sha" && continue
+       if git update-ref -d "refs/heads/$b" "$sha"; then
+         # update-ref keeps the tracking config; a later branch of this name would start [gone].
+         git config --remove-section "branch.$b" 2>/dev/null || true
+         continue
+       fi
        echo "RETAINED — $b could not be deleted"
      else
        echo "RETAINED — $b holds commits absent from $DEFAULT_BRANCH"
