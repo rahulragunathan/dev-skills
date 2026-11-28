@@ -55,6 +55,7 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-51](KNOWN_ISSUES.md#ki-51) | Rejected grading attempts are not retained | Likely | Medium |
 | [KI-36](KNOWN_ISSUES.md#ki-36) | A grader quote of a table cell that holds a pipe is refused | Likely | Medium |
 | [KI-39](KNOWN_ISSUES.md#ki-39) | Calling `print` with an f-string argument still hides later guards | Likely | Medium |
+| [KI-137](KNOWN_ISSUES.md#ki-137) | The Docker reproduction image lacks git and bash | Likely | Medium |
 | [KI-41](KNOWN_ISSUES.md#ki-41) | Converting a large sequence to text has no size bound | Rare | Medium |
 | [KI-76](KNOWN_ISSUES.md#ki-76) | The probe's error classes still match loose substrings | Rare | Medium |
 | [KI-79](KNOWN_ISSUES.md#ki-79) | A symlinked folder above the docs folder still redirects the roadmap tools | Rare | Medium |
@@ -70,6 +71,10 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-119](KNOWN_ISSUES.md#ki-119) | The record's user-only edit rule blocks settling a retried row | Rare | Medium |
 | [KI-121](KNOWN_ISSUES.md#ki-121) | A document fix on an incomplete pass has no disposition while it waits | Rare | Medium |
 | [KI-130](KNOWN_ISSUES.md#ki-130) | The gate's unreviewed-fix sentence ignores an accepted coverage gap | Rare | Medium |
+| [KI-138](KNOWN_ISSUES.md#ki-138) | Prune can delete a branch a worktree is rebasing | Rare | Medium |
+| [KI-139](KNOWN_ISSUES.md#ki-139) | First push cannot set the upstream in a single-branch clone | Rare | Medium |
+| [KI-140](KNOWN_ISSUES.md#ki-140) | The repro-sandbox tests miss several of the helper's guards | Rare | Medium |
+| [KI-144](KNOWN_ISSUES.md#ki-144) | The macOS sandbox reads all of /opt/homebrew and /Library | Rare | Medium |
 | [KI-82](KNOWN_ISSUES.md#ki-82) | The zsh lint misses traps hidden by quotes and other subscripts | Likely | Low |
 | [KI-44](KNOWN_ISSUES.md#ki-44) | A stale dispatch log gives a misleading replacement message | Rare | Low |
 | [KI-78](KNOWN_ISSUES.md#ki-78) | Index rows are not bound to their section | Rare | Low |
@@ -80,6 +85,9 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-91](KNOWN_ISSUES.md#ki-91) | Init and close can lose their caller's signal handler while registering their own | Rare | Low |
 | [KI-102](KNOWN_ISSUES.md#ki-102) | An empty Likelihood reads the Path line below it as its value | Rare | Low |
 | [KI-120](KNOWN_ISSUES.md#ki-120) | Two blocking sets of ratings leave a merged row's filing open | Rare | Low |
+| [KI-141](KNOWN_ISSUES.md#ki-141) | The signed-bookkeeping test misses signature text in the printed patch | Rare | Low |
+| [KI-142](KNOWN_ISSUES.md#ki-142) | The per-pass severity and kind counts have no rule for a split finding | Rare | Low |
+| [KI-143](KNOWN_ISSUES.md#ki-143) | The gate's land-by-default rule misses a pass whose only blocker was a document fix | Rare | Low |
 
 ## Enhancements
 

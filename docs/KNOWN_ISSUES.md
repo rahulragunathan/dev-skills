@@ -445,6 +445,38 @@ T3-2.
 
 ---
 
+<a id="ki-137"></a>
+
+## KI-137 — The Docker reproduction image lacks git and bash
+
+**Severity:** Medium
+**Likelihood:** Likely
+**Path:** Happy Path
+**Area:** Code
+**Where:** [repro-sandbox.sh](../skills/external-review/repro-sandbox.sh) — `python:3-alpine "$@"`
+
+### What Happens
+
+Off macOS the helper runs steps in `python:3-alpine`, which has no `git` and no `bash`. A step that needs either exits 127 inside the container. The probe passed, so the helper does not exit 3, and triage step 2 allows reading instead of running only on exit 3.
+
+### Steps To Reproduce
+
+1. On Linux with Docker and `python:3-alpine` pulled, clone a repository into a fresh fixture.
+2. Run `repro-sandbox.sh FIXTURE -- git -C repo status`.
+3. It exits 127. The triager should have a sandbox with the tools, or a stated fallback.
+
+### Example Scenario
+
+A triager on Linux cannot run most reproduction steps, and the skill gives no way forward.
+
+### Notes For A Fix
+
+Let the caller name a local image with the repository's tools, keeping `--pull=never`; and say in triage step 2 that a missing tool inside the sandbox means verifying by reading.
+
+**Source:** gemini-4-neon-high (Medium, Likely) — phase review pass 12, review-triage phase, 2026-11-27.
+
+---
+
 <a id="ki-41"></a>
 
 ## KI-41 — Converting a large sequence to text has no size bound
@@ -857,6 +889,134 @@ Qualify the sentence by successful coverage, and name the uncovered fix commits 
 
 ---
 
+<a id="ki-138"></a>
+
+## KI-138 — Prune can delete a branch a worktree is rebasing
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Path:** Unusual Input
+**Area:** Docs
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `grep -Fxq "branch refs/heads/$b" <<< "$WORKTREES"`
+
+### What Happens
+
+Prune now deletes with `update-ref -d` and checks worktrees itself. During a rebase or bisect the worktree's HEAD is detached, so `git worktree list --porcelain` shows no branch line for it. The old `git branch -D` refused here (`used by worktree`); the new check does not.
+
+### Steps To Reproduce
+
+1. Make a merged branch whose upstream is gone, and check it out in a linked worktree.
+2. Start an interactive rebase on it in that worktree, stopping at an `edit`.
+3. Run the prune block. The branch is deleted. It should be retained, as `git branch -D` would.
+
+### Example Scenario
+
+A rebase in progress loses its branch ref, and its tracking config.
+
+### Notes For A Fix
+
+Retain the branch when any worktree's `rebase-merge/head-name`, `rebase-apply/head-name` or bisect start names it; or retain every gone branch while any worktree is detached. A regression of T2's change (KI-80).
+
+**Source:** gemini-4-neon-high (Medium, Rare) — phase review pass 12, review-triage phase, 2026-11-27.
+
+---
+
+<a id="ki-139"></a>
+
+## KI-139 — First push cannot set the upstream in a single-branch clone
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Path:** Unusual Input
+**Area:** Docs
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `git branch --set-upstream-to="origin/$PHASE_BRANCH" "$PHASE_BRANCH"`
+
+### What Happens
+
+The first push now pushes a commit, not the branch, and sets the upstream afterwards. In a clone whose fetch refspec names only the default branch, the push makes no `origin/<branch>` tracking ref, so setting the upstream fails. A retry then fails the lease, since the remote branch exists.
+
+### Steps To Reproduce
+
+1. Clone with `--single-branch`, make the phase branch and commit its record.
+2. Run the first-push block.
+3. The push succeeds and the upstream step exits 128. It should set the upstream, as `git push -u` did.
+
+### Example Scenario
+
+Phase start stops halfway, and a plain retry cannot finish it.
+
+### Notes For A Fix
+
+Write `branch.<name>.remote` and `branch.<name>.merge` with `git config`, which is what `push -u` does. A regression of T2's change (KI-80).
+
+**Source:** gemini-4-neon-high (Medium, Rare) — phase review pass 12, review-triage phase, 2026-11-27.
+
+---
+
+<a id="ki-140"></a>
+
+## KI-140 — The repro-sandbox tests miss several of the helper's guards
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Path:** Happy Path
+**Area:** Tests
+**Where:** [repro-sandbox.bats](../skills/external-review/tests/repro-sandbox.bats) — `repro: a child cannot connect to a live host loopback listener`
+
+### What Happens
+
+On Linux the loopback test passes without `--network none`, because a container's 127.0.0.1 is its own. The Docker and macOS launcher tests use fakes and check only some flags, so removing `--read-only`, `--cap-drop=ALL`, `no-new-privileges` or `--user` stays green. No test makes the start probe fail, so dropping `|| unavailable` stays green.
+
+### Steps To Reproduce
+
+1. Remove `--cap-drop=ALL` from the Docker launcher.
+2. Run `repro-sandbox.bats`.
+3. All tests pass. One should fail.
+
+### Example Scenario
+
+A weakened sandbox ships with a green suite.
+
+### Notes For A Fix
+
+Assert every Docker hardening flag in the launcher test; add a test whose fake backend fails the probe and expects exit 3 with the command not run; on Linux, test the network by reaching a non-loopback host address.
+
+**Source:** gemini-4-neon-high (Medium, Rare) — phase review pass 12, review-triage phase, 2026-11-27.
+
+---
+
+<a id="ki-144"></a>
+
+## KI-144 — The macOS sandbox reads all of /opt/homebrew and /Library
+
+**Severity:** Medium
+**Likelihood:** Rare
+**Path:** External Interference
+**Area:** Code
+**Where:** [repro-sandbox.sh](../skills/external-review/repro-sandbox.sh) — `(subpath "/Library") (subpath "/opt/homebrew")`
+
+### What Happens
+
+The profile allows reading all of `/opt/homebrew` and `/Library`, for the runtimes a step needs. Those trees also hold Homebrew service data and configs (`/opt/homebrew/var`, `/opt/homebrew/etc`) and machine-wide application data, which a reproduction step can read.
+
+### Steps To Reproduce
+
+1. Put a synthetic secret in `/opt/homebrew/etc`.
+2. Run `repro-sandbox.sh FIXTURE -- cat` on it.
+3. It prints the file. It should be refused.
+
+### Example Scenario
+
+A hostile reproduction step reads a local service's credentials. The network is denied, so it can only print them into the triager's transcript.
+
+### Notes For A Fix
+
+Narrow the reads to the runtime subtrees (`/opt/homebrew/bin`, `Cellar`, `opt`, `lib`, `Frameworks`, `share`; `/Library/Frameworks`, `/Library/Developer`).
+
+**Source:** gemini-4-neon-high (Medium, Rare) — phase review pass 12, review-triage phase, 2026-11-27.
+
+---
+
 <a id="ki-82"></a>
 
 ## KI-82 — The zsh lint misses traps hidden by quotes and other subscripts
@@ -1115,3 +1275,99 @@ Two agents file the same row with different ratings.
 Apply the Severity, then Likelihood, then Path order to the qualifying sets too. (The Path order itself is stated in the Path column rule.)
 
 **Source:** gemini-4-neon-high — phase review pass 5, review-triage phase, 2026-11-27.
+
+---
+
+<a id="ki-141"></a>
+
+## KI-141 — The signed-bookkeeping test misses signature text in the printed patch
+
+**Severity:** Low
+**Likelihood:** Rare
+**Path:** Unusual Input
+**Area:** Tests
+**Where:** [phase-git.bats](../skills/phase-workflow/tests/phase-git.bats) — `after review: signed bookkeeping passes with signature display enabled`
+
+### What Happens
+
+Removing `--no-show-signature` from the patch log, and only there, leaves the test green: it checks that the patch appears, not that signature text does not. The wording test still catches the removal.
+
+### Steps To Reproduce
+
+1. Remove `--no-show-signature` from the fence's `git log -p`.
+2. Run the signed-bookkeeping test.
+3. It passes. It should fail.
+
+### Example Scenario
+
+The behavioural test does not pin one of the two flags it covers.
+
+### Notes For A Fix
+
+Assert the output holds no signature line.
+
+**Source:** gemini-4-neon-high (Low, Rare) — phase review pass 12, review-triage phase, 2026-11-27.
+
+---
+
+<a id="ki-142"></a>
+
+## KI-142 — The per-pass severity and kind counts have no rule for a split finding
+
+**Severity:** Low
+**Likelihood:** Rare
+**Path:** Unusual Input
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `Count rows in disposition tallies and note each split.`
+
+### What Happens
+
+The trend counts base IDs and disposition tallies count rows. The per-pass block's counts by severity, of findings in earlier fixes, and of documentation drift say neither, so halves with different severities or kinds can be counted either way.
+
+### Steps To Reproduce
+
+1. Split a finding into a Low document half and a High code half.
+2. Write the pass's block.
+3. Nothing says whether it counts once or twice, or at which severity.
+
+### Example Scenario
+
+Two triagers write different counts for the same pass.
+
+### Notes For A Fix
+
+Say the per-pass counts follow the disposition tallies: rows, noting each split.
+
+**Source:** gemini-4-neon-high (Low, Rare) — phase review pass 12, review-triage phase, 2026-11-27.
+
+---
+
+<a id="ki-143"></a>
+
+## KI-143 — The gate's land-by-default rule misses a pass whose only blocker was a document fix
+
+**Severity:** Low
+**Likelihood:** Rare
+**Path:** Unusual Input
+**Area:** Docs
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `After a complete pass with no blocking finding, recommend landing by default.`
+
+### What Happens
+
+The loop stops on a pass whose only blocking rows are document fixes, as if it had none. The gate's recommendation rule names only a pass with no blocking finding, so read literally it does not cover that pass.
+
+### Steps To Reproduce
+
+1. Finish a pass whose only blocking row is a document fix, and make the fix.
+2. Read the gate's recommendation rule.
+3. It does not say to recommend landing. It should.
+
+### Example Scenario
+
+The recommendation default does not apply where the stop rule says the pass is clean.
+
+### Notes For A Fix
+
+Write `no blocking finding other than a document fix`, as the stop rule does.
+
+**Source:** gemini-4-neon-high (Low, Rare) — phase review pass 12, review-triage phase, 2026-11-27.

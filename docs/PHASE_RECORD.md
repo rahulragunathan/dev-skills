@@ -51,4 +51,4 @@ those fixes and found no blocking finding; its findings are filed as KI-127 to K
 chose to fix KI-127, the regressions in the post-review check. Pass 11 reviewed that fix and found
 no blocking finding; its findings are filed as KI-133 to KI-136.
 
-The final follow-up pinned Git operations, confined reproduction steps, corrected triage and shortened the review loop. ENH-44 tracks the S02 condition edit and re-grading.
+The final follow-up pinned Git operations, confined reproduction steps, corrected triage and shortened the review loop. ENH-44 tracks the S02 condition edit and re-grading. Pass 12, Gemini only since Codex wrote the follow-up, found no blocking finding; its findings are filed as KI-137 to KI-144.
