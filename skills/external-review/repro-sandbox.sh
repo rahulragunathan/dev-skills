@@ -21,10 +21,14 @@ case "$(uname -s)" in
     profile='(version 1)
       (deny default)
       (allow process-fork process-exec sysctl-read)
-      (allow file-read* (subpath (param "FIXTURE"))
+      ; dyld and getcwd stat every path they walk; metadata exposes no file contents.
+      (allow file-read-metadata)
+      (allow file-read* (literal "/") (subpath (param "FIXTURE"))
         (subpath "/usr") (subpath "/bin") (subpath "/System")
-        (subpath "/Library") (subpath "/opt/homebrew") (subpath "/private/etc"))
-      (allow file-write* (subpath (param "FIXTURE")))'
+        (subpath "/Library") (subpath "/opt/homebrew") (subpath "/private/etc")
+        (subpath "/private/var/select") (literal "/dev/null") (literal "/dev/urandom"))
+      (allow file-write* (subpath (param "FIXTURE")))
+      (allow file-write-data (literal "/dev/null"))'
     run_confined() {
       /usr/bin/env -i HOME="$fixture" TMPDIR="$fixture" PATH=/usr/bin:/bin:/opt/homebrew/bin \
         "$sandbox" -D "FIXTURE=$fixture" -p "$profile" -- "$@" </dev/null
