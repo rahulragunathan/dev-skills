@@ -18,6 +18,8 @@ appended. When no phase is in flight the body is the single line `No phase in fl
 | `MERGE_METHOD` | `squash` |
 | Branched from | `origin/main` at `051b0c3` |
 | Started | 2026-11-28 |
+| `PR` | 14 |
+| Release | v2.3.1 |
 
 `squash` is the first allowed method in the order squash, rebase, merge. The plan lives in
 `~/.claude/plans/2026-11-27-plugins-from-github-plan.md`.
