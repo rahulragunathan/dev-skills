@@ -2,7 +2,7 @@
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "dev-skills",
   "description": "Agent skills for a phase-based development process: plan review and phase gates (phase-workflow), a project's docs and roadmap files (project-docs), structural design review at plan time and phase end (design-review), and outside review from other models (external-review).",
-  "version": "2.2.2",
+  "version": "2.3.0",
   "author": {
     "name": "Rahul Ragunathan"
   },

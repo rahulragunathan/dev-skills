@@ -27,17 +27,22 @@ Priority is about value, not urgency. Effort is a rough estimate — a session, 
 ## ENH-01 — `<title>`
 
 **Priority:** <High | Medium | Low> · **Effort:** <~hours / ~days>
-**Where:** [file.py](../file.py) — `def the_function_to_change(` · **Regression net:** `tests/test_<x>.py`
+**Where:** [file.py](../file.py) — `def the_function_to_change(` · **Regression Net:** `tests/test_<x>.py`
 
-### What it is
+### What It Is
 
 <the change, in a paragraph or two>
 
-### Why it matters
+### Why It Matters
 
 <the gap it closes or the duplication it removes — concrete, in the project's domain terms>
 
-### Notes for the work
+### Steps To Reproduce
+
+<numbered steps that show the behaviour, for an entry that describes one. Delete this section
+otherwise.>
+
+### Notes For The Work
 
 <approach, the constraints that would trip someone up, invariants to preserve, and related
 IDs worth bundling into the same pass>

@@ -36,7 +36,7 @@ Most severe first, and within a severity the most likely first. Both scales and 
 
 | ID | Issue | Likelihood | Severity |
 | ---- | ------- | ---------- | ---------- |
-| [KI-01](KNOWN_ISSUES.md#ki-01) | `<title>` | Almost always / Likely / Rare | Critical / High / Medium / Low |
+| [KI-01](KNOWN_ISSUES.md#ki-01) | `<title>` | Almost Always / Likely / Rare | Critical / High / Medium / Low |
 
 ## Enhancements
 

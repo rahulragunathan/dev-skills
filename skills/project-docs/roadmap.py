@@ -58,6 +58,13 @@ Ref = collections.namedtuple("Ref", "target fragment")
 # The rated fields of each kind of entry, in sort-key order. Their levels are
 # not listed here: they are read from the templates bundled beside this file.
 FIELDS = {"KI": ["Severity", "Likelihood"], "ENH": ["Priority"], "UNK": ["Kind"]}
+# Fields an entry may carry, checked against their template scale when present. They are
+# neither mirrored in ROADMAP nor part of the sort key.
+OPTIONAL_FIELDS = {"KI": ["Path", "Area"]}
+# Spellings from before the scales went to title case, accepted until every repository has
+# moved to the new one.
+OLD_SPELLINGS = {"Almost always": "Almost Always"}
+
 TEMPLATES = pathlib.Path(__file__).resolve().parent
 # The credential-shaped names external-review's capture.sh withholds; a test
 # keeps the two lists equal. check never opens a cited file of this shape, and
@@ -67,6 +74,11 @@ SECRET_NAMES = ("*.env", "*.env.*", "*.pem", "*.key", "*.p12", "*.pfx", "*.crt",
                 "*.sqlite", "*.sqlite3")
 # Each index section and the table header it must hold, so blank files never pass.
 SECTIONS = {"KI": "## Known Issues", "ENH": "## Enhancements", "UNK": "## Open Questions"}
+
+
+def spelled(value: str | None) -> str | None:
+    """The current spelling of a rating, so the old one compares and sorts as the new."""
+    return OLD_SPELLINGS.get(value, value)
 
 
 def credential_shaped(rel: str) -> bool:
@@ -180,7 +192,7 @@ def load_scales(template_dir: pathlib.Path) -> dict[str, dict[str, list[str]]]:
         name = FILES[prefix].replace(".md", "-template.md")
         lines = (template_dir / name).read_text().splitlines()
         scales[prefix] = {}
-        for field in fields:
+        for field in fields + OPTIONAL_FIELDS.get(prefix, []):
             try:
                 start = lines.index(f"## {field}")
             except ValueError:
@@ -241,12 +253,14 @@ def reconcile(docs: pathlib.Path, proposed: dict[str, str] | None = None):
             ratings[eid] = {}
             for field in fields:
                 match = re.search(r'\*\*' + field + r':\*\*\s*([^\n·]+)', body)
-                val = match[1].strip() if match else ""
+                val = spelled(match[1].strip()) if match else ""
                 ratings[eid][field] = val
-                if eid in rows and (not val or rows[eid]["cells"].get(field) != val):
+                if eid in rows and (not val or spelled(rows[eid]["cells"].get(field)) != val):
                     problems.append(f"  rating mismatch: {eid} {field}"); ok = False
                 if val and val not in scales[prefix][field]:
                     problems.append(f"  unknown {field}: {eid} ({val})"); ok = False
+            for problem in optional_problems(prefix, eid, body, scales[prefix]):
+                problems.append(problem); ok = False
             if eid in rows:
                 for label, ours, theirs in mirrored(prefix, eid, body, rows[eid]):
                     if ours != theirs or not ours:
@@ -263,6 +277,33 @@ def reconcile(docs: pathlib.Path, proposed: dict[str, str] | None = None):
             detail = [f"{e} -> #{rows[e]['anchor']}" for e in wrong]
             problems.append(f"  index rows pointing at the wrong anchor: {detail}"); ok = False
     return ok, problems
+
+
+def optional_problems(prefix: str, eid: str, body: str,
+                      scales: dict[str, list[str]]) -> list[str]:
+    """What is wrong with the entry's optional fields; an absent one is fine.
+
+    Only the metadata block is read: the lines before the entry's first `###` heading, outside
+    fences. Prose and examples further down may quote a field without setting it. The rated
+    fields are still read from the whole body, as before, so no existing roadmap changes verdict.
+    """
+    lines = []
+    for line, fenced in zip(body.splitlines(), fenced_lines(body)):
+        if line.startswith("### ") and not fenced:
+            break
+        if not fenced:
+            lines.append(line)
+    block, problems = "\n".join(lines), []
+    for field in OPTIONAL_FIELDS.get(prefix, []):
+        values = [v.strip() for v in re.findall(
+            r'(?:^|·)\s*\*\*' + field + r':\*\*[ \t]*([^\n·]*)', block, re.M)]
+        if len(values) > 1:
+            problems.append(f"  repeated {field}: {eid}")
+        elif values == [""]:
+            problems.append(f"  empty {field}: {eid}")
+        elif values and values[0] not in scales[field]:
+            problems.append(f"  unknown {field}: {eid} ({values[0]})")
+    return problems
 
 
 def structure_problems(roadmap: str, details: dict[str, str]) -> list[str]:

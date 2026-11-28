@@ -35,5 +35,5 @@ copy this table is for reading: editing it changes nothing.
 
 <what the code does now, and why it is unsettled>
 
-**What settles it:** <the decision to make, the test to write, or — for a Risk — the
+**What Settles It:** <the decision to make, the test to write, or — for a Risk — the
 circumstances that would make this worth revisiting>

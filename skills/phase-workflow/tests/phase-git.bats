@@ -390,7 +390,11 @@ SH
 # whose parents are upstream reports nothing though it carries unique work.
 # ---------------------------------------------------------------------------
 
-ki46_extract_cleanup() { extract_fence prune "$TEST_TMP/cleanup.sh" "$(dirname "$PUBLISH")/SKILL.md"; }
+ki46_extract_cleanup() {
+  export DEFAULT_BRANCH=main
+  git push -q origin main
+  extract_fence prune "$TEST_TMP/cleanup.sh" "$(dirname "$PUBLISH")/SKILL.md"
+}
 
 # Publish a branch, land it on main by $2, then orphan its upstream so the
 # prune fence considers it at all.
@@ -604,6 +608,140 @@ after_review() {
   run bash "$TEST_TMP/after.sh"
   [ "$status" -eq 0 ] || false
   [[ "$output" == *'`PR` | 9'* ]]
+}
+
+# commit_block <id>: the lines the post-review log prints under the commit whose message names <id>
+# as a whole ID (F-07, never F-070). It fails when no commit does, so a negative check never passes
+# on an empty block.
+commit_block() {
+  awk -v id="$1" '
+    function emit() {
+      if (matched) { printf "%s", block; found = 1 }
+    }
+    /^=== [0-9a-f]+$/ { emit(); block = ""; matched = 0; message = 1 }
+    /^diff --git / { message = 0 }
+    message && $0 ~ ("(^|[^0-9A-Za-z-])" id "([^0-9A-Za-z-]|$)") { matched = 1 }
+    { block = block $0 "\n" }
+    END { emit(); exit !found }
+  ' <<< "$output"
+}
+
+@test "after review: a CHANGELOG-only document fix passes and is shown" {
+  # Fails if a reviewer's confirmed fix to the release's CHANGELOG entry is refused after the last pass.
+  printf '## [1.0.0]\n\n- old claim\n' > CHANGELOG.md
+  git add CHANGELOG.md && git commit -qm changelog
+  reviewed="$(git rev-parse HEAD)"
+  printf '## [1.0.0]\n\n- corrected claim\n' > CHANGELOG.md
+  git commit -qam "Document fix for F-07: the claim"
+  after_review "$reviewed"
+  run bash "$TEST_TMP/after.sh"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$(commit_block F-07)" == *"+- corrected claim"* ]]
+}
+
+@test "after review: each commit's own change is shown under its message, and nothing before review" {
+  # Fails if the log shows messages without each commit's own patch, so two fixes to one file can
+  # name swapped findings unseen (KI-123), or if it starts before the reviewed commit (KI-124).
+  printf '## [1.0.0] - 2026-01-01\n\n- old wording\n' > CHANGELOG.md
+  git add CHANGELOG.md && git commit -qm "pre-review marker"
+  reviewed="$(git rev-parse HEAD)"
+  printf '## [1.0.0] - 2026-01-02\n\n- old wording\n' > CHANGELOG.md
+  git commit -qam "Document fix for F-07: the date"
+  printf '## [1.0.0] - 2026-01-02\n\n- new wording\n' > CHANGELOG.md
+  git commit -qam "Correct the wording" -m "Document fix for F-08"
+  after_review "$reviewed"
+  run bash "$TEST_TMP/after.sh"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  f07="$(commit_block F-07)" && f08="$(commit_block F-08)" || { echo "$output"; false; }
+  [[ "$f07" == *"+## [1.0.0] - 2026-01-02"* && "$f07" != *"+- new wording"* ]] || { echo "$output"; false; }
+  [[ "$f08" == *"+- new wording"* && "$f08" != *"+## [1.0.0]"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"pre-review marker"* ]]
+}
+
+@test "commit block: a base ID does not match a suffix or a patch" {
+  # Fails if a split row or an ID in patch text supplies evidence for its base ID.
+  reviewed="$(git rev-parse HEAD)"
+  echo F-07 > CHANGELOG.md && git add CHANGELOG.md && git commit -qm "Correct F-07a"
+  after_review "$reviewed"
+  run bash "$TEST_TMP/after.sh"
+  [ "$status" -eq 0 ] || false
+  [[ "$(commit_block F-07a)" == *"+F-07"* ]] || false
+  ! commit_block F-07 || false
+}
+
+@test "after review: even a CHANGELOG-only merge needs review" {
+  # Fails if an allowed path hides a merge inside the review window.
+  reviewed="$(git rev-parse HEAD)"
+  git switch -qc side
+  echo correction > CHANGELOG.md && git add CHANGELOG.md && git commit -qm correction
+  git switch -q main
+  git merge -q --no-ff side -m "Merge correction"
+  after_review "$reviewed"
+  run bash "$TEST_TMP/after.sh"
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$output" == *"MERGE AFTER REVIEW — rebase the commits after $reviewed instead, or run a narrow pass that covers the merge"* ]]
+}
+
+@test "after review: shallow history is refused" {
+  # Fails if the gate trusts a history with missing parents.
+  git commit -q --allow-empty -m tip
+  git clone -q --depth 1 "file://$REPO" "$TEST_TMP/shallow"
+  cd "$TEST_TMP/shallow"
+  [ "$(git rev-parse --is-shallow-repository)" = true ] || false
+  after_review HEAD
+  run bash "$TEST_TMP/after.sh"
+  [ "$status" -ne 0 ] || false
+  [[ "$output" == *"SHALLOW"* ]]
+}
+
+@test "after review: signed bookkeeping passes with signature display enabled" {
+  # Fails if Git includes signature text among the filenames.
+  reviewed="$(git rev-parse HEAD)"
+  ssh-keygen -q -t ed25519 -N '' -f "$TEST_TMP/signing"
+  git config gpg.format ssh
+  git config user.signingkey "$TEST_TMP/signing"
+  echo "tester $(cat "$TEST_TMP/signing.pub")" > "$TEST_TMP/signers"
+  git config gpg.ssh.allowedSignersFile "$TEST_TMP/signers"
+  git config log.showSignature true
+  echo correction > CHANGELOG.md && git add CHANGELOG.md && git commit -qS -m correction
+  git verify-commit HEAD || false
+  after_review "$reviewed"
+  run bash "$TEST_TMP/after.sh"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"+correction"* ]]
+}
+
+@test "after review: a change and its revert outside the bookkeeping set still stop the check" {
+  # Fails if a post-review commit to an outside file, reverted later, leaves no trace (KI-127).
+  reviewed="$(git rev-parse HEAD)"
+  [ ! -e helper.py ] || false   # the file must be new, so the revert leaves no net change
+  printf 'x = 1\n' > helper.py && git add helper.py && git commit -qm "add helper"
+  git rm -q helper.py && git commit -qm "revert helper"
+  printf '## [1.0.0]\n\n- fixed claim\n' > CHANGELOG.md
+  git add CHANGELOG.md && git commit -qm "Document fix for F-07: the claim"
+  after_review "$reviewed"
+  run bash "$TEST_TMP/after.sh"
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$output" == *"CHANGED AFTER REVIEW"*"helper.py"* ]]
+}
+
+@test "after review under zsh: a document fix passes, and a reverted outside change stops it" {
+  # Fails if zsh loses a filename when the fence combines the two listings.
+  command -v zsh >/dev/null || skip "zsh not installed"
+  printf '## [1.0.0]\n\n- old claim\n' > CHANGELOG.md
+  git add CHANGELOG.md && git commit -qm changelog
+  reviewed="$(git rev-parse HEAD)"
+  printf '## [1.0.0]\n\n- corrected claim\n' > CHANGELOG.md
+  git commit -qam "Document fix for F-07: the claim"
+  after_review "$reviewed"
+  run zsh -f "$TEST_TMP/after.sh"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$(commit_block F-07)" == *"+- corrected claim"* ]] || { echo "$output"; false; }
+  printf 'x = 1\n' > helper.py && git add helper.py && git commit -qm "add helper"
+  git rm -q helper.py && git commit -qm "revert helper"
+  run zsh -f "$TEST_TMP/after.sh"
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$output" == *"helper.py"* ]]
 }
 
 @test "origin check: accepts a bare user over each ssh spelling" {
@@ -1217,4 +1355,86 @@ SH
   git config remote.origin.vcs ""
   run bash "$PUBLISH" --check-origin "$FETCH_URL" "$PUSH_URL"
   [ "$status" -eq 1 ]
+}
+
+move_at_git_action() {
+  export REAL_GIT="$(command -v git)"
+  export MOVED="$(git commit-tree HEAD^{tree} -p HEAD -m concurrent)"
+  mkdir -p "$TEST_TMP/bin"
+  cat > "$TEST_TMP/bin/git" <<'SH'
+#!/bin/sh
+case "$1 ${2:-}" in
+  "push "*|"branch -D"|"branch -d"|"update-ref -d")
+    "$REAL_GIT" update-ref refs/heads/feature/x "$MOVED" || exit 1 ;;
+esac
+exec "$REAL_GIT" "$@"
+SH
+  chmod +x "$TEST_TMP/bin/git"
+}
+
+@test "first push: a concurrent move cannot change the published commit" {
+  # Fails if origin receives the moved tip instead of the commit whose record passed.
+  first_push "$BATS_TEST_DIRNAME/../SKILL.md"
+  git switch -qc feature/x
+  write_record feature/x
+  git add docs && git commit -qm record
+  checked="$(git rev-parse HEAD)"
+  move_at_git_action
+  PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/push.sh"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$(git rev-parse feature/x)" = "$MOVED" ] || false
+  [ "$(git --git-dir="$FORK" rev-parse refs/heads/feature/x)" = "$checked" ] || false
+  [ "$(git rev-parse --symbolic-full-name 'feature/x@{u}')" = refs/remotes/origin/feature/x ]
+}
+
+@test "prune: a concurrent move retains the new tip" {
+  # Fails if deletion by name discards a commit made after approval or the ancestor check.
+  ki46_extract_cleanup
+  git switch -qc feature/x
+  ki46_orphan feature/x
+  move_at_git_action
+  for approved in "$TASK_SHA" "$MOVED"; do
+    git update-ref refs/heads/feature/x "$TASK_SHA"
+    APPROVED_SHA="$approved" PATH="$TEST_TMP/bin:$PATH" run bash "$TEST_TMP/cleanup.sh"
+    [ "$(git rev-parse --verify --quiet refs/heads/feature/x)" = "$MOVED" ] || false
+    [ "$status" -ne 0 ] || false
+  done
+}
+
+@test "prune: ancestry is measured against the fetched default branch" {
+  # Fails if a local-only default-branch commit makes another branch eligible for deletion.
+  ki46_extract_cleanup
+  git switch -qc feature/x
+  git commit -q --allow-empty -m local
+  ki46_orphan feature/x
+  git merge -q --ff-only feature/x
+  run bash "$TEST_TMP/cleanup.sh"
+  [ "$status" -ne 0 ] || false
+  git rev-parse --verify refs/heads/feature/x
+}
+
+@test "first push: an existing remote branch keeps its tip" {
+  # Fails if a first push overwrites a branch created at origin after phase start.
+  first_push "$BATS_TEST_DIRNAME/../SKILL.md"
+  git push -q origin HEAD:refs/heads/feature/x
+  git switch -qc feature/x
+  write_record feature/x
+  git add docs && git commit -qm record
+  run bash "$TEST_TMP/push.sh"
+  [ "$status" -ne 0 ] || false
+  [ "$(git --git-dir="$FORK" rev-parse refs/heads/feature/x)" = "$TASK_SHA" ]
+}
+
+@test "prune: a deleted branch leaves no tracking config behind" {
+  # Fails if update-ref -d keeps branch.<name>.merge, so a later branch of the same name
+  # starts with a [gone] upstream and the next prune can delete it.
+  ki46_extract_cleanup
+  git checkout -q -b feature/x; echo x > x1; git add -A; git commit -qm x
+  git checkout -q main; git merge -q --ff-only feature/x
+  ki46_orphan feature/x
+  [ -n "$(git config --get branch.feature/x.merge)" ] || false
+  run bash "$TEST_TMP/cleanup.sh"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  ! git rev-parse --verify -q refs/heads/feature/x >/dev/null || false
+  [ -z "$(git config --get-regexp '^branch\.feature/x\.' || true)" ]
 }

@@ -15,7 +15,7 @@ The rules below are this skill's defaults. Where the user's or the project's own
 
 **Anything that lands cuts a release, numbered by semver.** Version by what changed, never by how the work was classified: a fix is a patch, a new flag a minor, a break major. A phase release names the phase in its CHANGELOG heading.
 
-**Roadmap files are optional.** A repository has `docs/ROADMAP.md` and its three supporting files only when the user asked for them, and `project-docs` owns them. Wherever this skill says to file a finding, file it through `project-docs` if the repository has all four files, and run `roadmap.py check` after filing; otherwise the finding stays in that review's own table as `Open — no roadmap files`, and the hand-off says why. A `docs/ROADMAP.md` of another shape is the project's own document. Never create roadmap files to have somewhere to file.
+**Roadmap files are optional.** A repository has `docs/ROADMAP.md` and its three supporting files only when the user asked for them, and `project-docs` owns them. Wherever this skill says to file a finding, file it through `project-docs` if the repository has all four files, and run `roadmap.py check` after filing; otherwise the finding stays in that review's own table as `Recorded Only: No Roadmap Files`, and the hand-off says why. A `docs/ROADMAP.md` of another shape is the project's own document. Never create roadmap files to have somewhere to file.
 
 **Run the external review checkpoint.** Follow `external-review`'s
 [coverage classification](../external-review/SKILL.md#coverage-classification) for missing CLIs,
@@ -40,12 +40,12 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 1. Draft the plan outside the repository (in Claude Code, `~/.claude/plans`), and keep it there: the plan review runs before the phase branch exists, and the Codex export refuses a tree with uncommitted files. Run **`design-review` in `plan` mode as part of drafting it.** Its output — the module table, the expected-change and shared-state lines, and whatever checks fired — fills the **File Structure** section `superpowers:writing-plans` already reserves. This is not an extra step: doing it here means the table reaches the reviewers in step 2 at no extra cost, and the Interface column is the same content `writing-plans` wants in each task's `Interfaces: Consumes / Produces` block, written once at the top instead of scattered.
 2. Run `external-review` in `plan` mode on the draft (Codex + Gemini).
 3. **Revise the plan** to incorporate every finding you verified as having merit.
-4. Add the **findings table** to the plan — the canonical format is in `external-review`. It goes **after the plan itself and before the testing strategy**, so the user reads the approach, then what outside review said about it, then how it will be verified. Every finding gets a row and a disposition; valid findings that are out of scope are kept rather than dropped — filed where the roadmap files exist, `Open — no roadmap files` where they do not — classified by what they are — defined wrong behaviour is a `KI-nn`, wanted work an `ENH-nn`, an unsettled question a `UNK-nn`. A reviewer reading a plan routinely finds a real bug in existing code, and filing that as an open question misuses the file.
+4. Add the **findings table** to the plan — the canonical format is in `external-review`. It goes **after the plan itself and before the testing strategy**, so the user reads the approach, then what outside review said about it, then how it will be verified. Every finding gets a row and a disposition; valid findings that are out of scope are kept rather than dropped — filed where the roadmap files exist, `Recorded Only: No Roadmap Files` where they do not — classified by what they are — defined wrong behaviour is a `KI-nn`, wanted work an `ENH-nn`, an unsettled question a `UNK-nn`. A reviewer reading a plan routinely finds a real bug in existing code, and filing that as an open question misuses the file.
 5. Present the whole thing in one pass, whatever the severities. A confirmed Critical does not hold the plan back — the user is in plan mode and can send it back.
 
 ## 2. Phase start (plan approved)
 
-1. **Preflight before any phase-start mutation.** The blocks in this skill run under bash or zsh, so they avoid the constructs the two read differently. Replace angle-bracket placeholders before running them. Run from the repo root. Stop on any failed command.
+1. **Preflight before any phase-start mutation.** The blocks in this skill run under bash or zsh, so they avoid the constructs the two read differently. Replace angle-bracket placeholders before running them. Run from the repo root. Stop on any failed command. Resolve each ref to a commit once and act on that commit. Use compare-and-swap for each ref write or deletion.
 
    **Initial discovery.** Run this block once at phase start. Later sections load the recorded values from `docs/PHASE_RECORD.md`; they do not re-run discovery. `gh` must be installed and able to read the repository and its merge settings. Resolve the repository from `origin`, not an upstream setting.
 
@@ -84,13 +84,15 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    [ "$(git symbolic-ref --quiet --short HEAD)" = "$PHASE_BRANCH" ] || { echo "WRONG BRANCH — stop"; exit 1; }
    # The record is committed, its first table names this branch, and the branch changed it since
    # it forked: a reused branch name must not inherit an old phase's record.
-   RECORDED="$(git show HEAD:docs/PHASE_RECORD.md \
+   HEAD_SHA="$(git rev-parse --verify "refs/heads/$PHASE_BRANCH^{commit}")"
+   RECORDED="$(git show "${HEAD_SHA}:docs/PHASE_RECORD.md" \
      | python3 "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/phase-record.py" get PHASE_BRANCH)" || RECORDED=""
-   FORK="$(git merge-base "refs/remotes/origin/$DEFAULT_BRANCH" HEAD)" || { echo "NO FORK POINT — stop"; exit 1; }
-   CHANGED=0; git diff --quiet "$FORK" HEAD -- docs/PHASE_RECORD.md || CHANGED=$?   # 1 differs; more is an error
-   git diff --quiet HEAD -- docs/PHASE_RECORD.md && [ "$RECORDED" = "$PHASE_BRANCH" ] && [ "$CHANGED" -eq 1 ] \
+   FORK="$(git merge-base "refs/remotes/origin/$DEFAULT_BRANCH" "$HEAD_SHA")" || { echo "NO FORK POINT — stop"; exit 1; }
+   CHANGED=0; git diff --quiet "$FORK" "$HEAD_SHA" -- docs/PHASE_RECORD.md || CHANGED=$?   # 1 differs; more is an error
+   git diff --quiet "$HEAD_SHA" -- docs/PHASE_RECORD.md && [ "$RECORDED" = "$PHASE_BRANCH" ] && [ "$CHANGED" -eq 1 ] \
      || { echo "PHASE RECORD NOT COMMITTED ON $PHASE_BRANCH — stop"; exit 1; }
-   git push -u origin "$PHASE_BRANCH"
+   git push --force-with-lease="refs/heads/${PHASE_BRANCH}:" origin "${HEAD_SHA}:refs/heads/$PHASE_BRANCH"
+   git branch --set-upstream-to="origin/$PHASE_BRANCH" "$PHASE_BRANCH"
    ```
 
    **This is the only place a phase branch is created.**
@@ -108,11 +110,11 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
 4. **Land the plan's diagram generators.** `design-review` builds them into the scratchpad at §1, because §1 runs before this branch exists, and the plan's front matter records their filenames. Copy **every** generator the plan recorded into `docs/` as this phase's first task **and commit it**. That commit is the baseline `design-review phase` compares against at §3 step 2. Skip this step entirely when the plan recorded none, which is the no-`drawio` path.
 5. **Roadmap files are not seeded.** If the user asks for them, `project-docs` sets them up with `roadmap.py init`.
 6. **`/simplify` runs at a task's refactor step only when the task added or reshaped code** — the *refactor while green* beat of its red-green-refactor cycle, where the tests that just passed re-validate whatever it rewrites. Skip it for tests-only, docs-only and one-line changes. §3 step 2 always runs it once more on the whole branch diff, for duplication no single task could see.
-7. Adopting this workflow on an existing project with no in-flight branch? Run `external-review` in `repo` mode first, to review the current state before phase 1 is planned. Its findings are filed where the roadmap files exist, and stay in its table, in the hand-off, where they do not.
+7. Adopting this workflow on an existing project with no in-flight branch? Run `external-review` in `repo` mode first, to review the current state before phase 1 is planned. Its findings follow the [disposition order](../external-review/SKILL.md#disposition-vocabulary--phase--repo-mode).
 
 ## 3. Phase end — retrospective (before hand-off)
 
-**Seven steps, in this order, every one of them.** The retrospective starts once the phase's last task is done and the suite is green — that is its trigger, not a request from the user. Each step produces an artifact, and you do not reach the gate at step 7 without all of them. Findings from every step land in the roadmap files through `project-docs` where the repository has them (the rule above), and in the PR's review record where it does not — never in chat alone.
+**Seven steps, in this order, every one of them.** The retrospective starts once the phase's last task is done and the suite is green — that is its trigger, not a request from the user. Each step produces an artifact, and you do not reach the gate at step 7 without all of them. Findings from every step enter the review record, and those dispositioned `Filed` land in the roadmap files through `project-docs` where the repository has them (the rule above); where it does not, deferred rows stay in the PR's review record as `Recorded Only: No Roadmap Files` — never in chat alone.
 
 | Step | Artifact it must produce |
 | --- | --- |
@@ -146,8 +148,9 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
      python3 "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/dependency-scan.py" --root .
      ```
 
-     It reads only the committed lockfiles, with `osv-scanner`, and sends package names and versions (never source) to the OSV database; a private package name can still identify an internal service, so pass `--offline` with a downloaded database where that matters. Exit 0 is clean or nothing to scan, 1 is findings, 3 is a coverage gap (a manifest with no lockfile, a file with no packages, an unpinned requirement), and 2 is a scanner that is missing or failed. Each finding and gap joins the review record like any other finding: fixed (an upgrade, with a test where behaviour changes), filed, or accepted with a reason. A missing scanner is reported like a missing review CLI and never blocks the gate. Run it again before the gate if any dependency file or `osv-scanner.toml` changed after it ran, and say which commit it scanned: online advisories change over time. Change it in `dependency-scan.py` and verify it with `tests/dependency-scan.bats`.
+     It reads only the committed lockfiles, with `osv-scanner`, and sends package names and versions (never source) to the OSV database; a private package name can still identify an internal service, so pass `--offline` with a downloaded database where that matters. Exit 0 is clean or nothing to scan, 1 is findings, 3 is a coverage gap (a manifest with no lockfile, a file with no packages, an unpinned requirement), and 2 is a scanner that is missing or failed. Each finding and gap joins the review record like any other finding (below); use a test where behaviour changes. Upgrade the vulnerable dependency. For a coverage gap, supply the input the scanner names. Rescan the committed fix before marking either row `Fixed In Phase`. A missing scanner is reported like a missing review CLI and never blocks the gate. Run it again before the gate if any dependency file or `osv-scanner.toml` changed after it ran, and say which commit it scanned: online advisories change over time. Change it in `dependency-scan.py` and verify it with `tests/dependency-scan.bats`.
    - **`/security-review` last**: Claude Code's built-in review of the branch's committed changes against the default branch, so it reads what `/simplify` and `/code-review` left. It runs only when the session's own working directory is inside the repository; a session started elsewhere, such as one driving a worktree under another folder, cannot run it. Where it is unavailable or fails, say so in the step's artifact; the external review's security item always runs, and the hand-off credits security coverage only to material an independent reviewer covered at step 5.
+   - **Every finding and coverage gap from these checks enters the review record** under external-review's [intake](../external-review/SKILL.md#triage--verify-before-presenting) and [blocking rule](../external-review/SKILL.md#the-blocking-rule), like a reviewer's. Apply the [disposition order](../external-review/SKILL.md#disposition-vocabulary--phase--repo-mode) to each row.
    - **That order, not the reverse.** Each pass must read the shape the one before it left: `design-review` moves responsibilities, `/simplify` rewrites, and `/code-review` is the correctness pass over everything that moved.
    - **Invoke it; do not restate its questions here.** The rubric lives in `design-review`; a second copy is a second edit site. Where it says to file a finding it does not fix, the rule at the top of this skill applies: through `project-docs` where the repository has the four roadmap files, otherwise in the PR's review record.
    - **Re-run the test suite after `/simplify`.** It rewrites code after the phase's green bar was established, and step 7 hands the user a diff to sign off on. Green is re-earned and reported, never assumed.
@@ -261,7 +264,7 @@ The plan the user sees is always the **revised** one. Reviewing after approval i
    - **README.md** — setup and usage; rewrite clean-slate when stale.
    - **docs/ARCHITECTURE.md** — **records and explains every diagram the project has**, one short section each saying what it depicts and when to regenerate it, not a bare embed. Regenerate each one with the `drawio` skill and compare against the generator committed at §2 (commit the `.drawio` source, generator script, and rendered PNG). **Drift-check the generator, not the PNG** — its box and edge labels are string literals naming modules and files, so they drop into the identifier check below, while a PNG is opaque to it. Catch a stale render mechanically: regenerate, then `git status`; if the PNG changes it was already out of date with its own source.
    - **CHANGELOG.md** — this phase's user-visible changes, appended to `[Unreleased]` under Added/Changed/Fixed/Removed. Never edit a released section. Where the roadmap files exist, an entry for a closed item is *moved* out of ROADMAP and its supporting file, not copied. Decide the version now (minor for additive work, patch for fixes and docs, major for a break). Prepare the release before external review: rename the populated `[Unreleased]` heading to `## [<version>] - <date> — <phase name>`, add a fresh empty `[Unreleased]` above it, and add the compare link under `## Reference`. Commit and push these edits before step 5. Record the version in the hand-off. Tag only after the approved PR merges.
-   - **KNOWN_ISSUES.md / ENHANCEMENTS.md / OPEN_QUESTIONS.md**, where the repository has them — every finding triaged out of steps 1–3 gets a full entry in the right one and a pointer row in ROADMAP, not a one-liner in ROADMAP alone. Getting these current *before* step 5 is what lets the external reviewers be told what is already tracked, so they stop re-deriving the backlog. Rate it when you write it; an unrated item is an untriaged item. Re-check the ordering, and re-check the filing: a question that has become a defined bug moves to KNOWN_ISSUES.
+   - **KNOWN_ISSUES.md / ENHANCEMENTS.md / OPEN_QUESTIONS.md**, where the repository has them — every finding triaged out of steps 1–3 that is filed gets a full entry in the right one and a pointer row in ROADMAP, not a one-liner in ROADMAP alone; a `Rejected` or `Confirmed: Accepted, No Work Planned` row gets none, and stays in the review record. Getting these current *before* step 5 is what lets the external reviewers be told what is already tracked, so they stop re-deriving the backlog. Rate it when you write it; an unrated item is an untriaged item. Re-check the ordering, and re-check the filing: a question that has become a defined bug moves to KNOWN_ISSUES.
    - **docs/PHASE_RECORD.md** — bring it current. It is written at §2 step 3 and then goes stale by
      default: the phase's later tasks, the deviations taken, the findings triaged and the version
      cut all happen after it was last touched. Record what the phase actually did, not what it
@@ -299,12 +302,13 @@ This matters most where re-gathering is expensive — fresh subagents, paid API 
 because that cost is exactly what tempts a skip. Say in the hand-off what was re-gathered and
 what remains expired.
 
-5. **External review loop:** `external-review` in `phase` mode (Codex + Gemini). [Its loop](../external-review/SKILL.md#the-loop) runs up to three passes without checking in, with its stop rule applied before any fix, and builds one [review record](../external-review/SKILL.md#the-phase-review-record) across them. Past three passes, or a fix after the loop stopped, is the user's call.
+5. **External review loop:** `external-review` in `phase` mode (Codex + Gemini). [Its loop](../external-review/SKILL.md#the-loop) runs up to three passes without checking in, with its stop rule applied before any fix, and builds one [review record](../external-review/SKILL.md#the-phase-review-record) across them. Past three passes, or a fix after the loop stopped, is the user's call; a document fix is the exception.
    - **It runs after the docs pass**, including release preparation. Fold later phase fixes into that unpublished release and commit them before the next pass or gate. Each commit a pass reviews has a green full suite.
+   - Only a finding that [blocks the phase](../external-review/SKILL.md#the-blocking-rule), or a document fix, is fixed here. Apply the [disposition order](../external-review/SKILL.md#disposition-vocabulary--phase--repo-mode) to all rows.
    - Build the record using `external-review`'s output contract and
      [coverage classification](../external-review/SKILL.md#coverage-classification).
-   - Every finding fixed here gets a failing test first, with its `Red:` line. Run step 3's check on those tests before the next pass, and again before the gate.
-6. **Post-fix drift re-check — narrow, and inside the loop.** Step 5's fixes change code after step 4 declared the docs true, so each round of fixes re-checks what it touched before it is committed for the next pass: the docs and code comments the changed files invalidate, the CHANGELOG entries whose claims moved, and the diagrams if a module moved. That way the next pass reviews them. After the last pass, confirm only that every filing has both its full entry and its ROADMAP pointer row, with ratings that agree, where the roadmap files exist; anything else this finds needs a narrow pass (`external-review`'s [loop](../external-review/SKILL.md#the-loop)). Report what you found, not only what you fixed.
+   - Every finding fixed here gets a failing test first, with its `Red:` line; a document fix gives the source it was checked against instead. Run step 3's check on those tests before the next pass, and again before the gate.
+6. **Post-fix drift re-check — narrow, and inside the loop.** Step 5's fixes change code after step 4 declared the docs true, so each round of fixes re-checks what it touched before it is committed for the next pass: the docs and code comments the changed files invalidate, the CHANGELOG entries whose claims moved, and the diagrams if a module moved. That way the next pass reviews them. After the last pass, where the roadmap files exist, run `roadmap.py check` and confirm that every filing has both its full entry and its ROADMAP pointer row, with ratings that agree; the check also catches an existing entry a document fix re-rated without its row. Anything else this finds needs a narrow pass (`external-review`'s [loop](../external-review/SKILL.md#the-loop)). Report what you found, not only what you fixed.
 7. **Present to the user and stop** — the phase gate.
    - **Include the review record** from step 5 in the hand-off, and put it in the PR description once the gate's checks below have passed — never in a per-phase review file in the repository. It exists so the user can see every finding and pull any deferred or accepted one back into this phase before signing off.
    - **Record the PR number and the release version in `docs/PHASE_RECORD.md` before presenting.**
@@ -318,31 +322,42 @@ what remains expired.
      `origin/<branch>` and local `HEAD` are the same commit, so this is exact rather than a
      convenience. Sign-off binds to that head; an edit afterwards moves it and means re-requesting
      review on the new one.
-   - **Before marking the PR ready, check what landed after review**, and run the full suite on `HEAD`. Only bookkeeping may follow the last pass: new roadmap entries with their pointer rows, and the phase record's `PR` and `Release` rows (`external-review`'s [loop](../external-review/SKILL.md#the-loop)). Check the paths first, then read the patch of those files only:
+   - **Before marking the PR ready, check what landed after review**, and run the full suite on `HEAD`. Only bookkeeping may follow the last pass: new roadmap entries with their pointer rows, the phase record's `PR` and `Release` rows, and the document fixes to this release's `CHANGELOG.md` entry, the roadmap files and the phase record that external-review's [loop](../external-review/SKILL.md#the-loop) allows. Check the paths first, then read the patch of those files only:
 
      ```bash
      # fence: after-review
      set -euo pipefail
      REVIEWED="<commit the last pass reviewed>"
+     REVIEWED_SHA="$(git rev-parse --verify "$REVIEWED^{commit}")"
      INSPECTED="$(git rev-parse --verify HEAD)"   # the gate below must find this same head
      echo "Inspected: $INSPECTED — set INSPECTED to this in the gate block"
-     git merge-base --is-ancestor "$REVIEWED" "$INSPECTED" || { echo "REVIEWED COMMIT REWRITTEN — run a full pass"; exit 1; }
-     # --no-renames lists both sides of a move, so a file cannot arrive under an allowed name.
-     CHANGED="$(git --no-pager diff --no-ext-diff --no-renames --ignore-submodules=none --name-only "$REVIEWED" "$INSPECTED")" \
+     SHALLOW="$(git rev-parse --is-shallow-repository)"
+     [ "$SHALLOW" = false ] || { echo "SHALLOW HISTORY — check the full repository"; exit 1; }
+     git merge-base --is-ancestor "$REVIEWED_SHA" "$INSPECTED" || { echo "REVIEWED COMMIT REWRITTEN — run a full pass"; exit 1; }
+     MERGES="$(git rev-list --merges "$REVIEWED_SHA..$INSPECTED")"
+     [ -z "$MERGES" ] || { echo "MERGE AFTER REVIEW — rebase the commits after $REVIEWED_SHA instead, or run a narrow pass that covers the merge"; exit 1; }
+     # Check each commit as well as the endpoints so a change and its revert count.
+     CHANGED="$(git --no-pager diff --no-ext-diff --no-renames --ignore-submodules=none --name-only "$REVIEWED_SHA" "$INSPECTED")" \
        || { echo "CANNOT LIST THE CHANGES SINCE REVIEW — stop"; exit 1; }
+     PER_COMMIT="$(git --no-pager log --no-show-signature --no-renames --ignore-submodules=none --name-only --format= "$REVIEWED_SHA..$INSPECTED")" \
+       || { echo "CANNOT LIST EACH COMMIT'S FILES — stop"; exit 1; }
      OTHER=""
      while IFS= read -r f; do
        case "$f" in
-         ''|docs/PHASE_RECORD.md|docs/ROADMAP.md|docs/KNOWN_ISSUES.md|docs/ENHANCEMENTS.md|docs/OPEN_QUESTIONS.md) ;;
+         ''|CHANGELOG.md|docs/PHASE_RECORD.md|docs/ROADMAP.md|docs/KNOWN_ISSUES.md|docs/ENHANCEMENTS.md|docs/OPEN_QUESTIONS.md) ;;
          *) OTHER="$OTHER  $f"$'\n' ;;
        esac
-     done <<< "$CHANGED"
+     done <<< "$CHANGED"$'\n'"$PER_COMMIT"
      [ -z "$OTHER" ] || { printf 'CHANGED AFTER REVIEW — needs a narrow pass:\n%s\n' "$OTHER"; exit 1; }
-     git --no-pager diff --no-ext-diff --no-textconv --no-renames --ignore-submodules=none "$REVIEWED" "$INSPECTED" -- \
-       docs/PHASE_RECORD.md docs/ROADMAP.md docs/KNOWN_ISSUES.md docs/ENHANCEMENTS.md docs/OPEN_QUESTIONS.md
+     # Keep the message with its patch so the reviewer can match each change to its finding.
+     git --no-pager log --no-show-signature -p --no-ext-diff --no-textconv --no-renames --ignore-submodules=none \
+       --format='=== %h%n%B' "$REVIEWED_SHA..$INSPECTED" -- \
+       CHANGELOG.md docs/PHASE_RECORD.md docs/ROADMAP.md docs/KNOWN_ISSUES.md docs/ENHANCEMENTS.md docs/OPEN_QUESTIONS.md
      ```
 
-     Read that patch: a filing and a fix can share a file, and in the record only the `PR` and `Release` rows may change. Anything else needs a narrow pass first. Name what landed in the hand-off.
+     Rebase only this branch's post-review bookkeeping commits. If you need changes from another branch, run a narrow pass covering the merge.
+
+     Read each commit's patch: a filing and a fix can share a file, and every change must be a filing, the record's `PR` and `Release` rows, or a document fix to this release's `CHANGELOG.md` entry, the roadmap files or the phase record whose commit, in the log the check prints, names its finding. Anything else, a changed phase-record key the workflow reads, one of those set at phase start such as `MERGE_METHOD`, included, needs a narrow pass first. Name what landed in the hand-off.
    - **Confirm `docs/PHASE_RECORD.md` is current, and do not take that on trust.** Step 4 brought
      it current, but steps 5 to 7 and every re-gate come after step 4. Check, in the committed
      file, that its first table (this repository's phase) names this PR and the release the
@@ -634,30 +649,31 @@ bash "$CLAUDE_PLUGIN_ROOT/skills/phase-workflow/publish-release.sh" \
    # fence: prune
    set -euo pipefail
    git fetch --prune origin
-   BRANCHES="$(git for-each-ref --format='%(refname:lstrip=2) %(upstream:track)' refs/heads/)"   # lstrip, not short: short can prefix heads/ to an ambiguous name
-   CURRENT="$(git symbolic-ref --quiet HEAD || true)"; CURRENT="${CURRENT#refs/heads/}"   # stripped, as above
-   GONE=""   # space-separated: a branch name holds no space or pattern character
-   while read -r b track; do
-     if [ "$track" = "[gone]" ] && [ "$b" != "$CURRENT" ]; then GONE="$GONE $b"; fi
-   done <<< "$BRANCHES"
-   if [ -n "$GONE" ]; then
-     # Never -D except at the approved tip already confirmed present on the remote.
-     # That tip contains no unpushed commits; use -d for every other branch.
-     RETAINED=""
-     for b in $(printf '%s' "$GONE"); do
-       if [ "$(git rev-parse "refs/heads/$b")" = "${APPROVED_SHA:-}" ]; then
-         git branch -D "$b" || { echo "RETAINED — $b could not be deleted (see git's message above)"; RETAINED="$RETAINED $b"; }
-       elif git branch -d "$b"; then
-         :
-       else
-         echo "RETAINED — $b holds commits absent from ${DEFAULT_BRANCH:-the default branch}"
-         RETAINED="$RETAINED $b"
+   BRANCHES="$(git for-each-ref --format='%(refname:lstrip=2) %(objectname) %(upstream:track)' refs/heads/)"
+   CURRENT="$(git symbolic-ref --quiet HEAD || true)"
+   WORKTREES="$(git worktree list --porcelain)"
+   DEFAULT_SHA="$(git rev-parse --verify "refs/remotes/origin/$DEFAULT_BRANCH^{commit}")"
+   RETAINED=""
+   CONSIDERED=""
+   while read -r b sha track; do
+     [ "$track" = "[gone]" ] && [ "refs/heads/$b" != "$CURRENT" ] || continue
+     CONSIDERED=yes
+     if grep -Fxq "branch refs/heads/$b" <<< "$WORKTREES"; then
+       echo "RETAINED — $b is checked out in another worktree"
+     elif [ "$sha" = "${APPROVED_SHA:-}" ] || git merge-base --is-ancestor "$sha" "$DEFAULT_SHA"; then
+       if git update-ref -d "refs/heads/$b" "$sha"; then
+         # update-ref keeps the tracking config; a later branch of this name would start [gone].
+         git config --remove-section "branch.$b" 2>/dev/null || true
+         continue
        fi
-     done
-     [ -z "$RETAINED" ] || exit 1   # every gone branch was considered first
-   else
-     echo "Nothing to clean up."
-   fi
+       echo "RETAINED — $b could not be deleted"
+     else
+       echo "RETAINED — $b holds commits absent from $DEFAULT_BRANCH"
+     fi
+     RETAINED=yes
+   done <<< "$BRANCHES"
+   [ -n "$CONSIDERED" ] || echo "Nothing to clean up."
+   [ -z "$RETAINED" ] || exit 1
    ```
 
    Cleanup failures resume at step 6 and do not repeat release edits or merge.

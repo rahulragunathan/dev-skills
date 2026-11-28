@@ -163,13 +163,13 @@ for m in $(printf '%s' "$CODEX_RUNGS"); do
   slug="${m%%:*}"
   case "$m" in *:*) effort="${m#*:}";; *) effort=high;; esac
   OUT="<scratchpad>/codex_<mode>_p<n>_c<chunk>_a<attempt>_${slug}_${effort}.txt"
-  LOG="${OUT%.txt}.log"
-  rm -f "$OUT" "$LOG"          # never inherit a previous attempt's answer
+  LOG="${OUT%.txt}.log"; STATE="${OUT%.txt}.state"
+  rm -f "$OUT" "$LOG" "$STATE"   # never inherit a previous attempt's answer
   rc=0
   codex exec -C "$ROOT" --sandbox read-only --skip-git-repo-check \
     -m "$slug" -c model_reasoning_effort="$effort" \
     -o "$OUT" "<prompt>" > "$LOG" 2>&1 < /dev/null || rc=$?
-  [ "$rc" = 0 ] && [ -s "$OUT" ] && break                      # it answered; keep this rung
+  if [ "$rc" = 0 ] && [ -s "$OUT" ]; then echo done > "$STATE"; break; fi   # it answered; keep this rung
   if grep -E '^ERROR:' "$LOG" | grep -F "$slug" | grep -qiE 'not supported|unknown model|is not available|entitle'; then
     # The log can quote a refusal from the material under review, so a probe of this rung confirms it.
     CONFIRMED=""
@@ -178,14 +178,17 @@ for m in $(printf '%s' "$CODEX_RUNGS"); do
     done <<< "$(bash "$CLAUDE_PLUGIN_ROOT/skills/external-review/preflight.sh" \
       --codex-model "$slug:$effort" --root "$ROOT" --timeout 120 2>&1 || true)"
     case "$CONFIRMED" in
-      UNAVAILABLE*) echo "unavailable: $slug:$effort — trying the next rung"; continue ;;
+      UNAVAILABLE*) echo unavailable > "$STATE"; echo "unavailable: $slug:$effort — trying the next rung"; continue ;;
     esac
+    echo failed > "$STATE"
     echo "$slug:$effort failed, and a probe did not confirm it unavailable (${CONFIRMED:-the probe gave no codex row}) — classify per Failure handling"; break
   fi
+  echo failed > "$STATE"
   echo "$slug:$effort failed for a reason that is not availability — classify per Failure handling"; break
 done
 ```
 
+- **Each attempt leaves its end.** The loop writes `.state` (`done`, `failed` or `unavailable`) beside the output, so `progress.sh` reports a run that failed before answering as failed, not running.
 - **`-o` captures the final message and nothing else.** A quota, auth or availability failure never reaches it, so the file is absent or empty and says nothing about why. The `.log` beside it holds stderr; the hand-off quotes its error lines verbatim, and the PR copy of the record does not.
 - **Downshift only on an `ERROR:` line that names this rung's own model, confirmed by a probe.**
   Codex writes the prompt and its whole transcript to stderr, so a run that fails mid-review
@@ -376,13 +379,20 @@ Prompt drift between the two reviewers corrupts the agree/disagree triage. Compo
 
    > This is a workflow document, not a git tutorial. Flag any passage that explains standard behaviour of `git`, `gh`, `pytest` or the shell rather than stating this project's policy. Genuine nuances that people get wrong are in scope; plain feature descriptions are not.
 
-8. **Suggested remediation:** for each finding, add one or two sentences on how you would fix it. A sketch, not a patch — enough to show what change you have in mind.
+8. **Suggested remediation:** Name the class of failure. Give the simplest fix that removes the class first, such as refusing or narrowing an input. Then give a case-specific fix if needed. Keep the sketch to two sentences. On a narrow pass, compare each changed mechanism with what it replaced. Report anything the old mechanism caught that the new one misses.
 
-9. **Output contract — always a list, even an empty one:**
+9. **Path, ratings and steps (every mode):**
 
-   > Return a numbered list of findings, each with file/function references and a severity. Return the list **even when you found nothing**: emit the heading and the single line `No findings.` Never answer with prose instead of the list.
+   > For every finding, give its **Path**: `Happy Path`, `Unusual Input` or `External Interference`. Happy Path is the documented workflow, run normally, with ordinary inputs; Unusual Input is odd but legal data or a rarely used option; External Interference is another process or user writing the same files, a crash or kill mid-run, a hostile local writer, or a filesystem quirk. Give its **Area**: `Code`, `Docs` or `Tests`, the kind of file that holds the defect. Rate its **Severity** (Critical, High, Medium or Low: the harm if it fires) and its **Likelihood** (Almost Always, Likely or Rare: how often someone following the documented workflow hits it).
+   > *phase / repo*: add numbered **Steps To Reproduce** from a clean checkout or a fresh fixture, with synthetic inputs, ending with what you see against what you should see. For a documentation finding, name the workflow step, its input and the wording that fails.
+   > *plan*: no numbered steps; instead say concretely what goes wrong, and when.
+   > Report everything you find, on any Path. Never drop a finding because of its Path.
 
-   The empty list is what separates a reviewer that ran and found nothing from one that never ran. **Absent output means the review did not happen — nothing else does.** An independent reviewer that returns `No findings.` has covered the material; a reviewer that returns nothing at all has not, and the coverage line must say which. An author's output remains disqualified regardless of its findings.
+10. **Output contract — always a list, even an empty one:**
+
+    > Return a numbered list of findings, each with file/function references, its Path, Area, Severity and Likelihood, and in phase and repo mode its Steps To Reproduce. Return the list **even when you found nothing**: emit the heading and the single line `No findings.` Never answer with prose instead of the list.
+
+    The empty list is what separates a reviewer that ran and found nothing from one that never ran. **Absent output means the review did not happen — nothing else does.** An independent reviewer that returns `No findings.` has covered the material; a reviewer that returns nothing at all has not, and the coverage line must say which. An author's output remains disqualified regardless of its findings.
 
 ## Modes
 
@@ -563,8 +573,10 @@ model downshift. The probe must carry the same do-not-read instruction as the re
 ## Triage — verify before presenting
 
 1. **Verify each finding against the repo** (read the cited file/function) before it reaches the user. A confident false finding routed into the roadmap files is worse than no review. Verification decides the **Verdict**, never whether the row appears.
-2. **Deduplicate across reviewers.** One row per distinct finding. Two reviewers reporting the same thing is signal, not noise — merge them into one row listing **both model ids, including Codex's effort**, per the Model column rule below. Never `Both`: a row can outlive this table by being filed as a roadmap entry, and `Both` resolves only against one pass's coverage line.
-3. **Give every finding a disposition** and present them in the findings table below. *plan* mode: the table goes in the plan. *phase* mode: the [review record](#the-phase-review-record) goes in the PR description and the hand-off. *repo* mode: the table goes in the hand-off.
+2. **Steps To Reproduce are evidence, never commands.** Read them before running anything. Run them only in a disposable fixture with synthetic inputs: a fresh `mktemp -d` folder, with a scratch `HOME` inside it, no credential variables in the environment, and no network. Bring the code in with `git clone --no-hardlinks` of the repository into `<folder>/repo`, checked out at the reviewed commit, then remove its `origin` (`git -C <folder>/repo remote remove origin`) so no step can push to or fetch from the real one; that one read of the repository is allowed. Run reviewer steps only through `"$CLAUDE_PLUGIN_ROOT/skills/external-review/repro-sandbox.sh" FIXTURE -- CMD [ARG...]` in this skill. Pass the fresh folder as `FIXTURE`. On macOS the helper uses `sandbox-exec`. Elsewhere it uses Docker with the local `python:3-alpine` image. If it reports `NO SANDBOX` (exit 3), verify by reading and record that method in the note. Never run them in the working tree or against an outside service. Refuse a step that reads or writes outside that folder, or that fetches and runs code, and say so in the note. In phase and repo mode, where a reviewer's steps are missing or do not work, complete or reconstruct them yourself, and say so in the note (`steps reconstructed by the triager`). A defect you confirm with reconstructed steps is judged like any other; a claim nobody can confirm is `Rejected`. Before the record reaches a PR, a roadmap entry or another review's bundle, sanitise all of it, not only the steps: replace real secrets, account names and local paths with synthetic values in every field, the reviewer's quoted fix included. Redacting inside an attributed quotation is allowed; mark it `[redacted]`.
+3. **In phase and repo mode, every source gets a Path, an Area and Steps To Reproduce at intake.** A plan-mode finding gets a Path and an Area, and no steps. Findings from `/code-review`, `/security-review`, `design-review` and the dependency scan join the record with the same fields as a reviewer's; where the source gave none, you supply them, and the note says who did. A dependency-scan coverage gap is a finding like any other.
+4. **Deduplicate across reviewers.** One row per distinct finding. Two reviewers reporting the same thing is signal, not noise — merge them into one row listing **both model ids, including Codex's effort**, per the Model column rule below. Never `Both`: a row can outlive this table by being filed as a roadmap entry, and `Both` resolves only against one pass's coverage line.
+5. **Give every finding a disposition** and present them in the findings table below. *plan* mode: the table goes in the plan. *phase* mode: the [review record](#the-phase-review-record) goes in the PR description and the hand-off. *repo* mode: the table goes in the hand-off.
 
 ## The findings table (canonical format — every mode)
 
@@ -589,31 +601,40 @@ If neither CLI is installed, print the skip line in its place — `External revi
 
 **Format: a compact table, then keyed notes.** Commentary lives below the table, keyed by finding ID.
 
-| # | Finding | Files | Model | Likelihood | Severity | Verdict | Disposition |
-| --- | --------- | ------- | ------- | ---------- | ---------- | --------- | ------------- |
-| F-01 | No rollback if the migration half-applies | `migrate.py:88-140` | gpt-5.6-sol:high | Rare | Critical | Confirmed | Incorporated — new step 6 |
-| F-02 | Token refresh races on concurrent runs | `auth/token.py`, `worker.py:41` | gpt-5.6-sol:high, gemini-3.1-pro-high | Likely | Medium | Confirmed | Filed KI-08 |
-| F-03 | Add a caching layer for lookups | `lookup.py` | gemini-3.1-pro-high | Almost always | Medium | Rejected | Not incorporated |
+| # | Finding | Files | Model | Path | Area | Likelihood | Severity | Verdict | Disposition |
+| --- | --------- | ------- | ------- | ---- | ---- | ---------- | ---------- | --------- | ------------- |
+| F-01 | No rollback if the migration half-applies | `migrate.py:88-140` | gpt-5.6-sol:high | External Interference | Code | Rare | Critical | Confirmed | Incorporated — new step 6 |
+| F-02 | Token refresh races on concurrent runs | `auth/token.py`, `worker.py:41` | gpt-5.6-sol:high, gemini-3.1-pro-high | Happy Path | Code | Likely | Medium | Confirmed | Filed KI-08 |
+| F-03 | Add a caching layer for lookups | `lookup.py` | gemini-3.1-pro-high | Happy Path | Code | Almost Always | Medium | Rejected | Not Incorporated |
 
 *The dispositions above are **plan** mode; phase and repo mode use the vocabulary further down. A phase review adds `Pass` and `Commit` columns; see [the phase review record](#the-phase-review-record).*
 
-**F-01** — *When it fires:* `the condition that has to hold` *What happens:* `the observable
-consequence, concretely` *Reviewer's fix:* `the remediation the reviewer proposed, in its own
-words` *Commentary:* `what you found verifying it, and why the disposition follows`
+**F-01** — *Non-Blocking* · *Disposition:* Incorporated — new step 6 — *When It Fires:* `the
+condition that has to hold` *What Happens:* `the observable consequence, concretely`
+*Reviewer's Fix:* `the remediation the reviewer proposed, in its own words` *Commentary:* `what
+you found verifying it, and why the disposition follows`
 
-**Every keyed note carries those first three lines.** *When it fires* and *What happens* are the
-pair that makes a `KNOWN_ISSUES` entry assessable, and a findings row without them asks the
-reader to take the severity on trust. They also travel: a row filed as `KI-nn` inherits both, so
-the entry starts with the two things a reader needs first.
+**Every keyed note opens with *Blocking* or *Non-Blocking*, by [the blocking
+rule](#the-blocking-rule), then its Disposition**, so the note reads without the table. The
+first is a bare word with no label. A `Rejected` row is *Non-Blocking*: only a confirmed finding
+can block. In plan mode the word says whether the finding would block once built. Then come
+*When It Fires*, *What Happens*, *Reviewer's Fix* and *Commentary*; in phase and repo mode,
+*Steps To Reproduce* follows *What Happens*. The examples here are plan mode, so they have
+none. *When It Fires* and *What Happens* are the pair that makes a `KNOWN_ISSUES` entry assessable, and a findings row without them asks the
+reader to take the severity on trust. *Steps To Reproduce* lets the next reader see it happen.
+All three travel: a row filed as `KI-nn` inherits them, as its *What Happens* and *Steps To
+Reproduce* sections. For a KI filed from a plan, use the note's *When It Fires* as evidence.
+Carry observed reproduction steps and results into the KI. If the failure is only inferred from the plan,
+describe the concrete failure and mark it `predicted, not run`.
 
-**Carry the reviewer's fix through, in the reviewer's words.** Rubric item 7 asks every finding
+**Carry the reviewer's fix through, in the reviewer's words.** The rubric's suggested-remediation item asks every finding
 for a remediation sketch, so one comes back with each; summarizing it into your own commentary
 loses the thing the user is deciding about. Two sentences at most, and where they disagree with
 what you would do, say so in the commentary rather than replacing the sketch. Write
-`none offered` when the reviewer gave none — that is itself worth seeing, because a finding
+`None Offered` when the reviewer gave none — that is itself worth seeing, because a finding
 whose author cannot say how to fix it is usually underspecified.
 
-**F-02** — *Explanation:* … *Reviewer's fix:* … *Commentary:* …
+**F-02** — *Non-Blocking* · *Disposition:* Filed KI-08 — *When It Fires:* … *What Happens:* … *Reviewer's Fix:* … *Commentary:* …
 
 Column rules:
 
@@ -621,43 +642,68 @@ Column rules:
 - **Finding** — one short line. Not a summary of the explanation.
 - **Files** — where the finding lives, as `path` or `path:start-end`, comma-separated when it spans more than one. **Take the reviewer's own reference and verify it against the repo during triage** — a wrong path is itself a signal the finding was not verified. Two or three paths is the cap; a finding touching more than that is really a finding about the design, so name the area (`skills/*/SKILL.md — every skill`) rather than listing every file. Use `—` only where the finding genuinely has no location, such as a missing file or an absent test. This column is what makes a filed `KI-nn`/`ENH-nn` entry actionable from cold, since the roadmap entry inherits it.
 - **Model** — the **model id that produced the finding, with Codex's effort**, not the CLI that ran it: `gpt-5.6-sol:high`, `gemini-3.1-pro-high`. Which rung of the ladder actually answered changes how much weight a finding deserves, and that is per-run state the CLI name cannot carry. When both reviewers found the same thing, **list both ids, retaining the effort** — `gpt-5.6-sol:high, gemini-3.1-pro-high` — never `Both`: a row can outlive this table by being filed as a `KI-nn`/`ENH-nn`/`UNK-nn` entry, and `Both` resolves only against one pass's coverage line. Two ids in one cell is also the agreement signal, stated so it survives the move. Never write `Codex` or `Gemini` alone in this column.
-- **Likelihood** — `Rare` | `Likely` | `Almost always`. **How often a user following the
+- **Path** — `Happy Path` | `Unusual Input` | `External Interference`, the KI template's scale:
+  what kind of use reaches the defect. The reviewer's own, attributed like Severity when two
+  disagree. A row has one Path per reviewer: where a finding reaches more than one, take the one
+  that blocks first (Happy Path, then Unusual Input, then External Interference), and name the
+  others in the commentary. Where a reviewer gave none, it is yours, and the commentary says
+  so.
+- **Area** — `Code` | `Docs` | `Tests`: what kind of file holds the defect. A README step that
+  breaks the workflow is `Docs` on the `Happy Path`. Area does not enter the blocking rule.
+- **Likelihood** — `Rare` | `Likely` | `Almost Always`. **How often a user following the
   documented workflow actually hits the harm**, not how often the code path runs. The two come
   apart: a bad count computed on every run is `Rare` if it only misleads when something else has
   already failed. **A defect that is always present but harmful only in combination is `Rare`.**
   Judge it against the workflow as written — if a step tells the user to do the thing that
-  triggers it, that is `Almost always` for everyone who follows the step, however unusual it
+  triggers it, that is `Almost Always` for everyone who follows the step, however unusual it
   looks. This is the reviewer's estimate where they gave one; where they did not, it is yours,
-  and the commentary says so.
+  and the commentary says so. When the two reviewers disagree on Likelihood, record both,
+  attributed like Severity: `Likely (gpt-5.6-sol:high) / Rare (gemini-3.1-pro-high)`.
 - **Severity** — **the consequence if it does fire, and nothing about how often.** Take the
   reviewer's own rating verbatim, attributed by **model id with Codex's effort** and never by CLI name:
   `High (gpt-5.6-sol:high)`. **Two columns, because one number cannot carry both.** A rare defect
   that exfiltrates source is `Rare · Critical`; friction on every run is
-  `Almost always · Low`. Both get fixed, for different reasons, and a single rating hides
-  which reason. Where a reviewer's rating obviously folded in likelihood, keep their word in
-  the cell and say so in the commentary rather than silently re-rating it. Never renormalize it: the same pass decides disposition, so quietly downgrading an inconvenient Critical would hide the decision. **When the two reviewers disagree, record both and order by the higher** — `High (gpt-5.6-sol:high) / Medium (gemini-3.1-pro-high)`. If you disagree with a rating yourself, say so in the commentary, where the user can see the disagreement.
+  `Almost Always · Low`. They are different kinds of work, and a single rating hides which. Where a reviewer's rating obviously folded in likelihood, keep their word in
+  the cell and say so in the commentary rather than silently re-rating it. Never renormalize it: the same pass decides disposition, so quietly downgrading an inconvenient Critical would hide the decision. **When the two reviewers disagree, record both and order by the higher** — `High (gpt-5.6-sol:high) / Medium (gemini-3.1-pro-high)`. If you disagree with a rating yourself, say so in the commentary, where the user can see the disagreement. [The blocking rule](#the-blocking-rule) judges each reviewer's ratings on their own.
 - **Verdict** — `Confirmed` | `Partly` | `Rejected`, from step 1. Separate from Disposition on purpose: *valid but deferred* and *invalid so dropped* are different states, and one column cannot carry both.
 - **Disposition** — what actually happened; vocabulary differs by mode (below).
 
 **Order: descending criticality**, mapping the reviewers' scales onto the KNOWN_ISSUES severity scale (Critical / High / Medium / Low). Tiebreak Confirmed above Rejected, so the actionable rows sit at the top.
 
+### The blocking rule
+
+A confirmed finding blocks the phase when its Severity is Critical or High, **and** at least one of these holds: its Path is Happy Path; its Likelihood is Likely or Almost Always.
+
+It applies in phase and repo mode, to every row whose Verdict is `Confirmed` or `Partly`, whatever its source, regressions this phase introduced included. For a `Partly` row, your verified ratings of the confirmed part decide; the reviewer's own stay in the row for attribution. In plan mode it sets only the opening word of the keyed note. In phase and repo mode follow the [disposition order](#disposition-vocabulary--phase--repo-mode).
+
+**When reviewers disagree, judge each reviewer's own Severity, Path and Likelihood.** A `Confirmed` merged row blocks only if one reviewer's three ratings block, or your own verified ratings do, and then the commentary says why; a `Partly` merged row is decided by your verified ratings alone, as above. Never combine one reviewer's ratings with another's: a High from one and a Happy Path from the other do not make a blocker. A filed merged row takes one whole set of three ratings, never a mix: your verified ones where you have them, else the set that decided a blocking disposition, else the set of the reviewer with the higher Severity. On a tie, take the set with the higher Likelihood, then the Path that blocks first, and say in the commentary which set was filed. Its Source line names each reviewer's own ratings.
+
+| Severity | Path | Likelihood | Blocks |
+| --- | --- | --- | --- |
+| Medium | Happy Path | Likely | No |
+| High | Happy Path | Rare | Yes |
+| High | External Interference | Rare | No |
+| Critical | Unusual Input | Likely | Yes |
+
 ### Disposition vocabulary — *plan* mode
 
-`Incorporated — <where>` | `Already covered — <where>` | `Filed KI-nn / ENH-nn / UNK-nn` | `Open — no roadmap files` | `Not incorporated` (Verdict `Rejected`).
+`Incorporated — <where>` | `Already Covered — <where>` | `Filed KI-nn / ENH-nn / UNK-nn` | `Recorded Only: No Roadmap Files` | `Not Incorporated` (Verdict `Rejected`).
 
-A valid finding that is out of scope for this phase is **kept, not dropped**. Where the repository has the four roadmap files, it is filed through `project-docs` as a `KI-nn`, `ENH-nn` or `UNK-nn` entry with its ROADMAP pointer row. Where it does not, the row stays in this table as `Open — no roadmap files`; nothing creates roadmap files unless the user asks. **A reviewer reading a plan often finds a real defect in the existing code; that is a `KI-nn`.** Use `UNK-nn` only for unsettled questions, per the `OPEN_QUESTIONS` template. Present the whole table in one pass regardless of severity: a confirmed Critical does not block the plan reaching the user, who is in plan mode and can send it back.
+A valid finding that is out of scope for this phase is **kept, not dropped**. Where the repository has the four roadmap files, it is filed through `project-docs` as a `KI-nn`, `ENH-nn` or `UNK-nn` entry with its ROADMAP pointer row. Where it does not, the row stays in this table as `Recorded Only: No Roadmap Files`; nothing creates roadmap files unless the user asks. **A reviewer reading a plan often finds a real defect in the existing code; that is a `KI-nn`.** Use `UNK-nn` only for unsettled questions, per the `OPEN_QUESTIONS` template. Present the whole table in one pass regardless of severity: a confirmed Critical does not block the plan reaching the user, who is in plan mode and can send it back.
 
 ### Disposition vocabulary — *phase / repo* mode
 
-`Fixed in phase` | `Proposed: fixed in phase` | `Filed KI-nn` | `Filed ENH-nn` | `Filed UNK-nn` | `Confirmed: accepted, no work planned` | `Open — no roadmap files` | `Rejected`.
+`Fixed In Phase` | `Unfixed Blocker` | `Filed KI-nn` | `Filed ENH-nn` | `Filed UNK-nn` | `Confirmed: Accepted, No Work Planned` | `Recorded Only: No Roadmap Files` | `Rejected`.
 
 **Every row lands in exactly one** — that is what guarantees nothing is quietly lost.
 
-- `Fixed in phase` — fixed on the branch, with a failing test written first. Regressions this phase introduced always land here, unless the loop stopped on the pass that found them.
-- `Proposed: fixed in phase` — *not yet fixed.* A row from the pass the loop stopped on that would need a fix. It goes to the gate unfixed, and the user decides; a fix they ask for needs another pass.
-- `Filed …` — valid and deferred, filed through `project-docs` as a rated entry with its ROADMAP pointer row. Only where the repository has all four roadmap files; run `roadmap.py check` after filing, and fix any drift it reports. A `docs/ROADMAP.md` of another shape is the project's own document, not consent to file.
-- `Confirmed: accepted, no work planned` — valid, and accepted as it is: nothing will be built and nothing is filed. Its note says why.
-- `Open — no roadmap files` — valid and deferred in a repository without the four roadmap files. The review record is where it stays.
+**Disposition order.** First verify, which sets the Verdict; a row that fails verification is `Rejected`. For a confirmed row, apply [the blocking rule](#the-blocking-rule): a blocking row is `Fixed In Phase`, or `Unfixed Blocker` when the loop has stopped or an incomplete pass awaits its retry; a row that does not block is filed, or `Recorded Only: No Roadmap Files`, or `Confirmed: Accepted, No Work Planned`. In phase mode, on a complete pass, a document fix is the exception: it is `Fixed In Phase` whether or not it blocks, and whether or not the loop has stopped ([the loop](#the-loop)). In repo mode there is no loop and no fix on the branch, so a blocking row is `Unfixed Blocker` and the user decides. The user can change any row at the gate; write it in the order it happened, as `Originally <old>; <new> On User's Call` (`Originally Filed KI-12; Fixed In Phase On User's Call`), where `<old>` is the disposition the rule gave the row, however often it changed since. The definitions below describe the default a row gets from the rule, not a row the user changed.
+
+- `Fixed In Phase` — the whole row is fixed: a blocking row, fixed on the branch, with a failing test written first, or a document fix, which has its own evidence ([below](#the-loop)).
+- `Unfixed Blocker` — *not fixed.* A blocking row that waits for the user: from the pass the loop stopped on, from an incomplete pass whose retry is pending, or from a repo review, which has no loop. The loop stops before fixing its last pass's findings, since every fix but a document fix needs another review pass, so the row reaches the gate unfixed and the user decides: fix it, which costs another pass, or file it.
+- `Filed …` — valid and not blocking, filed through `project-docs` as a rated entry with its ROADMAP pointer row. Only where the repository has all four roadmap files; run `roadmap.py check` after filing, and fix any drift it reports. A `docs/ROADMAP.md` of another shape is the project's own document, not consent to file.
+- `Confirmed: Accepted, No Work Planned` — valid, and accepted as it is: nothing will be built and nothing is filed. Its note says why.
+- `Recorded Only: No Roadmap Files` — valid and not blocking, in a repository without the four roadmap files, which the skills never create unasked. The review record is where it stays.
 - `Rejected` — failed verification. It is a real disposition, not a gap: it produces no artifact, and forcing it into the roadmap would pollute it.
 
 Give each filed entry a provenance line carrying the same model ids and Codex effort as the Model column — `Source: gpt-5.6-sol:high, gemini-3.1-pro-high — phase review, phase 4` — so the attribution survives the move into a durable doc. Do not write a per-phase review file under `docs/`: it would be a backward-looking doc outside CHANGELOG, breaking the tense split.
@@ -670,25 +716,26 @@ One record covers every pass of a phase review. It goes in the PR description (`
 **One table across all passes**: the findings table's columns, plus `Pass` and `Commit`, in the
 same severity order:
 
-| # | Pass | Finding | Files | Model | Likelihood | Severity | Verdict | Disposition | Commit |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| F-01 | 1 | Token refresh races on concurrent runs | `auth/token.py` | gpt-5.6-sol:high, gemini-3.1-pro-high | Likely | High | Confirmed | Fixed in phase | `a1b2c3d` |
-| F-03 | 2 | The F-01 fix drops the retry count | `auth/token.py:40-52` | gpt-5.6-sol:high | Almost always | Medium | Confirmed | Fixed in phase | `d4e5f6a` |
-| F-02 | 1 | README names a removed flag | `README.md` | gemini-3.1-pro-high | Almost always | Low | Confirmed | Confirmed: accepted, no work planned | — |
+| # | Pass | Finding | Files | Model | Path | Area | Likelihood | Severity | Verdict | Disposition | Commit |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| F-01 | 1 | Token refresh races on concurrent runs | `auth/token.py` | gpt-5.6-sol:high, gemini-3.1-pro-high | Happy Path | Code | Likely | High | Confirmed | Fixed In Phase | `a1b2c3d` |
+| F-03 | 2 | The F-01 fix drops the retry count | `auth/token.py:40-52` | gpt-5.6-sol:high | Unusual Input | Code | Almost Always | Medium | Confirmed | Filed KI-09 | — |
+| F-02 | 1 | README names a removed flag | `README.md` | gemini-3.1-pro-high | Happy Path | Docs | Almost Always | Low | Confirmed | Confirmed: Accepted, No Work Planned | — |
 
 The column rules above apply. `Commit` is the fix commit, or `—`. A finding from the phase's own
-checks rather than an external reviewer (`/code-review high`, `design-review`) names that check
+checks rather than an external reviewer (`/code-review high`, `/security-review`, `design-review`, the dependency scan) names that check
 in the Model column and `—` in Pass.
 
-**Under the table, a keyed note for every row** — *When it fires*, *What happens*, *Reviewer's fix* and *Commentary*, as above. A fixed row adds:
+**Under the table, a keyed note for every row** — it opens with *Blocking* or *Non-Blocking* and its Disposition, then *When It Fires*, *What Happens*, *Steps To Reproduce*, *Reviewer's Fix* and *Commentary*, as above. A fixed row adds:
 
 - *Fix:* the change, in one line.
 - *Scenarios:* each scenario the failing test covered, with the red you observed before the fix and the green after.
+- *Checked Against:* for a document fix, in place of *Scenarios*: the claim or wording it corrects, the source you checked it against, the fix commit and the first pass that reviewed it (or `not yet reviewed`).
 
 **Then a short block per pass:** the commit it reviewed; its coverage line with each
 invocation's output file name and byte count; its findings counted by severity; how many were
 in code an earlier fix of this review wrote; how many were documentation drift; and how many
-were accepted without work. The PR copy names output files by name only: full scratchpad
+were accepted without work. Count rows in disposition tallies and note each split. The PR copy names output files by name only: full scratchpad
 paths, and raw error text, stay in the hand-off, since they show local account and folder
 names to anyone who can read the PR.
 
@@ -710,45 +757,71 @@ timeout, a quota error, a partial answer, an empty ladder, every rung unavailabl
 independent reviewer at all, no pass is complete: the review is **Skipped** or **No coverage**,
 and the gate takes the user's recorded decision instead.
 
-1. **Run the pass and triage it.** Verify every finding and give it a disposition. A finding
+1. **Run the pass and triage it.** Verify every finding and give it a disposition.
+   Name the class of failure and prefer a fix that removes it. If an earlier pass already fixed
+   this mechanism, any further fix must remove the class. Test the edge cases the class implies
+   as well as the reported steps when the loop calls for a fix. A finding
    that an earlier pass's fix did not work gets a new row in this pass that names the earlier ID
    (`F-12 — the F-03 fix is partial`), and counts as new at its own severity. Earlier rows keep
-   their pass and finding, and per-pass counts never change. Later, only the user changes a row:
-   its Disposition, written as `<new> — was <old>, the user's call`, and, for a row reopened for
-   a fix, its Commit and test evidence.
+   their pass and finding, and per-pass counts never change. Updating the first reviewed pass is bookkeeping.
+   Record it when a pass first covers the fix. Only the user reopens a row. Write a user disposition change
+   as `Originally <old>; <new> On User's Call`. For a row reopened for a fix, update its Commit and its evidence (a test, or *Checked Against* for a document fix).
 2. **Apply the stop rule before fixing anything, and only to a complete pass.** Count verified
-   findings only; `Rejected` rows do not count. Stop after pass 3. Stop when a pass, from pass 2
-   on, has no new Critical or High and fewer findings than the pass before. Stop when a pass
-   finds nothing that needs a fix (no row would be `Fixed in phase`), since the next pass would
-   review an empty diff. **An incomplete pass triggers none of these**: re-run its failed pairs
+   findings only; `Rejected` rows do not count. Stop after pass 3. Stop when a pass has no blocking
+   finding other than a document fix ([the blocking rule](#the-blocking-rule)): its document fixes
+   are made, and the other rows keep their dispositions. **An incomplete pass triggers none of these**: re-run its failed pairs
    once their reviewer can answer, or take it to the user, and keep the reviewed commit where it
-   was. It never ends the loop on its own — see
+   was. While it waits, a confirmed blocking row from it is `Unfixed Blocker`. When the retry
+   completes, those rows are settled as for any complete pass, and that is not a change by the
+   user: the loop continues or stops as usual. It never ends the loop on its own — see
    [Coverage classification](#coverage-classification).
-3. **If the loop continues:** fix the `Fixed in phase` rows, each with a failing test first,
-   re-check the docs those fixes touch (`phase-workflow` §3 step 6), file the deferred rows, run the full suite, and commit. The next pass reviews only
+3. **If the loop continues:** fix the other blocking rows, each with a failing test first, make the pass's document fixes in the same commit (its message names their rows),
+   re-check the docs those fixes touch (`phase-workflow` §3 step 6), file the rows marked `Filed`, run the full suite, and commit. The next pass reviews only
    `<commit the last pass reviewed>..HEAD`. If that commit is no longer an ancestor of `HEAD`
    (an amend or a rebase), the next pass is full scope: the one case a follow-up widens.
-4. **If it stops:** that pass's findings are not fixed. Deferred rows are filed before the gate;
-   rows that would need a fix go to the gate as `Proposed: fixed in phase`. A fix the user then
-   asks for needs another pass, and so does any pass past three: both are the user's call.
+4. **If it stops:** that pass's findings are not fixed, document fixes aside. File rows marked `Filed` before the gate. Other blocking rows go to the gate as `Unfixed Blocker`. Any other fix the user
+   then asks for needs another pass, and so does any pass past three: both are the user's call.
 
 **After the last pass, only bookkeeping lands:** new roadmap entries and pointer rows for the
-deferred rows, and the phase record's PR number and release version. Anything else, such as an
-edit to an existing entry, a doc fix or a regenerated diagram, needs a narrow pass of its own. At
-the gate, run `phase-workflow`'s post-review check (§3 step 7): it lists both sides of every change
-since the reviewed commit, refuses anything outside the bookkeeping files, and prints their patch,
-which is read in full because a filing and a fix can share one file. The hand-off names what
-landed.
+deferred rows, the phase record's PR number and release version, and document fixes.
+
+**A document fix** is a change to this release's `CHANGELOG.md` entry, the roadmap files or the
+phase record that one reviewer finding asks for, and that you verify and agree with: its
+wording, facts, links, counts, dates, steps, or an entry's ratings. It never closes or deletes an
+entry, changes what an entry covers, or changes a value the workflow reads: the phase-record keys
+set at phase start, `ORIGIN_URL`, `ORIGIN_PUSH_URL`, `REPO`, `DEFAULT_BRANCH`, `PHASE_BRANCH` and
+`MERGE_METHOD`; those need a narrow pass. (`PR` and `Release` change as ordinary bookkeeping.)
+Nothing lands as a document fix without the finding that asked for it, and its commit message
+names the row. A finding that asks for a document fix and for any other change is split at triage into two
+rows that share its ID: `F-12a`, the document fix, and `F-12b`, the rest. Apply the disposition order to each half. Decide each half by its own verified ratings. Keep the reviewer's ratings for attribution.
+
+It applies to the row whatever its blocking status, and it does not reopen the loop: a pass
+whose only blocking rows are document fixes stops as if it had none. Make it without another
+pass. The row is `Fixed In Phase` with its commit, and in place of a failing test its note gives
+the claim or wording it corrects and the source you checked it against. At each gate use the note’s first reviewed pass to identify unreviewed fixes. On a pass the loop continues past, it is made with that pass's fixes, so the next
+pass reviews it. Anything else, such as a change to a skill, code, a test, README or a regenerated diagram,
+needs a narrow pass of its own.
+
+At the gate, run the [post-review check](../phase-workflow/SKILL.md#3-phase-end--retrospective-before-hand-off).
+It refuses merges in the review window. Read each commit's patch and name what landed in the hand-off.
 
 ### What the user sees at the gate
 
 The review record, then a short assessment:
 
-- **The trend** — the finding count for each pass, as a series.
-- **What the new findings are about** — fresh defects in untouched code, defects in an earlier pass's own fixes, or documentation drift. A count that holds steady while the *kind* changes is a different situation from one that holds steady on the same kind.
-- **Your recommendation** — land what is here, or another pass, with the reason.
+- **A Steps To Reproduce Summary** — one line per confirmed row, grouped by Path, Happy Path
+  first.
+- **The Trend** — one row per pass. Count distinct base IDs in both count columns. A base ID blocks if either half blocks.
 
-Every disposition is the user's to change: they can pull a deferred or accepted row back into the phase, or overturn a rejection, before signing off. Everything deferred is filed before the gate, or stays `Open — no roadmap files` in the record, since a commit after sign-off would be unreviewed. Nothing is fixed-and-unreviewed.
+  | Pass | Findings | Blocking | Outcome |
+  | --- | --- | --- | --- |
+  | 1 | 12 | 2 | Fixed in `a1b2c3d`; the rest filed |
+  | 2 | 4 | 0 | All filed; the loop stopped |
+
+- **What The New Findings Are About** — fresh defects in untouched code, defects in an earlier pass's own fixes, or documentation drift. A count that holds steady while the *kind* changes is a different situation from one that holds steady on the same kind.
+- **Your Recommendation** — After a complete pass with no blocking finding, recommend landing by default. Give the reason for your recommendation.
+
+Every disposition is the user's to change: they can pull a deferred or accepted row back into the phase, or overturn a rejection, before signing off. Everything deferred is filed before the gate, or stays `Recorded Only: No Roadmap Files` in the record, since a commit after sign-off would be unreviewed. Nothing is fixed-and-unreviewed but a document fix made after the last pass, which the hand-off names with its *Checked Against*.
 
 ### What "narrow" means
 

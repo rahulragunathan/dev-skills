@@ -10,6 +10,104 @@ here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-11-27 — review triage
+
+### Added
+
+- **Every review finding carries a Path, an Area and Steps To Reproduce.** Path says what kind
+  of use reaches the defect: `Happy Path`, `Unusual Input` or `External Interference`. Area says
+  what kind of file holds it: `Code`, `Docs` or `Tests`. external-review's shared rubric asks for
+  both, with Severity and Likelihood, in every mode; phase and repo mode add numbered steps from
+  a fresh fixture, and plan mode a concrete failure. Reviewers report every
+  finding, on any Path.
+- **The blocking rule.** A confirmed Critical or High finding blocks a phase when it is on the Happy
+  Path, or Likely or Almost Always. Only those are fixed in the phase, with one exception, a
+  reviewer's document fix to the release's bookkeeping (below); the other rows follow their dispositions. The user can
+  reopen a row at the gate. Each reviewer's ratings are judged on their own, never
+  mixed. The review loop now stops on a pass with no blocking finding, or whose only blocking
+  findings are document fixes, and the gate shows a Steps To Reproduce summary grouped by Path and a
+  trend table with each pass's blocking count.
+- **Steps are evidence, not commands.** Triage runs them only in a fresh `mktemp -d` folder
+  with a scratch `HOME`, no credential variables and no network, refuses a step that reaches
+  outside it or fetches and runs code, and reconstructs steps where needed and says so. The whole
+  record, not only the steps, is sanitised of secrets, account names and local paths before it
+  is published (KI-97, KI-107). Findings from `/code-review`,
+  `/security-review`, `design-review` and the dependency scan get the same fields at intake.
+- **The KI template gains Path and Area scales**, a `**Path:**` and an `**Area:**` field and a
+  `### Steps To Reproduce` section; the ENH template gains an optional one. `roadmap.py check`
+  validates either field when an entry sets it, reading only the entry's metadata block, and
+  refuses an unknown, empty or repeated one. Both are optional for now and not mirrored in
+  ROADMAP.
+
+### Changed
+
+- Reviewers name the failure class and suggest the simplest fix that removes it. Narrow passes
+  check what a replacement stopped catching. Triagers test the edges of the class and
+  recommend landing after a complete pass with no blocker.
+
+- **Title case for the labels and fixed values external-review shows, and for the KI and ENH
+  section headings.** Likelihood's top level is
+  `Almost Always`; `roadmap.py check` still accepts `Almost always` until Path becomes required.
+  The dispositions are `Fixed In Phase`, `Unfixed Blocker`, `Filed KI-nn`,
+  `Confirmed: Accepted, No Work Planned`, `Recorded Only: No Roadmap Files` and `Rejected`, and in
+  plan mode `Incorporated`, `Already Covered` and `Not Incorporated`. The keyed notes, the gate
+  headings and the KI and ENH section headings follow.
+- **`Unfixed Blocker` replaces `Proposed: fixed in phase`**, and **`Recorded Only: No Roadmap
+  Files` replaces `Open — no roadmap files`**, so each name says what the row is.
+- **Regressions follow the blocking rule** like every other finding, rather than always being
+  fixed in the phase.
+- **Each keyed note opens with *Blocking* or *Non-Blocking*, then its Disposition**, so a note
+  reads without the table.
+- **A reviewer's document fix to the release's bookkeeping lands without another pass.** After
+  the last pass, a change one reviewer finding asks for in this release's CHANGELOG entry, the
+  roadmap files or the phase record (wording, facts, links, counts, dates, steps or ratings, never
+  closing an entry or changing a value the workflow reads) is made directly once the triager verifies and
+  agrees with it, whether or not the row blocks. Its commit names the row, and phase-workflow's
+  post-review check accepts `CHANGELOG.md` beside the roadmap files and the record.
+
+### Fixed
+
+- The post-review check pins the reviewed commit, refuses shallow history and stops at any
+  merge in the review window. Signed commits no longer add signature text to the file list.
+  Tests check the executable fence (KI-128, KI-133, KI-134, KI-135, KI-136).
+- First push publishes the checked commit. Prune checks worktrees and deletes a gone branch
+  only at its inspected tip (KI-80).
+- Reviewer reproduction steps run in a confined fixture. When the sandbox cannot start,
+  triage records verification by reading (KI-112).
+- Dependency findings and coverage gaps have distinct remedies. Each fix requires a rescan
+  (KI-113). The plan-mode blocking rule sets the note’s opening word. Filed plan findings
+  preserve observed evidence and label predictions (KI-114, KI-117).
+- Findings follow the disposition order. Split rows use verified ratings for each half. The
+  trend counts base IDs, while disposition tallies count rows (KI-118, KI-129).
+- Document-fix notes track the first pass that reviewed the commit (KI-131). Tests check the
+  evidence source, the chronological disposition and whole finding IDs in commit messages
+  (KI-132).
+- The S02 key-bound decision is settled (KI-115, UNK-04). ENH-44 tracks the condition edit
+  and re-grading.
+
+- **Every row has a disposition.** A repo review's blocking row, and a
+  blocker from an incomplete pass waiting for its retry, are `Unfixed Blocker`. A change you make
+  at the gate is written `Originally <old>; <new> On User's Call`. A row has one Path, the one that
+  blocks first. Likelihood is attributed per reviewer like Severity, and a filed merged row takes
+  one whole set of ratings. A `Rejected` or accepted row gets no roadmap entry. Plan mode asks
+  for no steps anywhere. phase-workflow §3 step 2 sends its own checks' findings and gaps through
+  intake and the blocking rule (KI-98, KI-99, KI-100, KI-103, KI-104, KI-105, KI-106, KI-108).
+- **Reviewers no longer open with a summary line**, dropped before release: each finding's Path
+  says the same, and the trend's Blocking column answers the gate's question (KI-101).
+- **`progress.sh` reports a failed Codex attempt as failed**, not running: the Codex loop now
+  writes `.state` as the Gemini loop does (KI-111).
+- **The roadmap files have one casing and shape.** The ENH and UNK templates' `Regression Net`
+  and `What Settles It` labels and the `None Offered` fallback are in title case, and every
+  dev-skills entry uses its template's headings and labels, guarded by new tests (KI-110).
+- **The document-fix rule's edges.** A finding with a document half and another half is split into
+  two rows, so `Fixed In Phase` always means the whole row (KI-122). The post-review check prints
+  each commit's message above its own patch, and its tests check each commit's block (KI-123,
+  KI-124). It also checks every file each commit touched, so a change and its revert still stop it
+  (KI-127). The last drift re-check
+  runs `roadmap.py check` (KI-125). The gate names a document fix made after the last pass, *Checked
+  Against* accepts a wording fix, and any other fix you ask for at the gate still needs another pass
+  (KI-126).
+
 ## [2.2.2] - 2026-11-25
 
 ### Fixed
@@ -1139,7 +1237,8 @@ corrections are recorded here.
 
 ## Reference
 
-[Unreleased]: https://github.com/rahulragunathan/dev-skills/compare/v2.2.2...HEAD
+[Unreleased]: https://github.com/rahulragunathan/dev-skills/compare/v2.3.0...HEAD
+[2.3.0]: https://github.com/rahulragunathan/dev-skills/compare/v2.2.2...v2.3.0
 [2.2.2]: https://github.com/rahulragunathan/dev-skills/compare/v2.2.1...v2.2.2
 [2.2.1]: https://github.com/rahulragunathan/dev-skills/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/rahulragunathan/dev-skills/compare/v2.1.0...v2.2.0
