@@ -379,7 +379,7 @@ Prompt drift between the two reviewers corrupts the agree/disagree triage. Compo
 
    > This is a workflow document, not a git tutorial. Flag any passage that explains standard behaviour of `git`, `gh`, `pytest` or the shell rather than stating this project's policy. Genuine nuances that people get wrong are in scope; plain feature descriptions are not.
 
-8. **Suggested remediation:** for each finding, add one or two sentences on how you would fix it. A sketch, not a patch — enough to show what change you have in mind.
+8. **Suggested remediation:** Name the class of failure. Give the simplest fix that removes the class first, such as refusing or narrowing an input. Then give a case-specific fix if needed. Keep the sketch to two sentences. On a narrow pass, compare each changed mechanism with what it replaced. Report anything the old mechanism caught that the new one misses.
 
 9. **Path, ratings and steps (every mode):**
 
@@ -757,7 +757,10 @@ timeout, a quota error, a partial answer, an empty ladder, every rung unavailabl
 independent reviewer at all, no pass is complete: the review is **Skipped** or **No coverage**,
 and the gate takes the user's recorded decision instead.
 
-1. **Run the pass and triage it.** Verify every finding and give it a disposition. A finding
+1. **Run the pass and triage it.** Verify every finding and give it a disposition.
+   Name the class of failure and prefer a fix that removes it. If an earlier pass already fixed
+   this mechanism, any further fix must remove the class. Test the edge cases the class implies
+   as well as the reported steps when the loop calls for a fix. A finding
    that an earlier pass's fix did not work gets a new row in this pass that names the earlier ID
    (`F-12 — the F-03 fix is partial`), and counts as new at its own severity. Earlier rows keep
    their pass and finding, and per-pass counts never change. Updating the first reviewed pass is bookkeeping.
@@ -816,7 +819,7 @@ The review record, then a short assessment:
   | 2 | 4 | 0 | All filed; the loop stopped |
 
 - **What The New Findings Are About** — fresh defects in untouched code, defects in an earlier pass's own fixes, or documentation drift. A count that holds steady while the *kind* changes is a different situation from one that holds steady on the same kind.
-- **Your Recommendation** — land what is here, or another pass, with the reason.
+- **Your Recommendation** — After a complete pass with no blocking finding, recommend landing by default. Give the reason for your recommendation.
 
 Every disposition is the user's to change: they can pull a deferred or accepted row back into the phase, or overturn a rejection, before signing off. Everything deferred is filed before the gate, or stays `Recorded Only: No Roadmap Files` in the record, since a commit after sign-off would be unreviewed. Nothing is fixed-and-unreviewed but a document fix made after the last pass, which the hand-off names with its *Checked Against*.
 

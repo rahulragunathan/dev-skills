@@ -748,5 +748,44 @@ class PassNineTest(unittest.TestCase):
         self.assertNotIn("confirm only that every filing", step)
 
 
+class ShorterLoopTest(unittest.TestCase):
+    def setUp(self):
+        text = ER.read_text()
+        self.remediation = flat(text.split("8. **Suggested remediation:**")[1].split("9. **Path")[0])
+        loop = flat(section(text, "### The loop"))
+        self.triage = loop.split("1. **Run the pass and triage it.**")[1].split("2. **Apply the stop rule")[0]
+        self.gate = flat(section(text, "### What the user sees at the gate"))
+
+    def test_reviewer_names_the_failure_class(self):
+        # Fails if the reviewer can propose a patch without identifying the failure class.
+        self.assertIn("Name the class of failure", self.remediation)
+
+    def test_reviewer_offers_the_simplest_class_fix_first(self):
+        # Fails if a case-specific patch can precede a simpler input restriction.
+        self.assertIn("Give the simplest fix that removes the class first", self.remediation)
+        self.assertIn("refusing or narrowing an input", self.remediation)
+
+    def test_narrow_reviewer_compares_replaced_behavior(self):
+        # Fails if a narrow pass can miss coverage lost by replacing a mechanism.
+        self.assertIn("On a narrow pass, compare each changed mechanism with what it replaced", self.remediation)
+        self.assertIn("Report anything the old mechanism caught that the new one misses", self.remediation)
+
+    def test_triage_prefers_removing_the_class(self):
+        # Fails if triage proceeds to a fix without identifying the class and preferring its removal.
+        self.assertIn("Name the class of failure and prefer a fix that removes it", self.triage)
+
+    def test_repeat_findings_require_a_class_fix(self):
+        # Fails if a repeat finding can trigger another fix limited to the reported case.
+        self.assertIn("If an earlier pass already fixed this mechanism, any further fix must remove the class", self.triage)
+
+    def test_triage_tests_the_edges_implied_by_the_class(self):
+        # Fails if testing stops once the reported steps pass.
+        self.assertIn("Test the edge cases the class implies as well as the reported steps", self.triage)
+
+    def test_gate_recommends_landing_after_a_clean_pass(self):
+        # Fails if the gate routinely recommends a further pass with no blocker.
+        self.assertIn("After a complete pass with no blocking finding, recommend landing by default", self.gate)
+
+
 if __name__ == "__main__":
     unittest.main()
