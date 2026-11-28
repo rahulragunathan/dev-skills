@@ -109,6 +109,7 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 | [ENH-40](ENHANCEMENTS.md#enh-40) | Make Path required in the roadmap check | Medium | ~2 hours |
 | [ENH-41](ENHANCEMENTS.md#enh-41) | Make the triage wording tests pin the whole policy | Medium | ~2 hours |
 | [ENH-44](ENHANCEMENTS.md#enh-44) | Write the stated-key-bound reading into S02 Lifetime and re-grade the affected rows | Medium | ~1 day |
+| [ENH-45](ENHANCEMENTS.md#enh-45) | Check the release version against the default branch | Medium | ~2 hours |
 | [ENH-32](ENHANCEMENTS.md#enh-32) | Drop explanations of standard tool behaviour from the skills | Low | ~2 hours |
 | [ENH-39](ENHANCEMENTS.md#enh-39) | Make the tests pass 3 found weak fail for their named reason | Low | ~2 hours |
 | [ENH-43](ENHANCEMENTS.md#enh-43) | Make the roadmap-shape guards exact | Low | ~1 hour |

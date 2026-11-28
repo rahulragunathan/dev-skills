@@ -18,13 +18,9 @@ instructions and the commands they tell a reader to run.
 
 ![Module map](architecture.png)
 
-Regenerate the diagram from its source rather than editing the XML:
-
-```bash
-python3 docs/build_architecture.py
-python3 ~/.claude/skills/drawio/scripts/validate.py docs/architecture.drawio
-python3 ~/.claude/skills/drawio/scripts/render_png.py docs/architecture.drawio
-```
+Regenerate the diagram from its source rather than editing the XML: run
+`python3 docs/build_architecture.py`, then validate and render `docs/architecture.drawio` with
+`/drawio:create-diagram`, which knows where its scripts are installed.
 
 ## Module table
 
@@ -35,7 +31,7 @@ what sits at the bottom changes when someone else ships a new CLI.
 | --- | --- | --- | --- |
 | `phase-workflow` | Run a phase from plan review to merge | the `phase-workflow` skill; `phase-record.py`, `dependency-scan.py`, `publish-release.sh`, `mutation-restore.sh`, `bats_assertions.py` | `design-review`, `project-docs`, `external-review`, `gh`, `osv-scanner` |
 | `project-docs` | Keep a project's docs by tense, its roadmap files on request, and the name check | the `project-docs` skill; `roadmap.py`, `name_check.py` | `git` |
-| `design-review` | Decide structure at plan time and re-check it at phase end | the `design-review` skill, `plan` or `phase` mode | `drawio` skill |
+| `design-review` | Decide structure at plan time and re-check it at phase end | the `design-review` skill, `plan` or `phase` mode | `drawio:create-diagram` |
 | `external-review` | Get a review from other models of a plan, a phase diff or the repo | the `external-review` skill, `plan`, `phase` or `repo` mode | `project-docs`, `codex`, `agy` |
 
 **Expected change:** a new external reviewer. Adding one edits `external-review`, and today
@@ -62,7 +58,7 @@ environments — lives outside this plugin, so these skills assume nothing it in
 
 ## External tools
 
-`codex`, `agy` and the `drawio` skill are each invoked by exactly one skill, and a missing one
+`codex`, `agy` and `drawio:create-diagram` are each invoked by exactly one skill, and a missing one
 degrades that step rather than blocking the workflow. `external-review` reports its
 [coverage classification](../skills/external-review/SKILL.md#coverage-classification);
 `design-review` records "no diagram" and carries on. **`gh` is the exception and is required:**

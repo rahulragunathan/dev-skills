@@ -1,6 +1,6 @@
 ---
 name: design-review
-description: Structural design pass for plan time and phase end. Produces the module table, the expected-change and shared-state lines, and resolutions for whichever of six named checks fire covering SOLID, DRY, KISS and separation of concerns, with a YAGNI cap graded by cost. Optionally drives the drawio skill. Use at phase-workflow §1 and §3 step 2, or on any architectural change.
+description: Structural design pass for plan time and phase end. Produces the module table, the expected-change and shared-state lines, and resolutions for whichever of six named checks fire covering SOLID, DRY, KISS and separation of concerns, with a YAGNI cap graded by cost. Optionally drives the drawio plugin's create-diagram skill. Use at phase-workflow §1 and §3 step 2, or on any architectural change.
 license: MIT
 ---
 
@@ -242,11 +242,14 @@ baseline `phase` mode compares against.
   modules and files, so they drop into the existing identifier check. A PNG is opaque to it.
 - **Catch a stale render mechanically:** regenerate, then `git status`. If the PNG changes, it
   was already out of date with its own source.
-- **One render, not two.** The `drawio` skill is explicit: emit one colour per thing and do not
+- **One render, not two.** `drawio:create-diagram` is explicit: emit one colour per thing and do not
   hand-author a dark variant, because draw.io inverts for its own dark theme. `render_png.py
   --theme` exists if a specific doc needs both.
 
-**No `drawio` on the machine** means: write the table, skip the diagram, record "no diagram" in
+**Diagrams run through `/drawio:create-diagram`.** A generator only writes its `.drawio` file;
+validating and rendering go through that skill, which knows where its scripts are installed.
+
+**No `drawio:create-diagram` on the machine** means: write the table, skip the diagram, record "no diagram" in
 the plan's front matter, and say so in writing. Best-effort tool, non-negotiable step.
 
 ## Evidence

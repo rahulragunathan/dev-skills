@@ -1,11 +1,9 @@
 """Generate the plugin module map.
 
-Helpers vendored from the drawio skill's assets/build_template.py, as that
-skill prescribes. Regenerate and re-validate at every phase end:
-
-    python3 docs/build_architecture.py
-    python3 ~/.claude/skills/drawio/scripts/validate.py docs/architecture.drawio
-    python3 ~/.claude/skills/drawio/scripts/render_png.py docs/architecture.drawio
+Helpers vendored from drawio:create-diagram's assets/build_template.py, as
+that skill prescribes. This script only writes docs/architecture.drawio;
+validate and render it with /drawio:create-diagram, which knows where its
+scripts are installed. Regenerate and re-validate at every phase end.
 
 Conventions encoded here (read SKILL.md for the full rationale):
 - Arrow colour matches the SOURCE box's fill (or its stroke if fill is too light).
@@ -17,14 +15,12 @@ Conventions encoded here (read SKILL.md for the full rationale):
 - Descriptions via desc() — sentence case with explicit font-size, non-bold.
 - Multi-line edge labels use <div> tags, NOT \\n (drawio Desktop round-trip).
 
-After running this generator, run:
-    python3 ~/.claude/skills/drawio/scripts/validate.py docs/architecture.drawio
+After running this generator, validate it with the skill's validate.py
 to check for CROSSING / OVERLAP / TEXT_OVERLAP / LABEL_OVERLAP /
 LABEL_BOX_OVERLAP / SHORT_LABELLED_EDGE / DIAGONAL / DANGLING violations.
 Then render the PNG and LOOK at it — a clean validate says nothing about
-whether labels have room or whether either theme is legible:
-    python3 ~/.claude/skills/drawio/scripts/render_png.py docs/architecture.drawio \
-        -o docs/architecture.png
+whether labels have room or whether either theme is legible. Render with
+the skill's render_png.py, writing docs/architecture.png.
 
 Reserve routing corridors before writing any edges, and record the
 allocation here (e.g. "y=225 lane — pipeline fan-in; x=850 channel — app
@@ -541,11 +537,11 @@ def desc(text, size=11):
 #
 # Reserved routing corridors — keep these in sync when the layout moves:
 #   y=265  lane    — phase-workflow down into its three sub-skills
-#   y=490  lane    — design-review across to the drawio skill
+#   y=490  lane    — design-review across to drawio:create-diagram
 #   x=695  channel — external-review to codex
 #   x=710  channel — external-review to agy
 #   x=725  channel — phase-workflow to gh
-#   x=740  channel — design-review to the drawio skill
+#   x=740  channel — design-review to drawio:create-diagram
 # ==========================================================================
 
 PROCESS = COLOR_ORCH_PURPLE  # the phase process skills
@@ -609,7 +605,7 @@ review = box(
 codex = box(800, 150, 420, 60, "<b>codex</b> " + sub("OpenAI Codex CLI"), fill=EXTERNAL)
 agy = box(800, 230, 420, 60, "<b>agy</b> " + sub("Gemini CLI"), fill=EXTERNAL)
 gh = box(800, 310, 420, 60, "<b>gh</b> · <b>osv-scanner</b> " + sub("GitHub CLI · dependency scan"), fill=EXTERNAL)
-drawio = box(800, 390, 420, 60, "<b>drawio</b> " + sub("Diagram skill"), fill=EXTERNAL)
+drawio = box(800, 390, 420, 60, "<b>drawio:create-diagram</b> " + sub("Diagram skill"), fill=EXTERNAL)
 
 # --------------------------------------------------------------------------
 # Edges. Emitted after every box so labels layer on top.
@@ -733,7 +729,7 @@ box(
     W - 80,
     36,
     desc(
-        "Arrow colour matches its source. codex, agy, osv-scanner and drawio are optional — a "
+        "Arrow colour matches its source. codex, agy, osv-scanner and drawio:create-diagram are optional — a "
         "missing one degrades that step. gh is required: no PR, no phase."
     ),
     fill="#ffffff",
