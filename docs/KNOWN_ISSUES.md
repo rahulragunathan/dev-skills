@@ -297,6 +297,38 @@ Parse the supported manifest structures instead of matching lines.
 
 ---
 
+<a id="ki-145"></a>
+
+## KI-145 — Six more fences act on a ref by name after checking it
+
+**Severity:** High
+**Likelihood:** Rare
+**Path:** External Interference
+**Area:** Docs
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `git push origin "$TAG_REF:$TAG_REF"`
+
+### What Happens
+
+The root rule added in 2.3.0 says a fence resolves each ref to a commit once, acts on that commit, and compares and swaps every ref it writes. Six places still check a ref and then act on its name: branch creation starts from the default branch's name after discovery verified it; `release-tag` verifies the tag, then fetches or pushes by name; `gate` and `publish-record` check the PR head, then act by PR number and only detect a move afterwards; external-review's capture and Codex export re-read the base and `HEAD`; `mutation-restore.sh` accepts a symbolic ref and reuses it while restoring; and `publish-release.sh` deletes a checked branch by name.
+
+### Steps To Reproduce
+
+1. Run `release-tag` with a git wrapper that moves the local tag to another commit just before `git push`.
+2. The moved tag is pushed.
+3. It should push the commit it verified, or refuse.
+
+### Example Scenario
+
+A ref moved between a check and its action publishes, reviews or deletes something other than what was checked.
+
+### Notes For A Fix
+
+Apply the root rule in each place: resolve once into a SHA variable, act on the SHA, and use `--force-with-lease`, `update-ref <ref> <new> <old>` or `--match-head-commit` for each write. Test each with the moving-ref wrapper T2's tests use.
+
+**Source:** gpt-6.2-astra:high (implementation report, the plan's T2 list of fences that break the rule) — review-triage phase, 2026-11-27.
+
+---
+
 <a id="ki-49"></a>
 
 ## KI-49 — The headline tally mixes two skills
