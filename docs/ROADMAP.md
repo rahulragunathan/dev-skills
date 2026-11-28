@@ -57,6 +57,7 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-36](KNOWN_ISSUES.md#ki-36) | A grader quote of a table cell that holds a pipe is refused | Likely | Medium |
 | [KI-39](KNOWN_ISSUES.md#ki-39) | Calling `print` with an f-string argument still hides later guards | Likely | Medium |
 | [KI-137](KNOWN_ISSUES.md#ki-137) | The Docker reproduction image lacks git and bash | Likely | Medium |
+| [KI-146](KNOWN_ISSUES.md#ki-146) | README's install steps leave out a shadowing local install and the drawio fallbacks | Likely | Medium |
 | [KI-41](KNOWN_ISSUES.md#ki-41) | Converting a large sequence to text has no size bound | Rare | Medium |
 | [KI-76](KNOWN_ISSUES.md#ki-76) | The probe's error classes still match loose substrings | Rare | Medium |
 | [KI-79](KNOWN_ISSUES.md#ki-79) | A symlinked folder above the docs folder still redirects the roadmap tools | Rare | Medium |
@@ -89,6 +90,7 @@ Most severe first, and within a severity the most likely first. Both scales and 
 | [KI-141](KNOWN_ISSUES.md#ki-141) | The signed-bookkeeping test misses signature text in the printed patch | Rare | Low |
 | [KI-142](KNOWN_ISSUES.md#ki-142) | The per-pass severity and kind counts have no rule for a split finding | Rare | Low |
 | [KI-143](KNOWN_ISSUES.md#ki-143) | The gate's land-by-default rule misses a pass whose only blocker was a document fix | Rare | Low |
+| [KI-147](KNOWN_ISSUES.md#ki-147) | The drawio-name and manifest tests miss some regressions | Rare | Low |
 
 ## Enhancements
 

@@ -337,7 +337,7 @@ Keep the historical grades with their original hashes. Refresh the scenario rows
 ## ENH-45 — Check the release version against the default branch
 
 **Priority:** Medium · **Effort:** ~2 hours
-**Where:** [test_plugin_name.py](../tests/test_plugin_name.py) — `test_manifest_version_is_the_newest_changelog_release` · **Regression Net:** `tests/test_plugin_name.py`
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `Decide the version now` · **Regression Net:** `skills/phase-workflow/tests/phase-git.bats`
 
 ### What It Is
 
@@ -349,7 +349,7 @@ Plugins now update from the claude.ai account only when `plugin.json`'s version 
 
 ### Notes For The Work
 
-Read the default branch's `plugin.json` with `git show origin/<default>:.claude-plugin/plugin.json` in the phase's release step rather than in the unit test, which should not depend on remote state. Apply the same check to drawio.
+Read the default branch's `plugin.json` with `git show origin/<default>:.claude-plugin/plugin.json` in phase-workflow's release step rather than in a unit test, which should not depend on remote state. Being in the workflow, it covers drawio and any other plugin released through a phase.
 
 **Source:** gpt-6.2-astra:high — plan review (C-24), plugins-from-account phase, 2026-11-28.
 

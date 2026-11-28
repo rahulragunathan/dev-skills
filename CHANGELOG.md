@@ -10,7 +10,7 @@ here — the plugin manifest's version is the only record of them.
 
 ## [Unreleased]
 
-## [2.3.1] - 2026-11-28
+## [2.3.1] - 2026-11-28 — plugins from the claude.ai account
 
 ### Fixed
 
