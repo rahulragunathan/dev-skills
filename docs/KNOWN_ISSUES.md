@@ -859,7 +859,7 @@ Case one's citation corrected in pass 3 (gpt-6.2-astra:high): it names the file 
 **Likelihood:** Rare
 **Path:** Happy Path
 **Area:** Docs
-**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `its fix is an upgrade`
+**Where:** [phase-workflow/SKILL.md](../skills/phase-workflow/SKILL.md) — `# fence: dependency-scan`
 
 ### What Happens
 
@@ -925,7 +925,7 @@ Skip the rung's own file, and count another rung only when its state is `done` o
 **Likelihood:** Rare
 **Path:** Happy Path
 **Area:** Docs
-**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `and says no run reproduced`
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `Carry observed reproduction steps and results`
 
 ### What Happens
 
@@ -957,7 +957,7 @@ Carry reproduction evidence through when it exists; say "predicted, not run" onl
 **Likelihood:** Rare
 **Path:** Happy Path
 **Area:** Docs
-**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `A blocking row is fixed in the phase; the rest`
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `### The blocking rule`
 
 ### What Happens
 
@@ -989,7 +989,7 @@ Make the blocking rule's section and step 5 defer to the disposition order, link
 **Likelihood:** Rare
 **Path:** External Interference
 **Area:** Docs
-**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `Later, only the`
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `Only the user reopens a row`
 
 ### What Happens
 
@@ -1085,7 +1085,7 @@ Say which commit the record cites for a merged fix: the merge, with its message 
 **Likelihood:** Rare
 **Path:** Happy Path
 **Area:** Docs
-**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `The two rows are one finding in the pass's counts`
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `Decide each half by its own verified ratings`
 
 ### What Happens
 
@@ -1213,7 +1213,7 @@ Say in the blocking rule's section that in plan mode it decides only the keyed n
 **Likelihood:** Almost Always
 **Path:** Happy Path
 **Area:** Docs
-**Where:** [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) — `**What Settles It:** choose one reading`
+**Where:** [ENHANCEMENTS.md](ENHANCEMENTS.md) — `## ENH-44`
 
 ### What Happens
 
@@ -1505,7 +1505,7 @@ Apply the Severity, then Likelihood, then Path order to the qualifying sets too.
 **Likelihood:** Rare
 **Path:** Happy Path
 **Area:** Docs
-**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `and whether it landed after the last pass`
+**Where:** [external-review/SKILL.md](../skills/external-review/SKILL.md) — `the first pass that reviewed it`
 
 ### What Happens
 

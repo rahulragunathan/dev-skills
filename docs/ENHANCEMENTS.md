@@ -307,6 +307,31 @@ Assert the intake fields and who supplied them, the completeness and pass-3 cond
 
 ---
 
+<a id="enh-44"></a>
+
+## ENH-44 — Write the stated-key-bound reading into S02 Lifetime and re-grade the affected rows
+
+**Priority:** Medium · **Effort:** ~1 day
+**Where:** [s02-lifetime-surface.md](../skills/design-review/tests/s02-lifetime-surface.md) — `Fail an unbounded` · **Regression Net:** `skills/design-review/tests/grade.bats`
+
+### What It Is
+
+Write the [design decision](superpowers/specs/2026-09-16-plugin-fix-program-design.md#decisions-carried-in)
+into the Lifetime condition. A design must state the bound, such as a maximum size, a finite key set or a defined input format.
+
+### Why It Matters
+
+Graders disagreed on whether naming a format check bounds the taxonomy cache. The disputed round-9 baseline grade still contributes to the Lifetime tally.
+
+### Notes For The Work
+
+After KI-37, edit the condition and re-grade the affected answers against its new hash.
+Keep the historical grades with their original hashes. Refresh the scenario rows and rollup from the new grading evidence.
+
+**Source:** KI-115 and the decision on UNK-04.
+
+---
+
 <a id="enh-39"></a>
 
 ## ENH-39 — Make the tests pass 3 found weak fail for their named reason

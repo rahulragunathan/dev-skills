@@ -623,10 +623,9 @@ can block. In plan mode the word says whether the finding would block once built
 none. *When It Fires* and *What Happens* are the pair that makes a `KNOWN_ISSUES` entry assessable, and a findings row without them asks the
 reader to take the severity on trust. *Steps To Reproduce* lets the next reader see it happen.
 All three travel: a row filed as `KI-nn` inherits them, as its *What Happens* and *Steps To
-Reproduce* sections. A KI filed from a plan review has no steps to inherit: its *Steps To
-Reproduce* section gives the concrete failure from *When It Fires*, and says no run reproduced
-it. A plan has no code to run, so in plan mode the note has no *Steps To
-Reproduce*, and *When It Fires* carries the concrete failure.
+Reproduce* sections. For a KI filed from a plan, use the note's *When It Fires* as evidence.
+Carry observed reproduction steps and results into the KI. If the failure is only inferred from the plan,
+describe the concrete failure and mark it `predicted, not run`.
 
 **Carry the reviewer's fix through, in the reviewer's words.** The rubric's suggested-remediation item asks every finding
 for a remediation sketch, so one comes back with each; summarizing it into your own commentary
@@ -675,15 +674,15 @@ Column rules:
 
 A confirmed finding blocks the phase when its Severity is Critical or High, **and** at least one of these holds: its Path is Happy Path; its Likelihood is Likely or Almost Always.
 
-It applies in phase and repo mode, to every row whose Verdict is `Confirmed` or `Partly`, whatever its source, regressions this phase introduced included. For a `Partly` row, your verified ratings of the confirmed part decide; the reviewer's own stay in the row for attribution. A blocking row is fixed in the phase; the rest are filed, and the user can pull any of them back in at the gate.
+It applies in phase and repo mode, to every row whose Verdict is `Confirmed` or `Partly`, whatever its source, regressions this phase introduced included. For a `Partly` row, your verified ratings of the confirmed part decide; the reviewer's own stay in the row for attribution. In plan mode it sets only the opening word of the keyed note. In phase and repo mode follow the [disposition order](#disposition-vocabulary--phase--repo-mode).
 
 **When reviewers disagree, judge each reviewer's own Severity, Path and Likelihood.** A `Confirmed` merged row blocks only if one reviewer's three ratings block, or your own verified ratings do, and then the commentary says why; a `Partly` merged row is decided by your verified ratings alone, as above. Never combine one reviewer's ratings with another's: a High from one and a Happy Path from the other do not make a blocker. A filed merged row takes one whole set of three ratings, never a mix: your verified ones where you have them, else the set that decided a blocking disposition, else the set of the reviewer with the higher Severity. On a tie, take the set with the higher Likelihood, then the Path that blocks first, and say in the commentary which set was filed. Its Source line names each reviewer's own ratings.
 
 | Severity | Path | Likelihood | Blocks |
 | --- | --- | --- | --- |
-| Medium | Happy Path | Likely | No: filed |
+| Medium | Happy Path | Likely | No |
 | High | Happy Path | Rare | Yes |
-| High | External Interference | Rare | No: filed |
+| High | External Interference | Rare | No |
 | Critical | Unusual Input | Likely | Yes |
 
 ### Disposition vocabulary — *plan* mode
@@ -731,12 +730,12 @@ in the Model column and `—` in Pass.
 
 - *Fix:* the change, in one line.
 - *Scenarios:* each scenario the failing test covered, with the red you observed before the fix and the green after.
-- *Checked Against:* for a document fix, in place of *Scenarios*: the claim or wording it corrects, the source you checked it against, and whether it landed after the last pass.
+- *Checked Against:* for a document fix, in place of *Scenarios*: the claim or wording it corrects, the source you checked it against, the fix commit and the first pass that reviewed it (or `not yet reviewed`).
 
 **Then a short block per pass:** the commit it reviewed; its coverage line with each
 invocation's output file name and byte count; its findings counted by severity; how many were
 in code an earlier fix of this review wrote; how many were documentation drift; and how many
-were accepted without work. The PR copy names output files by name only: full scratchpad
+were accepted without work. Count rows in disposition tallies and note each split. The PR copy names output files by name only: full scratchpad
 paths, and raw error text, stay in the hand-off, since they show local account and folder
 names to anyone who can read the PR.
 
@@ -761,23 +760,23 @@ and the gate takes the user's recorded decision instead.
 1. **Run the pass and triage it.** Verify every finding and give it a disposition. A finding
    that an earlier pass's fix did not work gets a new row in this pass that names the earlier ID
    (`F-12 — the F-03 fix is partial`), and counts as new at its own severity. Earlier rows keep
-   their pass and finding, and per-pass counts never change. Later, only the user changes a row:
-   its Disposition, written as `Originally <old>; <new> On User's Call`, and, for a row reopened for
-   a fix, its Commit and its evidence (a test, or *Checked Against* for a document fix).
+   their pass and finding, and per-pass counts never change. Updating the first reviewed pass is bookkeeping.
+   Record it when a pass first covers the fix. Only the user reopens a row. Write a user disposition change
+   as `Originally <old>; <new> On User's Call`. For a row reopened for a fix, update its Commit and its evidence (a test, or *Checked Against* for a document fix).
 2. **Apply the stop rule before fixing anything, and only to a complete pass.** Count verified
    findings only; `Rejected` rows do not count. Stop after pass 3. Stop when a pass has no blocking
    finding other than a document fix ([the blocking rule](#the-blocking-rule)): its document fixes
-   are made, its other rows are filed, and nothing is left for a next pass to review. **An incomplete pass triggers none of these**: re-run its failed pairs
+   are made, and the other rows keep their dispositions. **An incomplete pass triggers none of these**: re-run its failed pairs
    once their reviewer can answer, or take it to the user, and keep the reviewed commit where it
    was. While it waits, a confirmed blocking row from it is `Unfixed Blocker`. When the retry
    completes, those rows are settled as for any complete pass, and that is not a change by the
    user: the loop continues or stops as usual. It never ends the loop on its own — see
    [Coverage classification](#coverage-classification).
 3. **If the loop continues:** fix the other blocking rows, each with a failing test first, make the pass's document fixes in the same commit (its message names their rows),
-   re-check the docs those fixes touch (`phase-workflow` §3 step 6), file the other deferred rows, run the full suite, and commit. The next pass reviews only
+   re-check the docs those fixes touch (`phase-workflow` §3 step 6), file the rows marked `Filed`, run the full suite, and commit. The next pass reviews only
    `<commit the last pass reviewed>..HEAD`. If that commit is no longer an ancestor of `HEAD`
    (an amend or a rebase), the next pass is full scope: the one case a follow-up widens.
-4. **If it stops:** that pass's findings are not fixed, document fixes aside. Other deferred rows are filed before the gate; other blocking rows go to the gate as `Unfixed Blocker`. Any other fix the user
+4. **If it stops:** that pass's findings are not fixed, document fixes aside. File rows marked `Filed` before the gate. Other blocking rows go to the gate as `Unfixed Blocker`. Any other fix the user
    then asks for needs another pass, and so does any pass past three: both are the user's call.
 
 **After the last pass, only bookkeeping lands:** new roadmap entries and pointer rows for the
@@ -791,14 +790,12 @@ set at phase start, `ORIGIN_URL`, `ORIGIN_PUSH_URL`, `REPO`, `DEFAULT_BRANCH`, `
 `MERGE_METHOD`; those need a narrow pass. (`PR` and `Release` change as ordinary bookkeeping.)
 Nothing lands as a document fix without the finding that asked for it, and its commit message
 names the row. A finding that asks for a document fix and for any other change is split at triage into two
-rows that share its ID: `F-12a`, the document fix, and `F-12b`, the rest, which takes its own
-disposition from the blocking rule. The two rows are one finding in the pass's counts.
+rows that share its ID: `F-12a`, the document fix, and `F-12b`, the rest. Apply the disposition order to each half. Decide each half by its own verified ratings. Keep the reviewer's ratings for attribution.
 
 It applies to the row whatever its blocking status, and it does not reopen the loop: a pass
 whose only blocking rows are document fixes stops as if it had none. Make it without another
 pass. The row is `Fixed In Phase` with its commit, and in place of a failing test its note gives
-the claim or wording it corrects and the source you checked it against, and says whether it
-landed after the last pass. On a pass the loop continues past, it is made with that pass's fixes, so the next
+the claim or wording it corrects and the source you checked it against. At each gate use the note’s first reviewed pass to identify unreviewed fixes. On a pass the loop continues past, it is made with that pass's fixes, so the next
 pass reviews it. Anything else, such as a change to a skill, code, a test, README or a regenerated diagram,
 needs a narrow pass of its own.
 
@@ -811,9 +808,9 @@ The review record, then a short assessment:
 
 - **A Steps To Reproduce Summary** — one line per confirmed row, grouped by Path, Happy Path
   first.
-- **The Trend** — one row per pass, so the blocking count is read beside the total:
+- **The Trend** — one row per pass. Count distinct base IDs in both count columns. A base ID blocks if either half blocks.
 
-  | Pass | Rows | Blocking | Outcome |
+  | Pass | Findings | Blocking | Outcome |
   | --- | --- | --- | --- |
   | 1 | 12 | 2 | Fixed in `a1b2c3d`; the rest filed |
   | 2 | 4 | 0 | All filed; the loop stopped |

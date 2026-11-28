@@ -80,6 +80,8 @@ that breaks the workflow is `Docs` on the `Happy Path`.
 
 ### Steps To Reproduce
 
+Carry observed reproduction steps and results into this section. If a failure is only inferred from the plan, describe it and mark it `predicted, not run`.
+
 1. <from a clean checkout or a fresh fixture: the action, with its input>
 2. <the next action, if any>
 3. <what you see, against what you should see>

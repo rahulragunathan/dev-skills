@@ -213,7 +213,7 @@ class TriageTest(unittest.TestCase):
 
     def test_blocking_rule_is_stated_once_and_grouped(self):
         # Fails if the rule is restated, loses its grouping, or the worked table stops giving
-        # Medium/Likely as filed, High/Happy Path/Rare as blocking, High/External/Rare as filed.
+        # Medium/Likely as non-blocking, High/Happy Path/Rare as blocking, High/External/Rare as non-blocking.
         rule = ("A confirmed finding blocks the phase when its Severity is Critical or High, "
                 "**and** at least one of these holds: its Path is Happy Path; its Likelihood is "
                 "Likely or Almost Always.")
@@ -224,9 +224,9 @@ class TriageTest(unittest.TestCase):
         rows = {tuple(c.strip() for c in l.strip("|").split("|")[:3]): l.split("|")[4].strip()
                 for l in worked.splitlines() if l.startswith("| ") and "Blocks" not in l
                 and "---" not in l}
-        for key, want in ((("Medium", "Happy Path", "Likely"), "No: filed"),
+        for key, want in ((("Medium", "Happy Path", "Likely"), "No"),
                           (("High", "Happy Path", "Rare"), "Yes"),
-                          (("High", "External Interference", "Rare"), "No: filed")):
+                          (("High", "External Interference", "Rare"), "No")):
             with self.subTest(row=key):
                 self.assertEqual(rows.get(key), want)
 
@@ -375,7 +375,9 @@ class FollowUpTest(unittest.TestCase):
     def test_trend_has_a_blocking_column(self):
         # Fails if the gate's trend is a bare count series rather than a table with Blocking.
         gate = section(ER.read_text(), "### What the user sees at the gate")
-        self.assertIn("| Pass | Rows | Blocking | Outcome |", gate)
+        self.assertIn("| Pass | Findings | Blocking | Outcome |", gate)
+
+        self.assertIn("Count distinct base IDs in both count columns", flat(gate))
 
     def test_keyed_notes_open_with_blocking_and_disposition(self):
         # Fails if an example note does not open with the bare word Blocking or Non-Blocking and
@@ -469,12 +471,12 @@ class PolicyGapTest(unittest.TestCase):
         self.assertIn("describe the default", order)
 
     def test_the_users_change_reads_in_order_everywhere(self):
-        # Fails if the old `<new> — was <old>` form survives in a skill, the loop or the release notes.
-        for name, text in (("external-review", self.er), ("phase-workflow", self.pw),
-                           ("CHANGELOG", (ROOT / "CHANGELOG.md").read_text())):
-            with self.subTest(name):
-                self.assertNotIn("was <old>, the user's call", text)
-                self.assertNotIn("— was Filed, the user's call", text)
+        # Fails if loop step 1 or the release notes lose the chronological form.
+        loop = flat(section(ER.read_text(), "### The loop")).split("1. **Run the pass")[1].split("2. **Apply")[0]
+        release = flat(FollowUpTest().changelog_entry())
+        for name, text in (("loop step 1", loop), ("2.3.0", release)):
+            with self.subTest(name=name):
+                self.assertIn("`Originally <old>; <new> On User's Call`", text)
 
     def test_ki_106_merged_ratings_are_attributed_and_filed_whole(self):
         # Fails if Likelihood has no attribution rule for disagreeing reviewers, or a filed
@@ -537,19 +539,45 @@ class PassFourTest(unittest.TestCase):
         self.assertIn("then remove its `origin` (`git -C <folder>/repo remote remove origin`)", self.er)
 
     def test_only_filed_rows_reach_the_roadmap(self):
-        # Fails if §3's opening or step 2 still sends every non-blocking row to the roadmap files.
-        step2 = self.pw[self.pw.index("2. **Consolidation"):self.pw.index("3. **Red record check")]
-        with self.subTest("step 2"):
-            self.assertIn("a blocking one is fixed in the phase, and the rest take their disposition from "
-                          "the same rule; only a `Filed` row gets a roadmap entry", step2)
-        with self.subTest("opening"):
-            self.assertIn("Findings from every step enter the review record, and those dispositioned "
-                          "`Filed` land in the roadmap files", self.pw)
+        # Fails if a non-blocking row bypasses disposition or a missing roadmap loses the row.
+        link = "SKILL.md#disposition-vocabulary--phase--repo-mode)"
+        opening = self.pw.split("**Seven steps,")[1].split("| Step |")[0]
+        self.assertIn("`Recorded Only: No Roadmap Files`", opening)
+        for start, end in (("2. **Consolidation", "3. **Red record check"),
+                           ("5. **External review loop", "6. **Post-fix drift")):
+            with self.subTest(step=start):
+                self.assertIn(link, self.pw.split(start)[1].split(end)[0])
+        self.assertIn("[disposition order](#disposition-vocabulary--phase--repo-mode)",
+                      section(ER.read_text(), "### The blocking rule"))
 
     def test_a_plan_finding_files_its_concrete_failure(self):
-        # Fails if a plan finding filed as a KI has nothing to put in Steps To Reproduce.
-        self.assertIn("A KI filed from a plan review has no steps to inherit: its *Steps To Reproduce* "
-                      "section gives the concrete failure", self.er)
+        # Fails if filing erases an observation or labels a reproduced failure as a prediction.
+        for path in (ER, ROOT / "skills/project-docs/KNOWN_ISSUES-template.md"):
+            with self.subTest(path=path.name):
+                text = flat(path.read_text())
+                self.assertIn("Carry observed reproduction steps and results", text)
+                self.assertIn("only inferred from the plan", text)
+                self.assertIn("`predicted, not run`", text)
+
+    def test_scan_remediation_matches_the_finding(self):
+        # Fails if a gap calls for an upgrade or a fix is marked before rescanning.
+        step = self.pw.split("2. **Consolidation")[1].split("3. **Red record check")[0]
+        for clause in ("Upgrade the vulnerable dependency", "supply the input the scanner names",
+                       "Rescan the committed fix before marking either row `Fixed In Phase`"):
+            self.assertIn(clause, step)
+
+    def test_s02_points_to_remaining_grading_work(self):
+        # Fails if either account of the disputed grade sends readers back to a settled question.
+        for name in ("README.md", "s02-lifetime-surface.md"):
+            with self.subTest(name=name):
+                text = (ROOT / "skills/design-review/tests" / name).read_text()
+                self.assertIn("[ENH-44](../../../docs/ENHANCEMENTS.md#enh-44)", text)
+                self.assertNotIn("UNK-04", text)
+
+    def test_plan_blocking_sets_only_the_opening_word(self):
+        # Fails if the blocking rule decides a plan disposition.
+        rule = flat(section(ER.read_text(), "### The blocking rule"))
+        self.assertIn("In plan mode it sets only the opening word of the keyed note", rule)
 
     def test_equal_severity_has_a_tie_break(self):
         # Fails if a merged row whose reviewers tie on Severity has no rule for which set is filed.
@@ -615,12 +643,13 @@ class BookkeepingFixTest(unittest.TestCase):
         for clause in ("whatever its blocking status",
                        "a pass whose only blocking rows are document fixes stops as if it had none",
                        "in place of a failing test its note gives the claim or wording it corrects and the source "
-                       "you checked it against, and says whether it landed after the last pass",
+                       "you checked it against",
                        "On a pass the loop continues past, it is made with that pass's fixes, so the next pass "
                        "reviews it"):
             with self.subTest(clause=clause):
                 self.assertIn(clause, rule)
         with self.subTest("definition"):
+            self.assertIn("Updating the first reviewed pass is bookkeeping", er)
             self.assertIn("with a failing test written first, or a document fix, which has its own evidence", er)
         with self.subTest("stop rule"):
             self.assertIn("that pass's findings are not fixed, document fixes aside", er)
@@ -635,12 +664,12 @@ class BookkeepingFixTest(unittest.TestCase):
                        "In repo mode there is no loop and no fix on the branch",
                        "fix the other blocking rows, each with a failing test first, make the pass's document "
                        "fixes in the same commit",
-                       "file the other deferred rows",
+                       "file the rows marked `Filed`",
                        "its Commit and its evidence (a test, or *Checked Against* for a document fix)",
-                       "the source you checked it against, and whether it landed after the last pass",
+                       "the source you checked it against, the fix commit and the first pass that reviewed it (or `not yet reviewed`)",
                        "since every fix but a document fix needs another review pass",
                        "Stop when a pass has no blocking finding other than a document fix",
-                       "Other deferred rows are filed before the gate; other blocking rows go to the gate",
+                       "File rows marked `Filed` before the gate. Other blocking rows go to the gate",
                        "*Checked Against:* for a document fix, in place of *Scenarios*"):
             with self.subTest(clause=clause):
                 self.assertIn(clause, er)
@@ -679,10 +708,12 @@ class PassNineTest(unittest.TestCase):
         rule = self.er[start:self.er.index("### What the user sees at the gate", start)]
         self.assertIn("A finding that asks for a document fix and for any other change is split at triage "
                       "into two rows that share its ID", rule)
-        self.assertIn("the rest, which takes its own disposition from the blocking rule", rule)
+        self.assertIn("Apply the disposition order to each half", rule)
         self.assertIn("- `Fixed In Phase` — the whole row is fixed:", self.er)
         # Fails if the split's two rows can be counted as two findings in the pass's counts.
-        self.assertIn("The two rows are one finding in the pass's counts", rule)
+        self.assertIn("Decide each half by its own verified ratings", rule)
+        self.assertIn("Keep the reviewer's ratings for attribution", rule)
+        self.assertIn("Count rows in disposition tallies and note each split", self.er)
 
     def test_the_users_change_names_the_rule_s_disposition(self):
         # Fails if a row the user changed twice has no rule for what `<old>` is.
@@ -703,7 +734,9 @@ class PassNineTest(unittest.TestCase):
 
     def test_a_wording_fix_is_checked_against_a_source(self):
         # Fails if a wording fix can cite only the reviewer's request as its evidence.
-        self.assertNotIn("for a wording fix, the reviewer's request", self.er)
+        record = section(ER.read_text(), "### The phase review record")
+        checked = next(line for line in record.splitlines() if line.startswith("- *Checked Against:*"))
+        self.assertIn("the claim or wording it corrects, the source you checked it against", checked)
 
     def test_ki_125_the_last_drift_check_runs_roadmap_check(self):
         # Fails if step 6 after the last pass checks only new filings, so an existing entry a document

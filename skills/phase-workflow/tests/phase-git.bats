@@ -610,12 +610,20 @@ after_review() {
   [[ "$output" == *'`PR` | 9'* ]]
 }
 
-# commit_block <id>: the lines the post-review log prints under the commit whose subject names <id>
+# commit_block <id>: the lines the post-review log prints under the commit whose message names <id>
 # as a whole ID (F-07, never F-070). It fails when no commit does, so a negative check never passes
 # on an empty block.
 commit_block() {
-  awk -v id="$1" '/^=== [0-9a-f]+$/ { getline msg; keep = msg ~ ("(^|[^0-9A-Za-z-])" id "([^0-9]|$)"); found = found || keep }
-    keep; END { exit !found }' <<< "$output"
+  awk -v id="$1" '
+    function emit() {
+      if (matched) { printf "%s", block; found = 1 }
+    }
+    /^=== [0-9a-f]+$/ { emit(); block = ""; matched = 0; message = 1 }
+    /^diff --git / { message = 0 }
+    message && $0 ~ ("(^|[^0-9A-Za-z-])" id "([^0-9A-Za-z-]|$)") { matched = 1 }
+    { block = block $0 "\n" }
+    END { emit(); exit !found }
+  ' <<< "$output"
 }
 
 @test "after review: a CHANGELOG-only document fix passes and is shown" {
@@ -640,7 +648,7 @@ commit_block() {
   printf '## [1.0.0] - 2026-01-02\n\n- old wording\n' > CHANGELOG.md
   git commit -qam "Document fix for F-07: the date"
   printf '## [1.0.0] - 2026-01-02\n\n- new wording\n' > CHANGELOG.md
-  git commit -qam "Document fix for F-08: the wording"
+  git commit -qam "Correct the wording" -m "Document fix for F-08"
   after_review "$reviewed"
   run bash "$TEST_TMP/after.sh"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
@@ -648,6 +656,17 @@ commit_block() {
   [[ "$f07" == *"+## [1.0.0] - 2026-01-02"* && "$f07" != *"+- new wording"* ]] || { echo "$output"; false; }
   [[ "$f08" == *"+- new wording"* && "$f08" != *"+## [1.0.0]"* ]] || { echo "$output"; false; }
   [[ "$output" != *"pre-review marker"* ]]
+}
+
+@test "commit block: a base ID does not match a suffix or a patch" {
+  # Fails if a split row or an ID in patch text supplies evidence for its base ID.
+  reviewed="$(git rev-parse HEAD)"
+  echo F-07 > CHANGELOG.md && git add CHANGELOG.md && git commit -qm "Correct F-07a"
+  after_review "$reviewed"
+  run bash "$TEST_TMP/after.sh"
+  [ "$status" -eq 0 ] || false
+  [[ "$(commit_block F-07a)" == *"+F-07"* ]] || false
+  ! commit_block F-07 || false
 }
 
 @test "after review: even a CHANGELOG-only merge needs review" {

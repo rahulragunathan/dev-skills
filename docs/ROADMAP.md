@@ -114,6 +114,7 @@ Highest priority first. Priority definitions and full detail in [ENHANCEMENTS.md
 | [ENH-38](ENHANCEMENTS.md#enh-38) | Name security in design-review's plan-time checks | Medium | ~2 hours |
 | [ENH-40](ENHANCEMENTS.md#enh-40) | Make Path required in the roadmap check | Medium | ~2 hours |
 | [ENH-41](ENHANCEMENTS.md#enh-41) | Make the triage wording tests pin the whole policy | Medium | ~2 hours |
+| [ENH-44](ENHANCEMENTS.md#enh-44) | Write the stated-key-bound reading into S02 Lifetime and re-grade the affected rows | Medium | ~1 day |
 | [ENH-32](ENHANCEMENTS.md#enh-32) | Drop explanations of standard tool behaviour from the skills | Low | ~2 hours |
 | [ENH-39](ENHANCEMENTS.md#enh-39) | Make the tests pass 3 found weak fail for their named reason | Low | ~2 hours |
 | [ENH-43](ENHANCEMENTS.md#enh-43) | Make the roadmap-shape guards exact | Low | ~1 hour |
@@ -125,5 +126,4 @@ reasoning behind each in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
 | ID | Question | Kind |
 | ---- | ---------- | ------ |
-| [UNK-04](OPEN_QUESTIONS.md#unk-04) | Does an undefined input-format check bound a shared cache's keys? | Decision |
 | [UNK-05](OPEN_QUESTIONS.md#unk-05) | What drives repeat review findings? | Verification |

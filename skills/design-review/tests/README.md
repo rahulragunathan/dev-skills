@@ -396,7 +396,7 @@ revisions, so earlier with-skill rows are Superseded, and earlier baseline rows 
 revisions stay Current. S03, S04 and S06 pass in all ten runs and do not discriminate at this
 sample size. S02 with-skill replicate 3 fails Lifetime for the reason round-7 replicate 3 did,
 while baseline replicate 2 passes on a similar argument;
-[UNK-04](../../../docs/OPEN_QUESTIONS.md#unk-04) records that decision. The round-7
+[ENH-44](../../../docs/ENHANCEMENTS.md#enh-44) tracks the condition edit and re-grading against the stated key bound. The round-7
 corrections stay in the scenario Notes, and archived answers remain unchanged.
 
 S07 Mutation choice must be grouped by the loaded skill: round 4's
